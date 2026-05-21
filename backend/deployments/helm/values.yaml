@@ -1,0 +1,61 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+replicaCount: 1
+
+image:
+  repository: localhost:5000/sico/sico-backend
+  tag: local
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  ports:
+    http: 8080
+    grpc: 50054
+
+env:
+  # APP_ENV drives runtime defaults (gin mode, log format, etc.).
+  # Valid values: development | test | production. Defaults to production
+  # when unset.
+  APP_ENV: production
+  DB_HOST: sico-mysql
+  DB_PORT: "3306"
+  REDIS_HOST: sico-redis
+  REDIS_PORT: "6379"
+  CORE_GRPC_ADDRESS: "sico-core:50053"
+  REVERSE_GRPC_SERVE_ADDRESS: "0.0.0.0:50054"
+  SEAWEEDFS_ENDPOINT: "http://sico-seaweedfs-filer:14003"
+  EVENT_BUS_TYPE: kafka
+  EVENT_BUS_TOPIC: core-backend
+  KAFKA_BOOTSTRAP_SERVERS: "sico-kafka:9092"
+
+resources:
+  requests:
+    memory: 128Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+# Secret name containing DB_USER, DB_PASSWORD, REDIS_PASSWORD, and
+# SANDBOX_CLIENT_SECRET_TEST_CLIENT (optional; used by the `test-client`
+# sandbox example flow — see examples/sandbox/README.md).
+secretName: sico-credentials

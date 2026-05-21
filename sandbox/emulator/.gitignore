@@ -1,0 +1,73 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Output of the go coverage tool
+*.coverprofile
+
+# Dependency directories (remove the comment below if you use Go modules)
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Build directories
+bin/
+build/
+!dist/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Docs should be generated, so ignore the source
+docs/swagger.json
+docs/swagger.yaml
+docs/docs.go
+
+# config files, may contain sensitive information
+# Environment variables
+backend/.env
+.env.local
+.env.*.local
+
+# Python cache and virtual environments
+**/__pycache__/
+*.py[cod]
+.venv/
+app/playground
+
+# temp files
+tmp/
+
+# Setup runtime artifacts
+.emulator-service.pid
+.emulator-service.env
+setup/ADBKeyboard.apk
+setup/MicrosoftEdge.apk
+setup/*.apk.tmp
+setup/*.apk.tmp.extract
+
+*.egg-info/
+
+scripts/playground
+
+dist/*
+
+*.spec

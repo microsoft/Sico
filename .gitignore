@@ -416,3 +416,14 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# macOS Finder metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# JetBrains IDEs (IntelliJ IDEA, GoLand, PyCharm, WebStorm, ...)
+.idea/
+*.iml
+*.ipr
+*.iws

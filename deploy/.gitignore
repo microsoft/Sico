@@ -1,0 +1,3 @@
+config/llmhubs/*.yaml
+!config/llmhubs/*-template.yaml
+config/mem0/mem0_config.yaml

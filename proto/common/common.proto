@@ -1,0 +1,84 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package common;
+
+option go_package = "sico-backend/internal/transport/http/dto/common";
+
+
+message Attachment {
+    string name = 1;     // @gotag: json:"name"
+    string uri = 2;      // @gotag: json:"uri"
+    string sas_url = 3;  // @gotag: json:"sasUrl"
+    string type = 4;     // @gotag: json:"type"
+    int64 size = 5;      // @gotag: json:"size"
+    int64 id = 6;        // @gotag: json:"id"
+}
+
+
+message DocTableSheet {
+    int64 id = 1;            // sheet number/ID
+    string sheet_name = 2;   // sheet name
+    int64 total_row = 3;     // total number of rows
+}
+
+enum ColumnType {
+    COLUMN_TYPE_UNKNOWN = 0; // Unknown
+    COLUMN_TYPE_TEXT = 1;    // Text
+    COLUMN_TYPE_NUMBER = 2;  // Number
+    COLUMN_TYPE_DATE = 3;    // Date
+    COLUMN_TYPE_FLOAT = 4;   // Float
+    COLUMN_TYPE_BOOLEAN = 5; // Boolean
+    COLUMN_TYPE_IMAGE = 6;   // Image
+}
+
+enum FileType {
+    FILE_TYPE_UNKNOWN = 0;
+    FILE_TYPE_TYPE_IMAGE = 1;
+    FILE_TYPE_TYPE_VIDEO = 2;
+    FILE_TYPE_TYPE_AUDIO = 3;
+    FILE_TYPE_TYPE_FILE = 4;
+    FILE_TYPE_TYPE_ARCHIVE = 5;
+}
+
+message DocTableColumn {
+    int64 id = 1;                // column ID
+    string column_name = 2;      // column name
+    bool is_semantic = 3;        // whether it's a semantic matching column
+    int64 sequence = 4;          // original column sequence number in excel
+    optional ColumnType column_type = 5;  // column type
+    optional bool contains_empty_value = 6; // whether contains empty values
+    optional string desc = 7;             // description
+}
+
+message TypeInfo {
+    string data_type = 1; // @gotag: json:"dataType" binding:"required"
+    bool required = 2; // @gotag: json:"required,omitempty"
+    string description = 3; // @gotag: json:"description,omitempty"
+    optional TypeInfo elem_type = 4; // @gotag: json:"elemType,omitempty"
+    map<string, TypeInfo> properties = 5; // @gotag: json:"properties,omitempty"
+    optional string file_sub_type = 6; // @gotag: json:"fileSubType,omitempty"
+}
+
+message NamedTypeInfo {
+    string name = 1; // @gotag: json:"name" binding:"required"
+    TypeInfo type = 2; // @gotag: json:"type" binding:"required"
+}

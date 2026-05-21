@@ -1,0 +1,71 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package chat;
+
+option go_package = "sico-backend/internal/transport/http/dto/conversation";
+
+import "google/protobuf/struct.proto";
+import "common/common.proto";
+
+message ChatContent {
+  ChatContentType type = 1; // @gotag: json:"type,omitempty"
+  string content = 2; // @gotag: json:"content,omitempty"
+  FunctionContext function_context = 3; // @gotag: json:"functionContext,omitempty"
+  repeated common.Attachment attachments = 4; // @gotag: json:"attachments,omitempty"
+}
+
+message FunctionContext {
+  int64 workflow_id = 1; // @gotag: json:"workflowId,omitempty"
+  int64 workflow_execution_id = 2; // @gotag: json:"workflowExecutionId,omitempty"
+  string workflow_name = 3; // @gotag: json:"workflowName,omitempty"
+  google.protobuf.Struct arguments = 4; // @gotag: json:"arguments,omitempty"
+  string result = 5; // @gotag: json:"result,omitempty"
+  string exception = 6; // @gotag: json:"exception,omitempty"
+}
+
+enum ChatContentType {
+  CHAT_CONTENT_TYPE_UNKNOWN = 0;
+  CHAT_CONTENT_TYPE_TEXT = 1;
+  CHAT_CONTENT_TYPE_FUNCTION_CALL = 2;
+  CHAT_CONTENT_TYPE_FUNCTION_RESULT = 3;
+  CHAT_CONTENT_TYPE_TRAIN_CONTEXT = 4;
+  CHAT_CONTENT_TYPE_END = 5;
+  CHAT_CONTENT_TYPE_PLAYBOOK_INGESTION = 6;
+  CHAT_CONTENT_TYPE_PLAN = 7;
+  CHAT_CONTENT_TYPE_KEEPALIVE = 8;
+  CHAT_CONTENT_TYPE_ERROR = 9;
+}
+
+message ChatResponse {
+  ChatContent content = 1; // @gotag: json:"content,omitempty"
+  int64 timestamp = 2; // @gotag: json:"timestamp,omitempty"
+  bool is_final = 3; // @gotag: json:"isFinal,omitempty"
+  bool is_internal = 4; // @gotag: json:"isInternal,omitempty"
+}
+
+message TopicMessage {
+  int64 conversation_id = 1; // @gotag: json:"conversationId,omitempty"
+  int64 turn_id = 2; // @gotag: json:"turnId,omitempty"
+  int64 seq = 3; // @gotag: json:"seq,omitempty"
+  ChatResponse chat_response = 4; // @gotag: json:"chatResponse,omitempty"
+}

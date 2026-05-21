@@ -1,0 +1,137 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Copy this file when adding a new V2 builtin model.
+# The loader ignores descriptors where `template: true`.
+template: true
+model_key: your-model-key
+display_name: Friendly Model Name
+description: Short description for the builtin model.
+model_type: text                    # text | multimodal | artifact
+provider_template_type: azure_openai # azure_openai | openai_compatible | http_json | http_binary | anthropic | gemini
+io_profile:
+  input_types: [text]
+  output_types: [text]
+  supports_tools: false
+  supports_previous_response_id: false
+  supports_structured_output: false
+
+# ── Config by provider ──────────────────────────────────────────────
+# Azure OpenAI (provider_template_type: azure_openai):
+#   Default: Responses API (per Microsoft recommendation for GPT-5.x/4.1/o-series).
+#   Uses v1 API path when api_version: preview (no versioned URL).
+#   config:
+#     endpoint: https://example.cognitiveservices.azure.com/
+#     deployment_name: gpt-5.4
+#     api_version: preview              # v1 API — no api-version in URL
+#     unsupported_request_options: []   # Optional: drop request options the model rejects
+#     timeout_ms: 60000
+#     max_tokens: 16384
+#   # Opt out of Responses API: add use_chat_completions: true
+#
+# Azure AI Foundry third-party models (provider_template_type: azure_openai):
+#   Default: Chat Completions (wider model compatibility).
+#   config:
+#     endpoint: https://example.services.ai.azure.com/openai/v1
+#     deployment_name: DeepSeek-V3.2
+#     api_version: preview
+#     use_chat_completions: true         # stay on Chat Completions
+#     unsupported_request_options: []    # Optional: drop request options the model rejects
+#     timeout_ms: 60000
+#     max_tokens: 8192
+#   # Opt into Responses API: replace use_chat_completions with use_responses_api: true
+#
+# OpenAI-compatible (provider_template_type: openai_compatible):
+#   config:
+#     base_url: https://api.deepseek.com
+#     path: /chat/completions
+#     upstream_model_name: deepseek-reasoner
+#     use_chat_completions: true        # Optional: force Chat Completions for this model
+#     use_responses_api: true           # Optional: force Responses API when request shape is supported
+#     passthrough_options: []            # Optional: allow specific request.options keys for all request types
+#     chat_completions_passthrough_options: []  # Fills only fields not already built by the adapter
+#     responses_passthrough_options: []         # Fills only fields not already built by the adapter
+#     default_headers: {}               # Optional: extra request headers sent on every call
+#     timeout_ms: 60000
+#     max_tokens: 8192
+#
+# OpenRouter via OpenAI-compatible (provider_template_type: openai_compatible):
+#   Chat Completions-compatible text, streaming, tools, structured outputs, and image inputs work through the same adapter.
+#   Common OpenRouter Chat Completions fields such as models/route/provider/plugins/top_k/min_p/top_a/
+#   repetition_penalty/metadata/session_id/trace/verbosity are auto-allowed when base_url points to openrouter.ai.
+#   Responses API is available as an explicit opt-in via use_responses_api: true.
+#   In Responses mode, common fields such as metadata/store/verbosity/provider/route/models are auto-allowed.
+#   config:
+#     base_url: https://openrouter.ai/api/v1
+#     upstream_model_name: anthropic/claude-sonnet-4
+#     use_responses_api: true           # Optional: enable /responses for OpenRouter
+#     site_url: https://example.com  # Optional: sent as HTTP-Referer unless default_headers already sets it
+#     app_name: Sico                      # Optional: sent as X-OpenRouter-Title unless default_headers already sets it
+#     timeout_ms: 60000
+#     max_tokens: 8192
+#
+# Anthropic (provider_template_type: anthropic):
+#   config:
+#     base_url: https://api.anthropic.com
+#     upstream_model_name: claude-sonnet-4-20250514
+#     timeout_ms: 60000
+#     max_tokens: 4096
+#
+# Gemini (provider_template_type: gemini):
+#   config:
+#     base_url: https://generativelanguage.googleapis.com
+#     upstream_model_name: gemini-2.5-flash
+#     timeout_ms: 60000
+#     max_tokens: 4096
+#
+# ── Image detail forwarding (optional) ─────────────────────────────
+# Capability resolution in Sico never looks at the model name. It only
+# considers the ``model_type`` field above and the value below. Models
+# with ``model_type`` other than ``multimodal`` always drop ``detail``
+# regardless of what is configured here.
+#
+# For multimodal models, Sico forwards the caller's image ``detail``
+# parameter to upstream according to these rules:
+#
+#   * ``supported_image_detail_levels`` unset  → {auto, low, high}
+#     Conservative default — the pre-5.4 OpenAI Vision API levels.
+#     Deliberately omits ``original`` (introduced in gpt-5.4) so models are
+#     not sent a value they may reject. This is not auto-detection; it is
+#     just the baseline Sico applies to every multimodal model unless you
+#     say otherwise.
+#   * ``supported_image_detail_levels: []``    → detail is silently dropped
+#     from outbound requests. Use this for providers that 400 on any
+#     ``detail`` field.
+#   * ``supported_image_detail_levels: [...]`` → whitelist. Only the listed
+#     levels are forwarded; any other caller-supplied value (including
+#     ``auto``/``low``/``high``) returns 400.
+#
+# OpenAI's ``original`` detail level was introduced with ``gpt-5.4``, but
+# support is capability-specific rather than family-wide. Declare it only
+# for deployments that actually accept it; unsupported deployments will 400
+# on it. Keep capability declarations explicit and in config.
+#   config:
+#     supported_image_detail_levels: [auto, low, high, original]
+config:
+  deployment_name: your-deployment-name
+  endpoint: https://example.openai.azure.com/
+  api_version: preview
+  timeout_ms: 60000
+  max_tokens: 4096

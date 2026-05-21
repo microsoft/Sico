@@ -1,0 +1,41 @@
+# Applies to Docker builds whose context is the repository root
+# (currently: core). Backend and frontend images use their own
+# per-package .dockerignore files because they build from `backend/`
+# and `frontend/` respectively.
+
+# VCS / docs
+.git
+.gitignore
+*.md
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python (core) build / cache artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Helm charts are deployed separately and not needed inside the images
+backend/deployments/helm/
+core/deployments/helm/
+frontend/deployments/helm/
+
+# Folders unrelated to the core image
+backend/
+frontend/
+docs/
+examples/
+sandbox/
+deploy/kind/
+.github/

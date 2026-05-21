@@ -1,0 +1,326 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package knowledge;
+
+import "common/common.proto";
+
+option go_package = "sico-backend/internal/transport/http/dto/knowledge";
+
+// Knowledge Document type
+enum KnowledgeDocumentType {
+  KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN = 0; // @gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN"
+  KNOWLEDGE_DOCUMENT_TYPE_FILE = 1;    // @gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_FILE"
+  KNOWLEDGE_DOCUMENT_TYPE_LINK = 2;    // @gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_LINK"
+}
+
+// Knowledge Document status
+enum KnowledgeDocumentStatus {
+  KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN = 0;   // @gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN"
+  KNOWLEDGE_DOCUMENT_STATUS_FAILED = 1;    // @gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_FAILED"
+  KNOWLEDGE_DOCUMENT_STATUS_UPLOADED = 2;  // @gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UPLOADED"
+  KNOWLEDGE_DOCUMENT_STATUS_INGESTED = 3;  // @gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_INGESTED"
+}
+
+// Knowledge Tag entity
+message KnowledgeTag {
+  int64 id = 1;                 // @gotag: json:"id"
+  int64 project_id = 2;         // @gotag: json:"projectId"
+  string name = 3;              // @gotag: json:"name"
+  string description = 4;       // @gotag: json:"description"
+  string creator_username = 5;  // @gotag: json:"creatorUsername"
+  int64 created_at = 6;         // @gotag: json:"createdAt"
+  int64 updated_at = 7;         // @gotag: json:"updatedAt"
+}
+
+// Knowledge Document entity
+message KnowledgeDocument {
+  int64 id = 1;                             // @gotag: json:"id"
+  int64 project_id = 2;                     // @gotag: json:"projectId"
+  string agent_id = 3;                      // @gotag: json:"agentId"
+  int64 asset_id = 4;                       // @gotag: json:"assetId"
+  string link_url = 5;                      // @gotag: json:"linkUrl"
+  KnowledgeDocumentType document_type = 6;  // @gotag: json:"documentType"
+  KnowledgeDocumentStatus status = 7;       // @gotag: json:"status"
+  string fail_reason = 8;                   // @gotag: json:"failReason"
+  string creator_username = 9;              // @gotag: json:"creatorUsername"
+  int64 created_at = 10;                    // @gotag: json:"createdAt"
+  int64 updated_at = 11;                    // @gotag: json:"updatedAt"
+  common.Attachment attachment = 12;        // @gotag: json:"attachment"
+  repeated KnowledgeTag tags = 13;          // @gotag: json:"tags"
+  string icon_uri = 14;                     // @gotag: json:"iconUri"
+  string icon_sas_url = 15;                 // @gotag: json:"iconSasUrl"
+  string name = 16;                         // @gotag: json:"name"
+}
+
+// Create Knowledge Document
+message CreateKnowledgeDocumentRequest {
+  int64 project_id = 1;                     // @gotag: json:"projectId" form:"projectId"
+  string agent_id = 2;                      // @gotag: json:"agentId" form:"agentId"
+  int64 asset_id = 3;                       // @gotag: json:"assetId" form:"assetId"
+  string link_url = 4;                      // @gotag: json:"linkUrl" form:"linkUrl" binding:"max=2048"
+  KnowledgeDocumentType document_type = 5;  // @gotag: json:"documentType" form:"documentType" binding:"required"
+  repeated int64 tag_ids = 7;               // @gotag: json:"tagIds" form:"tagIds"
+  string icon_uri = 8;                      // @gotag: json:"iconUri" form:"iconUri" binding:"max=256"
+  string name = 9;                          // @gotag: json:"name" form:"name" binding:"max=256"
+}
+
+message CreateKnowledgeDocumentResponse {
+  CreateKnowledgeDocumentData data = 1; // @gotag: json:"data"
+  int32 code = 253;                     // @gotag: json:"code"
+  string msg = 254;                     // @gotag: json:"msg"
+}
+
+message CreateKnowledgeDocumentData {
+  int64 id = 1; // @gotag: json:"id"
+}
+
+// Update Knowledge Document
+message UpdateKnowledgeDocumentRequest {
+  int64 id = 1;                             // @gotag: json:"id" form:"id" binding:"required"
+  string agent_id = 2;                      // @gotag: json:"agentId" form:"agentId"
+  int64 asset_id = 3;                       // @gotag: json:"assetId" form:"assetId"
+  string link_url = 4;                      // @gotag: json:"linkUrl" form:"linkUrl" binding:"max=2048"
+  KnowledgeDocumentType document_type = 5;  // @gotag: json:"documentType" form:"documentType"
+  KnowledgeDocumentStatus status = 6;       // @gotag: json:"status" form:"status"
+  string fail_reason = 7;                   // @gotag: json:"failReason" form:"failReason" binding:"max=1024"
+  repeated int64 tag_ids = 8;               // @gotag: json:"tagIds" form:"tagIds"
+  string icon_uri = 9;                      // @gotag: json:"iconUri" form:"iconUri" binding:"max=256"
+  string name = 10;                         // @gotag: json:"name" form:"name" binding:"max=256"
+}
+
+message UpdateKnowledgeDocumentResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Get Knowledge Document
+message GetKnowledgeDocumentRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message GetKnowledgeDocumentResponse {
+  GetKnowledgeDocumentData data = 1; // @gotag: json:"data"
+  int32 code = 253;                  // @gotag: json:"code"
+  string msg = 254;                  // @gotag: json:"msg"
+}
+
+message GetKnowledgeDocumentData {
+  KnowledgeDocument document = 1; // @gotag: json:"document"
+}
+
+// Delete Knowledge Document
+message DeleteKnowledgeDocumentRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message DeleteKnowledgeDocumentResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// List Knowledge Document
+message ListKnowledgeDocumentRequest {
+  int64 project_id = 1;                     // @gotag: form:"projectId"
+  string agent_id = 2;                      // @gotag: form:"agentId"
+  int64 asset_id = 3;                       // @gotag: form:"assetId"
+  string link_url = 4;                      // @gotag: form:"linkUrl" binding:"max=2048"
+  KnowledgeDocumentType document_type = 5;  // @gotag: form:"documentType"
+  KnowledgeDocumentStatus status = 6;       // @gotag: form:"status"
+  string creator_username = 7;              // @gotag: form:"creatorUsername"
+  int32 page = 8;                           // @gotag: form:"page" binding:"required,min=1"
+  int32 page_size = 9;                      // @gotag: form:"pageSize" binding:"required,min=1,max=100"
+}
+
+message ListKnowledgeDocumentResponse {
+  ListKnowledgeDocumentData data = 1; // @gotag: json:"data"
+  int32 code = 253;                   // @gotag: json:"code"
+  string msg = 254;                   // @gotag: json:"msg"
+}
+
+message ListKnowledgeDocumentData {
+  repeated KnowledgeDocument documents = 1; // @gotag: json:"documents"
+  int32 total = 2;                           // @gotag: json:"total"
+  bool has_next = 3;                         // @gotag: json:"hasNext"
+}
+
+// Create Knowledge Tag
+message CreateKnowledgeTagRequest {
+  int64 project_id = 1;         // @gotag: json:"projectId" form:"projectId" binding:"required"
+  string name = 2;              // @gotag: json:"name" form:"name" binding:"required,max=256"
+  string description = 3;       // @gotag: json:"description" form:"description"
+}
+
+message CreateKnowledgeTagResponse {
+  CreateKnowledgeTagData data = 1; // @gotag: json:"data"
+  int32 code = 253;                // @gotag: json:"code"
+  string msg = 254;                // @gotag: json:"msg"
+}
+
+message CreateKnowledgeTagData {
+  int64 id = 1; // @gotag: json:"id"
+}
+
+// Update Knowledge Tag
+message UpdateKnowledgeTagRequest {
+  int64 id = 1;            // @gotag: json:"id" form:"id" binding:"required"
+  string name = 2;         // @gotag: json:"name" form:"name" binding:"max=256"
+  string description = 3;  // @gotag: json:"description" form:"description"
+}
+
+message UpdateKnowledgeTagResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Delete Knowledge Tag
+message DeleteKnowledgeTagRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message DeleteKnowledgeTagResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Get Knowledge Tag
+message GetKnowledgeTagRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message GetKnowledgeTagResponse {
+  GetKnowledgeTagData data = 1; // @gotag: json:"data"
+  int32 code = 253;             // @gotag: json:"code"
+  string msg = 254;             // @gotag: json:"msg"
+}
+
+message GetKnowledgeTagData {
+  KnowledgeTag tag = 1; // @gotag: json:"tag"
+}
+
+// Get Knowledge Document Details (summary and full text)
+message GetKnowledgeDocumentDetailsRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message GetKnowledgeDocumentDetailsResponse {
+  GetKnowledgeDocumentDetailsData data = 1; // @gotag: json:"data"
+  int32 code = 253;                          // @gotag: json:"code"
+  string msg = 254;                          // @gotag: json:"msg"
+}
+
+message GetKnowledgeDocumentDetailsData {
+  string summary = 1;   // @gotag: json:"summary"
+  string full_text = 2; // @gotag: json:"fullText"
+}
+
+// List Knowledge Tags
+message ListKnowledgeTagRequest {
+  int64 project_id = 1;      // @gotag: form:"projectId" binding:"required"
+  int32 page = 2;            // @gotag: form:"page" binding:"required"
+  int32 page_size = 3;       // @gotag: form:"pageSize" binding:"required"
+}
+
+message ListKnowledgeTagResponse {
+  ListKnowledgeTagData data = 1; // @gotag: json:"data"
+  int32 code = 253;              // @gotag: json:"code"
+  string msg = 254;              // @gotag: json:"msg"
+}
+
+message ListKnowledgeTagData {
+  repeated KnowledgeTag tags = 1; // @gotag: json:"tags"
+  int32 total = 2;               // @gotag: json:"total"
+  bool has_next = 3;             // @gotag: json:"hasNext"
+}
+
+// Knowledge Playbook entity
+message KnowledgePlaybook {
+  int64 id = 1;                             // @gotag: json:"id"
+  int64 project_id = 2;                     // @gotag: json:"projectId"
+  int64 agent_instance_id = 3;              // @gotag: json:"agentInstanceId"
+  string name = 4;                          // @gotag: json:"name"
+  int64 created_at = 5;                     // @gotag: json:"createdAt"
+  int64 updated_at = 6;                     // @gotag: json:"updatedAt"
+  repeated KnowledgeTag tags = 7;           // @gotag: json:"tags"
+}
+
+// Get Knowledge Playbook
+message GetKnowledgePlaybookRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message GetKnowledgePlaybookResponse {
+  GetKnowledgePlaybookData data = 1; // @gotag: json:"data"
+  int32 code = 253;                  // @gotag: json:"code"
+  string msg = 254;                  // @gotag: json:"msg"
+}
+
+message GetKnowledgePlaybookData {
+  KnowledgePlaybook playbook = 1; // @gotag: json:"playbook"
+}
+
+// Update Knowledge Playbook (name and tags only)
+message UpdateKnowledgePlaybookRequest {
+  int64 id = 1;                // @gotag: json:"id" form:"id" binding:"required"
+  string name = 2;             // @gotag: json:"name" form:"name" binding:"max=256"
+  repeated int64 tag_ids = 3;  // @gotag: json:"tagIds" form:"tagIds"
+}
+
+message UpdateKnowledgePlaybookResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// List Knowledge Playbooks
+message ListKnowledgePlaybookRequest {
+  int64 project_id = 1;         // @gotag: form:"projectId" binding:"required"
+  int64 agent_instance_id = 2;  // @gotag: form:"agentInstanceId"
+  int32 page = 3;               // @gotag: form:"page" binding:"required,min=1"
+  int32 page_size = 4;          // @gotag: form:"pageSize" binding:"required,min=1,max=100"
+}
+
+message ListKnowledgePlaybookResponse {
+  ListKnowledgePlaybookData data = 1; // @gotag: json:"data"
+  int32 code = 253;                   // @gotag: json:"code"
+  string msg = 254;                   // @gotag: json:"msg"
+}
+
+message ListKnowledgePlaybookData {
+  repeated KnowledgePlaybook playbooks = 1; // @gotag: json:"playbooks"
+  int32 total = 2;                          // @gotag: json:"total"
+  bool has_next = 3;                        // @gotag: json:"hasNext"
+}
+
+// Get Knowledge Playbook Details (content fetched from core via gRPC)
+message GetKnowledgePlaybookDetailsRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message GetKnowledgePlaybookDetailsResponse {
+  GetKnowledgePlaybookDetailsData data = 1; // @gotag: json:"data"
+  int32 code = 253;                         // @gotag: json:"code"
+  string msg = 254;                         // @gotag: json:"msg"
+}
+
+message GetKnowledgePlaybookDetailsData {
+  string content = 1; // @gotag: json:"content"
+  string name = 2;    // @gotag: json:"name"
+}

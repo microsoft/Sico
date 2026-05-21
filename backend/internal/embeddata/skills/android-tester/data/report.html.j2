@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+{#
+Copyright (c) 2026 Sico Authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+#}
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test Run Report — {{ task_id }}</title>
+<style>
+  :root {
+    --bg: #fff;
+    --fg: #24292f;
+    --muted: #656d76;
+    --border: #d0d7de;
+    --bg-subtle: #f6f8fa;
+    --accent: #0969da;
+    --success: #1a7f37;
+    --fail: #cf222e;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica,
+                 Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--fg);
+    background: var(--bg);
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  h1 { font-size: 1.75rem; border-bottom: 1px solid var(--border); padding-bottom: .4em; }
+  h2 { font-size: 1.35rem; margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+  h3 { font-size: 1.1rem; margin-top: 1.5rem; }
+  code {
+    background: var(--bg-subtle);
+    padding: .15em .35em;
+    border-radius: 4px;
+    font-size: .9em;
+  }
+  .meta-table { width: 100%; border-collapse: collapse; margin: .5rem 0 1rem; }
+  .meta-table td { padding: .35rem .6rem; border: 1px solid var(--border); }
+  .meta-table td:first-child { font-weight: 600; width: 140px; background: var(--bg-subtle); }
+
+  .status-completed { color: var(--success); font-weight: 600; }
+  .status-failed { color: var(--fail); font-weight: 600; }
+
+  .screenshot-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem;
+    margin: .75rem 0;
+  }
+  .screenshot-grid figure { margin: 0; text-align: center; }
+  .screenshot-grid figcaption { font-size: .85rem; color: var(--muted); margin-top: .3rem; }
+  .screenshot-grid img, .screenshot-single img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .screenshot-single { margin: .75rem 0; }
+  .screenshot-single figcaption { font-size: .85rem; color: var(--muted); margin-top: .3rem; }
+
+  blockquote {
+    margin: .5rem 0;
+    padding: .5rem 1rem;
+    border-left: 3px solid var(--border);
+    background: var(--bg-subtle);
+    white-space: pre-wrap;
+    font-size: .9rem;
+  }
+
+  .errors { color: var(--fail); }
+  .errors li { margin-bottom: .25rem; }
+
+  .telemetry-table { width: 100%; border-collapse: collapse; margin: .5rem 0; }
+  .telemetry-table th, .telemetry-table td {
+    padding: .35rem .6rem;
+    border: 1px solid var(--border);
+    text-align: left;
+    font-size: .9rem;
+  }
+  .telemetry-table th { background: var(--bg-subtle); font-weight: 600; }
+</style>
+</head>
+<body>
+
+{% if task_name %}
+<h1>Test Report: {{ task_name }}</h1>
+{% else %}
+<h1>Test Report</h1>
+{% endif %}
+
+<h2>General Information</h2>
+<table class="meta-table">
+  <tr><td>Task ID</td><td><code>{{ task_id }}</code></td></tr>
+  {% if task_name %}
+  <tr><td>Task Name</td><td>{{ task_name }}</td></tr>
+  {% endif %}
+  {% if instruction %}
+  <tr><td>Instruction</td><td>{{ instruction }}</td></tr>
+  {% endif %}
+  {% if device_id %}
+  <tr><td>Device ID</td><td>{{ device_id }}</td></tr>
+  {% endif %}
+  <tr><td>Status</td><td class="status-{{ status }}">{{ status }}</td></tr>
+  {%- if reason %}
+  <tr><td>Reason</td><td>{{ reason }}</td></tr>
+  {%- endif %}
+  <tr><td>Duration</td><td>{{ duration_fmt }}</td></tr>
+  <tr><td>Started</td><td>{{ start_ts }}</td></tr>
+  <tr><td>Total Steps</td><td>{{ steps | length }}</td></tr>
+</table>
+
+<h2>Steps</h2>
+{% for rec in steps %}
+<h3>Step {{ rec.step }}</h3>
+
+{% if rec.screenshots | length == 2 %}
+<div class="screenshot-grid">
+  {% for src, desc in rec.screenshots %}
+  <figure>
+    <img src="{{ src }}" alt="{{ desc }}" loading="lazy">
+    <figcaption>{{ desc | screenshot_label }}</figcaption>
+  </figure>
+  {% endfor %}
+</div>
+{% elif rec.screenshots %}
+  {% for src, desc in rec.screenshots %}
+  <figure class="screenshot-single">
+    <img src="{{ src }}" alt="{{ desc }}" loading="lazy">
+    <figcaption>{{ desc | screenshot_label }}</figcaption>
+  </figure>
+  {% endfor %}
+{% endif %}
+
+{% if rec.operator %}
+<strong>Operator</strong>
+<blockquote>{{ rec.operator }}</blockquote>
+{% endif %}
+
+{% if rec.reflector %}
+<strong>Reflector</strong>
+<blockquote>{{ rec.reflector }}</blockquote>
+{% endif %}
+
+{% if rec.errors %}
+<strong>Errors</strong>
+<ul class="errors">
+  {% for err in rec.errors %}
+  <li>{{ err }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endfor %}
+
+{% if telemetry %}
+<h2>Telemetry</h2>
+<table class="telemetry-table">
+  <tr><th>Metric</th><th>Details</th></tr>
+  {% for key, value in telemetry.items() %}
+  <tr><td>{{ key }}</td><td>{{ value | fmt_telemetry }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+</body>
+</html>

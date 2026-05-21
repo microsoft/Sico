@@ -1,0 +1,132 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package user;
+
+option go_package = "sico-backend/internal/transport/http/dto/rbac/user";
+
+import "rbac/rbac_common.proto";
+
+// Request message for querying users
+message QueryUsersRequest {
+  string alias = 1;                             // @gotag: form:"alias" binding:"max=64"
+  string email = 2;                             // @gotag: form:"email" binding:"max=255"
+  string phone = 3;                             // @gotag: form:"phone" binding:"max=32"
+  string status_list = 4;                       // @gotag: form:"statusList"
+  string tenant = 5;                            // @gotag: form:"tenant"
+  repeated common.UserStatus status_arr = 6;    // @gotag: json:"-"
+  int32 page = 7;                               // @gotag: form:"page" binding:"min=1" default:"1"
+  int32 page_size = 8;                          // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+}
+
+// Response message for querying users
+message QueryUsersResponse {
+  QueryUsersResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;        // @gotag: json:"code"
+  string msg = 254;        // @gotag: json:"msg"
+}
+
+message QueryUsersResponseData {
+  repeated common.User users = 1; // @gotag: json:"users"
+  int32 total = 2;         // @gotag: json:"total"
+  bool has_next = 3;       // @gotag: json:"hasNext"
+}
+
+// Request message for getting user by Username
+message GetUserRequest {
+  string username = 1; // @gotag: form:"username" binding:"required"
+}
+
+// Response message for getting user by Username
+message GetUserResponse {
+  GetUserResponseData data = 1;    // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message GetUserResponseData {
+  common.User user = 1;    // @gotag: json:"user"
+}
+
+// Request message for creating a user
+message CreateUserRequest {
+  string alias = 1;       // @gotag: json:"alias" binding:"omitempty,min=1,max=64"
+  string username = 2;    // @gotag: json:"username" binding:"omitempty,min=3,max=64"
+  string password = 3;    // @gotag: json:"password" binding:"required,min=6,max=128"
+  string email = 4;       // @gotag: json:"email" binding:"required,email,max=255"
+  string phone = 5;       // @gotag: json:"phone" binding:"omitempty,numeric,len=11"
+  string icon_uri = 6;    // @gotag: json:"iconUri" binding:"max=255"
+  string description = 7; // @gotag: json:"description" binding:"max=1024"
+  string tenant = 8;      // @gotag: json:"tenant" binding:"max=255"
+}
+
+// Response message for creating a user
+message CreateUserResponse {
+  CreateUserResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;        // @gotag: json:"code"
+  string msg = 254;        // @gotag: json:"msg"
+}
+
+message CreateUserResponseData {
+  int64 id = 1; // @gotag: json:"id"
+}
+
+// Request message for updating a user
+message UpdateUserRequest {
+  int64 id = 1;                     // @gotag: json:"id" binding:"required"
+  string alias = 2;                 // @gotag: json:"alias" binding:"omitempty,min=1,max=64"
+  string email = 3;                 // @gotag: json:"email" binding:"omitempty,email,max=255"
+  string phone = 4;                 // @gotag: json:"phone" binding:"omitempty,numeric,len=11"
+  string icon_uri = 5;              // @gotag: json:"iconUri" binding:"max=255"
+  string description = 6;           // @gotag: json:"description" binding:"max=1024"
+  common.UserStatus status = 7;     // @gotag: json:"status" binding:"omitempty,oneof=0 1 2"
+  string tenant = 8;                // @gotag: json:"tenant" binding:"max=255"
+}
+
+// Response message for updating a user
+message UpdateUserResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Request message for deleting a user
+message DeleteUserRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+// Response message for deleting a user
+message DeleteUserResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Request message for resetting user password
+message ResetPasswordRequest {
+  int64 id = 1;            // @gotag: json:"id" binding:"required"
+  string old_password = 2; // @gotag: json:"oldPassword" binding:"required,min=6,max=128"
+  string new_password = 3; // @gotag: json:"newPassword" binding:"required,min=6,max=128"
+}
+
+// Response message for resetting user password
+message ResetPasswordResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}

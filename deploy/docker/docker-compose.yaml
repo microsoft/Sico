@@ -1,0 +1,384 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# sico -- Docker Compose local stack
+# Usage: docker compose -p sico --env-file .env -f deploy/docker/docker-compose.yaml up --build -d
+# Reads .env from repo root for configuration (copy from .env.example)
+
+# -- Utilities for local development and testing --
+# * Nginx: http://localhost:8080 (this port is subject to change based on your .env SICO_PORT setting)
+# * MySQL database:
+#   - Address: localhost:14000
+#   - User: sico
+#   - Password: (from .env)
+#   - Database: sico
+# * Kafka UI: http://localhost:14001
+# * SeaweedFS Master: http://localhost:14002 (view cluster status)
+# * SeaweedFS Filer UI: http://localhost:14003 (browse, upload and download files)
+# * Qdrant Dashboard: http://localhost:14004/dashboard
+
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: sico-nginx
+    ports:
+      - "${SICO_PORT:-8080}:8080"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/api/sico/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: deployments/docker/Dockerfile
+    container_name: sico-frontend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/index.html || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: deployments/docker/Dockerfile
+    container_name: sico-backend
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - DB_HOST=mysql
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-sico}
+      - DB_USER=${DB_USER:-sico}
+      - DB_PASSWORD=${DB_PASSWORD:-}
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - SANDBOX_CLIENT_SECRET_TEST_CLIENT=${SANDBOX_CLIENT_SECRET_TEST_CLIENT:-}
+      - CORE_GRPC_ADDRESS=core:50053
+      - REVERSE_GRPC_SERVE_ADDRESS=0.0.0.0:50054
+      - REVERSE_GRPC_ADDRESS=backend:50054
+      - SEAWEEDFS_ENDPOINT=http://seaweedfs-filer:${SEAWEEDFS_FILER_PORT:-14003}
+      - EVENT_BUS_TYPE=${EVENT_BUS_TYPE:-kafka}
+      - EVENT_BUS_TOPIC=core-backend
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      # Sandbox emulator endpoint (e.g. MuMu running on the developer's host machine).
+      # Use host.docker.internal in the URL; the extra_hosts entry below makes it work on Linux too.
+      - SANDBOX_EMULATOR_BASE_URL=${SANDBOX_EMULATOR_BASE_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      seaweedfs-filer:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/sico/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  core:
+    build:
+      context: ../../
+      dockerfile: core/deployments/docker/Dockerfile
+    container_name: sico-core
+    environment:
+      - SICO_PORT=${SICO_PORT:-8080}
+      - GRPC_SERVER_ADDRESS=0.0.0.0:50053
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REVERSE_GRPC_ADDRESS=backend:50054
+      - EVENT_BUS_TYPE=${EVENT_BUS_TYPE:-kafka}
+      - EVENT_BUS_TOPIC=core-backend
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - MEM0_QDRANT_HOST=qdrant
+      - EXPERIENCES_ENABLED=${EXPERIENCES_ENABLED:-true}
+      - RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE=${RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE:-false}
+      - CHAT_AGENT_MAX_ITERATIONS=${CHAT_AGENT_MAX_ITERATIONS:-1000}
+      - SEAWEEDFS_ENDPOINT=http://seaweedfs-filer:${SEAWEEDFS_FILER_PORT:-14003}
+      - SICO_ENDPOINT=http://backend:8080
+    volumes:
+      - core-storage:/mnt/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+      seaweedfs-filer:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch = grpc.insecure_channel('localhost:50053'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: sico-mysql
+    ports:
+      - "14000:3306"
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "1"
+      MYSQL_ROOT_HOST: "localhost"
+      MYSQL_DATABASE: ${DB_NAME:-sico}
+      MYSQL_USER: ${DB_USER:-sico}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --protocol=tcp -u$$MYSQL_USER -p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: sico-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping 2>&1 | grep -qE 'PONG|NOAUTH'"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: sico-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: sico-kafka-cluster-001
+      # Bound resource usage so the broker doesn't OOMKill on long-running deployments.
+      # The producer (core) is chatty (per-chunk + 5s keepalives) and the consumer (backend)
+      # uses no consumer group, so cleanup is purely time/size based on the broker side.
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+      KAFKA_LOG_RETENTION_HOURS: 2
+      KAFKA_LOG_RETENTION_BYTES: 268435456        # 256 MiB per partition
+      KAFKA_LOG_SEGMENT_BYTES: 67108864           # 64 MiB segments → faster cleanup
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 60000
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  kafka-init:
+    image: apache/kafka:3.9.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/opt/kafka/bin/kafka-topics.sh"]
+    command:
+      - --bootstrap-server
+      - kafka:9092
+      - --create
+      - --if-not-exists
+      - --topic
+      - core-backend
+      - --partitions
+      - "1"
+      - --replication-factor
+      - "1"
+      - --config
+      - retention.ms=7200000
+      - --config
+      - retention.bytes=268435456
+      - --config
+      - segment.bytes=67108864
+    networks:
+      - sico
+    restart: "no"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: sico-kafka-ui
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "14001:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/api/clusters || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  seaweedfs-master:
+    image: chrislusf/seaweedfs:3.80
+    container_name: sico-seaweedfs-master
+    ports:
+      - "14002:${SEAWEEDFS_MASTER_PORT:-9333}"
+    command: master -ip=seaweedfs-master -ip.bind=0.0.0.0 -port=${SEAWEEDFS_MASTER_PORT:-9333}
+    volumes:
+      - seaweedfs-master-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:${SEAWEEDFS_MASTER_PORT:-9333}/dir/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  seaweedfs-volume:
+    image: chrislusf/seaweedfs:3.80
+    container_name: sico-seaweedfs-volume
+    command: volume -mserver=seaweedfs-master:${SEAWEEDFS_MASTER_PORT:-9333} -ip.bind=0.0.0.0 -port=${SEAWEEDFS_VOLUME_PORT:-9334} -dir=/data
+    volumes:
+      - seaweedfs-volume-data:/data
+    depends_on:
+      seaweedfs-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:${SEAWEEDFS_VOLUME_PORT:-9334}/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  seaweedfs-filer:
+    image: chrislusf/seaweedfs:3.80
+    container_name: sico-seaweedfs-filer
+    ports:
+      - "${SEAWEEDFS_FILER_PORT:-14003}:${SEAWEEDFS_FILER_PORT:-14003}"
+    command: filer -master=seaweedfs-master:${SEAWEEDFS_MASTER_PORT:-9333} -ip.bind=0.0.0.0 -port=${SEAWEEDFS_FILER_PORT:-14003}
+    volumes:
+      # The filer keeps its metadata index here (default leveldb2 store).
+      # WITHOUT this volume the index is lost on container recreation, which
+      # orphans every previously uploaded object — see /1/* missing after a
+      # filer restart.
+      - seaweedfs-filer-data:/data
+    depends_on:
+      seaweedfs-master:
+        condition: service_healthy
+      seaweedfs-volume:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:${SEAWEEDFS_FILER_PORT:-14003}/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.2
+    container_name: sico-qdrant
+    ports:
+      - "14004:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      # qdrant's image ships neither curl nor wget; use bash's /dev/tcp to
+      # probe the HTTP port instead.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sico
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  kafka-data:
+  core-storage:
+  seaweedfs-master-data:
+  seaweedfs-volume-data:
+  seaweedfs-filer-data:
+  qdrant-data:
+
+networks:
+  sico:
+    driver: bridge

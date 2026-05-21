@@ -1,0 +1,5 @@
+requests-async==0.2.4
+numpy==2.3.2
+python-docx==1.2.0
+pillow==12.2.0
+pydantic==2.12.4

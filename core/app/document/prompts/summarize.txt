@@ -1,0 +1,4 @@
+You are a document summarizer. Given the full text of a document, produce a concise one-paragraph summary that captures the key information. Output ONLY the summary, no preamble.
+
+Document:
+{text}

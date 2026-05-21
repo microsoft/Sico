@@ -1,0 +1,126 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Pre-commit hooks for the sico repository.
+#
+# Setup:
+#   pre-commit install
+#
+# Manual full-repo run:
+#   pre-commit run --all-files
+#
+# Docs: https://pre-commit.com
+
+repos:
+  - repo: https://github.com/google/addlicense
+    rev: v1.2.0
+    hooks:
+      - id: addlicense
+        name: Ensure MIT license header
+        args:
+          - "-c"
+          - "Sico Authors"
+          - "-l"
+          - "mit"
+          - "-y"
+          - "2026"
+          - "-ignore"
+          - "**/.idea/**"
+          - "-ignore"
+          - "**/.vscode/**"
+          - "-ignore"
+          - "**/node_modules/**"
+          - "-ignore"
+          - "**/.venv/**"
+          - "-ignore"
+          - "**/venv/**"
+          - "-ignore"
+          - "**/__pycache__/**"
+          - "-ignore"
+          - "**/dist/**"
+          - "-ignore"
+          - "**/build/**"
+          - "-ignore"
+          - "**/vendor/**"
+          # Generated protobuf / gRPC stubs
+          - "-ignore"
+          - "**/*.pb.go"
+          - "-ignore"
+          - "**/*_pb2.py"
+          - "-ignore"
+          - "**/*_pb2_grpc.py"
+          - "-ignore"
+          - "core/app/pb/**"
+          # Generated wire / otel wrappers / swagger / GORM models
+          - "-ignore"
+          - "**/zz_otelwrap_gen.go"
+          - "-ignore"
+          - "backend/internal/di/wire_gen.go"
+          - "-ignore"
+          - "backend/internal/store/**/model/**"
+          - "-ignore"
+          - "backend/internal/store/**/dal/**"
+          - "-ignore"
+          - "backend/internal/store/**/query/**"
+          - "-ignore"
+          - "backend/api/openapi/**"
+          - "-ignore"
+          - "core/core.egg-info/**"
+          # TypeScript ambient declarations
+          - "-ignore"
+          - "frontend/src/**/*.d.ts"
+
+  # Basic hygiene — cross-language, fast.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        # Skip generated artifacts whose upstream formatters don't guarantee
+        # trailing-whitespace conventions (keeps the hook from fighting
+        # ``swag init`` / protoc output on every commit).
+        exclude: '\.(svg|md)$|^backend/api/openapi/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/'
+      - id: end-of-file-fixer
+        exclude: '\.(svg|md)$|^backend/api/openapi/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/'
+      - id: check-yaml
+        args: ["--unsafe"]
+        exclude: '(^|/).*/deployments/helm/templates/.*\.ya?ml$' # Helm templates are Go templates, not plain YAML
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+        exclude: '^backend/internal/embeddata/'
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+        # PowerShell scripts often get re-introduced as CRLF on Windows
+        # commits or by tools like addlicense; their execution is line-ending
+        # agnostic, so don't fail CI over the mismatch.
+        exclude: '^backend/api/openapi/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/|\.ps1$'
+
+  - repo: local
+    hooks:
+      - id: helm-lint
+        name: Helm chart lint
+        # language: script uses the shebang (#!/usr/bin/env python3), so we
+        # do not hard-code `python` vs `python3` on the entry line — that
+        # avoids breakage on systems (e.g. most macOS / Linux) where only
+        # `python3` is on PATH.
+        entry: scripts/lint_helm_charts.py
+        language: script
+        pass_filenames: false
+        files: '^(backend|core)/deployments/helm/'

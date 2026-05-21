@@ -1,0 +1,59 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package reverse_rpc;
+option go_package = "sico-backend/internal/transport/reverse_grpc/pb/conversation/reverse_rpc";
+
+import "conversation/msg.proto";
+
+service ReverseConversationRPC {
+
+    rpc RpcCreateMessage(CreateMessageRequest) returns (CreateMessageResponse) {}
+    rpc RpcListUserMessageByUserAgentTurnID(ListUserMessageByUserAgentTurnIDRequest) returns (ListUserMessageByUserAgentTurnIDResponse) {}
+
+}
+
+message CreateMessageRequest {
+    msg.Message message = 1; // @gotag: json:"message"
+}
+
+message CreateMessageData {
+    int64 id = 1;                       // @gotag: json:"id"
+}
+
+message CreateMessageResponse {
+    CreateMessageData data = 1; // @gotag: json:"data"
+    int32 code = 253;       // @gotag: json:"code"
+    string msg = 254;     // @gotag: json:"msg"
+}
+
+message ListUserMessageByUserAgentTurnIDRequest {
+    int64 agent_instance_id = 1; // @gotag: json:"agentInstanceId"
+    int64 turn_id = 2; // @gotag: json:"turnId"
+    string username = 3; // @gotag: json:"username"
+}
+
+message ListUserMessageByUserAgentTurnIDResponse {
+    repeated msg.Message data = 1; // @gotag: json:"data"
+    int32 code = 253;     // @gotag: json:"code"
+    string msg = 254;     // @gotag: json:"msg"
+}

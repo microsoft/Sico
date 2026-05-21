@@ -1,0 +1,49 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Copy this file (drop the -template suffix) and set OPENROUTER_API_KEY
+# before enabling. The loader skips descriptors where `template: true`.
+template: true
+model_key: openrouter-gpt-5-4
+display_name: OpenRouter GPT-5.4
+description: GPT-5.4 routed through OpenRouter via the openai_compatible adapter.
+default: false
+model_type: multimodal
+provider_template_type: openai_compatible
+io_profile:
+  input_types:
+    - text
+    - image
+  output_types:
+    - text
+    - json
+  supports_tools: true
+  supports_previous_response_id: false
+  supports_structured_output: true
+  supports_reasoning: true
+config:
+  base_url: https://openrouter.ai/api/v1
+  upstream_model_name: openai/gpt-5.4
+  # OpenRouter speaks both Chat Completions and Responses APIs; chat is more
+  # broadly compatible and mirrors what most OpenRouter users call.
+  use_chat_completions: true
+  bearer_token: ${OPENROUTER_API_KEY}
+  timeout_ms: 60000
+  max_tokens: 128000

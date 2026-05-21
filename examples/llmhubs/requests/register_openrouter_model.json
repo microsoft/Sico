@@ -1,0 +1,18 @@
+{
+  "displayName": "OpenRouter Claude Sonnet 4",
+  "description": "Dynamic OpenRouter model registration example",
+  "providerTemplateType": 2,
+  "modelType": 1,
+  "config": {
+    "base_url": "https://openrouter.ai/api/v1",
+    "upstream_model_name": "anthropic/claude-sonnet-4",
+    "site_url": "https://example.com",
+    "app_name": "Sico",
+    "max_tokens": 4096,
+    "timeout_ms": 60000
+  },
+  "auth": {
+    "authType": 1,
+    "token": "sk-or-your-real-token"
+  }
+}

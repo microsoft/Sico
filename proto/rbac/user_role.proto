@@ -1,0 +1,92 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package user_role;
+
+option go_package = "sico-backend/internal/transport/http/dto/rbac/user_role";
+
+import "rbac/role.proto";
+import "rbac/rbac_common.proto";
+
+// UserRole assignment view
+message UserRole {
+  int64 id = 1;            // @gotag: json:"id"
+  int64 user_id = 2;       // @gotag: json:"userId"
+  int64 role_id = 3;       // @gotag: json:"roleId"
+  int64 created_at = 4;    // @gotag: json:"createdAt"
+  int64 updated_at = 5;    // @gotag: json:"updatedAt"
+  role.Role role = 6;      // @gotag: json:"role"
+  common.User user = 7;    // @gotag: json:"user"
+}
+
+// Assign role to user
+message AssignUserRoleRequest {
+  int64 user_id = 1; // @gotag: json:"userId" binding:"required"
+  int64 role_id = 2; // @gotag: json:"roleId" binding:"required"
+}
+message AssignUserRoleResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Remove role from user
+message RemoveUserRoleRequest {
+  int64 user_id = 1; // @gotag: json:"userId" binding:"required"
+  int64 role_id = 2; // @gotag: json:"roleId" binding:"required"
+}
+message RemoveUserRoleResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// List roles of user
+message ListUserRolesRequest {
+  int64 user_id = 1; // @gotag: form:"userId" binding:"required"
+  int32 page = 2;    // @gotag: form:"page" binding:"min=1" default:"1"
+  int32 page_size = 3; // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+}
+message ListUserRolesResponseData {
+  repeated role.Role roles = 1; // @gotag: json:"roles"
+  int32 total = 2;              // @gotag: json:"total"
+  bool has_next = 3;            // @gotag: json:"hasNext"
+}
+message ListUserRolesResponse {
+  ListUserRolesResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;                  // @gotag: json:"code"
+  string msg = 254;                  // @gotag: json:"msg"
+}
+
+// List users by role
+message ListUsersByRoleRequest {
+  int64 role_id = 1; // @gotag: form:"roleId" binding:"required"
+  int32 page = 2;    // @gotag: form:"page" binding:"min=1" default:"1"
+  int32 page_size = 3; // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+}
+message ListUsersByRoleResponseData {
+  repeated common.User users = 1; // @gotag: json:"users"
+  int32 total = 2;                // @gotag: json:"total"
+  bool has_next = 3;              // @gotag: json:"hasNext"
+}
+message ListUsersByRoleResponse {
+  ListUsersByRoleResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;                     // @gotag: json:"code"
+  string msg = 254;                     // @gotag: json:"msg"
+}

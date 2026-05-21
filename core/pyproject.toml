@@ -1,0 +1,87 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+[project]
+name = "core"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "agent-framework==1.0.1",
+    "agent-framework-redis == 1.0.0b260116",
+    "betterproto2-compiler>=0.9.0",
+    "betterproto2[all]>=0.9.1",
+    "dotenv>=0.9.9",
+    "grpcio>=1.76.0",
+    "grpcio-tools>=1.76.0",
+    "pydantic>=2.12.4",
+    "mem0ai==2.0.1",
+    "requests>=2.32.5",
+    "kafka-python>=2.3.0",
+    "pytest>=9.0.3",
+    "ruff>=0.9.10",
+    "pytest-asyncio>=1.3.0",
+    "pytest-mock>=3.15.1",
+    "kubernetes>=35.0.0",
+    "markitdown[all]>=0.1.5",
+    "python-toon>=0.1.3",
+    "json-schema-to-pydantic==0.4.7",
+    "openai>=2.8.1",
+    "truststore>=0.10.1",
+    "fakeredis[lua]>=2.35.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"
+addopts = "-v"
+
+[tool.ruff]
+extend-exclude = ["app/pb"]
+line-length = 130
+target-version = "py313"
+
+# Size/complexity rules are part of the default lint gate.
+#
+# Reference thresholds:
+#   E501   line-length (uses [tool.ruff].line-length = 130)
+#   C901   mccabe cyclomatic complexity (see max-complexity below)
+#   PLR0911 too-many-return-statements
+#   PLR0912 too-many-branches
+#   PLR0913 too-many-arguments
+#   PLR0915 too-many-statements  -> ~function length (100 lines ≈ 60 stmts)
+[tool.ruff.lint]
+extend-select = ["E501", "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.pylint]
+max-statements = 60
+max-branches = 15
+max-args = 7
+max-returns = 6
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR0915", "PLR0912", "PLR0913", "C901"]

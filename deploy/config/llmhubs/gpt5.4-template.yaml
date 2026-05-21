@@ -1,0 +1,41 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Copy this file (drop the -template suffix) and fill in the placeholders
+# before enabling. The loader skips descriptors where `template: true`.
+template: true
+model_key: gpt5.4
+display_name: GPT-5.4
+description: Azure OpenAI multimodal model for text and image understanding.
+default: false
+model_type: multimodal
+provider_template_type: azure_openai
+config:
+  deployment_name: gpt-5.4
+  endpoint: https://YOUR-RESOURCE.cognitiveservices.azure.com/
+  api_version: preview
+  timeout_ms: 60000
+  max_tokens: 128000
+  # OpenAI introduced the "original" image detail level with gpt-5.4, but
+  # support is deployment-specific. This template opts in because current
+  # GPT-5.4 mainline deployments accept it; remove ``original`` if your
+  # target deployment rejects it. OpenAI recommends ``original`` for
+  # computer-use / screenshot inputs when available.
+  supported_image_detail_levels: [auto, low, high, original]

@@ -1,0 +1,1174 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# -- Core ServiceAccount + RBAC for python-sandbox ----------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sico-core
+  namespace: sico
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandbox-pod-manager
+  namespace: python-sandbox
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/status"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sico-core-sandbox-binding
+  namespace: python-sandbox
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sandbox-pod-manager
+subjects:
+  - kind: ServiceAccount
+    name: sico-core
+    namespace: sico
+---
+# -- MySQL (official mysql:8.0) ------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-data
+  namespace: sico
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-mysql
+  namespace: sico
+  labels:
+    app: sico-mysql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sico-mysql
+  template:
+    metadata:
+      labels:
+        app: sico-mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_RANDOM_ROOT_PASSWORD
+              value: "1"
+            - name: MYSQL_ROOT_HOST
+              value: "localhost"
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: sico-credentials
+                  key: DB_NAME
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sico-credentials
+                  key: DB_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sico-credentials
+                  key: DB_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "127.0.0.1"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "127.0.0.1"]
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["SETUID", "SETGID", "CHOWN", "DAC_OVERRIDE", "FOWNER"]
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+              cpu: 500m
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mysql-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-mysql
+  namespace: sico
+spec:
+  selector:
+    app: sico-mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+---
+# -- Redis config (mounted from Secret) ----------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-config
+  namespace: sico
+type: Opaque
+stringData:
+  redis.conf: |
+    requirepass REDIS_PASSWORD_PLACEHOLDER
+---
+# -- Redis (official redis:7-alpine) ------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-redis
+  namespace: sico
+  labels:
+    app: sico-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sico-redis
+  template:
+    metadata:
+      labels:
+        app: sico-redis
+    spec:
+      initContainers:
+        - name: render-config
+          image: redis:7-alpine
+          command: ["sh", "-c"]
+          args:
+            - |
+              awk '{
+                idx = index($0, "REDIS_PASSWORD_PLACEHOLDER");
+                if (idx > 0) print substr($0, 1, idx-1) ENVIRON["REDIS_PASSWORD"] substr($0, idx + 26);
+                else print $0;
+              }' /tmp/redis-template/redis.conf > /etc/redis/redis.conf
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sico-credentials
+                  key: REDIS_PASSWORD
+          volumeMounts:
+            - name: redis-config-template
+              mountPath: /tmp/redis-template
+              readOnly: true
+            - name: redis-config-rendered
+              mountPath: /etc/redis
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "/etc/redis/redis.conf"]
+          env:
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: sico-credentials
+                  key: REDIS_PASSWORD
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: redis-config-rendered
+              mountPath: /etc/redis
+              readOnly: true
+            - name: redis-data
+              mountPath: /data
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 128Mi
+              cpu: 200m
+      volumes:
+        - name: redis-config-template
+          secret:
+            secretName: redis-config
+        - name: redis-config-rendered
+          emptyDir: {}
+        - name: redis-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-redis
+  namespace: sico
+spec:
+  selector:
+    app: sico-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+# -- Kafka (KRaft mode, no ZooKeeper) -----------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-data
+  namespace: sico
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-kafka
+  namespace: sico
+  labels:
+    app: sico-kafka
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sico-kafka
+  template:
+    metadata:
+      labels:
+        app: sico-kafka
+    spec:
+      containers:
+        - name: kafka
+          image: apache/kafka:3.9.0
+          ports:
+            - containerPort: 9092
+              name: plaintext
+            - containerPort: 9093
+              name: controller
+          env:
+            - name: KAFKA_NODE_ID
+              value: "1"
+            - name: KAFKA_PROCESS_ROLES
+              value: broker,controller
+            - name: KAFKA_LISTENERS
+              value: PLAINTEXT://:9092,CONTROLLER://:9093
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: PLAINTEXT://sico-kafka:9092
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: CONTROLLER
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: 1@localhost:9093
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_LOG_DIRS
+              value: /var/lib/kafka/data
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms256m -Xmx512m"
+            - name: CLUSTER_ID
+              value: sico-kafka-cluster-001
+            # Bound resource usage so the broker doesn't OOMKill on long-running deployments.
+            # The producer (core) is chatty (per-chunk + 5s keepalives) and the consumer
+            # (backend) uses no consumer group, so cleanup is purely time/size based.
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms256m -Xmx384m"
+            - name: KAFKA_LOG_RETENTION_HOURS
+              value: "2"
+            - name: KAFKA_LOG_RETENTION_BYTES
+              value: "268435456"          # 256 MiB per partition
+            - name: KAFKA_LOG_SEGMENT_BYTES
+              value: "67108864"           # 64 MiB segments -> faster cleanup
+            - name: KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS
+              value: "60000"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 100m
+            limits:
+              memory: 1Gi
+              cpu: 500m
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: kafka-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-kafka
+  namespace: sico
+spec:
+  selector:
+    app: sico-kafka
+  ports:
+    - port: 9092
+      targetPort: 9092
+---
+# -- Kafka topic init Job -----------------------------------------------------
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sico-kafka-init
+  namespace: sico
+  labels:
+    app: sico-kafka-init
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: sico-kafka-init
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-kafka
+          image: apache/kafka:3.9.0
+          command:
+            - sh
+            - -c
+            - |
+              until /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server sico-kafka:9092 > /dev/null 2>&1; do
+                echo "Waiting for Kafka..."
+                sleep 5
+              done
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: kafka-init
+          image: apache/kafka:3.9.0
+          command:
+            - /opt/kafka/bin/kafka-topics.sh
+            - --bootstrap-server
+            - sico-kafka:9092
+            - --create
+            - --if-not-exists
+            - --topic
+            - core-backend
+            - --partitions
+            - "1"
+            - --replication-factor
+            - "1"
+            - --config
+            - retention.ms=7200000
+            - --config
+            - retention.bytes=268435456
+            - --config
+            - segment.bytes=67108864
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+# -- SeaweedFS Master ---------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seaweedfs-master-data
+  namespace: sico
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-seaweedfs-master
+  namespace: sico
+  labels:
+    app: sico-seaweedfs-master
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sico-seaweedfs-master
+  template:
+    metadata:
+      labels:
+        app: sico-seaweedfs-master
+    spec:
+      containers:
+        - name: seaweedfs-master
+          image: chrislusf/seaweedfs:3.80
+          command: ["weed", "master", "-ip=sico-seaweedfs-master", "-ip.bind=0.0.0.0", "-port=9333"]
+          ports:
+            - containerPort: 9333
+              name: master
+            - containerPort: 19333
+              name: master-grpc
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /dir/status
+              port: 9333
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /dir/status
+              port: 9333
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 256Mi
+              cpu: 250m
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: seaweedfs-master-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-seaweedfs-master
+  namespace: sico
+spec:
+  selector:
+    app: sico-seaweedfs-master
+  ports:
+    - name: http
+      port: 9333
+      targetPort: 9333
+    - name: grpc
+      port: 19333
+      targetPort: 19333
+---
+# -- SeaweedFS Volume ---------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seaweedfs-volume-data
+  namespace: sico
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-seaweedfs-volume
+  namespace: sico
+  labels:
+    app: sico-seaweedfs-volume
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sico-seaweedfs-volume
+  template:
+    metadata:
+      labels:
+        app: sico-seaweedfs-volume
+    spec:
+      containers:
+        - name: seaweedfs-volume
+          image: chrislusf/seaweedfs:3.80
+          command: ["weed", "volume", "-mserver=sico-seaweedfs-master:9333", "-ip.bind=0.0.0.0", "-port=9334", "-dir=/data"]
+          ports:
+            - containerPort: 9334
+              name: volume
+            - containerPort: 19334
+              name: volume-grpc
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 9334
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 9334
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 50m
+            limits:
+              memory: 512Mi
+              cpu: 500m
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: seaweedfs-volume-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-seaweedfs-volume
+  namespace: sico
+spec:
+  selector:
+    app: sico-seaweedfs-volume
+  ports:
+    - name: http
+      port: 9334
+      targetPort: 9334
+    - name: grpc
+      port: 19334
+      targetPort: 19334
+---
+# -- SeaweedFS Filer ----------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seaweedfs-filer-data
+  namespace: sico
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-seaweedfs-filer
+  namespace: sico
+  labels:
+    app: sico-seaweedfs-filer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sico-seaweedfs-filer
+  template:
+    metadata:
+      labels:
+        app: sico-seaweedfs-filer
+    spec:
+      containers:
+        - name: seaweedfs-filer
+          image: chrislusf/seaweedfs:3.80
+          command: ["weed", "filer", "-master=sico-seaweedfs-master:9333", "-ip.bind=0.0.0.0", "-port=9335"]
+          ports:
+            - containerPort: 9335
+              name: filer
+            - containerPort: 19335
+              name: filer-grpc
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9335
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9335
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 256Mi
+              cpu: 250m
+          volumeMounts:
+            # The filer keeps its metadata index here (default leveldb2 store).
+            # Without persistent storage, every pod restart wipes the index and
+            # orphans every previously uploaded object.
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: seaweedfs-filer-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-seaweedfs-filer
+  namespace: sico
+spec:
+  selector:
+    app: sico-seaweedfs-filer
+  ports:
+    - name: http
+      port: 14003
+      targetPort: 9335
+    - name: grpc
+      port: 19335
+      targetPort: 19335
+---
+# -- Qdrant (vector database for mem0) ----------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-data
+  namespace: sico
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-qdrant
+  namespace: sico
+  labels:
+    app: sico-qdrant
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sico-qdrant
+  template:
+    metadata:
+      labels:
+        app: sico-qdrant
+    spec:
+      containers:
+        - name: qdrant
+          image: qdrant/qdrant:v1.13.2
+          ports:
+            - containerPort: 6333
+              name: http
+            - containerPort: 6334
+              name: grpc
+          volumeMounts:
+            - name: data
+              mountPath: /qdrant/storage
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 6333
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: 6333
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+              cpu: 500m
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: qdrant-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-qdrant
+  namespace: sico
+spec:
+  selector:
+    app: sico-qdrant
+  ports:
+    - name: http
+      port: 6333
+      targetPort: 6333
+    - name: grpc
+      port: 6334
+      targetPort: 6334
+---
+# -- Core storage PVC ---------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: core-storage
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteOnce]
+  storageClassName: ""
+  hostPath:
+    path: /mnt/sico-storage
+    type: DirectoryOrCreate
+  claimRef:
+    namespace: sico
+    name: core-storage
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: core-storage
+  namespace: sico
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ""
+  volumeName: core-storage
+  resources:
+    requests:
+      storage: 1Gi
+---
+# -- Nginx reverse proxy ------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: sico
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    pid /tmp/nginx.pid;
+    http {
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        server_tokens off;
+
+        access_log /dev/stdout;
+        error_log /dev/stderr;
+
+        # Use kube-dns resolver
+        resolver kube-dns.kube-system.svc.cluster.local valid=10s ipv6=off;
+
+        # Map for WebSocket upgrade (used by emulator VNC H264 stream).
+        map $http_upgrade $connection_upgrade {
+            default upgrade;
+            ''      close;
+        }
+
+        # Rate limiting: 10 requests/sec per client IP, burst up to 20
+        limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+
+        server {
+            listen 8080;
+            server_name _;
+
+            # Security headers
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-Frame-Options "DENY" always;
+            add_header X-XSS-Protection "1; mode=block" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+
+            set $backend_upstream http://sico-backend.sico.svc.cluster.local:8080;
+
+            # Swagger UI needs permissive CSP to load its own CSS/JS assets
+            location /api/sico/docs/ {
+                proxy_pass $backend_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" always;
+                add_header X-Content-Type-Options "nosniff" always;
+            }
+
+            # Emulator VNC viewer is embedded as a same-origin iframe by the
+            # SPA, so the server-level "X-Frame-Options: DENY" /
+            # "frame-ancestors 'none'" headers must be relaxed to SAMEORIGIN
+            # for these routes. Also needs WebSocket upgrade for the H264
+            # stream at /ws/h264.
+            location ~ ^/api/sico/sandbox/resources/emulator/ {
+                proxy_pass $backend_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+                proxy_buffering off;
+                proxy_read_timeout 3600s;
+                client_max_body_size 10M;
+
+                add_header X-Frame-Options "SAMEORIGIN" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; media-src 'self' blob:; frame-ancestors 'self'" always;
+                add_header X-Content-Type-Options "nosniff" always;
+            }
+
+            location /api/ {
+                limit_req zone=api_limit burst=20 nodelay;
+
+                proxy_pass $backend_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_buffering off;
+                proxy_read_timeout 60s;
+                client_max_body_size 10M;
+
+                # The backend stores object URLs as the cluster-internal filer
+                # address (used by core/sandbox), but browsers can't resolve
+                # that hostname. Rewrite it to the same-origin /storage path
+                # served by this nginx so SPA fetches go through the proxy.
+                # `sub_filter` requires the upstream response to be uncompressed.
+                proxy_set_header Accept-Encoding "";
+                sub_filter_once off;
+                sub_filter_types application/json;
+                sub_filter 'http://sico-seaweedfs-filer:14003' '/storage';
+                sub_filter 'http:\/\/sico-seaweedfs-filer:14003' '\/storage';
+            }
+
+            location /health {
+                proxy_pass $backend_upstream;
+            }
+
+            # Lightweight liveness endpoint served by nginx itself, used by
+            # the kubelet probes so they don't depend on upstream readiness.
+            location = /nginx-health {
+                access_log off;
+                return 200 "ok";
+                add_header Content-Type text/plain;
+            }
+
+            # Proxy storage requests to SeaweedFS filer
+            set $seaweedfs_upstream http://sico-seaweedfs-filer.sico.svc.cluster.local:14003;
+
+            # HTML deliverables produced by agents (e.g. generated reports) are
+            # previewed inside a same-origin sandboxed iframe in the SPA's
+            # FileDrawer. Relax the storage-level "DENY"/"frame-ancestors 'none'"
+            # headers to SAMEORIGIN/'self' for .html responses only, so the iframe
+            # is allowed to load. The sandbox attribute on the iframe still
+            # isolates script execution from the parent origin.
+            location ~ ^/storage/.*\.html$ {
+                rewrite ^/storage/(.*) /$1 break;
+                proxy_pass $seaweedfs_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_buffering off;
+
+
+                # Rewrite internal filer URLs embedded in generated HTML reports
+                # to the same-origin /storage path; `sub_filter` needs uncompressed
+                # upstream responses.
+                proxy_set_header Accept-Encoding "";
+                sub_filter_once off;
+                sub_filter 'http://sico-seaweedfs-filer:14003' '/storage';
+                sub_filter 'http:\/\/sico-seaweedfs-filer:14003' '\/storage';
+
+                add_header Content-Security-Policy "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'self'" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header X-Frame-Options "SAMEORIGIN" always;
+                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            }
+
+            location /storage/ {
+                rewrite ^/storage/(.*) /$1 break;
+                proxy_pass $seaweedfs_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_buffering off;
+
+                add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header X-Frame-Options "DENY" always;
+                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            }
+
+            # Everything else is the React SPA, served by the frontend Deployment.
+            set $frontend_upstream http://sico-frontend.sico.svc.cluster.local:80;
+            location / {
+                proxy_pass $frontend_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+
+                # The server-level CSP (default-src 'none') would block the SPA's
+                # own JS/CSS/fonts. Replace it with one that allows same-origin
+                # assets plus the inline styles/styled-components the app uses.
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header X-Frame-Options "DENY" always;
+                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            }
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-nginx
+  namespace: sico
+  labels:
+    app: sico-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sico-nginx
+  template:
+    metadata:
+      labels:
+        app: sico-nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/nginx
+          readinessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"]
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 25m
+            limits:
+              memory: 64Mi
+              cpu: 100m
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-nginx
+  namespace: sico
+spec:
+  selector:
+    app: sico-nginx
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+# -- Kafka UI -----------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-kafka-ui
+  namespace: sico
+  labels:
+    app: sico-kafka-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sico-kafka-ui
+  template:
+    metadata:
+      labels:
+        app: sico-kafka-ui
+    spec:
+      containers:
+        - name: kafka-ui
+          image: provectuslabs/kafka-ui:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: KAFKA_CLUSTERS_0_NAME
+              value: local
+            - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+              value: sico-kafka:9092
+          startupProbe:
+            httpGet:
+              path: /api/clusters
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/clusters
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/clusters
+              port: 8080
+            periodSeconds: 15
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 768Mi
+              cpu: 500m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-kafka-ui
+  namespace: sico
+spec:
+  selector:
+    app: sico-kafka-ui
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

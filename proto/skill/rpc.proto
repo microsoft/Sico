@@ -1,0 +1,76 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package skill;
+
+option go_package = "sico-backend/internal/transport/grpc/pb/skill;skillgrpc";
+
+import "skill/skill.proto";
+
+service SkillService {
+    // ExtractSkill downloads the skill zip from the given URL,
+    // extracts it, and persists files to storage.
+    rpc ExtractSkill(ExtractSkillRequest) returns (ExtractSkillResponse) {}
+
+    // GetSkillDetails returns the file contents of a skill.
+    rpc GetSkillDetails(GetSkillDetailsGrpcRequest) returns (GetSkillDetailsGrpcResponse) {}
+
+    // DeleteSkillFromFS deletes the skill files from the filesystem.
+    rpc DeleteSkillFromFS(DeleteSkillFromFSRequest) returns (DeleteSkillFromFSResponse) {}
+}
+
+message ExtractSkillRequest {
+    int64 skill_id = 1;        // @gotag: json:"skillId"
+    int64 project_id = 2;     // @gotag: json:"projectId"
+    string agent_id = 3;      // @gotag: json:"agentId"
+    string download_url = 4;  // @gotag: json:"downloadUrl"
+}
+
+message ExtractSkillResponse {
+    string message = 1;     // @gotag: json:"message"
+    string name = 2;        // @gotag: json:"name"
+    string description = 3; // @gotag: json:"description"
+    int32 code = 253;       // @gotag: json:"code"
+}
+
+message GetSkillDetailsGrpcRequest {
+    int64 skill_id = 1;    // @gotag: json:"skillId"
+    int64 project_id = 2;  // @gotag: json:"projectId"
+    string agent_id = 3;   // @gotag: json:"agentId"
+}
+
+message GetSkillDetailsGrpcResponse {
+    repeated SkillFile files = 1; // @gotag: json:"files"
+    int32 code = 253;             // @gotag: json:"code"
+    string msg = 254;             // @gotag: json:"msg"
+}
+
+message DeleteSkillFromFSRequest {
+    int64 skill_id = 1;    // @gotag: json:"skillId"
+    int64 project_id = 2;  // @gotag: json:"projectId"
+    string agent_id = 3;   // @gotag: json:"agentId"
+}
+
+message DeleteSkillFromFSResponse {
+    int32 code = 253;  // @gotag: json:"code"
+    string msg = 254;  // @gotag: json:"msg"
+}

@@ -1,0 +1,76 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package msg;
+
+option go_package = "sico-backend/internal/transport/http/dto/conversation";
+import "common/common.proto";
+import "conversation/chat.proto";
+
+enum MessageContentType {
+  MESSAGE_CONTENT_TYPE_UNKNOWN = 0;
+  MESSAGE_CONTENT_TYPE_MARKDOWN = 1;
+  MESSAGE_CONTENT_TYPE_IMAGE = 4;
+  MESSAGE_CONTENT_TYPE_END = 5;
+  MESSAGE_CONTENT_TYPE_ERROR = 6;
+  MESSAGE_CONTENT_TYPE_PLAYBOOK_INGESTION = 8;
+  MESSAGE_CONTENT_TYPE_PLAN = 9;
+}
+
+message MessageItem {
+  int64 message_id = 1; // @gotag: json:"messageId"
+  int64 turn_id = 2; // @gotag: json:"turnId"
+  string role = 3; // @gotag: json:"role"
+  string username = 4; // @gotag: json:"username"
+  int64 agent_instance_id = 5; // @gotag: json:"agentInstanceId"
+  MessageContentType type = 6; // @gotag: json:"type"
+  string content = 7; // @gotag: json:"content"
+  chat.FunctionContext function_context = 8; // @gotag: json:"functionContext"
+  repeated common.Attachment attachments = 9; // @gotag: json:"attachments"
+  int64 created_at = 10; // @gotag: json:"createdAt"
+  int64 updated_at = 11; // @gotag: json:"updatedAt"
+}
+
+message MessageTurn {
+  int64 turn_id = 1; // @gotag: json:"turnId"
+  repeated MessageItem messages = 2; // @gotag: json:"messages"
+}
+
+
+message MessageExtraInfo {
+    // Reserved for future use
+}
+
+message Message {
+    int64 id = 1; // @gotag: json:"id"
+    int64 turn_id = 2; // @gotag: json:"turnId"
+    int64 conversation_id = 3; // @gotag: json:"conversationId"
+    string username = 4; // @gotag: json:"username"
+    int64 agent_instance_id = 5; // @gotag: json:"agentInstanceId"
+    string role = 6; // @gotag: json:"role"
+    chat.ChatContentType content_type = 7; // @gotag: json:"contentType"
+    string content = 8; // @gotag: json:"content"
+    chat.FunctionContext function_context = 9; // @gotag: json:"functionContext"
+    MessageExtraInfo ext = 10; // @gotag: json:"ext"
+    repeated common.Attachment attachments = 11; // @gotag: json:"attachments"
+    int64 created_at = 12; // @gotag: json:"createdAt"
+    int64 updated_at = 13; // @gotag: json:"updatedAt"
+}

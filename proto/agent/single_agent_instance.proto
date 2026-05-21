@@ -1,0 +1,152 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package single_agent_instance;
+
+option go_package = "sico-backend/internal/transport/http/dto/agent/single_agent";
+
+import "common/common.proto";
+import "project/project.proto";
+import "sandbox/restful.proto";
+
+// SingleAgentInstance message
+message SingleAgentInstance {
+  int64 id = 1;   // @gotag: json:"id"
+  string agent_id = 2;   // @gotag: json:"agentId"
+  string employer_username = 3;   // @gotag: json:"employerUsername"
+  string operator_username = 4;   // @gotag: json:"operatorUsername"
+  string name = 5;  // @gotag: json:"name"
+  string role = 6;  // @gotag: json:"role"
+  string desc = 7;  // @gotag: json:"desc"
+  string raw_icon_uri = 8;  // @gotag: json:"rawIconUri"
+  string icon_uri = 9;  // @gotag: json:"iconUri"
+  string raw_employer_icon_uri = 10;                // @gotag: json:"rawEmployerIconUri"
+  string employer_icon_uri = 11;                // @gotag: json:"employerIconUri"
+  int64 project_id = 13;       // @gotag: json:"-"
+  string permission = 17;  // @gotag: json:"permission"
+  repeated common.Attachment attachments = 18;  // @gotag: json:"attachments"
+  reserved 19;
+  int64 created_at = 23;  // @gotag: json:"createdAt"
+  int64 updated_at = 24;  // @gotag: json:"updatedAt"
+  project.Project project = 26;    // @gotag: json:"project"
+  repeated sandbox.InstanceSandboxStatusInfo sandboxes = 27; // @gotag: json:"sandboxes"
+}
+
+// Request to create a single agent instance
+message CreateSingleAgentInstanceRequest {
+  string agent_id = 1;      // @gotag: form:"agentId" json:"agentId"
+  string employer_username = 2;   // @gotag: form:"employerUsername" binding:"required" json:"employerUsername"
+  string name = 3;          // @gotag: form:"name" binding:"required" json:"name"
+  string desc = 4;          // @gotag: form:"desc" json:"desc"
+  string role = 5;          // @gotag: form:"role" json:"role"
+  string icon_uri = 6;      // @gotag: form:"iconUri" json:"iconUri"
+  string employer_icon_uri = 7;                   // @gotag: json:"employerIconUri"
+  repeated common.Attachment attachments = 12;       // @gotag: json:"attachments"
+  reserved 13;
+}
+
+// Response for creating a single agent instance
+message CreateSingleAgentInstanceResponse {
+  CreateSingleAgentInstanceData data = 1;   // @gotag: json:"data"
+  int32 code = 253;                         // @gotag: json:"code"
+  string msg = 254;                         // @gotag: json:"msg"
+}
+
+message CreateSingleAgentInstanceData {
+  int64 id = 1;       // @gotag: json:"id"
+  string agent_id = 2;       // @gotag: json:"agentId"
+  string employer_username = 3;    // @gotag: json:"employerUsername"
+}
+
+// Request to get a single agent instance
+message GetSingleAgentInstanceRequest {
+  int64 id = 1;       // @gotag: form:"id" binding:"required"
+}
+
+// Response for getting a single agent instance
+message GetSingleAgentInstanceResponse {
+  GetSingleAgentInstanceData data = 1;    // @gotag: json:"data"
+  int32 code = 253;                       // @gotag: json:"code"
+  string msg = 254;                       // @gotag: json:"msg"
+}
+
+message GetSingleAgentInstanceData {
+  SingleAgentInstance instance = 1;    // @gotag: json:"instance"
+}
+
+// Request to update a single agent instance
+message UpdateSingleAgentInstanceRequest {
+  int64 id = 1;                                       // @gotag: json:"id" binding:"required"
+  string operator_username = 2;                             // @gotag: json:"-"
+  string permission = 3;                              // @gotag: json:"permission"
+  string name = 8;                                    // @gotag: json:"name"
+  repeated common.Attachment attachments = 10;        // @gotag: json:"attachments"
+  reserved 11;
+  int64 project_id = 12;                    // @gotag: json:"projectId"
+  string desc = 13;                            // @gotag: json:"desc"
+}
+
+// Response for updating a single agent instance
+message UpdateSingleAgentInstanceResponse {
+  int32 code = 253;                 // @gotag: json:"code"
+  string msg = 254;                 // @gotag: json:"msg"
+}
+
+// Request to delete a single agent instance
+message DeleteSingleAgentInstanceRequest {
+  int64 id = 1;       // @gotag: form:"id" binding:"required" json:"id"
+  string operator_username = 2;    // @gotag: form:"operatorUsername" json:"-"
+}
+
+// Response for deleting a single agent instance
+message DeleteSingleAgentInstanceResponse {
+  int32 code = 253;                 // @gotag: json:"code"
+  string msg = 254;                 // @gotag: json:"msg"
+}
+
+// Request to list single agent instances
+message ListSingleAgentInstancesRequest {
+  string username = 1;    // @gotag: form:"username" json:"-"
+  int32 page = 4;           // @gotag: form:"page" binding:"required,min=1"
+  int32 page_size = 5;      // @gotag: form:"pageSize" binding:"required,min=1,max=50"
+  bool is_employer = 6;               // @gotag: form:"isEmployer"
+}
+
+// Response for listing single agent instances
+message ListSingleAgentInstancesResponse {
+  ListSingleAgentInstancesData data = 1;   // @gotag: json:"data"
+  int32 code = 253;                        // @gotag: json:"code"
+  string msg = 254;                        // @gotag: json:"msg"
+}
+
+message ListSingleAgentInstancesData {
+  repeated SingleAgentInstance instances = 1; // @gotag: json:"instances"
+  int32 total = 2;                           // @gotag: json:"total"
+  bool has_next = 3;                         // @gotag: json:"hasNext"
+}
+
+message ListSingleAgentInstanceFilter {
+  optional string employer_username = 1;             // @gotag: json:"employerUsername"
+  optional string operator_username = 2;             // @gotag: json:"operatorUsername"
+  optional string role = 5;                          // @gotag: json:"role"
+  optional int64 project_id = 6;                     // @gotag: json:"projectId"
+}

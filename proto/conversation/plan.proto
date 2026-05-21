@@ -1,0 +1,149 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+
+syntax = "proto3";
+
+package plan;
+option go_package = "sico-backend/internal/transport/http/dto/conversation";
+
+enum ToolType {
+    TOOL_TYPE_UNKNOWN = 0;
+    TOOL_TYPE_BUILTIN = 1;
+}
+
+enum ToolDeliverableType {
+    TOOL_DELIVERABLE_TYPE_UNKNOWN = 0;
+    TOOL_DELIVERABLE_TYPE_MARKDOWN = 1;
+    TOOL_DELIVERABLE_TYPE_FILE = 2;
+    TOOL_DELIVERABLE_TYPE_WEB_PREVIEW_URL = 3;
+    TOOL_DELIVERABLE_TYPE_ACQUIRED_SANDBOX = 5;
+    // ... more.
+}
+
+message ToolDeliverableAcquiredSandbox {
+    string sandbox_id = 1; // @gotag: json:"sandboxId,omitempty"
+    string sandbox_type = 2; // @gotag: json:"sandboxType,omitempty"
+    string endpoint = 3; // @gotag: json:"endpoint,omitempty"
+    string provider_base_url = 4; // @gotag: json:"providerBaseUrl,omitempty"
+    string device_id = 5; // @gotag: json:"deviceId,omitempty"
+    string display_name = 6; // @gotag: json:"displayName,omitempty"
+    string vnc_url = 7; // @gotag: json:"vncUrl,omitempty"
+}
+
+message ToolDeliverable {
+    ToolDeliverableType type = 1; // @gotag: json:"type,omitempty"
+    string markdown_content = 2; // @gotag: json:"markdownContent,omitempty"
+    string markdown_title = 5; // @gotag: json:"markdownTitle,omitempty"
+    string file_url = 3; // @gotag: json:"fileUrl,omitempty"
+    string file_name = 4; // @gotag: json:"fileName,omitempty"
+    string web_preview_sas_url = 6; // @gotag: json:"webPreviewSasUrl,omitempty"
+    ToolDeliverableAcquiredSandbox acquired_sandbox = 7; // @gotag: json:"acquiredSandbox,omitempty"
+    // ... more
+}
+
+message ToolExecutionInfo {
+    ToolType tool_type = 1; // @gotag: json:"toolType,omitempty"
+    string builtin_tool_name = 6; // @gotag: json:"builtinToolName,omitempty"
+
+    // Should also define other fields for Builtin tools, so that
+    // we can track the ToolExecution context when needed later.
+}
+
+enum ToolCallRunningListItemStatus {
+    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN = 0;
+    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING = 1;
+    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING = 2;
+    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE = 3;
+    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED = 4;
+    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED = 5;
+}
+
+enum ToolCallStatus {
+    TOOL_CALL_STATUS_UNKNOWN = 0;
+    TOOL_CALL_STATUS_RUNNING = 1;
+    TOOL_CALL_STATUS_FAILED = 2;
+    TOOL_CALL_STATUS_SUCCESSFUL = 3;
+    TOOL_CALL_STATUS_FAILED_ANALYZING = 4;
+    TOOL_CALL_STATUS_FAILED_ANALYZED = 5;
+    TOOL_CALL_STATUS_RETRY_RUNNING = 6;
+    TOOL_CALL_STATUS_RETRY_SUCCESSFUL = 7;
+    TOOL_CALL_STATUS_RETRY_FAILED = 8;
+}
+
+message ToolCallRunningListItem {
+    string name = 1; // @gotag: json:"name,omitempty"
+    ToolCallRunningListItemStatus status = 2; // @gotag: json:"status"
+}
+
+message ToolCall {
+    string tool_name = 1; // @gotag: json:"toolName,omitempty"
+    // message is for frontend display
+    string message = 2; // @gotag: json:"message,omitempty"
+    repeated ToolCallRunningListItem running_list = 6; // @gotag: json:"runningList,omitempty"
+    ToolExecutionInfo execution_info = 3; // @gotag: json:"executionInfo,omitempty"
+    repeated ToolDeliverable deliverables = 4; // @gotag: json:"deliverables,omitempty"
+    int64 tool_call_id = 5; // @gotag: json:"toolCallId,omitempty"
+    repeated ToolCall batch_calls = 7; // @gotag: json:"batchCalls,omitempty"
+    int64 batch_item_index = 8; // @gotag: json:"batchItemIndex,omitempty"
+    ToolCallStatus tool_call_status = 9; // @gotag: json:"toolCallStatus,omitempty"
+}
+
+enum PlanStepStatus {
+    PLAN_STEP_STATUS_UNKNOWN = 0;
+    PLAN_STEP_STATUS_PENDING = 1;
+    PLAN_STEP_STATUS_IN_PROGRESS = 2;
+    PLAN_STEP_STATUS_COMPLETED = 3;
+    PLAN_STEP_STATUS_FAILED = 4;
+    PLAN_STEP_STATUS_REQUIRE_HUMAN_INPUT = 5;
+    PLAN_STEP_STATUS_CANCELLED = 6;
+}
+
+message PlanStep {
+    string title = 1; // @gotag: json:"title,omitempty"
+    repeated ToolCall tool_calls = 2; // @gotag: json:"toolCalls,omitempty"
+    PlanStepStatus status = 3; // @gotag: json:"status,omitempty"
+}
+
+message PlanExtra {
+    string username = 1; // @gotag: json:"username,omitempty"
+    int64 agent_instance_id = 2; // @gotag: json:"agentInstanceId,omitempty"
+    string agent_id = 3; // @gotag: json:"agentId,omitempty"
+    int64 turn_id = 4; // @gotag: json:"turnId,omitempty"
+    int64 project_id = 5; // @gotag: json:"projectId,omitempty"
+    int64 conversation_id = 6; // @gotag: json:"conversationId,omitempty"
+    int64 updated_at = 7; // @gotag: json:"updatedAt,omitempty"
+}
+
+message Plan {
+    string title = 3; // @gotag: json:"title,omitempty"
+    repeated PlanStep steps = 1; // @gotag: json:"steps,omitempty"
+    PlanExtra extra = 2; // @gotag: json:"extra,omitempty"
+}
+
+enum PlanStatus {
+    PLAN_STATUS_UNKNOWN = 0;
+    PLAN_STATUS_NO_PLAN = 1;
+    PLAN_STATUS_RUNNING = 2;
+    PLAN_STATUS_COMPLETED = 3;
+    PLAN_STATUS_FAILED = 4;
+    PLAN_STATUS_REQUIRE_HUMAN_INPUT = 5;
+    PLAN_STATUS_CANCELLED = 6;
+}

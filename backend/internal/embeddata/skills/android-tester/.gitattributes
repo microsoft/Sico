@@ -1,0 +1,35 @@
+# Force deterministic line endings on checkout for the skill tree.
+
+* text=auto eol=lf
+
+*.sh     text eol=lf
+*.py     text eol=lf
+*.toml   text eol=lf
+*.md     text eol=lf
+*.env    text eol=lf
+*.json   text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+Makefile text eol=lf
+
+# PowerShell / Windows scripts: keep CRLF.
+*.ps1    text eol=crlf
+*.psm1   text eol=crlf
+*.psd1   text eol=crlf
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Binary formats — git must not touch these.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.svg  binary
+*.zip  binary
+*.gz   binary
+*.tar  binary
+*.exe  binary
+*.dll  binary
+*.so   binary
+*.whl  binary

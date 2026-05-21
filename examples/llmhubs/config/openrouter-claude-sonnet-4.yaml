@@ -1,0 +1,78 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Example OpenRouter model descriptor for llmhubs v2.
+#
+# This file is intentionally stored under examples/ so it is not auto-loaded as
+# a builtin model at startup. Use it as a copy/paste starting point for either:
+# 1. a builtin model you manage yourself, or
+# 2. a dynamic model registry entry created through the backend API.
+
+model_key: openrouter-claude-sonnet-4
+display_name: OpenRouter Claude Sonnet 4
+description: Claude Sonnet 4 routed through OpenRouter via the openai_compatible adapter.
+model_type: text
+provider_template_type: openai_compatible
+config:
+  base_url: https://openrouter.ai/api/v1
+  upstream_model_name: anthropic/claude-sonnet-4
+  # Set use_responses_api: true if you want to target /responses explicitly.
+  # Chat Completions remains the default for wider OpenRouter compatibility.
+  # use_responses_api: true
+  site_url: https://example.com
+  app_name: Sico
+  timeout_ms: 60000
+  max_tokens: 8192
+
+# Authentication:
+# - For a dynamic model registry entry, set authType=1 and provide the
+#   OpenRouter API key as a bearer token.
+# - For a builtin model, provide bearer_token through your own secure config path
+#   if your deployment supports builtin secrets.
+
+# Example request options accepted automatically for OpenRouter chat completions:
+# options:
+#   models: [anthropic/claude-sonnet-4, openai/gpt-4.1-mini]
+#   route: fallback
+#   provider:
+#     require_parameters: true
+#   plugins:
+#     - id: web
+#   top_k: 20
+#   min_p: 0.1
+#   repetition_penalty: 1.05
+#   metadata:
+#     tenant: demo
+#   session_id: sess_demo
+#   trace:
+#     trace_id: trace_demo
+#   verbosity: low
+#
+# Example request options commonly used with OpenRouter Responses API when
+# use_responses_api: true is enabled:
+# options:
+#   metadata:
+#     tenant: demo
+#   store: true
+#   verbosity: low
+#   provider:
+#     require_parameters: true
+#   route: fallback
+#   models: [anthropic/claude-sonnet-4, openai/gpt-4.1-mini]
