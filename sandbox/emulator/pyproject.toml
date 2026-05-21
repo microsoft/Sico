@@ -29,7 +29,7 @@ dependencies = [
 	"fastapi==0.120.1",
 	"uvicorn[standard]==0.30.6",
 	"pydantic-settings==2.6.1",
-	"python-multipart==0.0.22",
+	"python-multipart==0.0.27",
 ]
 
 [project.optional-dependencies]
