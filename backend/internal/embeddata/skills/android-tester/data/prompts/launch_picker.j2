@@ -1,0 +1,24 @@
+You are helping an Android automation agent launch an app.
+
+The agent tried to launch an app named:
+  {{ requested_app }}
+
+This name could not be resolved to an installed package on the
+device. Below is the list of packages currently installed on the
+device. Pick the single package whose app best matches the
+requested name in the context of the user's task.
+
+### User Task
+{{ problem }}
+
+### Installed Packages
+{% for pkg in installed_packages %}
+- {{ pkg }}
+{% endfor %}
+
+### Output Format
+Respond with exactly one line containing only the chosen package
+name (for example: `com.example.app`). No quotes, no
+explanation, no extra text. If none of the installed packages
+plausibly matches the requested app, respond with the single
+word: NONE

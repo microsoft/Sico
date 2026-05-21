@@ -1,0 +1,297 @@
+# Copyright (c) 2026 Sico Authors
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Default deny all ingress in the sico namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: sico
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Allow backend -> MySQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-mysql
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-mysql
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-backend
+      ports:
+        - port: 3306
+          protocol: TCP
+---
+# Allow backend + core -> Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-to-redis
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-backend
+        - podSelector:
+            matchLabels:
+              app: sico-core
+      ports:
+        - port: 6379
+          protocol: TCP
+---
+# Allow core -> backend gRPC and backend -> core gRPC
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-grpc
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-core
+      ports:
+        - port: 50054
+          protocol: TCP
+    # Allow HTTP access from nginx and python-sandbox pods
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-nginx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: python-sandbox
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-core-grpc
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-core
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-backend
+      ports:
+        - port: 50053
+          protocol: TCP
+---
+# Allow backend + core + kafka-init -> Kafka
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-to-kafka
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-kafka
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-backend
+        - podSelector:
+            matchLabels:
+              app: sico-core
+        - podSelector:
+            matchLabels:
+              app: sico-kafka-init
+        - podSelector:
+            matchLabels:
+              app: sico-kafka-ui
+      ports:
+        - port: 9092
+          protocol: TCP
+---
+# Allow external -> Kafka UI (port-forwarded)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kafka-ui-ingress
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-kafka-ui
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+---
+# Allow backend + nginx -> SeaweedFS Filer
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-to-seaweedfs-filer
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-seaweedfs-filer
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-backend
+        - podSelector:
+            matchLabels:
+              app: sico-core
+        - podSelector:
+            matchLabels:
+              app: sico-nginx
+        # Filer subscribes to its own gRPC for meta aggregation (loopSubscribeToOneFiler).
+        - podSelector:
+            matchLabels:
+              app: sico-seaweedfs-filer
+      ports:
+        - port: 9335
+          protocol: TCP
+        - port: 19335
+          protocol: TCP
+---
+# Allow SeaweedFS internal: filer + volume -> master
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-seaweedfs-master
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-seaweedfs-master
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-seaweedfs-volume
+        - podSelector:
+            matchLabels:
+              app: sico-seaweedfs-filer
+      ports:
+        # 9333 = master HTTP, 19333 = master gRPC (used by filer to assign file ids
+        # and by volume server heartbeats). Both must be reachable.
+        - port: 9333
+          protocol: TCP
+        - port: 19333
+          protocol: TCP
+---
+# Allow SeaweedFS internal: filer -> volume
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-seaweedfs-volume
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-seaweedfs-volume
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-seaweedfs-filer
+      ports:
+        # 9334 = volume HTTP, 19334 = volume gRPC (filer streams chunk uploads here).
+        - port: 9334
+          protocol: TCP
+        - port: 19334
+          protocol: TCP
+---
+# Allow external -> nginx (port-forwarded)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-nginx-ingress
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-nginx
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+---
+# Allow nginx -> frontend (SPA static bundle)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-nginx-to-frontend
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-nginx
+      ports:
+        - port: 80
+          protocol: TCP

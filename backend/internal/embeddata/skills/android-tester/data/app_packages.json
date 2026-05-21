@@ -1,0 +1,6 @@
+{
+  "settings": "com.android.settings",
+  "edge": "com.microsoft.emmx",
+  "chrome": "com.android.chrome",
+  "play store": "com.android.vending"
+}

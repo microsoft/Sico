@@ -1,0 +1,131 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package reverse_rpc;
+option go_package = "sico-backend/internal/transport/reverse_grpc/pb/sandbox/reverse_rpc";
+
+service ReverseSandboxRPC {
+
+    // RpcApplySandbox acquires a sandbox of the given type for the instance.
+    // type is required. Returns whether the acquisition succeeded and the sandbox ID.
+    rpc RpcApplySandbox(ApplySandboxRequest) returns (ApplySandboxResponse) {}
+
+    // RpcReleaseSandbox releases the specified sandbox for the instance.
+    rpc RpcReleaseSandbox(ReleaseSandboxRequest) returns (ReleaseSandboxResponse) {}
+
+    // RpcGetInstanceSandboxes returns all sandboxes assigned to an instance with type and status.
+    // If type is empty, returns all types. Used by core service to query sandbox state.
+    rpc RpcGetInstanceSandboxes(GetInstanceSandboxesRequest) returns (GetInstanceSandboxesResponse) {}
+
+    // RpcResetSandbox soft-resets a sandbox (e.g. close apps, go home for emulator).
+    // The lease and assignment are preserved — only the sandbox environment is reset.
+    rpc RpcResetSandbox(ResetSandboxRequest) returns (ResetSandboxResponse) {}
+
+    // RpcProxyAioSandboxHttp forwards an AIO sandbox HTTP API request through backend.
+    // This is intended for core-side tool execution against backend-proxied AIO resources.
+    rpc RpcProxyAioSandboxHttp(AioSandboxHttpRequest) returns (AioSandboxHttpResponse) {}
+
+}
+
+message AioSandboxHttpFormField {
+    string name = 1;          // @gotag: json:"name"
+    string text_value = 2;    // @gotag: json:"textValue"
+    bytes bytes_value = 3;    // @gotag: json:"bytesValue"
+    string file_name = 4;     // @gotag: json:"fileName"
+    string content_type = 5;  // @gotag: json:"contentType"
+}
+
+message AioSandboxHttpRequest {
+    string proxy_base_path = 1; // @gotag: json:"proxyBasePath"
+    string method = 2;          // @gotag: json:"method"
+    string path = 3;            // @gotag: json:"path"
+    string query_json = 4;      // @gotag: json:"queryJson"
+    string json_body_json = 5;  // @gotag: json:"jsonBodyJson"
+    repeated AioSandboxHttpFormField form_fields = 6; // @gotag: json:"formFields"
+    string agent_instance_id = 7; // @gotag: json:"agentInstanceId"
+}
+
+message AioSandboxHttpResponse {
+    int32 status_code = 1;      // @gotag: json:"statusCode"
+    string content_type = 2;    // @gotag: json:"contentType"
+    string body_text = 3;       // @gotag: json:"bodyText"
+    int32 code = 253;           // @gotag: json:"code"
+    string msg = 254;           // @gotag: json:"msg"
+}
+
+message InstanceSandboxInfo {
+    string sandbox_id = 1;    // @gotag: json:"sandboxId"
+    string type = 2;           // @gotag: json:"type"
+    string status = 3;         // @gotag: json:"status"          // available|assigned|in_use|unhealthy|unknown
+    string endpoint = 4;      // @gotag: json:"endpoint"
+    string vnc_url = 5;       // @gotag: json:"vncUrl"
+    string docs_url = 6;      // @gotag: json:"docsUrl"
+    string display_name = 7;  // @gotag: json:"displayName"
+}
+
+message GetInstanceSandboxesRequest {
+    string instance_id = 1;   // @gotag: json:"instanceId"
+    string type = 2;           // @gotag: json:"type"            // optional: filter by sandbox type (emulator|aio|wincua)
+}
+
+message ApplySandboxRequest {
+    string instance_id = 1;   // @gotag: json:"instanceId"
+    string type = 2;           // @gotag: json:"type"            // required: the sandbox type to acquire
+}
+
+message ReleaseSandboxRequest {
+    string instance_id = 1;   // @gotag: json:"instanceId"
+    string sandbox_id = 2;     // @gotag: json:"sandboxId"
+}
+
+message GetInstanceSandboxesResponse {
+    repeated InstanceSandboxInfo sandboxes = 1; // @gotag: json:"sandboxes"
+    int32 code = 253;                           // @gotag: json:"code"
+    string msg = 254;                           // @gotag: json:"msg"
+}
+
+message ApplySandboxResponse {
+    bool applied = 1;                           // @gotag: json:"applied"
+    string applied_sandbox_id = 2;             // @gotag: json:"appliedSandboxId"
+    string endpoint = 3;                        // @gotag: json:"endpoint"
+    string provider_base_url = 4;              // @gotag: json:"providerBaseUrl"
+    string device_id = 5;                       // @gotag: json:"deviceId"
+    string display_name = 6;                    // @gotag: json:"displayName"
+    string vnc_url = 7;                         // @gotag: json:"vncUrl"
+    int32 code = 253;                           // @gotag: json:"code"
+    string msg = 254;                           // @gotag: json:"msg"
+}
+
+message ReleaseSandboxResponse {
+    int32 code = 253;                           // @gotag: json:"code"
+    string msg = 254;                           // @gotag: json:"msg"
+}
+
+message ResetSandboxRequest {
+    string instance_id = 1;                     // @gotag: json:"instanceId"
+    string sandbox_id = 2;                      // @gotag: json:"sandboxId"
+}
+
+message ResetSandboxResponse {
+    int32 code = 253;                           // @gotag: json:"code"
+    string msg = 254;                           // @gotag: json:"msg"
+}

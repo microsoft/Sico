@@ -1,0 +1,320 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package llmhubs_restful;
+
+option go_package = "sico-backend/internal/transport/http/dto/llmhubs";
+
+import "google/protobuf/struct.proto";
+
+// ========================
+// Enums
+// ========================
+
+enum ModelType {
+  MODEL_TYPE_UNSPECIFIED = 0;
+  MODEL_TYPE_TEXT = 1;
+  MODEL_TYPE_MULTIMODAL = 2;
+  MODEL_TYPE_ARTIFACT = 3;
+}
+
+enum ProviderTemplateType {
+  PROVIDER_TEMPLATE_UNSPECIFIED = 0;
+  PROVIDER_TEMPLATE_AZURE_OPENAI = 1;
+  PROVIDER_TEMPLATE_OPENAI_COMPATIBLE = 2;
+  PROVIDER_TEMPLATE_HTTP_JSON = 4;
+  PROVIDER_TEMPLATE_HTTP_BINARY = 5;
+  PROVIDER_TEMPLATE_ANTHROPIC = 6;
+  PROVIDER_TEMPLATE_GEMINI = 7;
+}
+
+enum ModelStatus {
+  MODEL_STATUS_UNSPECIFIED = 0;
+  MODEL_STATUS_ACTIVE = 1;
+  MODEL_STATUS_DISABLED = 2;
+}
+
+enum AuthType {
+  AUTH_TYPE_NONE = 0;
+  AUTH_TYPE_BEARER_TOKEN = 1;
+  AUTH_TYPE_API_KEY_HEADER = 2;
+}
+
+// ========================
+// Model Registry CRUD
+// ========================
+
+message ModelRegistryEntry {
+  int64 id = 1;                                     // @gotag: json:"id"
+  string model_key = 2;                              // @gotag: json:"modelKey"
+  string display_name = 3;                           // @gotag: json:"displayName"
+  int32 model_type = 4;                              // @gotag: json:"modelType"
+  int32 provider_template_type = 5;                  // @gotag: json:"providerTemplateType"
+  string agent_id = 6;                               // @gotag: json:"agentId"
+  int32 status = 7;                                  // @gotag: json:"status"
+  bool is_builtin = 8;                               // @gotag: json:"isBuiltin"
+  string description = 9;                            // @gotag: json:"description"
+  string icon_uri = 10;                              // @gotag: json:"iconUri"
+  google.protobuf.Struct io_profile = 11;            // @gotag: json:"ioProfile"
+  google.protobuf.Struct config = 14;                // @gotag: json:"config"
+  string creator_username = 16;                      // @gotag: json:"creatorUsername"
+  string updater_username = 17;                      // @gotag: json:"updaterUsername"
+  int64 created_at = 18;                             // @gotag: json:"createdAt"
+  int64 updated_at = 19;                             // @gotag: json:"updatedAt"
+}
+
+message AuthConfig {
+  int32 auth_type = 1;      // @gotag: json:"authType"
+  string token = 2;         // @gotag: json:"token,omitempty"
+  string header_name = 3;   // @gotag: json:"headerName,omitempty"
+  string api_key_value = 4; // @gotag: json:"apiKeyValue,omitempty"
+}
+
+// ---- Create ----
+
+message CreateModelRegistryRequest {
+  string display_name = 1;                           // @gotag: json:"displayName" binding:"required,max=255"
+  int32 model_type = 2;                              // @gotag: json:"modelType" binding:"required,min=1,max=3"
+  int32 provider_template_type = 3;                  // @gotag: json:"providerTemplateType" binding:"required,min=1,max=7"
+  string agent_id = 4;                               // @gotag: json:"agentId"
+  string description = 5;                            // @gotag: json:"description"
+  string icon_uri = 6;                               // @gotag: json:"iconUri"
+  google.protobuf.Struct config = 7;                 // @gotag: json:"config" binding:"required"
+  AuthConfig auth = 11;                              // @gotag: json:"auth"
+}
+
+message CreateModelRegistryResponse {
+  CreateModelRegistryData data = 1;                  // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message CreateModelRegistryData {
+  ModelRegistryEntry model = 1;                      // @gotag: json:"model"
+}
+
+// ---- Update ----
+
+message UpdateModelRegistryRequest {
+  int64 id = 1;                                      // @gotag: json:"id" binding:"required"
+  string display_name = 2;                           // @gotag: json:"displayName"
+  string description = 3;                            // @gotag: json:"description"
+  string icon_uri = 4;                               // @gotag: json:"iconUri"
+  int32 model_type = 5;                              // @gotag: json:"modelType"
+  google.protobuf.Struct config = 6;                 // @gotag: json:"config"
+  AuthConfig auth = 10;                              // @gotag: json:"auth"
+}
+
+message UpdateModelRegistryResponse {
+  UpdateModelRegistryData data = 1;                  // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message UpdateModelRegistryData {
+  ModelRegistryEntry model = 1;                      // @gotag: json:"model"
+}
+
+// ---- Get ----
+
+message GetModelRegistryRequest {
+  int64 id = 1;                                      // @gotag: form:"id" binding:"required"
+}
+
+message GetModelRegistryResponse {
+  GetModelRegistryData data = 1;                     // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message GetModelRegistryData {
+  ModelRegistryEntry model = 1;                      // @gotag: json:"model"
+}
+
+// ---- List ----
+
+message ListModelRegistryRequest {
+  string agent_id = 1;                               // @gotag: form:"agentId"
+  int32 status = 2;                                  // @gotag: form:"status"
+  int32 provider_template_type = 3;                  // @gotag: form:"providerTemplateType"
+  int32 model_type = 4;                              // @gotag: form:"modelType"
+  int32 page = 5;                                    // @gotag: form:"page" binding:"required,min=1"
+  int32 page_size = 6;                               // @gotag: form:"pageSize" binding:"required,min=1,max=100"
+  string keyword = 7;                                // @gotag: form:"keyword"
+}
+
+message ListModelRegistryResponse {
+  ListModelRegistryData data = 1;                    // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message ListModelRegistryData {
+  repeated ModelRegistryEntry items = 1;             // @gotag: json:"items"
+  int64 total = 2;                                   // @gotag: json:"total"
+}
+
+// ---- Delete ----
+
+message DeleteModelRegistryRequest {
+  int64 id = 1;                                      // @gotag: json:"id" binding:"required"
+}
+
+message DeleteModelRegistryResponse {
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+// ---- Toggle (enable/disable) ----
+
+message ToggleModelRegistryRequest {
+  int64 id = 1;                                      // @gotag: json:"id" binding:"required"
+  bool enable = 2;                                   // @gotag: json:"enable"
+}
+
+message ToggleModelRegistryResponse {
+  ToggleModelRegistryData data = 1;                  // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message ToggleModelRegistryData {
+  ModelRegistryEntry model = 1;                      // @gotag: json:"model"
+}
+
+// ---- Stats ----
+
+message GetModelRegistryStatsRequest {
+  string agent_id = 1;                               // @gotag: form:"agentId"
+}
+
+message GetModelRegistryStatsResponse {
+  GetModelRegistryStatsData data = 1;                // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message GetModelRegistryStatsData {
+  int64 total_models = 1;                            // @gotag: json:"totalModels"
+  int64 active = 2;                                  // @gotag: json:"active"
+  int64 builtin_available = 3;                       // @gotag: json:"builtinAvailable"
+}
+
+// ========================
+// Provider Template List
+// ========================
+
+message ProviderTemplateInfo {
+  int32 type = 1;          // @gotag: json:"type"
+  string label = 2;        // @gotag: json:"label"
+  string description = 3;  // @gotag: json:"description"
+  string value = 4;        // @gotag: json:"value"
+}
+
+message ListProviderTemplatesRequest {
+}
+
+message ListProviderTemplatesResponse {
+  ListProviderTemplatesData data = 1;                // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message ListProviderTemplatesData {
+  repeated ProviderTemplateInfo items = 1;           // @gotag: json:"items"
+}
+
+// ========================
+// Runtime API
+// ========================
+
+message RuntimeInputContent {
+  string type = 1;           // @gotag: json:"type"
+  string text = 2;           // @gotag: json:"text,omitempty"
+  string image_base64 = 3;   // @gotag: json:"imageBase64,omitempty"
+  string file_url = 4;       // @gotag: json:"fileUrl,omitempty"
+  string file_base64 = 5;    // @gotag: json:"fileBase64,omitempty"
+  string call_id = 6;        // @gotag: json:"callId,omitempty"
+  string name = 7;           // @gotag: json:"name,omitempty"
+  string arguments = 8;      // @gotag: json:"arguments,omitempty"
+  google.protobuf.Struct output = 9;  // @gotag: json:"output,omitempty"
+  string image_url = 10;     // @gotag: json:"imageUrl,omitempty"
+  string media_type = 11;    // @gotag: json:"mediaType,omitempty"
+  string result = 12;        // @gotag: json:"result,omitempty"
+  repeated google.protobuf.Struct actions = 13; // @gotag: json:"actions,omitempty"
+  string detail = 14;        // @gotag: json:"detail,omitempty"
+}
+
+message RuntimeInput {
+  string role = 1;                               // @gotag: json:"role"
+  repeated RuntimeInputContent content = 2;      // @gotag: json:"content"
+}
+
+message RuntimeGenerateRequest {
+  reserved 6;
+  string model = 1;                              // @gotag: json:"model"
+  string instructions = 2;                       // @gotag: json:"instructions,omitempty"
+  repeated RuntimeInput inputs = 3;              // @gotag: json:"inputs" binding:"required"
+  google.protobuf.Struct options = 4;            // @gotag: json:"options,omitempty"
+  repeated google.protobuf.Struct tools = 5;     // @gotag: json:"tools,omitempty"
+  string previous_response_id = 7;               // @gotag: json:"previousResponseId,omitempty"
+}
+
+message RuntimeOutputItem {
+  string type = 1;                               // @gotag: json:"type"
+  string text = 2;                               // @gotag: json:"text,omitempty"
+  google.protobuf.Struct json = 3;               // @gotag: json:"json,omitempty"
+  string call_id = 4;                            // @gotag: json:"callId,omitempty"
+  string name = 5;                               // @gotag: json:"name,omitempty"
+  string arguments = 6;                          // @gotag: json:"arguments,omitempty"
+  repeated google.protobuf.Struct actions = 7;   // @gotag: json:"actions,omitempty"
+}
+
+message RuntimeArtifact {
+  string artifact_type = 1;                      // @gotag: json:"artifactType"
+  string mime_type = 2;                          // @gotag: json:"mimeType"
+  string filename = 3;                           // @gotag: json:"filename"
+  string storage_uri = 4;                        // @gotag: json:"storageUri,omitempty"
+  string download_url = 5;                       // @gotag: json:"downloadUrl"
+}
+
+message RuntimeUsage {
+  int64 prompt_tokens = 1;                       // @gotag: json:"promptTokens"
+  int64 completion_tokens = 2;                   // @gotag: json:"completionTokens"
+  int64 total_tokens = 3;                        // @gotag: json:"totalTokens"
+}
+
+message RuntimeTrace {
+  int32 provider_template_type = 1;              // @gotag: json:"providerTemplateType"
+  string model = 2;                              // @gotag: json:"model"
+  int64 latency_ms = 3;                          // @gotag: json:"latencyMs"
+}
+
+message RuntimeGenerateResponse {
+  repeated RuntimeOutputItem outputs = 1;        // @gotag: json:"outputs"
+  repeated RuntimeArtifact artifacts = 2;        // @gotag: json:"artifacts"
+  google.protobuf.Struct payload = 3;            // @gotag: json:"payload,omitempty"
+  RuntimeUsage usage = 4;                        // @gotag: json:"usage,omitempty"
+  RuntimeTrace trace = 5;                        // @gotag: json:"trace,omitempty"
+  int32 code = 253;                              // @gotag: json:"code"
+  string msg = 254;                              // @gotag: json:"msg"
+}

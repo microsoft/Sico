@@ -1,0 +1,146 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package skill;
+
+option go_package = "sico-backend/internal/transport/http/dto/skill";
+
+// Skill status
+enum SkillStatus {
+  SKILL_STATUS_UNKNOWN = 0;    // @gotag: json:"SKILL_STATUS_UNKNOWN"
+  SKILL_STATUS_UPLOADING = 1;  // @gotag: json:"SKILL_STATUS_UPLOADING"
+  SKILL_STATUS_UPLOADED = 2;   // @gotag: json:"SKILL_STATUS_UPLOADED"
+  SKILL_STATUS_FAILED = 3;     // @gotag: json:"SKILL_STATUS_FAILED"
+}
+
+// Skill entity
+message Skill {
+  int64 id = 1;                    // @gotag: json:"id"
+  int64 project_id = 2;           // @gotag: json:"projectId"
+  string agent_id = 3;            // @gotag: json:"agentId"
+  string name = 4;                // @gotag: json:"name"
+  string description = 5;        // @gotag: json:"description"
+  int64 asset_id = 6;            // @gotag: json:"assetId"
+  string creator_username = 7;   // @gotag: json:"creatorUsername"
+  SkillStatus status = 8;        // @gotag: json:"status"
+  string fail_reason = 9;        // @gotag: json:"failReason"
+  int64 created_at = 10;         // @gotag: json:"createdAt"
+  int64 updated_at = 11;         // @gotag: json:"updatedAt"
+}
+
+// Create Skill
+message CreateSkillRequest {
+  int64 project_id = 1;           // @gotag: json:"projectId" form:"projectId"
+  string agent_id = 2;            // @gotag: json:"agentId" form:"agentId"
+  int64 asset_id = 3;             // @gotag: json:"assetId" form:"assetId" binding:"required"
+}
+
+message CreateSkillResponse {
+  CreateSkillData data = 1; // @gotag: json:"data"
+  int32 code = 253;         // @gotag: json:"code"
+  string msg = 254;         // @gotag: json:"msg"
+}
+
+message CreateSkillData {
+  Skill skill = 1; // @gotag: json:"skill"
+}
+
+// Get Skill
+message GetSkillRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message GetSkillResponse {
+  GetSkillData data = 1; // @gotag: json:"data"
+  int32 code = 253;      // @gotag: json:"code"
+  string msg = 254;      // @gotag: json:"msg"
+}
+
+message GetSkillData {
+  Skill skill = 1; // @gotag: json:"skill"
+}
+
+// Update Skill
+message UpdateSkillRequest {
+  int64 id = 1;             // @gotag: json:"id" form:"id" binding:"required"
+  int64 asset_id = 2;       // @gotag: json:"assetId" form:"assetId" binding:"required"
+}
+
+message UpdateSkillResponse {
+  UpdateSkillData data = 1; // @gotag: json:"data"
+  int32 code = 253;         // @gotag: json:"code"
+  string msg = 254;         // @gotag: json:"msg"
+}
+
+message UpdateSkillData {
+  Skill skill = 1; // @gotag: json:"skill"
+}
+
+// Delete Skill
+message DeleteSkillRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message DeleteSkillResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// List Skills
+message ListSkillRequest {
+  int64 project_id = 1;       // @gotag: form:"projectId"
+  string agent_id = 2;        // @gotag: form:"agentId"
+  SkillStatus status = 3;     // @gotag: form:"status"
+  int32 page = 4;             // @gotag: form:"page" binding:"required,min=1"
+  int32 page_size = 5;        // @gotag: form:"pageSize" binding:"required,min=1,max=100"
+}
+
+message ListSkillResponse {
+  ListSkillData data = 1; // @gotag: json:"data"
+  int32 code = 253;       // @gotag: json:"code"
+  string msg = 254;       // @gotag: json:"msg"
+}
+
+message ListSkillData {
+  repeated Skill skills = 1; // @gotag: json:"skills"
+  int32 total = 2;           // @gotag: json:"total"
+  bool has_next = 3;         // @gotag: json:"hasNext"
+}
+
+// Get Skill Details (returns file contents)
+message GetSkillDetailsRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message GetSkillDetailsResponse {
+  GetSkillDetailsData data = 1; // @gotag: json:"data"
+  int32 code = 253;             // @gotag: json:"code"
+  string msg = 254;             // @gotag: json:"msg"
+}
+
+message GetSkillDetailsData {
+  repeated SkillFile files = 1; // @gotag: json:"files"
+}
+
+message SkillFile {
+  string path = 1;    // @gotag: json:"path"
+  string content = 2; // @gotag: json:"content"
+}

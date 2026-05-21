@@ -1,0 +1,120 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package casbin_rule;
+
+option go_package = "sico-backend/internal/transport/http/dto/rbac/casbin_rule";
+
+// CasbinRule policy entity
+message CasbinRule {
+  int64 id = 1;        // @gotag: json:"id"
+  string ptype = 2;    // @gotag: json:"ptype" binding:"required" // policy type: p or g
+  string v0 = 3;       // @gotag: json:"v0" binding:"required" // subject/role
+  string v1 = 4;       // @gotag: json:"v1" binding:"required" // object/resource
+  string v2 = 5;       // @gotag: json:"v2" binding:"required" // action
+  string v3 = 6;       // @gotag: json:"v3"
+  string v4 = 7;       // @gotag: json:"v4"
+  string v5 = 8;       // @gotag: json:"v5"
+}
+
+// Create policy
+message CreatePolicyRequest {
+  string ptype = 1;    // @gotag: json:"ptype" binding:"required"
+  string v0 = 2;       // @gotag: json:"v0" binding:"required"
+  string v1 = 3;       // @gotag: json:"v1" binding:"required"
+  string v2 = 4;       // @gotag: json:"v2" binding:"required"
+  string v3 = 5;       // @gotag: json:"v3"
+  string v4 = 6;       // @gotag: json:"v4"
+  string v5 = 7;       // @gotag: json:"v5"
+}
+
+message CreatePolicyResponseData {
+  int64 id = 1;        // @gotag: json:"id"
+}
+
+message CreatePolicyResponse {
+  CreatePolicyResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;                  // @gotag: json:"code"
+  string msg = 254;                  // @gotag: json:"msg"
+}
+
+// Update policy
+message UpdatePolicyRequest {
+  int64 id = 1;        // @gotag: json:"id" binding:"required"
+  string v0 = 2;       // @gotag: json:"v0" binding:"omitempty"
+  string v1 = 3;       // @gotag: json:"v1" binding:"omitempty"
+  string v2 = 4;       // @gotag: json:"v2" binding:"omitempty"
+  string v3 = 5;       // @gotag: json:"v3" binding:"omitempty"
+  string v4 = 6;       // @gotag: json:"v4" binding:"omitempty"
+  string v5 = 7;       // @gotag: json:"v5" binding:"omitempty"
+}
+
+message UpdatePolicyResponse {
+  int32 code = 253;    // @gotag: json:"code"
+  string msg = 254;    // @gotag: json:"msg"
+}
+
+// Delete policy
+message DeletePolicyRequest {
+  int64 id = 1;        // @gotag: form:"id" binding:"required"
+}
+
+message DeletePolicyResponse {
+  int32 code = 253;    // @gotag: json:"code"
+  string msg = 254;    // @gotag: json:"msg"
+}
+
+// Get policy
+message GetPolicyRequest {
+  int64 id = 1;        // @gotag: form:"id" binding:"required"
+}
+
+message GetPolicyResponseData {
+  CasbinRule policy = 1; // @gotag: json:"policy"
+}
+
+message GetPolicyResponse {
+  GetPolicyResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;               // @gotag: json:"code"
+  string msg = 254;               // @gotag: json:"msg"
+}
+
+// Query policies
+message QueryPoliciesRequest {
+  string ptype = 1;    // @gotag: form:"ptype"
+  string v0 = 2;       // @gotag: form:"v0"
+  string v1 = 3;       // @gotag: form:"v1"
+  string v2 = 4;       // @gotag: form:"v2"
+  int32 page = 5;      // @gotag: form:"page" binding:"min=1" default:"1"
+  int32 page_size = 6; // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+}
+
+message QueryPoliciesResponseData {
+  repeated CasbinRule policies = 1; // @gotag: json:"policies"
+  int32 total = 2;                  // @gotag: json:"total"
+  bool has_next = 3;                // @gotag: json:"hasNext"
+}
+
+message QueryPoliciesResponse {
+  QueryPoliciesResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;                   // @gotag: json:"code"
+  string msg = 254;                   // @gotag: json:"msg"
+}

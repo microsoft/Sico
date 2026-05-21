@@ -1,0 +1,11 @@
+.git
+.gitignore
+*.md
+*.exe
+*.test
+*.out
+vendor/
+deployments/helm/
+.idea/
+*.swp
+*.swo

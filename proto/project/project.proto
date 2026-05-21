@@ -1,0 +1,257 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package project;
+
+option go_package = "sico-backend/internal/transport/http/dto/project";
+
+// Request message for creating a project
+message CreateProjectRequest {
+  string name = 1;        // @gotag: json:"name" binding:"required,min=1,max=100"
+  string description = 2; // @gotag: json:"description" binding:"max=500"
+  string icon_uri = 3;    // @gotag: json:"iconUri" binding:"max=500"
+  repeated string operator_admins = 4; // @gotag: json:"operatorAdmins" binding:"max=100"
+}
+
+// Response message for creating a project
+message CreateProjectResponse {
+  CreateProjectData data = 1; // @gotag: json:"data"
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+message CreateProjectData {
+  int64 id = 1;       // @gotag: json:"id"
+}
+
+// Request message for updating a project
+message UpdateProjectRequest {
+  int64 id = 1;          // @gotag: json:"id" binding:"required"
+  string name = 2;       // @gotag: json:"name" binding:"max=100"
+  string description = 3; // @gotag: json:"description" binding:"max=500"
+  string icon_uri = 4;    // @gotag: json:"iconUri" binding:"max=500"
+  repeated string operator_admins = 5; // @gotag: json:"operatorAdmins" binding:"max=100"
+}
+
+// Response message for updating a project
+message UpdateProjectResponse {
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+// Request message for deleting a project
+message DeleteProjectRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+// Response message for deleting a project
+message DeleteProjectResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Request message for getting project detail
+message GetProjectDetailRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+// Response message for getting project detail
+message GetProjectDetailResponse {
+  Project data = 1;  // @gotag: json:"data"
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+// Request message for getting user project list
+message GetUserProjectListRequest {
+  string username = 1;     // @gotag: form:"username" json:"-"
+  int32 page = 2;         // @gotag: form:"page" binding:"min=1" default:"1"
+  int32 page_size = 3;    // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+  MemberType member_type = 4; // @gotag: form:"memberType" default:"0"
+}
+
+// Response message for getting user project list
+message GetUserProjectListResponse {
+  GetUserProjectListData data = 1; // @gotag: json:"data"
+  int32 code = 253;                // @gotag: json:"code"
+  string msg = 254;                // @gotag: json:"msg"
+}
+
+message GetUserProjectListData {
+  repeated Project projects = 1; // @gotag: json:"projects"
+  int32 total = 2; // @gotag: json:"total"
+  bool hasNext = 3; // @gotag: json:"hasNext"
+}
+
+message ProjectAgentInstance {
+  int64 id = 1; // @gotag: json:"id"
+  string icon_url = 2; // @gotag: json:"iconUrl"
+}
+
+// Project entity message
+message Project {
+  int64 id = 1;           // @gotag: json:"id"
+  string name = 2;        // @gotag: json:"name"
+  string description = 3; // @gotag: json:"description"
+  string owner_username = 4;    // @gotag: json:"ownerUsername"
+  string creator_username = 5;  // @gotag: json:"creatorUsername"
+  MemberType member_type = 6; // @gotag: json:"memberType"
+  int64 created_at = 7;   // @gotag: json:"createdAt"
+  int64 updated_at = 8;   // @gotag: json:"updatedAt"
+  repeated string operator_admins = 9; // @gotag: json:"operatorAdmins"
+  repeated ProjectAgentInstance agent_instances = 10; // @gotag: json:"agentInstances"
+  string icon_sas_url = 12; // @gotag: json:"iconUrl"
+}
+
+// MemberType enum
+enum MemberType {
+  MEMBER_TYPE_UNKNOWN = 0;
+  MEMBER_TYPE_OWNER = 1;
+  MEMBER_TYPE_ADMIN = 2;
+  MEMBER_TYPE_MEMBER = 3;
+}
+
+// Request message for adding a project asset
+message AddProjectAssetRequest {
+  string project_id = 1;  // @gotag: json:"projectId" form:"projectId"
+  // File will be handled in handler layer, not in proto
+}
+
+// Response message for adding a project asset
+message AddProjectAssetResponse {
+  AddProjectAssetData data = 1; // @gotag: json:"data"
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+message AddProjectAssetData {
+  int64 id = 1;  // @gotag: json:"id"
+  string sas_url = 2;  // @gotag: json:"sasUrl"
+  string uri = 3;  // @gotag: json:"uri"
+  FileMetaInfo meta_info = 4; // @gotag: json:"metaInfo"
+}
+
+message FileMetaInfo {
+  string file_name = 1; // @gotag: json:"fileName"
+  int64 file_size = 2; // @gotag: json:"fileSize"
+  string content_type = 3; // @gotag: json:"contentType"
+  string file_ext = 4; // @gotag: json:"fileExt"
+  string file_type = 5; // @gotag: json:"fileType"
+}
+
+// Request message for deleting a project asset
+message DeleteProjectAssetRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+// Response message for deleting a project asset
+message DeleteProjectAssetResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Request message for getting project asset sas url
+message GetProjectSASAssetRequest {
+  string uri = 1;  // @gotag: form:"uri"
+}
+
+// Response message for getting project sas asset
+message GetProjectSASAssetResponse {
+  GetProjectSASAssetData data = 1; // @gotag: json:"data"
+  int32 code = 253;                 // @gotag: json:"code"
+  string msg = 254;                 // @gotag: json:"msg"
+}
+
+message GetProjectSASAssetData {
+  string uri = 1;  // @gotag: form:"uri"
+  string sas_url = 2;  // @gotag: form:"sasUrl"
+}
+
+// Request message for getting project asset list
+message GetProjectAssetListRequest {
+  string project_id = 1;  // @gotag: form:"projectId"
+  string username = 2;     // @gotag: form:"username" json:"-"
+  int32 page = 3;         // @gotag: form:"page" binding:"min=0" default:"1"
+  int32 page_size = 4;    // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+}
+
+// Response message for getting project asset list
+message GetProjectAssetListResponse {
+  GetProjectAssetListData data = 1; // @gotag: json:"data"
+  int32 code = 253;                 // @gotag: json:"code"
+  string msg = 254;                 // @gotag: json:"msg"
+}
+
+message GetProjectAssetListData {
+  repeated ProjectAsset assets = 1; // @gotag: json:"assets"
+  int32 total = 2;                  // @gotag: json:"total"
+}
+
+// Project Asset entity message
+message ProjectAsset {
+  int64 id = 1;           // @gotag: json:"id"
+  string project_id = 2;  // @gotag: json:"projectId"
+  string object_key = 3;  // @gotag: json:"objectKey"
+  string creator_username = 4;  // @gotag: json:"creatorUsername"
+  int64 created_at = 5;   // @gotag: json:"createdAt"
+  int64 updated_at = 6;   // @gotag: json:"updatedAt"
+  string extra = 7;       // @gotag: json:"extra"
+}
+
+message QueryProjectStatisticsRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+  string filter_operator_username = 2; // @gotag: form:"filterOperatorUsername"
+  string filter_employer_username = 3; // @gotag: form:"filterEmployerUsername"
+}
+
+message ProjectStatisticsEntry {
+  int32 total_tasks = 1; // @gotag: json:"totalTasks"
+  int32 succeeded_tasks = 2; // @gotag: json:"succeededTasks"
+  int32 failed_tasks = 3; // @gotag: json:"failedTasks"
+  int32 cancelled_tasks = 4; // @gotag: json:"cancelledTasks"
+
+  // Currently only allow 1 running task per agent instance, so no need to return running_tasks,
+  // but we keep the field here for future extension
+  // int32 running_tasks = 5; // @gotag: json:"runningTasks"
+
+  int32 training_tasks = 6; // @gotag: json:"trainingTasks"
+  int64 total_work_time = 7; // @gotag: json:"totalWorkTime"
+}
+
+message ProjectSingleAgentInstanceStatisticsEntry {
+  string name = 1; // @gotag: json:"name"
+  int64 agent_instance_id = 2; // @gotag: json:"agentInstanceId"
+  string icon_uri = 3; // @gotag: json:"iconUri"
+  string icon_sas_url = 4; // @gotag: json:"iconSasUrl"
+  string role = 5; // @gotag: json:"role"
+  ProjectStatisticsEntry statistics = 7; // @gotag: json:"statistics"
+}
+
+message QueryProjectStatisticsData {
+  repeated ProjectSingleAgentInstanceStatisticsEntry agent_instance_statistics = 1; // @gotag: json:"agentInstanceStatistics"
+  ProjectStatisticsEntry overall_statistics = 2; // @gotag: json:"overallStatistics"
+}
+
+message QueryProjectStatisticsResponse {
+  QueryProjectStatisticsData data = 1; // @gotag: json:"data"
+  int32 code = 253;                    // @gotag: json:"code"
+  string msg = 254;                    // @gotag: json:"msg"
+}

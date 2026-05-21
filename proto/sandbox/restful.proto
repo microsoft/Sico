@@ -1,0 +1,185 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package sandbox;
+option go_package = "sico-backend/internal/transport/http/dto/sandbox";
+
+// Unified sandbox control plane DTOs (HTTP/JSON).
+// NOTE: Use strings for `type/status` to keep JSON binding simple.
+
+message SandboxResource {
+  string type = 1;        // @gotag: json:"type"
+  string resource_id = 2; // @gotag: json:"resourceId"
+  string display_name = 3; // @gotag: json:"displayName,omitempty"
+  string status = 4;      // @gotag: json:"status"  // available|in_use|unhealthy|unknown
+  string sandbox_id = 5;  // @gotag: json:"sandboxId,omitempty"
+  map<string, string> metadata = 6; // @gotag: json:"metadata,omitempty"
+}
+
+message SandboxLease {
+  // sandbox_id format: {type}:{resourceID}, e.g. "emulator:http://192.168.1.1:8080"
+  string sandbox_id = 1;  // @gotag: json:"sandboxId"
+  string user = 4;        // @gotag: json:"user,omitempty"
+  int64 created_at = 5;   // @gotag: json:"createdAt"
+  map<string, string> metadata = 9; // @gotag: json:"metadata,omitempty"
+}
+
+message ListSandboxResourcesRequest {
+  string type = 1; // @gotag: form:"type" binding:"omitempty,oneof=emulator aio"
+}
+
+message ListSandboxResourcesResponse {
+  ListSandboxResourcesResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message ListSandboxResourcesResponseData {
+  repeated SandboxResource resources = 1; // @gotag: json:"resources"
+}
+
+message ListSandboxLeasesRequest {
+  string type = 1; // @gotag: form:"type" binding:"omitempty,oneof=emulator aio"
+}
+
+message ListSandboxLeasesResponse {
+  ListSandboxLeasesResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message ListSandboxLeasesResponseData {
+  repeated SandboxLease leases = 1; // @gotag: json:"leases"
+}
+
+message CreateSandboxLeaseRequest {
+  string type = 1;        // @gotag: json:"type" binding:"required,oneof=emulator aio"
+  // Transport sets this from auth context.
+  string requester_username = 10; // @gotag: json:"-"
+}
+
+message CreateSandboxLeaseResponse {
+  CreateSandboxLeaseResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message CreateSandboxLeaseResponseData {
+  SandboxLease lease = 1; // @gotag: json:"lease"
+}
+
+message ResetSandboxLeaseResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message ReleaseSandboxLeaseResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// ==================== Client API types ====================
+
+message SandboxApplyRequest {
+  string type = 1; // @gotag: json:"type" binding:"required"
+}
+
+message SandboxResetRequest {
+  string sandbox_id = 1; // @gotag: json:"sandbox_id" binding:"required"
+}
+
+message SandboxReleaseRequest {
+  string sandbox_id = 1; // @gotag: json:"sandbox_id" binding:"required"
+}
+
+// ==================== Dashboard Management types ====================
+
+message SandboxResourceInfo {
+  string sandbox_id = 1;     // @gotag: json:"sandbox_id"
+  string type = 2;            // @gotag: json:"type"
+  string status = 3;          // @gotag: json:"status"
+  string instance_id = 4;     // @gotag: json:"instance_id"
+  string instance_name = 5;   // @gotag: json:"instance_name"
+  string display_name = 6;    // @gotag: json:"display_name"
+  string endpoint = 7;        // @gotag: json:"endpoint"
+  string vnc_url = 8;         // @gotag: json:"vnc_url"
+  string docs_url = 9;        // @gotag: json:"docs_url"
+  int64 usage_seconds = 10;   // @gotag: json:"usage_seconds"
+  int64 created_at = 11;      // @gotag: json:"created_at,omitempty"
+  int64 expires_at = 12;      // @gotag: json:"expires_at,omitempty"
+}
+
+message SandboxResourcesByType {
+  repeated SandboxResourceInfo emulator = 1; // @gotag: json:"emulator"
+  repeated SandboxResourceInfo aio = 2;      // @gotag: json:"aio"
+  repeated SandboxResourceInfo wincua = 3;   // @gotag: json:"wincua"
+}
+
+message SandboxVNCInfo {
+  string sandbox_id = 1; // @gotag: json:"sandbox_id"
+  string type = 2;        // @gotag: json:"type"
+  string vnc_url = 3;     // @gotag: json:"vnc_url"
+}
+
+message GetInstanceSandboxesRequest {
+  string instance_id = 1; // @gotag: form:"instanceId" binding:"required"
+  string type = 2;        // @gotag: form:"type" binding:"omitempty,oneof=emulator aio wincua"
+}
+
+message InstanceSandboxStatusInfo {
+  string sandbox_id = 1;   // @gotag: json:"sandboxId"
+  string type = 2;         // @gotag: json:"type"
+  string status = 3;       // @gotag: json:"status"
+  string endpoint = 4;     // @gotag: json:"endpoint"
+  string vnc_url = 5;      // @gotag: json:"vncUrl"
+  string docs_url = 6;     // @gotag: json:"docsUrl"
+  string display_name = 7; // @gotag: json:"displayName"
+}
+
+message GetInstanceSandboxesData {
+  repeated InstanceSandboxStatusInfo items = 1; // @gotag: json:"items"
+}
+
+message GetInstanceSandboxesResponse {
+  GetInstanceSandboxesData data = 1; // @gotag: json:"data"
+  int32 code = 253;                  // @gotag: json:"code"
+  string msg = 254;                  // @gotag: json:"msg"
+}
+
+// ==================== Assignment types ====================
+
+message SandboxAssignRequest {
+  string instance_id = 1; // @gotag: json:"instance_id" binding:"required"
+  string sandbox_id = 2;  // @gotag: json:"sandbox_id" binding:"required"
+}
+
+message SandboxUnassignRequest {
+  string instance_id = 1; // @gotag: json:"instance_id" binding:"required"
+  string sandbox_id = 2;  // @gotag: json:"sandbox_id" binding:"required"
+}
+
+message SandboxInstanceInfo {
+  string id = 1;     // @gotag: json:"id"
+  string name = 2;   // @gotag: json:"name"
+  string role = 3;   // @gotag: json:"role"
+  repeated InstanceSandboxStatusInfo sandboxes = 4; // @gotag: json:"sandboxes"
+}

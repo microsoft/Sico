@@ -1,0 +1,62 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package reverse_rpc;
+option go_package = "sico-backend/internal/transport/reverse_grpc/pb/knowledge/reverse_rpc";
+
+service ReverseKnowledgeRPC {
+    // Fetch knowledge metadata (name and tags) for a list of knowledge document IDs.
+    rpc RpcListKnowledgeMetadata(GetKnowledgeMetadataRequest) returns (GetKnowledgeMetadataResponse) {}
+
+    // Create or update a knowledge playbook for a given project and agent instance.
+    // If a playbook already exists for the (project_id, agent_instance_id) pair,
+    // only the updated_at timestamp is refreshed; otherwise a new record is created.
+    rpc RpcUpsertKnowledgePlaybook(UpsertKnowledgePlaybookRequest) returns (UpsertKnowledgePlaybookResponse) {}
+}
+
+message GetKnowledgeMetadataRequest {
+    repeated int64 knowledge_ids = 1; // @gotag: json:"knowledgeIds"
+}
+
+message KnowledgeMetadata {
+    int64 knowledge_id = 1;      // @gotag: json:"knowledgeId"
+    string name = 2;             // @gotag: json:"name"
+    repeated string tags = 3;    // @gotag: json:"tags"
+}
+
+message GetKnowledgeMetadataResponse {
+    repeated KnowledgeMetadata data = 1; // @gotag: json:"data"
+    int32 code = 253;                     // @gotag: json:"code"
+    string msg = 254;                     // @gotag: json:"msg"
+}
+
+message UpsertKnowledgePlaybookRequest {
+    int64 project_id = 1;          // @gotag: json:"projectId"
+    int64 agent_instance_id = 2;   // @gotag: json:"agentInstanceId"
+}
+
+message UpsertKnowledgePlaybookResponse {
+    int64 playbook_id = 1;        // @gotag: json:"playbookId"
+    bool created = 2;             // @gotag: json:"created"
+    int32 code = 253;             // @gotag: json:"code"
+    string msg = 254;             // @gotag: json:"msg"
+}

@@ -1,0 +1,5135 @@
+definitions:
+  sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption:
+    properties:
+      description:
+        type: string
+      displayName:
+        type: string
+      iconUri:
+        type: string
+      modelKey:
+        type: string
+      modelType:
+        type: integer
+      providerTemplateType:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentData:
+    properties:
+      agentId:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentInstanceData:
+    properties:
+      agentId:
+        type: string
+      employerUsername:
+        type: string
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentInstanceRequest:
+    properties:
+      agentId:
+        type: string
+      attachments:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
+        type: array
+      desc:
+        type: string
+      employerIconUri:
+        type: string
+      employerUsername:
+        type: string
+      iconUri:
+        type: string
+      name:
+        type: string
+      role:
+        type: string
+    required:
+    - employerUsername
+    - name
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentInstanceResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentInstanceData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentRequest:
+    properties:
+      desc:
+        maxLength: 500
+        type: string
+      iconUri:
+        type: string
+      llmhubConfig:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig'
+      name:
+        maxLength: 100
+        type: string
+      role:
+        type: string
+    required:
+    - name
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.DeleteSingleAgentInstanceResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.DeleteSingleAgentResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.DeploySingleAgentData:
+    properties:
+      agentId:
+        type: string
+      employerUsername:
+        type: string
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.DeploySingleAgentRequest:
+    properties:
+      agentId:
+        type: string
+      name:
+        maxLength: 100
+        type: string
+    required:
+    - agentId
+    - name
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.DeploySingleAgentResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DeploySingleAgentData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentData:
+    properties:
+      agent:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgent'
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentInstanceData:
+    properties:
+      instance:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstance'
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentInstanceResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentInstanceData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsData:
+    properties:
+      builtinModels:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption'
+        type: array
+      customModels:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption'
+        type: array
+      selectedConfig:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig'
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig:
+    properties:
+      defaultGlobalModelKey:
+        type: string
+      modelKeys:
+        items:
+          type: string
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListRolesData:
+    properties:
+      role:
+        items:
+          type: string
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListRolesResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ListRolesData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentInfosData:
+    properties:
+      agentInfos:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInfo'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentInfosResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentInfosData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentInstancesData:
+    properties:
+      hasNext:
+        type: boolean
+      instances:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstance'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentInstancesResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentInstancesData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentsData:
+    properties:
+      agents:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgent'
+        type: array
+      hasNext:
+        type: boolean
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentsData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgent:
+    properties:
+      agentId:
+        type: string
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      desc:
+        type: string
+      iconUri:
+        type: string
+      llmhubConfig:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig'
+      name:
+        type: string
+      rawIconUri:
+        type: string
+      role:
+        type: string
+      updatedAt:
+        type: integer
+      updaterUsername:
+        type: string
+      version:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInfo:
+    properties:
+      agentId:
+        type: string
+      capabilityTags:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      role:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstance:
+    properties:
+      agentId:
+        type: string
+      attachments:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
+        type: array
+      createdAt:
+        type: integer
+      desc:
+        type: string
+      employerIconUri:
+        type: string
+      employerUsername:
+        type: string
+      iconUri:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      operatorUsername:
+        type: string
+      permission:
+        type: string
+      project:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.Project'
+      rawEmployerIconUri:
+        type: string
+      rawIconUri:
+        type: string
+      role:
+        type: string
+      sandboxes:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.InstanceSandboxStatusInfo'
+        type: array
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceRequest:
+    properties:
+      attachments:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
+        type: array
+      desc:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      permission:
+        type: string
+      projectId:
+        type: integer
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentRequest:
+    properties:
+      agentId:
+        type: string
+      desc:
+        maxLength: 500
+        type: string
+      iconUri:
+        type: string
+      llmhubConfig:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig'
+      name:
+        maxLength: 100
+        type: string
+      role:
+        type: string
+    required:
+    - agentId
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_common.Attachment:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      sasUrl:
+        type: string
+      size:
+        type: integer
+      type:
+        type: string
+      uri:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_common.StandardResponse:
+    properties:
+      code:
+        type: integer
+      data: {}
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.AgentInstanceInfo:
+    properties:
+      desc:
+        type: string
+      iconUri:
+        type: string
+      instanceId:
+        type: integer
+      name:
+        type: string
+      role:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.CancelPlanRequest:
+    properties:
+      agentInstanceId:
+        type: integer
+      turnId:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.CancelPlanResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ChatAttachment:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      sasUrl:
+        type: string
+      size:
+        type: integer
+      type:
+        type: string
+      uri:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ChatRequestHttp:
+    properties:
+      agentInstanceId:
+        type: integer
+      attachments:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ChatAttachment'
+        type: array
+      message:
+        type: string
+    required:
+    - agentInstanceId
+    - message
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ChatStreamResponse:
+    properties:
+      content:
+        type: string
+      functionContext:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.FunctionContext'
+      isFinal:
+        type: boolean
+      role:
+        type: string
+      timestamp:
+        type: integer
+      turnId:
+        type: integer
+      type:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.MessageContentType'
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ConversationData:
+    properties:
+      agentInstanceInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.AgentInstanceInfo'
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      id:
+        type: integer
+      lastSectionId:
+        type: string
+      metaData:
+        additionalProperties:
+          type: string
+        type: object
+      title:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.CreateConversationRequest:
+    properties:
+      agentInstanceId:
+        type: integer
+      metaData:
+        additionalProperties:
+          type: string
+        type: object
+      title:
+        type: string
+    required:
+    - agentInstanceId
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.CreateConversationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.FunctionContext:
+    properties:
+      arguments:
+        $ref: '#/definitions/structpb.Struct'
+      exception:
+        type: string
+      result:
+        type: string
+      workflowExecutionId:
+        type: integer
+      workflowId:
+        type: integer
+      workflowName:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksData:
+    properties:
+      tasks:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.RecommendationTask'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksRequest:
+    properties:
+      agentInstanceId:
+        type: integer
+    required:
+    - agentInstanceId
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.GetConversationData:
+    properties:
+      conversation:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationData'
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.GetConversationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GetConversationData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.GetPlanData:
+    properties:
+      plan:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.Plan'
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.PlanStatus'
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.GetPlanResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GetPlanData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.GetUserMessageByUserAgentTurnIDResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.MessageItem'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ListConversationData:
+    properties:
+      conversations:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationData'
+        type: array
+      hasMore:
+        type: boolean
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ListConversationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ListConversationData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ListMessagesByUserAndAgentData:
+    properties:
+      hasMore:
+        type: boolean
+      messages:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.MessageItem'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ListMessagesByUserAndAgentResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ListMessagesByUserAndAgentData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.MessageContentType:
+    enum:
+    - 0
+    - 1
+    - 4
+    - 5
+    - 6
+    - 8
+    - 9
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - MessageContentType_MESSAGE_CONTENT_TYPE_UNKNOWN
+    - MessageContentType_MESSAGE_CONTENT_TYPE_MARKDOWN
+    - MessageContentType_MESSAGE_CONTENT_TYPE_IMAGE
+    - MessageContentType_MESSAGE_CONTENT_TYPE_END
+    - MessageContentType_MESSAGE_CONTENT_TYPE_ERROR
+    - MessageContentType_MESSAGE_CONTENT_TYPE_PLAYBOOK_INGESTION
+    - MessageContentType_MESSAGE_CONTENT_TYPE_PLAN
+  sico-backend_internal_transport_http_dto_conversation.MessageItem:
+    properties:
+      agentInstanceId:
+        type: integer
+      attachments:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
+        type: array
+      content:
+        type: string
+      createdAt:
+        type: integer
+      functionContext:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.FunctionContext'
+      messageId:
+        type: integer
+      role:
+        type: string
+      turnId:
+        type: integer
+      type:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.MessageContentType'
+      updatedAt:
+        type: integer
+      username:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.Plan:
+    properties:
+      extra:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.PlanExtra'
+      steps:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.PlanStep'
+        type: array
+      title:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.PlanExtra:
+    properties:
+      agentId:
+        type: string
+      agentInstanceId:
+        type: integer
+      conversationId:
+        type: integer
+      projectId:
+        type: integer
+      turnId:
+        type: integer
+      updatedAt:
+        type: integer
+      username:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.PlanStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - PlanStatus_PLAN_STATUS_UNKNOWN
+    - PlanStatus_PLAN_STATUS_NO_PLAN
+    - PlanStatus_PLAN_STATUS_RUNNING
+    - PlanStatus_PLAN_STATUS_COMPLETED
+    - PlanStatus_PLAN_STATUS_FAILED
+    - PlanStatus_PLAN_STATUS_REQUIRE_HUMAN_INPUT
+    - PlanStatus_PLAN_STATUS_CANCELLED
+  sico-backend_internal_transport_http_dto_conversation.PlanStep:
+    properties:
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.PlanStepStatus'
+      title:
+        type: string
+      toolCalls:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCall'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.PlanStepStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - PlanStepStatus_PLAN_STEP_STATUS_UNKNOWN
+    - PlanStepStatus_PLAN_STEP_STATUS_PENDING
+    - PlanStepStatus_PLAN_STEP_STATUS_IN_PROGRESS
+    - PlanStepStatus_PLAN_STEP_STATUS_COMPLETED
+    - PlanStepStatus_PLAN_STEP_STATUS_FAILED
+    - PlanStepStatus_PLAN_STEP_STATUS_REQUIRE_HUMAN_INPUT
+    - PlanStepStatus_PLAN_STEP_STATUS_CANCELLED
+  sico-backend_internal_transport_http_dto_conversation.RecommendationTask:
+    properties:
+      icon:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.RecommendationTaskIcon'
+      message:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.RecommendationTaskIcon:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - RecommendationTaskIcon_RECOMMENDATION_TASK_ICON_UNKNOWN
+    - RecommendationTaskIcon_RECOMMENDATION_TASK_ICON_FALLBACK
+    - RecommendationTaskIcon_RECOMMENDATION_TASK_ICON_BUILD
+    - RecommendationTaskIcon_RECOMMENDATION_TASK_ICON_THINK
+    - RecommendationTaskIcon_RECOMMENDATION_TASK_ICON_WRITE
+    - RecommendationTaskIcon_RECOMMENDATION_TASK_ICON_RESEARCH
+  sico-backend_internal_transport_http_dto_conversation.ReconnectRequest:
+    properties:
+      agentInstanceId:
+        type: integer
+    required:
+    - agentInstanceId
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ToolCall:
+    properties:
+      batchCalls:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCall'
+        type: array
+      batchItemIndex:
+        type: integer
+      deliverables:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolDeliverable'
+        type: array
+      executionInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolExecutionInfo'
+      message:
+        description: message is for frontend display
+        type: string
+      runningList:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCallRunningListItem'
+        type: array
+      toolCallId:
+        type: integer
+      toolCallStatus:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCallStatus'
+      toolName:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ToolCallRunningListItem:
+    properties:
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCallRunningListItemStatus'
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ToolCallRunningListItemStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN
+    - ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING
+    - ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING
+    - ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE
+    - ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED
+    - ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED
+  sico-backend_internal_transport_http_dto_conversation.ToolCallStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - ToolCallStatus_TOOL_CALL_STATUS_UNKNOWN
+    - ToolCallStatus_TOOL_CALL_STATUS_RUNNING
+    - ToolCallStatus_TOOL_CALL_STATUS_FAILED
+    - ToolCallStatus_TOOL_CALL_STATUS_SUCCESSFUL
+    - ToolCallStatus_TOOL_CALL_STATUS_FAILED_ANALYZING
+    - ToolCallStatus_TOOL_CALL_STATUS_FAILED_ANALYZED
+    - ToolCallStatus_TOOL_CALL_STATUS_RETRY_RUNNING
+    - ToolCallStatus_TOOL_CALL_STATUS_RETRY_SUCCESSFUL
+    - ToolCallStatus_TOOL_CALL_STATUS_RETRY_FAILED
+  sico-backend_internal_transport_http_dto_conversation.ToolDeliverable:
+    properties:
+      acquiredSandbox:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolDeliverableAcquiredSandbox'
+      fileName:
+        type: string
+      fileUrl:
+        type: string
+      markdownContent:
+        type: string
+      markdownTitle:
+        type: string
+      type:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolDeliverableType'
+      webPreviewSasUrl:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ToolDeliverableAcquiredSandbox:
+    properties:
+      deviceId:
+        type: string
+      displayName:
+        type: string
+      endpoint:
+        type: string
+      providerBaseUrl:
+        type: string
+      sandboxId:
+        type: string
+      sandboxType:
+        type: string
+      vncUrl:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ToolDeliverableType:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 5
+    format: int32
+    type: integer
+    x-enum-comments:
+      ToolDeliverableType_TOOL_DELIVERABLE_TYPE_ACQUIRED_SANDBOX: '... more.'
+    x-enum-descriptions:
+    - ""
+    - ""
+    - ""
+    - ""
+    - '... more.'
+    x-enum-varnames:
+    - ToolDeliverableType_TOOL_DELIVERABLE_TYPE_UNKNOWN
+    - ToolDeliverableType_TOOL_DELIVERABLE_TYPE_MARKDOWN
+    - ToolDeliverableType_TOOL_DELIVERABLE_TYPE_FILE
+    - ToolDeliverableType_TOOL_DELIVERABLE_TYPE_WEB_PREVIEW_URL
+    - ToolDeliverableType_TOOL_DELIVERABLE_TYPE_ACQUIRED_SANDBOX
+  sico-backend_internal_transport_http_dto_conversation.ToolExecutionInfo:
+    properties:
+      builtinToolName:
+        type: string
+      toolType:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolType'
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ToolType:
+    enum:
+    - 0
+    - 1
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - ToolType_TOOL_TYPE_UNKNOWN
+    - ToolType_TOOL_TYPE_BUILTIN
+  sico-backend_internal_transport_http_dto_conversation.UpdateConversationRequest:
+    properties:
+      id:
+        type: integer
+      metaData:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        type: integer
+      title:
+        type: string
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.UpdateConversationResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeDocumentData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeDocumentRequest:
+    properties:
+      agentId:
+        type: string
+      assetId:
+        type: integer
+      documentType:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocumentType'
+      iconUri:
+        maxLength: 256
+        type: string
+      linkUrl:
+        maxLength: 2048
+        type: string
+      name:
+        maxLength: 256
+        type: string
+      projectId:
+        type: integer
+      tagIds:
+        items:
+          type: integer
+        type: array
+    required:
+    - documentType
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeDocumentResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeDocumentData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeTagData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeTagRequest:
+    properties:
+      description:
+        type: string
+      name:
+        maxLength: 256
+        type: string
+      projectId:
+        type: integer
+    required:
+    - name
+    - projectId
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeTagResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeTagData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgeDocumentResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgeTagResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeDocumentData:
+    properties:
+      document:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocument'
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeDocumentDetailsData:
+    properties:
+      fullText:
+        type: string
+      summary:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeDocumentDetailsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeDocumentDetailsData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeDocumentResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeDocumentData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgePlaybookData:
+    properties:
+      playbook:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybook'
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgePlaybookDetailsData:
+    properties:
+      content:
+        type: string
+      name:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgePlaybookDetailsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgePlaybookDetailsData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgePlaybookResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgePlaybookData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeTagData:
+    properties:
+      tag:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeTag'
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeTagResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeTagData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocument:
+    properties:
+      agentId:
+        type: string
+      assetId:
+        type: integer
+      attachment:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      documentType:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocumentType'
+      failReason:
+        type: string
+      iconSasUrl:
+        type: string
+      iconUri:
+        type: string
+      id:
+        type: integer
+      linkUrl:
+        type: string
+      name:
+        type: string
+      projectId:
+        type: integer
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocumentStatus'
+      tags:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeTag'
+        type: array
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocumentStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-comments:
+      KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_FAILED: '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_FAILED"'
+      KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED: '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_INGESTED"'
+      KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN: '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN"'
+      KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UPLOADED: '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UPLOADED"'
+    x-enum-descriptions:
+    - '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN"'
+    - '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_FAILED"'
+    - '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UPLOADED"'
+    - '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_INGESTED"'
+    x-enum-varnames:
+    - KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN
+    - KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_FAILED
+    - KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UPLOADED
+    - KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED
+  sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocumentType:
+    enum:
+    - 0
+    - 1
+    - 2
+    format: int32
+    type: integer
+    x-enum-comments:
+      KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_FILE: '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_FILE"'
+      KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK: '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_LINK"'
+      KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN: '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN"'
+    x-enum-descriptions:
+    - '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN"'
+    - '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_FILE"'
+    - '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_LINK"'
+    x-enum-varnames:
+    - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN
+    - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_FILE
+    - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK
+  sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybook:
+    properties:
+      agentInstanceId:
+        type: integer
+      createdAt:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+      projectId:
+        type: integer
+      tags:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeTag'
+        type: array
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.KnowledgeTag:
+    properties:
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      projectId:
+        type: integer
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeDocumentData:
+    properties:
+      documents:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocument'
+        type: array
+      hasNext:
+        type: boolean
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeDocumentResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeDocumentData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.ListKnowledgePlaybookData:
+    properties:
+      hasNext:
+        type: boolean
+      playbooks:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybook'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.ListKnowledgePlaybookResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgePlaybookData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeTagData:
+    properties:
+      hasNext:
+        type: boolean
+      tags:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeTag'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeTagResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeTagData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgeDocumentRequest:
+    properties:
+      agentId:
+        type: string
+      assetId:
+        type: integer
+      documentType:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocumentType'
+      failReason:
+        maxLength: 1024
+        type: string
+      iconUri:
+        maxLength: 256
+        type: string
+      id:
+        type: integer
+      linkUrl:
+        maxLength: 2048
+        type: string
+      name:
+        maxLength: 256
+        type: string
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocumentStatus'
+      tagIds:
+        items:
+          type: integer
+        type: array
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgeDocumentResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgePlaybookRequest:
+    properties:
+      id:
+        type: integer
+      name:
+        maxLength: 256
+        type: string
+      tagIds:
+        items:
+          type: integer
+        type: array
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgePlaybookResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgeTagRequest:
+    properties:
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        maxLength: 256
+        type: string
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgeTagResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.AuthConfig:
+    properties:
+      apiKeyValue:
+        type: string
+      authType:
+        type: integer
+      headerName:
+        type: string
+      token:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.CreateModelRegistryData:
+    properties:
+      model:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.ModelRegistryEntry'
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.CreateModelRegistryRequest:
+    properties:
+      agentId:
+        type: string
+      auth:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.AuthConfig'
+      config:
+        $ref: '#/definitions/structpb.Struct'
+      description:
+        type: string
+      displayName:
+        maxLength: 255
+        type: string
+      iconUri:
+        type: string
+      modelType:
+        maximum: 3
+        minimum: 1
+        type: integer
+      providerTemplateType:
+        maximum: 7
+        minimum: 1
+        type: integer
+    required:
+    - config
+    - displayName
+    - modelType
+    - providerTemplateType
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.CreateModelRegistryResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.CreateModelRegistryData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.DeleteModelRegistryRequest:
+    properties:
+      id:
+        type: integer
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.DeleteModelRegistryResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.ModelRegistryEntry:
+    properties:
+      agentId:
+        type: string
+      config:
+        $ref: '#/definitions/structpb.Struct'
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      description:
+        type: string
+      displayName:
+        type: string
+      iconUri:
+        type: string
+      id:
+        type: integer
+      ioProfile:
+        $ref: '#/definitions/structpb.Struct'
+      isBuiltin:
+        type: boolean
+      modelKey:
+        type: string
+      modelType:
+        type: integer
+      providerTemplateType:
+        type: integer
+      status:
+        type: integer
+      updatedAt:
+        type: integer
+      updaterUsername:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeArtifact:
+    properties:
+      artifactType:
+        type: string
+      downloadUrl:
+        type: string
+      filename:
+        type: string
+      mimeType:
+        type: string
+      storageUri:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeGenerateRequest:
+    properties:
+      inputs:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeInput'
+        type: array
+      instructions:
+        type: string
+      model:
+        type: string
+      options:
+        $ref: '#/definitions/structpb.Struct'
+      previousResponseId:
+        type: string
+      tools:
+        items:
+          $ref: '#/definitions/structpb.Struct'
+        type: array
+    required:
+    - inputs
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeGenerateResponse:
+    properties:
+      artifacts:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeArtifact'
+        type: array
+      code:
+        type: integer
+      msg:
+        type: string
+      outputs:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeOutputItem'
+        type: array
+      payload:
+        $ref: '#/definitions/structpb.Struct'
+      trace:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeTrace'
+      usage:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeUsage'
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeInput:
+    properties:
+      content:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeInputContent'
+        type: array
+      role:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeInputContent:
+    properties:
+      actions:
+        items:
+          $ref: '#/definitions/structpb.Struct'
+        type: array
+      arguments:
+        type: string
+      callId:
+        type: string
+      detail:
+        type: string
+      fileBase64:
+        type: string
+      fileUrl:
+        type: string
+      imageBase64:
+        type: string
+      imageUrl:
+        type: string
+      mediaType:
+        type: string
+      name:
+        type: string
+      output:
+        $ref: '#/definitions/structpb.Struct'
+      result:
+        type: string
+      text:
+        type: string
+      type:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeOutputItem:
+    properties:
+      actions:
+        items:
+          $ref: '#/definitions/structpb.Struct'
+        type: array
+      arguments:
+        type: string
+      callId:
+        type: string
+      json:
+        $ref: '#/definitions/structpb.Struct'
+      name:
+        type: string
+      text:
+        type: string
+      type:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeStreamChunk:
+    properties:
+      code:
+        type: integer
+      delta:
+        type: string
+      finish_reason:
+        type: string
+      msg:
+        type: string
+      outputs:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeOutputItem'
+        type: array
+      usage:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeUsage'
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeTrace:
+    properties:
+      latencyMs:
+        type: integer
+      model:
+        type: string
+      providerTemplateType:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.RuntimeUsage:
+    properties:
+      completionTokens:
+        type: integer
+      promptTokens:
+        type: integer
+      totalTokens:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.AddProjectAssetData:
+    properties:
+      id:
+        type: integer
+      metaInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.FileMetaInfo'
+      sasUrl:
+        type: string
+      uri:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.AddProjectAssetResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.AddProjectAssetData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectRequest:
+    properties:
+      description:
+        maxLength: 500
+        type: string
+      iconUri:
+        maxLength: 500
+        type: string
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      operatorAdmins:
+        items:
+          type: string
+        maxItems: 100
+        type: array
+    required:
+    - name
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.DeleteProjectAssetResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.DeleteProjectResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.FileMetaInfo:
+    properties:
+      contentType:
+        type: string
+      fileExt:
+        type: string
+      fileName:
+        type: string
+      fileSize:
+        type: integer
+      fileType:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetProjectAssetListData:
+    properties:
+      assets:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectAsset'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetProjectAssetListResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectAssetListData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetProjectDetailResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.Project'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetProjectSASAssetData:
+    properties:
+      sas_url:
+        type: string
+      uri:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetProjectSASAssetResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectSASAssetData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetUserProjectListData:
+    properties:
+      hasNext:
+        type: boolean
+      projects:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.Project'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetUserProjectListResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetUserProjectListData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.MemberType:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - MemberType_MEMBER_TYPE_UNKNOWN
+    - MemberType_MEMBER_TYPE_OWNER
+    - MemberType_MEMBER_TYPE_ADMIN
+    - MemberType_MEMBER_TYPE_MEMBER
+  sico-backend_internal_transport_http_dto_project.Project:
+    properties:
+      agentInstances:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectAgentInstance'
+        type: array
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      description:
+        type: string
+      iconUrl:
+        type: string
+      id:
+        type: integer
+      memberType:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.MemberType'
+      name:
+        type: string
+      operatorAdmins:
+        items:
+          type: string
+        type: array
+      ownerUsername:
+        type: string
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.ProjectAgentInstance:
+    properties:
+      iconUrl:
+        type: string
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.ProjectAsset:
+    properties:
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      extra:
+        type: string
+      id:
+        type: integer
+      objectKey:
+        type: string
+      projectId:
+        type: string
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.ProjectSingleAgentInstanceStatisticsEntry:
+    properties:
+      agentInstanceId:
+        type: integer
+      iconSasUrl:
+        type: string
+      iconUri:
+        type: string
+      name:
+        type: string
+      role:
+        type: string
+      statistics:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectStatisticsEntry'
+    type: object
+  sico-backend_internal_transport_http_dto_project.ProjectStatisticsEntry:
+    properties:
+      cancelledTasks:
+        type: integer
+      failedTasks:
+        type: integer
+      succeededTasks:
+        type: integer
+      totalTasks:
+        type: integer
+      totalWorkTime:
+        type: integer
+      trainingTasks:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.QueryProjectStatisticsData:
+    properties:
+      agentInstanceStatistics:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectSingleAgentInstanceStatisticsEntry'
+        type: array
+      overallStatistics:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectStatisticsEntry'
+    type: object
+  sico-backend_internal_transport_http_dto_project.QueryProjectStatisticsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.QueryProjectStatisticsData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.UpdateProjectRequest:
+    properties:
+      description:
+        maxLength: 500
+        type: string
+      iconUri:
+        maxLength: 500
+        type: string
+      id:
+        type: integer
+      name:
+        maxLength: 100
+        type: string
+      operatorAdmins:
+        items:
+          type: string
+        maxItems: 100
+        type: array
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_project.UpdateProjectResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.CasbinRule:
+    properties:
+      id:
+        type: integer
+      ptype:
+        type: string
+      v0:
+        type: string
+      v1:
+        type: string
+      v2:
+        type: string
+      v3:
+        type: string
+      v4:
+        type: string
+      v5:
+        type: string
+    required:
+    - ptype
+    - v0
+    - v1
+    - v2
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.CreatePolicyRequest:
+    properties:
+      ptype:
+        type: string
+      v0:
+        type: string
+      v1:
+        type: string
+      v2:
+        type: string
+      v3:
+        type: string
+      v4:
+        type: string
+      v5:
+        type: string
+    required:
+    - ptype
+    - v0
+    - v1
+    - v2
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.CreatePolicyResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.CreatePolicyResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.CreatePolicyResponseData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.DeletePolicyResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.GetPolicyResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.GetPolicyResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.GetPolicyResponseData:
+    properties:
+      policy:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.CasbinRule'
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.QueryPoliciesResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.QueryPoliciesResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.QueryPoliciesResponseData:
+    properties:
+      hasNext:
+        type: boolean
+      policies:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.CasbinRule'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.UpdatePolicyRequest:
+    properties:
+      id:
+        type: integer
+      v0:
+        type: string
+      v1:
+        type: string
+      v2:
+        type: string
+      v3:
+        type: string
+      v4:
+        type: string
+      v5:
+        type: string
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_casbin_rule.UpdatePolicyResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_common.User:
+    properties:
+      alias:
+        type: string
+      createdAt:
+        type: integer
+      description:
+        type: string
+      email:
+        type: string
+      iconUri:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      rawIconUri:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.UserStatus'
+      tenant:
+        type: string
+      updatedAt:
+        type: integer
+      username:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_common.UserStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - UserStatus_USER_STATUS_INACTIVE
+    - UserStatus_USER_STATUS_ACTIVE
+    - UserStatus_USER_STATUS_FROZEN
+  sico-backend_internal_transport_http_dto_rbac_role.CreateRoleRequest:
+    properties:
+      code:
+        maxLength: 64
+        minLength: 2
+        type: string
+      description:
+        maxLength: 1024
+        type: string
+      name:
+        maxLength: 128
+        minLength: 2
+        type: string
+    required:
+    - code
+    - name
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponseData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.DeleteRoleResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponseData:
+    properties:
+      role:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role'
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponseData:
+    properties:
+      hasNext:
+        type: boolean
+      roles:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.Role:
+    properties:
+      code:
+        type: string
+      createdAt:
+        type: integer
+      description:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      status:
+        enum:
+        - 0
+        - 1
+        type: integer
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleRequest:
+    properties:
+      description:
+        maxLength: 1024
+        type: string
+      id:
+        type: integer
+      name:
+        maxLength: 128
+        minLength: 2
+        type: string
+      status:
+        enum:
+        - 0
+        - 1
+        type: integer
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_token.LoginRequest:
+    properties:
+      email:
+        maxLength: 64
+        minLength: 3
+        type: string
+      password:
+        maxLength: 128
+        minLength: 6
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_token.LoginResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.LoginResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_token.LoginResponseData:
+    properties:
+      tokenInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.TokenInfo'
+      user:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.User'
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_token.LogoutResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_token.RefreshTokenRequest:
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_token.RefreshTokenResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.RefreshTokenResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_token.RefreshTokenResponseData:
+    properties:
+      tokenInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.TokenInfo'
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_token.TokenInfo:
+    properties:
+      accessToken:
+        type: string
+      expiresAt:
+        type: integer
+      tokenType:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.CreateUserRequest:
+    properties:
+      alias:
+        maxLength: 64
+        minLength: 1
+        type: string
+      description:
+        maxLength: 1024
+        type: string
+      email:
+        maxLength: 255
+        type: string
+      iconUri:
+        maxLength: 255
+        type: string
+      password:
+        maxLength: 128
+        minLength: 6
+        type: string
+      phone:
+        type: string
+      tenant:
+        maxLength: 255
+        type: string
+      username:
+        maxLength: 64
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.CreateUserResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.CreateUserResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.CreateUserResponseData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.DeleteUserResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.GetUserResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.GetUserResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.GetUserResponseData:
+    properties:
+      user:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.User'
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.QueryUsersResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.QueryUsersResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.QueryUsersResponseData:
+    properties:
+      hasNext:
+        type: boolean
+      total:
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.User'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.ResetPasswordRequest:
+    properties:
+      id:
+        type: integer
+      newPassword:
+        maxLength: 128
+        minLength: 6
+        type: string
+      oldPassword:
+        maxLength: 128
+        minLength: 6
+        type: string
+    required:
+    - id
+    - newPassword
+    - oldPassword
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.ResetPasswordResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.UpdateUserRequest:
+    properties:
+      alias:
+        maxLength: 64
+        minLength: 1
+        type: string
+      description:
+        maxLength: 1024
+        type: string
+      email:
+        maxLength: 255
+        type: string
+      iconUri:
+        maxLength: 255
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.UserStatus'
+        enum:
+        - 0
+        - 1
+        - 2
+      tenant:
+        maxLength: 255
+        type: string
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user.UpdateUserResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.AssignUserRoleRequest:
+    properties:
+      roleId:
+        type: integer
+      userId:
+        type: integer
+    required:
+    - roleId
+    - userId
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.AssignUserRoleResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.ListUserRolesResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.ListUserRolesResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.ListUserRolesResponseData:
+    properties:
+      hasNext:
+        type: boolean
+      roles:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.ListUsersByRoleResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.ListUsersByRoleResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.ListUsersByRoleResponseData:
+    properties:
+      hasNext:
+        type: boolean
+      total:
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.User'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.RemoveUserRoleRequest:
+    properties:
+      roleId:
+        type: integer
+      userId:
+        type: integer
+    required:
+    - roleId
+    - userId
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.RemoveUserRoleResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.GetInstanceSandboxesData:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.InstanceSandboxStatusInfo'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.GetInstanceSandboxesResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.GetInstanceSandboxesData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.InstanceSandboxStatusInfo:
+    properties:
+      displayName:
+        type: string
+      docsUrl:
+        type: string
+      endpoint:
+        type: string
+      sandboxId:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+      vncUrl:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxApplyRequest:
+    properties:
+      type:
+        type: string
+    required:
+    - type
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxAssignRequest:
+    properties:
+      instance_id:
+        type: string
+      sandbox_id:
+        type: string
+    required:
+    - instance_id
+    - sandbox_id
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxInstanceInfo:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      role:
+        type: string
+      sandboxes:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.InstanceSandboxStatusInfo'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxReleaseRequest:
+    properties:
+      sandbox_id:
+        type: string
+    required:
+    - sandbox_id
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxResetRequest:
+    properties:
+      sandbox_id:
+        type: string
+    required:
+    - sandbox_id
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxResourceInfo:
+    properties:
+      created_at:
+        type: integer
+      display_name:
+        type: string
+      docs_url:
+        type: string
+      endpoint:
+        type: string
+      expires_at:
+        type: integer
+      instance_id:
+        type: string
+      instance_name:
+        type: string
+      sandbox_id:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+      usage_seconds:
+        type: integer
+      vnc_url:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxResourcesByType:
+    properties:
+      aio:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourceInfo'
+        type: array
+      emulator:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourceInfo'
+        type: array
+      wincua:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourceInfo'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxUnassignRequest:
+    properties:
+      instance_id:
+        type: string
+      sandbox_id:
+        type: string
+    required:
+    - instance_id
+    - sandbox_id
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxVNCInfo:
+    properties:
+      sandbox_id:
+        type: string
+      type:
+        type: string
+      vnc_url:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_skill.CreateSkillData:
+    properties:
+      skill:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.Skill'
+    type: object
+  sico-backend_internal_transport_http_dto_skill.CreateSkillRequest:
+    properties:
+      agentId:
+        type: string
+      assetId:
+        type: integer
+      projectId:
+        type: integer
+    required:
+    - assetId
+    type: object
+  sico-backend_internal_transport_http_dto_skill.CreateSkillResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.CreateSkillData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_skill.DeleteSkillResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_skill.GetSkillData:
+    properties:
+      skill:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.Skill'
+    type: object
+  sico-backend_internal_transport_http_dto_skill.GetSkillDetailsData:
+    properties:
+      files:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.SkillFile'
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_skill.GetSkillDetailsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.GetSkillDetailsData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_skill.GetSkillResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.GetSkillData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_skill.ListSkillData:
+    properties:
+      hasNext:
+        type: boolean
+      skills:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.Skill'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_skill.ListSkillResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.ListSkillData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_skill.Skill:
+    properties:
+      agentId:
+        type: string
+      assetId:
+        type: integer
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      description:
+        type: string
+      failReason:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      projectId:
+        type: integer
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.SkillStatus'
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_skill.SkillFile:
+    properties:
+      content:
+        type: string
+      path:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_skill.SkillStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-comments:
+      SkillStatus_SKILL_STATUS_FAILED: '@gotag: json:"SKILL_STATUS_FAILED"'
+      SkillStatus_SKILL_STATUS_UNKNOWN: '@gotag: json:"SKILL_STATUS_UNKNOWN"'
+      SkillStatus_SKILL_STATUS_UPLOADED: '@gotag: json:"SKILL_STATUS_UPLOADED"'
+      SkillStatus_SKILL_STATUS_UPLOADING: '@gotag: json:"SKILL_STATUS_UPLOADING"'
+    x-enum-descriptions:
+    - '@gotag: json:"SKILL_STATUS_UNKNOWN"'
+    - '@gotag: json:"SKILL_STATUS_UPLOADING"'
+    - '@gotag: json:"SKILL_STATUS_UPLOADED"'
+    - '@gotag: json:"SKILL_STATUS_FAILED"'
+    x-enum-varnames:
+    - SkillStatus_SKILL_STATUS_UNKNOWN
+    - SkillStatus_SKILL_STATUS_UPLOADING
+    - SkillStatus_SKILL_STATUS_UPLOADED
+    - SkillStatus_SKILL_STATUS_FAILED
+  sico-backend_internal_transport_http_dto_skill.UpdateSkillData:
+    properties:
+      skill:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.Skill'
+    type: object
+  sico-backend_internal_transport_http_dto_skill.UpdateSkillRequest:
+    properties:
+      assetId:
+        type: integer
+      id:
+        type: integer
+    required:
+    - assetId
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_skill.UpdateSkillResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.UpdateSkillData'
+      msg:
+        type: string
+    type: object
+  structpb.Struct:
+    properties:
+      fields:
+        additionalProperties:
+          $ref: '#/definitions/structpb.Value'
+        description: Unordered map of dynamically typed values.
+        type: object
+    type: object
+  structpb.Value:
+    properties:
+      kind:
+        description: "The kind of value.\n\nTypes that are valid to be assigned to
+          Kind:\n\n\t*Value_NullValue\n\t*Value_NumberValue\n\t*Value_StringValue\n\t*Value_BoolValue\n\t*Value_StructValue\n\t*Value_ListValue"
+    type: object
+info:
+  contact: {}
+  description: Sico AI Agent Platform API
+  title: Sico API
+  version: "1.0"
+paths:
+  /api/dwp/conversation/onboard/recommendation_tasks:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/agent/roles:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ListRolesResponse'
+      security:
+      - BearerAuth: []
+      summary: List Agent Roles
+      tags:
+      - Agent
+  /api/sico/agent/single_agent:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: agentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DeleteSingleAgentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: agentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create single agent request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update single agent request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
+  /api/sico/agent/single_agent/deploy:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Deploy single agent request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DeploySingleAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DeploySingleAgentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
+  /api/sico/agent/single_agent_infos:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentInfosResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
+  /api/sico/agent/single_agent_instance:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DeleteSingleAgentInstanceResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgentInstance
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentInstanceResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgentInstance
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create single agent instance request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentInstanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentInstanceResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgentInstance
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update single agent instance request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgentInstance
+  /api/sico/agent/single_agent_instances:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: isEmployer
+        type: boolean
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 50
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentInstancesResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgentInstance
+  /api/sico/agent/single_agents:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 50
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ListSingleAgentsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
+  /api/sico/agents/{agentId}/models:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Agent ID
+        in: path
+        name: agentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
+  /api/sico/conversation:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GetConversationResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Conversation Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.CreateConversationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.CreateConversationResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Conversation Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.UpdateConversationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.UpdateConversationResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/conversation/chat:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Chat Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ChatRequestHttp'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ChatStreamResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/conversation/chat/reconnect:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: chat Reconnect Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ReconnectRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ChatStreamResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/conversation/list:
+    get:
+      parameters:
+      - default: 1
+        in: query
+        minimum: 0
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ListConversationResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/conversation/messages:
+    get:
+      parameters:
+      - in: query
+        name: agentId
+        type: string
+      - in: query
+        name: agentInstanceId
+        required: true
+        type: integer
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 50
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        name: turnId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ListMessagesByUserAndAgentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/conversation/messages/user/turn:
+    get:
+      parameters:
+      - in: query
+        name: agentId
+        type: string
+      - in: query
+        name: agentInstanceId
+        required: true
+        type: integer
+      - in: query
+        name: turnId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GetUserMessageByUserAgentTurnIDResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/conversation/plan:
+    get:
+      parameters:
+      - in: query
+        name: agentInstanceId
+        type: integer
+      - in: query
+        name: turnId
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GetPlanResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/conversation/plan/cancel:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Cancel Plan Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.CancelPlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.CancelPlanResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/health:
+    get:
+      description: Get the health status of the server
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health Check
+      tags:
+      - Health
+  /api/sico/knowledge/document:
+    delete:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgeDocumentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeDocumentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Knowledge Document
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeDocumentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeDocumentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Knowledge Document
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgeDocumentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgeDocumentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+  /api/sico/knowledge/document/details:
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeDocumentDetailsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+  /api/sico/knowledge/documents:
+    get:
+      parameters:
+      - in: query
+        name: agentId
+        type: string
+      - in: query
+        name: assetId
+        type: integer
+      - in: query
+        name: creatorUsername
+        type: string
+      - enum:
+        - 0
+        - 1
+        - 2
+        format: int32
+        in: query
+        name: documentType
+        type: integer
+        x-enum-comments:
+          KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_FILE: '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_FILE"'
+          KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK: '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_LINK"'
+          KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN: '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN"'
+        x-enum-descriptions:
+        - '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN"'
+        - '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_FILE"'
+        - '@gotag: json:"KNOWLEDGE_DOCUMENT_TYPE_LINK"'
+        x-enum-varnames:
+        - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN
+        - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_FILE
+        - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK
+      - in: query
+        maxLength: 2048
+        name: linkUrl
+        type: string
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      - in: query
+        name: projectId
+        type: integer
+      - enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        format: int32
+        in: query
+        name: status
+        type: integer
+        x-enum-comments:
+          KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_FAILED: '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_FAILED"'
+          KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED: '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_INGESTED"'
+          KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN: '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN"'
+          KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UPLOADED: '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UPLOADED"'
+        x-enum-descriptions:
+        - '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN"'
+        - '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_FAILED"'
+        - '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_UPLOADED"'
+        - '@gotag: json:"KNOWLEDGE_DOCUMENT_STATUS_INGESTED"'
+        x-enum-varnames:
+        - KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN
+        - KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_FAILED
+        - KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UPLOADED
+        - KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeDocumentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+  /api/sico/knowledge/playbook:
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgePlaybookResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Knowledge Playbook
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgePlaybookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgePlaybookResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+  /api/sico/knowledge/playbook/details:
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgePlaybookDetailsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+  /api/sico/knowledge/playbooks:
+    get:
+      parameters:
+      - in: query
+        name: agentInstanceId
+        type: integer
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      - in: query
+        name: projectId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgePlaybookResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+  /api/sico/knowledge/tag:
+    delete:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgeTagResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.GetKnowledgeTagResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Knowledge Tag
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeTagRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.CreateKnowledgeTagResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Knowledge Tag
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgeTagRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgeTagResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+  /api/sico/knowledge/tags:
+    get:
+      parameters:
+      - in: query
+        name: page
+        required: true
+        type: integer
+      - in: query
+        name: pageSize
+        required: true
+        type: integer
+      - in: query
+        name: projectId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeTagResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
+  /api/sico/llm/models:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Delete Model
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.DeleteModelRegistryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.DeleteModelRegistryResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - llmhub
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Model
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.CreateModelRegistryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.CreateModelRegistryResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - llmhub
+  /api/sico/llm/runtime/generate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Runtime Generate
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeGenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeGenerateResponse'
+      tags:
+      - llmhub
+  /api/sico/llm/runtime/generate/stream:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Runtime Generate
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeGenerateRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.RuntimeStreamChunk'
+      tags:
+      - llmhub
+  /api/sico/llm/sdk-examples:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      tags:
+      - llmhub
+  /api/sico/llm/source-slots:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      tags:
+      - llmhub
+  /api/sico/project:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.DeleteProjectResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectDetailResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create project request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update project request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.UpdateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.UpdateProjectResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+  /api/sico/project/asset:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.DeleteProjectAssetResponse'
+      tags:
+      - Project
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Project ID
+        in: formData
+        name: project_id
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.AddProjectAssetResponse'
+      tags:
+      - Project
+  /api/sico/project/assets:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - default: 1
+        in: query
+        minimum: 0
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        name: projectId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectAssetListResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+  /api/sico/project/sas_asset:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: uri
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectSASAssetResponse'
+      tags:
+      - Project
+  /api/sico/project/statistics:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: filterEmployerUsername
+        type: string
+      - in: query
+        name: filterOperatorUsername
+        type: string
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.QueryProjectStatisticsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+  /api/sico/project/user_projects:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - default: 0
+        enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        format: int32
+        in: query
+        name: memberType
+        type: integer
+        x-enum-varnames:
+        - MemberType_MEMBER_TYPE_UNKNOWN
+        - MemberType_MEMBER_TYPE_OWNER
+        - MemberType_MEMBER_TYPE_ADMIN
+        - MemberType_MEMBER_TYPE_MEMBER
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetUserProjectListResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+  /api/sico/rbac/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.LoginResponse'
+      tags:
+      - RBAC
+  /api/sico/rbac/logout:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.LogoutResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - RBAC
+  /api/sico/rbac/policies:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        name: ptype
+        type: string
+      - in: query
+        name: v0
+        type: string
+      - in: query
+        name: v1
+        type: string
+      - in: query
+        name: v2
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.QueryPoliciesResponse'
+      security:
+      - BearerAuth: []
+      summary: Query Policies
+      tags:
+      - RBAC
+  /api/sico/rbac/policy:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.DeletePolicyResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Policy
+      tags:
+      - RBAC
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.GetPolicyResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Policy
+      tags:
+      - RBAC
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Policy
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.CreatePolicyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.CreatePolicyResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Policy
+      tags:
+      - RBAC
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Policy
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.UpdatePolicyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_casbin_rule.UpdatePolicyResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Policy
+      tags:
+      - RBAC
+  /api/sico/rbac/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Refresh token request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_token.RefreshTokenResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - RBAC
+  /api/sico/rbac/role:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.DeleteRoleResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Role
+      tags:
+      - RBAC
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Role
+      tags:
+      - RBAC
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Role
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Role
+      tags:
+      - RBAC
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Role
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Role
+      tags:
+      - RBAC
+  /api/sico/rbac/role_users:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        name: roleId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.ListUsersByRoleResponse'
+      security:
+      - BearerAuth: []
+      summary: List Users By Role
+      tags:
+      - RBAC
+  /api/sico/rbac/roles:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        maxLength: 64
+        name: code
+        type: string
+      - in: query
+        maxLength: 128
+        name: name
+        type: string
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - enum:
+        - 0
+        - 1
+        in: query
+        name: status
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponse'
+      security:
+      - BearerAuth: []
+      summary: Query Roles
+      tags:
+      - RBAC
+  /api/sico/rbac/user:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.DeleteUserResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - RBAC
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.GetUserResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - RBAC
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create user request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.CreateUserResponse'
+      tags:
+      - RBAC
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update user request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.UpdateUserResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - RBAC
+  /api/sico/rbac/user/password:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Reset password request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.ResetPasswordResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - RBAC
+  /api/sico/rbac/user_role:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Remove User Role
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.RemoveUserRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.RemoveUserRoleResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove User Role
+      tags:
+      - RBAC
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Assign User Role
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.AssignUserRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.AssignUserRoleResponse'
+      security:
+      - BearerAuth: []
+      summary: Assign User Role
+      tags:
+      - RBAC
+  /api/sico/rbac/user_roles:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        name: userId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.ListUserRolesResponse'
+      security:
+      - BearerAuth: []
+      summary: List User Roles
+      tags:
+      - RBAC
+  /api/sico/rbac/users:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        maxLength: 64
+        name: alias
+        type: string
+      - in: query
+        maxLength: 255
+        name: email
+        type: string
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        maxLength: 32
+        name: phone
+        type: string
+      - in: query
+        name: statusList
+        type: string
+      - in: query
+        name: tenant
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user.QueryUsersResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - RBAC
+  /api/sico/sandbox/{sandboxId}/vnc:
+    get:
+      description: Get VNC URL for a specific sandbox by ID
+      parameters:
+      - description: Sandbox ID
+        in: path
+        name: sandboxId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxVNCInfo'
+              type: object
+      summary: Get sandbox VNC URL
+      tags:
+      - Sandbox-View
+  /api/sico/sandbox/admin/release:
+    post:
+      consumes:
+      - application/json
+      description: Release a sandbox from in-use state while preserving assignment
+        mapping.
+      parameters:
+      - description: Release request (instance_id + sandbox_id)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxUnassignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      summary: Admin release a sandbox
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/apply:
+    post:
+      consumes:
+      - application/json
+      description: Apply for a sandbox of the specified type. One instanceID can have
+        multiple sandboxes.
+      parameters:
+      - description: Instance context (JSON with agentInstanceId)
+        in: header
+        name: X-Sico-Context
+        required: true
+        type: string
+      - description: Client ID
+        in: header
+        name: X-Sico-Client-Id
+        required: true
+        type: string
+      - description: Unix timestamp
+        in: header
+        name: X-Sico-Timestamp
+        required: true
+        type: string
+      - description: Random nonce
+        in: header
+        name: X-Sico-Nonce
+        required: true
+        type: string
+      - description: HMAC signature
+        in: header
+        name: X-Sico-Signature
+        required: true
+        type: string
+      - description: Sandbox type to apply
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxApplyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      summary: Apply for a sandbox
+      tags:
+      - Sandbox
+  /api/sico/sandbox/assign:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Manually assign a sandbox to an agent instance from the dashboard.
+        The sandbox will be reserved for the specified instance.
+      parameters:
+      - description: Assignment request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxAssignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      summary: Assign sandbox to instance
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/docs/{type}:
+    get:
+      description: Returns the OpenAPI spec for a sandbox type (fetched from an available
+        sandbox instance)
+      parameters:
+      - description: Sandbox type (emulator)
+        in: path
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OpenAPI JSON spec
+          schema:
+            type: object
+      summary: Get sandbox type API documentation
+      tags:
+      - Sandbox
+  /api/sico/sandbox/instance:
+    get:
+      description: |-
+        Get all sandboxes assigned to an instance with type, status, and endpoint info.
+        If type query param is provided, only sandboxes of that type are returned.
+      parameters:
+      - in: query
+        name: instanceId
+        required: true
+        type: string
+      - enum:
+        - emulator
+        - aio
+        - wincua
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.GetInstanceSandboxesResponse'
+      summary: Get instance sandboxes
+      tags:
+      - Sandbox
+  /api/sico/sandbox/instance/{instanceId}/vnc:
+    get:
+      description: Get VNC URLs for all sandboxes associated with an instance
+      parameters:
+      - description: Instance ID
+        in: path
+        name: instanceId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxVNCInfo'
+                  type: array
+              type: object
+      summary: Get instance VNC URLs
+      tags:
+      - Sandbox-View
+  /api/sico/sandbox/instances:
+    get:
+      description: Returns a list of active agent instances (id and name) for sandbox
+        assignment.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxInstanceInfo'
+                  type: array
+              type: object
+      summary: List agent instances for sandbox assignment
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/list:
+    get:
+      description: List all sandbox resources grouped by type, with status and usage
+        info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourcesByType'
+              type: object
+      summary: List all sandboxes
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/release:
+    post:
+      consumes:
+      - application/json
+      description: Release a sandbox that was acquired via apply. The sandbox becomes
+        available for re-use.
+      parameters:
+      - description: Instance context (JSON with agentInstanceId)
+        in: header
+        name: X-Sico-Context
+        required: true
+        type: string
+      - description: Client ID
+        in: header
+        name: X-Sico-Client-Id
+        required: true
+        type: string
+      - description: Unix timestamp
+        in: header
+        name: X-Sico-Timestamp
+        required: true
+        type: string
+      - description: Random nonce
+        in: header
+        name: X-Sico-Nonce
+        required: true
+        type: string
+      - description: HMAC signature
+        in: header
+        name: X-Sico-Signature
+        required: true
+        type: string
+      - description: Sandbox to release
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxReleaseRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      summary: Release a sandbox
+      tags:
+      - Sandbox
+  /api/sico/sandbox/reset:
+    post:
+      consumes:
+      - application/json
+      description: Soft-reset a sandbox by sandbox ID. The lease and assignment are
+        preserved.
+      parameters:
+      - description: Sandbox ID to reset
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      summary: Reset a sandbox
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/unassign:
+    post:
+      consumes:
+      - application/json
+      description: Remove a sandbox assignment from an agent instance and release
+        the sandbox.
+      parameters:
+      - description: Unassignment request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxUnassignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      summary: Unassign sandbox from instance
+      tags:
+      - Sandbox-Management
+  /api/sico/skills:
+    delete:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.DeleteSkillResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - skills
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.GetSkillResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - skills
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Skill
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.CreateSkillRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.CreateSkillResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - skills
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Skill
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.UpdateSkillRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.UpdateSkillResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - skills
+  /api/sico/skills/details:
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.GetSkillDetailsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - skills
+  /api/sico/skills/list:
+    get:
+      parameters:
+      - in: query
+        name: agentId
+        type: string
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      - in: query
+        name: projectId
+        type: integer
+      - enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        format: int32
+        in: query
+        name: status
+        type: integer
+        x-enum-comments:
+          SkillStatus_SKILL_STATUS_FAILED: '@gotag: json:"SKILL_STATUS_FAILED"'
+          SkillStatus_SKILL_STATUS_UNKNOWN: '@gotag: json:"SKILL_STATUS_UNKNOWN"'
+          SkillStatus_SKILL_STATUS_UPLOADED: '@gotag: json:"SKILL_STATUS_UPLOADED"'
+          SkillStatus_SKILL_STATUS_UPLOADING: '@gotag: json:"SKILL_STATUS_UPLOADING"'
+        x-enum-descriptions:
+        - '@gotag: json:"SKILL_STATUS_UNKNOWN"'
+        - '@gotag: json:"SKILL_STATUS_UPLOADING"'
+        - '@gotag: json:"SKILL_STATUS_UPLOADED"'
+        - '@gotag: json:"SKILL_STATUS_FAILED"'
+        x-enum-varnames:
+        - SkillStatus_SKILL_STATUS_UNKNOWN
+        - SkillStatus_SKILL_STATUS_UPLOADING
+        - SkillStatus_SKILL_STATUS_UPLOADED
+        - SkillStatus_SKILL_STATUS_FAILED
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_skill.ListSkillResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - skills
+securityDefinitions:
+  BearerAuth:
+    description: 'Enter your bearer token in the format: Bearer <token>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -1,0 +1,144 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package llmhubs;
+
+option go_package = "sico-backend/internal/transport/grpc/pb/llmhubs";
+
+import "google/protobuf/struct.proto";
+
+// LLMHubRPC exposes LLMHub runtime operations over gRPC (Backend → Core).
+service LLMHubRPC {
+    rpc RuntimeGenerate(RuntimeGenerateRequest) returns (RuntimeGenerateResponse) {}
+    rpc RuntimeGenerateStream(RuntimeGenerateRequest) returns (stream RuntimeStreamChunk) {}
+    rpc ListBuiltinModels(ListBuiltinModelsRequest) returns (ListBuiltinModelsResponse) {}
+}
+
+message ListBuiltinModelsRequest {}
+
+message BuiltinModelEntry {
+    string model_key = 1;
+    string display_name = 2;
+    string description = 3;
+    string icon_uri = 4;
+    int32 model_type = 5;
+    int32 provider_template_type = 6;
+}
+
+message ListBuiltinModelsResponse {
+    repeated BuiltinModelEntry models = 1;
+    int32 code = 253;
+    string msg = 254;
+}
+
+message RuntimeInputContent {
+    string type = 1;
+    string text = 2;
+    string image_base64 = 3;
+    string file_url = 4;
+    string file_base64 = 5;
+    string call_id = 6;
+    string name = 7;
+    string arguments = 8;
+    google.protobuf.Struct output = 9;   // computer_call_output nested data
+    string image_url = 10;
+    string media_type = 11;
+    string result = 12;                  // function_result serialized value
+    repeated google.protobuf.Struct actions = 13;  // computer_call actions for history replay
+    string detail = 14;
+}
+
+message RuntimeInput {
+    string role = 1;
+    repeated RuntimeInputContent content = 2;
+}
+
+message RuntimeModelDefinition {
+    string model_key = 1;
+    string display_name = 2;
+    int32 model_type = 3;
+    int32 provider_template_type = 4;
+    int32 status = 5;
+    google.protobuf.Struct config = 6;
+    map<string, string> secrets = 8;
+}
+
+message RuntimeGenerateRequest {
+    reserved 6;
+    string model = 1;
+    string instructions = 2;
+    repeated RuntimeInput inputs = 3;
+    google.protobuf.Struct options = 4;
+    repeated google.protobuf.Struct tools = 5;
+    RuntimeModelDefinition model_definition = 7;
+    string previous_response_id = 8;
+}
+
+message RuntimeOutputItem {
+    string type = 1;
+    string text = 2;
+    google.protobuf.Struct json = 3;
+    string call_id = 4;
+    string name = 5;
+    string arguments = 6;
+    repeated google.protobuf.Struct actions = 7;  // computer_call actions
+}
+
+message RuntimeArtifact {
+    string artifact_type = 1;
+    string mime_type = 2;
+    string filename = 3;
+    string storage_uri = 4;
+    string download_url = 5;
+}
+
+message RuntimeUsage {
+    int64 prompt_tokens = 1;
+    int64 completion_tokens = 2;
+    int64 total_tokens = 3;
+}
+
+message RuntimeTrace {
+    int32 provider_template_type = 1;
+    string model = 2;
+    int64 latency_ms = 3;
+}
+
+message RuntimeGenerateResponse {
+    repeated RuntimeOutputItem outputs = 1;
+    repeated RuntimeArtifact artifacts = 2;
+    google.protobuf.Struct payload = 3;
+    RuntimeUsage usage = 4;
+    RuntimeTrace trace = 5;
+    int32 code = 253;
+    string msg = 254;
+}
+
+// RuntimeStreamChunk represents a single incremental piece of a streaming response.
+message RuntimeStreamChunk {
+    string delta = 1;                    // incremental text fragment
+    repeated RuntimeOutputItem outputs = 2;  // structured outputs (tool calls, etc.)
+    string finish_reason = 3;            // "stop", "tool_use", "error", or empty
+    RuntimeUsage usage = 4;              // final usage stats (sent on last chunk)
+    int32 code = 253;                    // non-zero signals error
+    string msg = 254;                    // error message
+}
