@@ -13,7 +13,7 @@
 3. [Cortex-Action-Memory](#3-cortex-action-memory)
    - [Cortex: Reasoning and Planning](#31-cortex-reasoning-and-planning)
    - [Action: Skills, Tools, and Sandbox](#32-action-skills-tools-and-sandbox)
-   - [Memory & Sense: Experience and Context](#33-memory--sense-experience-and-context)
+   - [Memory & Sense: Experience & Contextual Awareness](#33-memory--sense-experience--contextual-awareness)
    - [Three Loops at the Heart of Sico](#34-three-loops-at-the-heart-of-sico)
 4. [Core Execution Loop](#4-core-execution-loop)
    - [End-to-End Flow](#41-end-to-end-flow)
@@ -633,7 +633,7 @@ This framework draws on recent work on evolving agent contexts, including ACE (Z
 
 - **Operator-correction pathway reserved in the Reflector interface (partial).** Sico's Reflector already accepts a `ground_truth` parameter alongside execution feedback, so Operator corrections are designed to enter the Reflector-Curator pipeline as a first-class signal.
 
-- **Embedded in a larger architecture, not a standalone optimizer.** In Sico the Playbook is not the central artifact but one of the **five memory layers** described in [§3.3](#33-memory--sense-experience-and-context), alongside in-turn scratchpad, recent history, Mem0 long-term facts, and project knowledge. It also participates in the **three coordinated loops** of [§3.4](#34-three-loops-at-the-heart-of-sico), where the planned Evaluation Loop feeds L1–L4 failure attribution back into Experience Learning ([§6.3](#63-closing-the-loop)). The same mechanism is exposed as a portable module for non-Sico agent stacks in [§5.1.5](#515-external-agent-integration).
+- **Embedded in a larger architecture, not a standalone optimizer.** In Sico the Playbook is not the central artifact but one of the **five memory layers** described in [§3.3](#33-memory--sense-experience--contextual-awareness), alongside in-turn scratchpad, recent history, Mem0 long-term facts, and project knowledge. It also participates in the **three coordinated loops** of [§3.4](#34-three-loops-at-the-heart-of-sico), where the planned Evaluation Loop feeds L1–L4 failure attribution back into Experience Learning ([§6.3](#63-closing-the-loop)). The same mechanism is exposed as a portable module for non-Sico agent stacks in [§5.1.5](#515-external-agent-integration).
 
 #### 5.1.5 External Agent Integration
 
