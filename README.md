@@ -93,7 +93,7 @@ On top of this runtime, Sico organizes work into **three loops** that together f
 
 - **Execution Loop**: turns an Operator goal into a traced agent run. The Cortex–Action–Memory stack executes inside an observable Sandbox and emits structured trajectories: actions, intermediate states, tool outputs, and environmental feedback.
 - **Evolution Loop**: converts those trajectories into reusable capability. A Reflector → Curator pipeline distills successful strategies and recurring failure patterns into a per-(project, agent) **Playbook** that is injected into the next run's workspace (training-free), while the same signals can also be fed back into base-model training (training-based).
-- **Evaluation Loop** *(planned)*: attributes *why* a task failed using an **L1–L4 taxonomy** (Task Instruction Issue · DW Capability Issue · Environment Issue …), giving the Operator a targeted correction signal and routing structured failure attributions back into the Evolution Loop.
+- **Evaluation Loop** *(planned)*: analyzes failed task trajectories and attributes the root cause using an L1–L4 failure taxonomy, from high-level ownership to concrete failure mode. The results help the Operator provide targeted corrections and feed failure insights back into Experience Learning and future training.
 
 ## Features
 

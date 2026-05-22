@@ -230,7 +230,7 @@ At the start of each chat, workspace initialization copies all relevant skills i
 
 Sandbox capabilities are exposed as HTTP APIs. For the current Android emulator sandbox, `sandbox_acquire` returns `http_api_base_url`; the agent uses the built-in `curl` tool against that URL, so the sandbox runtime only needs to ship its HTTP server, not per-endpoint agent-side wrappers. See [§4.6](#46-sandbox-observable-execution-environments) for details.
 
-### 3.3 Memory & Sense: Experience and Context
+### 3.3 Memory & Sense: Experience & Contextual Awareness
 
 A Digital Worker needs different kinds of memory at very different time scales. Rather than putting everything into a single vector store, Sico splits memory into five layers, each backed by the storage that best fits its access pattern.
 
