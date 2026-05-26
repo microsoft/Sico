@@ -196,7 +196,6 @@ make kind-down                  # tear down and delete local cluster data
 sico/
 ├── backend/              # Go HTTP + gRPC service (Gin, GORM, Wire)
 ├── core/                 # Python agent orchestration service (asyncio, grpclib)
-├── frontend/             # Packaged/deployment frontend assets (source package is separate)
 ├── proto/                # Protobuf definitions shared by all services
 ├── sandbox/              # Sandbox runtimes (Android emulator, ...)
 ├── skills/               # Packaged Digital Worker skills

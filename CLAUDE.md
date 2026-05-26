@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sico is an open-source AI agent platform with three main services that communicate via gRPC and a bidirectional "reverse RPC" pattern. The backend handles HTTP APIs and persistence, the core handles AI/LLM orchestration, and the frontend provides a React dashboard.
+Sico is an open-source AI agent platform with three main services that communicate via gRPC and a bidirectional "reverse RPC" pattern. The backend handles HTTP APIs and persistence, the core handles AI/LLM orchestration, and the frontend provides a React dashboard (frontend codebase is not opensourced). 
 
 ## Build & Run Commands
 
@@ -40,19 +40,6 @@ uv run ruff check .            # lint
 uv run ruff format .           # format
 ```
 Requires Python >=3.13. Uses `uv` for dependency management (pyproject.toml + uv.lock).
-
-### Frontend (React + pnpm)
-```bash
-cd frontend
-pnpm install                   # install dependencies
-pnpm dev                       # start dev server (vite)
-pnpm build                     # production build (tsc -b && vite build)
-pnpm lint                      # eslint
-pnpm lint:fix
-pnpm format                    # prettier
-pnpm format:check
-```
-Single-package React app (package name `sico-frontend`, private). Uses Vite + Tailwind + styled-components + React Router. TypeScript path alias `@` → `frontend/src/`.
 
 ### Protobuf Code Generation
 All `.proto` files live in `proto/`. Generation scripts are run from the `proto/` directory:
@@ -120,14 +107,6 @@ Key patterns:
 - **`app/schemas/`** — Pydantic models for chat, conversation.
 - **`app/pb/`** — Auto-generated protobuf/betterproto2 stubs (do not edit manually).
 - **`app/utils/`** — Shared utilities: Redis, caching, eventbus, response builders.
-
-### Frontend Structure (TypeScript/React — `frontend/`)
-
-- Single-package React app rooted at `frontend/` (not a monorepo). Package name `sico-frontend`, private, managed with pnpm.
-- **`src/`** — app source: `pages/`, `components/`, `api/`, `hooks/`, `utils/`, `assets/`; `App.tsx` + `main.tsx` + `PlatformRouter.tsx` entry.
-- **`public/`** — static assets (includes `pdfjs/` worker).
-- **`proto-types/src/`** — generated TS types from protobuf (do not edit manually; emitted by `bash gen.sh` in `proto/`).
-- Uses Vite, Tailwind CSS, styled-components, React Router, and `@` path alias mapped to `src/`.
 
 ### Sandbox System
 

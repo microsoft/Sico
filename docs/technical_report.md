@@ -129,7 +129,7 @@ Sico separates AI orchestration from data persistence with a protobuf-driven gRP
 |---------|----------|-----------|---------------|
 | **Backend** | Go | Gin | HTTP API gateway, JWT/Casbin auth for operator-facing APIs, sandbox-client HMAC auth, data persistence, reverse gRPC server |
 | **Core** | Python | asyncio | Agent orchestration, LLM invocation, tool execution, Experience Learning; no direct MySQL access, with runtime state in workspace files and memory/vector stores |
-| **Frontend** | - | - | Operator-facing web client for human users (not open source) |
+| **Frontend** | TypeScript | React / Vite | Operator-facing web client for human users; source code is not currently published in this repository and is distributed separately as a packaged archive |
 
 Sico uses two services because AI orchestration and platform responsibilities evolve at different speeds and benefit from different runtimes. The Backend service is implemented in Go for high-throughput HTTP handling. The Core service is implemented in Python to support rapid iteration across the AI/LLM ecosystem. This separation decouples deployment cycles and allows each service to optimize for its primary workload.
 
