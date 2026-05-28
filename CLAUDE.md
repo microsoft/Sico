@@ -4,14 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sico is an open-source AI agent platform with three main services that communicate via gRPC and a bidirectional "reverse RPC" pattern. The backend handles HTTP APIs and persistence, the core handles AI/LLM orchestration, and the frontend provides a React dashboard (frontend codebase is not opensourced). 
+Sico is an open-source AI agent platform with three main services that communicate via gRPC and a bidirectional "reverse RPC" pattern. The backend handles HTTP APIs and persistence, the core handles AI/LLM orchestration, and the frontend provides a React dashboard.
+
+> **Frontend source code is not in this public repository.** In a public checkout, `frontend/` only contains packaged deployment assets (e.g. `frontend-dist.zip`, `deployments/`) — there is no `frontend/package.json` or `src/`, so any `pnpm`/`vite` workflow must be run from a separate frontend source checkout. Do not add or document `pnpm dev`/`pnpm build` instructions in this repo.
 
 ## Build & Run Commands
 
 ### Full Stack (Docker Compose)
 ```bash
 cp .env.example .env          # first time only
-make compose-up               # builds and starts all services (nginx, backend, core, mysql, redis, kafka, seaweedfs)
+make compose-up               # builds and starts all services (nginx, frontend, backend, core, mysql, redis, kafka, seaweedfs, qdrant)
 make compose-down              # stop and remove containers
 make compose-logs              # tail all service logs
 ```
