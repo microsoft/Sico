@@ -524,7 +524,7 @@ class ChatService(ChatServiceBase):
             knowledge_list=json.dumps(workspace_context.get("knowledge", []), ensure_ascii=False, indent=2),
             skills_list=json.dumps(workspace_context.get("skills", []), ensure_ascii=False, indent=2),
         )
-        print(prompt)
+
         generation = await app.llmhubs.generate(request=build_llm_request(
             [{
                 "role": "user",

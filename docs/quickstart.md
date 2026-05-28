@@ -21,8 +21,8 @@ For a developer setup (building services from source, writing code, running test
 ## 1. Configure the environment
 
 ```bash
-git clone https://github.com/microsoft/sico.git
-cd sico
+git clone https://github.com/microsoft/Sico.git
+cd Sico
 cp .env.example .env
 ```
 
@@ -210,7 +210,7 @@ curl http://localhost:8080/api/sico/health
 # Core is internal, but the Backend exposes an aggregated health view.
 ```
 
-Sign in with the seeded default account:
+Sign in with the seeded default account (local development only — rotate or remove before exposing the stack outside your machine):
 
 - **Username**: `operator@sico.local`
 - **Password**: `operator`

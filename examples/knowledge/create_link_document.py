@@ -30,7 +30,7 @@ from examples._shared.http import bearer_headers, env_int, json_request, print_j
 def main() -> None:
     token = require_env("TOKEN")
     project_id = env_int("PROJECT_ID", 1)
-    link_url = os.environ.get("DOC_URL", "https://github.com/microsoft/sico")
+    link_url = os.environ.get("DOC_URL", "https://github.com/microsoft/Sico")
     name = os.environ.get("DOC_NAME", "Sico GitHub Repository")
     agent_id = os.environ.get("AGENT_ID", "").strip()
 

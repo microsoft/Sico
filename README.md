@@ -21,10 +21,11 @@ The idea behind Sico emerged from large-scale operational challenges observed in
 
 Through real production workloads, Sico achieved closed-loop validation for Digital Workers operating under continuous execution, evaluation, and human supervision. Through this process, we observed that reliability emerged not from static automation alone, but from the continuous co-evolution between human operators and Digital Workers.
 
-In Sico, three core roles define how work gets done:
+In Sico, four core roles define how work gets done:
 
-- Operator: responsible for training, monitoring, and improving Digital Workers
 - Employer: defines business objectives and outcome standards for Digital Workers
+- Operator: responsible for training, monitoring, and improving Digital Workers
+- Developer: builds the capability structure and infrastructure (workflows, tools, execution environments) of Digital Workers
 - Digital Worker: executes tasks through structured capabilities and continuous learning
 
 At the center of this system, a Digital Worker is not just a model or an agent, but a structured, executable capability unit. 
@@ -120,8 +121,8 @@ On top of this runtime, Sico organizes work into **three loops** that together f
 ### Prepare the configuration (shared by all run modes)
 
 ```bash
-git clone https://github.com/microsoft/sico.git
-cd sico
+git clone https://github.com/microsoft/Sico.git
+cd Sico
 cp .env.example .env            # edit values as needed
 ```
 
@@ -162,7 +163,7 @@ Then pick **one** of the run modes below.
 ### Run mode A: Docker Compose (recommended for local dev)
 
 ```bash
-make compose-up                 # builds and starts nginx, backend, core, mysql, redis
+make compose-up                 # builds and starts nginx, frontend, backend, core, mysql, redis, kafka, seaweedfs, qdrant
 ```
 
 Then verify the stack:
@@ -172,7 +173,7 @@ Then verify the stack:
 - API docs: [http://localhost:8080/api/sico/docs/index.html](http://localhost:8080/api/sico/docs/index.html)
 - Health: `curl http://localhost:8080/api/sico/health`
 
-Sign in with the seeded default account:
+Sign in with the seeded default account (local development only — rotate or remove before exposing the stack outside your machine):
 
 - **Username**: `operator@sico.local`
 - **Password**: `operator`
@@ -239,4 +240,4 @@ This project may contain trademarks or logos for projects, products, or services
 
 ## Acknowledgements
 
-Sico stands on the shoulders of the open-source community: Go, Gin, GORM, Wire, Python, asyncio, grpclib, betterproto, React, Vite, and many more. Thank you to everyone who has [contributed](https://github.com/microsoft/sico/graphs/contributors) to Sico.
+Sico stands on the shoulders of the open-source community: Go, Gin, GORM, Wire, Python, asyncio, grpclib, betterproto, React, Vite, and many more. Thank you to everyone who has [contributed](https://github.com/microsoft/Sico/graphs/contributors) to Sico.
