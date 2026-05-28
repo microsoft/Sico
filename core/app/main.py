@@ -132,7 +132,7 @@ async def serve():
 
     server_address = os.getenv("GRPC_SERVER_ADDRESS", "localhost:50053")
     host, port = server_address.split(":")
-    print(f"Starting gRPC server at {server_address}...")
+    _LOGGER.info("Starting gRPC server at %s...", server_address)
 
     await server.start(host, int(port))
     try:
