@@ -2,7 +2,7 @@
 
 Sico is at an early, actively-evolving stage. This roadmap captures our direction, not a commitment to specific dates. Priorities shift based on user feedback and real-world deployment experience.
 
-We track concrete work items as [GitHub Issues](https://github.com/microsoft/sico/issues). This page is the higher-level view.
+We track concrete work items as [GitHub Issues](https://github.com/microsoft/Sico/issues). This page is the higher-level view.
 
 ## Current scope
 
@@ -41,4 +41,4 @@ Frontend source code is not currently published in this repository. For now, the
 
 ## Contributing ideas
 
-Have a use case, a proposal, or an existing tool you think should integrate with Sico? Open a [discussion](https://github.com/microsoft/sico/discussions) or [issue](https://github.com/microsoft/sico/issues). Real workload feedback is the single most valuable input for the roadmap.
+Have a use case, a proposal, or an existing tool you think should integrate with Sico? Open a [discussion](https://github.com/microsoft/Sico/discussions) or [issue](https://github.com/microsoft/Sico/issues). Real workload feedback is the single most valuable input for the roadmap.

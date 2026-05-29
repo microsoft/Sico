@@ -13,7 +13,14 @@ updated to list supported versions.
 
 **Please do not file public GitHub issues for security vulnerabilities.**
 
-Instead, report privately via GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
+For Microsoft-owned projects, the preferred reporting channel is the
+**Microsoft Security Response Center (MSRC)**: report at
+[https://msrc.microsoft.com/create-report](https://msrc.microsoft.com/create-report),
+or email [secure@microsoft.com](mailto:secure@microsoft.com). MSRC coordinates
+disclosure across Microsoft products and is the canonical channel for issues
+with potential cross-product impact.
+
+As an alternative, you can also report privately via GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
 on this repository.
 
 Please include:
