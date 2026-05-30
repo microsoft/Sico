@@ -15,7 +15,7 @@
 
 ## What is Sico?
 
-Sico — Symbiotic Intelligence of CO-evolution — is an open-source platform for building, managing, and evolving **Digital Workers**: structured AI labor units that co-evolve with human operators through real production work, particularly in BPO (Business Process Outsourcing) scenarios.
+Sico — Symbiotic Intelligence for CO-evolution — is an open-source platform for building, managing, and evolving **Digital Workers**: structured AI labor units that co-evolve with human operators through real production work, particularly in BPO (Business Process Outsourcing) scenarios.
 
 The idea behind Sico emerged from large-scale operational challenges observed in Microsoft’s internal environments, especially across BPO-style workflows such as [black-box testing](https://en.wikipedia.org/wiki/Black-box_testing).
 
