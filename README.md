@@ -9,7 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB.svg)](core/pyproject.toml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Overview](docs/overview.md) · [Quick Start](docs/quickstart.md) · [Technical Report](docs/technical_report.md) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/roadmap.md)
+[Overview](docs/overview.md) · [Quick Start](docs/quickstart.md) · [Technical Report](docs/technical_report.md) · [Agentic Evolution](docs/agentic-evolution.pdf) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/roadmap.md)
 
 </div>
 
@@ -36,11 +36,19 @@ Its anatomy consists of:
 - **Action**: execution via domain skills, workflows, and sandboxed tools
 - **Memory & Sense**: accumulated knowledge, execution experience and contextual awareness for grounding and continuous improvement
 
-Human operators supervise execution quality, intervene when necessary, and guide capability improvement. 
+This creates a practical **Co-Evolution** loop where humans and Digital Workers continuously improve together through real work. 
 
-This creates a practical **Co-Evolution** loop where humans and Digital Workers continuously improve together through real work.
+For a comprehensive survey of this direction, refer to [**Agentic Evolution: From Self-Improving Agents to Co-Evolving Human–AI Systems** ](docs/agentic-evolution.pdf)
 
-> Learn more: [What is Sico](docs/overview.md), [What is Co-Evolution](docs/agentic-evolution.pdf).
+> Learn more: [What is Sico](docs/overview.md)
+
+## Who is Sico for?
+
+Sico is primarily designed for:
+
+- BPO providers looking to build and operate AI-powered workforces for their clients
+- Enterprises seeking to automate and scale operational workflows with AI
+- Developers building AI workers for specific business domains
 
 ## Why Sico?
 Many real-world workflows, especially in BPO scenarios such as black-box testing, data processing, customer support, and content moderation, require continuous, stable execution at scale.
@@ -169,7 +177,6 @@ make compose-up                 # builds and starts nginx, frontend, backend, co
 Then verify the stack:
 
 - UI login: [http://localhost:8080/login](http://localhost:8080/login)
-- Developer interface: [http://localhost:8080/developer](http://localhost:8080/developer)
 - API docs: [http://localhost:8080/api/sico/docs/index.html](http://localhost:8080/api/sico/docs/index.html)
 - Health: `curl http://localhost:8080/api/sico/health`
 
