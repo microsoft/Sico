@@ -25,7 +25,7 @@ from typing import Protocol
 
 from android_tester.models import TaskStatus
 
-_IGNORABLE_ACTIONS = frozenset({"scroll", "drag", "pressback"})
+_IGNORABLE_ACTIONS = frozenset({"scroll", "drag", "pressback", "wait"})
 
 
 @dataclass(slots=True)
@@ -52,8 +52,10 @@ class MaxStepsPolicy:
 
     def evaluate(self, context: StopContext) -> StopDecision | None:
         if context.step > self.max_steps:
-            return StopDecision(status=TaskStatus.FAILED,
-                                reason="max steps reached")
+            return StopDecision(
+                status=TaskStatus.BLOCKED,
+                reason=f"reached maximum number of steps ({self.max_steps})",
+            )
         return None
 
 
@@ -66,8 +68,13 @@ class NoProgressPolicy:
             self.max_no_progress_steps >= 0
             and context.consecutive_no_progress >= self.max_no_progress_steps
         ):
-            return StopDecision(status=TaskStatus.FAILED,
-                                reason="no progress limit reached")
+            return StopDecision(
+                status=TaskStatus.BLOCKED,
+                reason=(
+                    f"no progress for "
+                    f"{context.consecutive_no_progress} consecutive steps"
+                ),
+            )
         return None
 
 
@@ -81,21 +88,33 @@ class RepetitiveActionPolicy:
         keys = context.action_keys
         if len(keys) < self.max_repetitions:
             return None
-        if self._is_single_repetition(keys):
-            return StopDecision(status=TaskStatus.FAILED,
-                                reason="repetitive action detected")
-        if self._is_cyclic_repetition(keys):
-            return StopDecision(status=TaskStatus.FAILED,
-                                reason="repetitive action cycle detected")
+        repeated_key = self._find_single_repetition(keys)
+        if repeated_key is not None:
+            return StopDecision(
+                status=TaskStatus.BLOCKED,
+                reason=(
+                    f"action {repeated_key!r} repeated "
+                    f"{self.max_repetitions}x in a row"
+                ),
+            )
+        pattern = self._find_cyclic_repetition(keys)
+        if pattern is not None:
+            return StopDecision(
+                status=TaskStatus.BLOCKED,
+                reason=(
+                    f"cyclic pattern of length {len(pattern)} "
+                    f"repeated 3x: {pattern!r}"
+                ),
+            )
         return None
 
-    def _is_single_repetition(self, keys: list[str]) -> bool:
+    def _find_single_repetition(self, keys: list[str]) -> str | None:
         tail = keys[-self.max_repetitions :]
         if len(set(tail)) == 1 and not self._is_ignorable(tail[0]):
-            return True
-        return False
+            return tail[0]
+        return None
 
-    def _is_cyclic_repetition(self, keys: list[str]) -> bool:
+    def _find_cyclic_repetition(self, keys: list[str]) -> list[str] | None:
         max_window = self.max_repetitions * 3
         recent = keys[-max_window:]
         for pattern_len in range(2, (len(recent) // 3) + 1):
@@ -106,8 +125,8 @@ class RepetitiveActionPolicy:
             if all(tail[i] == pattern[i % pattern_len]
                    for i in range(len(tail))):
                 if not all(self._is_ignorable(k) for k in pattern):
-                    return True
-        return False
+                    return pattern
+        return None
 
     @staticmethod
     def _is_ignorable(key: str) -> bool:

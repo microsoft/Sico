@@ -47,6 +47,9 @@ spec:
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
+            {{- $taskRuntime := index .Values "taskRuntime" | default dict }}
+            - name: TASK_RUNTIME_PYTHON_RUNNER_IMAGE
+              value: {{ default (printf "%s:%s" .Values.image.repository .Values.image.tag) (index $taskRuntime "pythonRunnerImage") | quote }}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:

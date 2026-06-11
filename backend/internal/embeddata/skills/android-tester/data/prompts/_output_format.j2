@@ -1,0 +1,18 @@
+### Output Format
+You MUST respond using EXACTLY this format, with all three tags present:
+<think> your thinking process </think>
+<action> the next action </action>
+<conclusion> the conclusion about the next action </conclusion>
+
+Include this optional tag ONLY when this turn starts work on a NEW step
+of the user task. Omit it entirely while continuing the same step:
+<current_step> short phrase for the new user-task step, ideally taken verbatim from the user query </current_step>
+
+The `<action>` tag MUST contain one of the available action functions (e.g., `Click(box=(x1,y1))`).
+Never describe the action in plain text. Never omit the `<action>` tag.
+
+### Example
+<think>I see a "Not now" button at the bottom of the screen at approximately (500, 850). I need to click it to skip this setup prompt.</think>
+<action>Click(box=(500,850))</action>
+<conclusion>Clicking "Not now" to skip the setup and proceed.</conclusion>
+<current_step>Dismiss the onboarding prompt</current_step>

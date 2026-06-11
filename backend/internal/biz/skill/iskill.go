@@ -33,7 +33,6 @@ type Service interface {
 	UpdateSkill(ctx context.Context, req *skill.UpdateSkillRequest) (*skill.UpdateSkillResponse, error)
 	DeleteSkill(ctx context.Context, req *skill.DeleteSkillRequest) (*skill.DeleteSkillResponse, error)
 	ListSkills(ctx context.Context, req *skill.ListSkillRequest) (*skill.ListSkillResponse, error)
-	GetSkillDetails(ctx context.Context, req *skill.GetSkillDetailsRequest) (*skill.GetSkillDetailsResponse, error)
 }
 
 var defaultSvc Service

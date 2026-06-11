@@ -1,4 +1,4 @@
-.PHONY: install install-project install-adb package
+.PHONY: install install-project install-adb test package
 
 install: install-project install-adb
 
@@ -11,6 +11,9 @@ ifeq ($(OS),Windows_NT)
 else
 	sh scripts/install-adb.sh
 endif
+
+test:
+	uv run --with pytest pytest tests
 
 package:
 ifeq ($(OS),Windows_NT)

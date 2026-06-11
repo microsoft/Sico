@@ -54,7 +54,7 @@ func TestRpcApplySandboxReturnsVNCURL(t *testing.T) {
 
 	resp, err := svc.RpcApplySandbox(ctx, &sandboxRgrpc.ApplySandboxRequest{
 		InstanceId: lease.User,
-		Type:       lease.Type,
+		Type:       osForLease(lease),
 	})
 	require.NoError(t, err)
 	require.Equal(t, int32(0), resp.GetCode())

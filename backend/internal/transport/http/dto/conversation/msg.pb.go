@@ -116,6 +116,7 @@ type MessageItem struct {
 	Attachments     []*common.Attachment   `protobuf:"bytes,9,rep,name=attachments,proto3" json:"attachments"`                                    
 	CreatedAt       int64                  `protobuf:"varint,10,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                     
 	UpdatedAt       int64                  `protobuf:"varint,11,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                     
+	ConversationId  int64                  `protobuf:"varint,12,opt,name=conversation_id,json=conversationId,proto3" json:"conversationId"`      
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -227,6 +228,13 @@ func (x *MessageItem) GetUpdatedAt() int64 {
 	return 0
 }
 
+func (x *MessageItem) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
 type MessageTurn struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TurnId        int64                  `protobuf:"varint,1,opt,name=turn_id,json=turnId,proto3" json:"turnId"`  
@@ -279,6 +287,304 @@ func (x *MessageTurn) GetMessages() []*MessageItem {
 	return nil
 }
 
+// BatchSummaryItem describes one delegated-task batch attached to a conversation.
+// “summary_uri“ points to the persisted HTML report under SeaweedFS.
+type BatchSummaryItem struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	BatchId              string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`                                            
+	ParentConversationId int64                  `protobuf:"varint,2,opt,name=parent_conversation_id,json=parentConversationId,proto3" json:"parentConversationId"`  
+	ParentTurnId         int64                  `protobuf:"varint,3,opt,name=parent_turn_id,json=parentTurnId,proto3" json:"parentTurnId"`                          
+	Status               string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status"`                                                             
+	Reason               string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason"`                                                             
+	TotalCount           int32                  `protobuf:"varint,6,opt,name=total_count,json=totalCount,proto3" json:"totalCount"`                                  
+	SummaryUri           string                 `protobuf:"bytes,7,opt,name=summary_uri,json=summaryUri,proto3" json:"summaryUri"`                                   
+	CreatedAt            int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                                     
+	UpdatedAt            int64                  `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                                     
+	EndedAt              int64                  `protobuf:"varint,10,opt,name=ended_at,json=endedAt,proto3" json:"endedAt"`                                          
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *BatchSummaryItem) Reset() {
+	*x = BatchSummaryItem{}
+	mi := &file_conversation_msg_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchSummaryItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchSummaryItem) ProtoMessage() {}
+
+func (x *BatchSummaryItem) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_msg_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchSummaryItem.ProtoReflect.Descriptor instead.
+func (*BatchSummaryItem) Descriptor() ([]byte, []int) {
+	return file_conversation_msg_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *BatchSummaryItem) GetBatchId() string {
+	if x != nil {
+		return x.BatchId
+	}
+	return ""
+}
+
+func (x *BatchSummaryItem) GetParentConversationId() int64 {
+	if x != nil {
+		return x.ParentConversationId
+	}
+	return 0
+}
+
+func (x *BatchSummaryItem) GetParentTurnId() int64 {
+	if x != nil {
+		return x.ParentTurnId
+	}
+	return 0
+}
+
+func (x *BatchSummaryItem) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *BatchSummaryItem) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *BatchSummaryItem) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+func (x *BatchSummaryItem) GetSummaryUri() string {
+	if x != nil {
+		return x.SummaryUri
+	}
+	return ""
+}
+
+func (x *BatchSummaryItem) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *BatchSummaryItem) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+func (x *BatchSummaryItem) GetEndedAt() int64 {
+	if x != nil {
+		return x.EndedAt
+	}
+	return 0
+}
+
+type ListBatchSummariesRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ConversationId int64                  `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversationId" binding:"required" form:"conversationId"`  
+	TurnId         *int64                 `protobuf:"varint,2,opt,name=turn_id,json=turnId,proto3,oneof" json:"turnId,omitempty" form:"turnId"`                    
+	Page           int32                  `protobuf:"varint,3,opt,name=page,proto3" json:"page" form:"page" binding:"min=1" default:"1"`                                            
+	PageSize       int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"20"`                    
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListBatchSummariesRequest) Reset() {
+	*x = ListBatchSummariesRequest{}
+	mi := &file_conversation_msg_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBatchSummariesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBatchSummariesRequest) ProtoMessage() {}
+
+func (x *ListBatchSummariesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_msg_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBatchSummariesRequest.ProtoReflect.Descriptor instead.
+func (*ListBatchSummariesRequest) Descriptor() ([]byte, []int) {
+	return file_conversation_msg_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ListBatchSummariesRequest) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *ListBatchSummariesRequest) GetTurnId() int64 {
+	if x != nil && x.TurnId != nil {
+		return *x.TurnId
+	}
+	return 0
+}
+
+func (x *ListBatchSummariesRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListBatchSummariesRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type ListBatchSummariesData struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*BatchSummaryItem    `protobuf:"bytes,1,rep,name=items,proto3" json:"items"`                      
+	HasMore       bool                   `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"hasMore"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBatchSummariesData) Reset() {
+	*x = ListBatchSummariesData{}
+	mi := &file_conversation_msg_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBatchSummariesData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBatchSummariesData) ProtoMessage() {}
+
+func (x *ListBatchSummariesData) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_msg_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBatchSummariesData.ProtoReflect.Descriptor instead.
+func (*ListBatchSummariesData) Descriptor() ([]byte, []int) {
+	return file_conversation_msg_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListBatchSummariesData) GetItems() []*BatchSummaryItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *ListBatchSummariesData) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
+}
+
+type ListBatchSummariesResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Data          *ListBatchSummariesData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                   `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                  `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBatchSummariesResponse) Reset() {
+	*x = ListBatchSummariesResponse{}
+	mi := &file_conversation_msg_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBatchSummariesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBatchSummariesResponse) ProtoMessage() {}
+
+func (x *ListBatchSummariesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_msg_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBatchSummariesResponse.ProtoReflect.Descriptor instead.
+func (*ListBatchSummariesResponse) Descriptor() ([]byte, []int) {
+	return file_conversation_msg_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ListBatchSummariesResponse) GetData() *ListBatchSummariesData {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ListBatchSummariesResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ListBatchSummariesResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
 type MessageExtraInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -287,7 +593,7 @@ type MessageExtraInfo struct {
 
 func (x *MessageExtraInfo) Reset() {
 	*x = MessageExtraInfo{}
-	mi := &file_conversation_msg_proto_msgTypes[2]
+	mi := &file_conversation_msg_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -299,7 +605,7 @@ func (x *MessageExtraInfo) String() string {
 func (*MessageExtraInfo) ProtoMessage() {}
 
 func (x *MessageExtraInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_msg_proto_msgTypes[2]
+	mi := &file_conversation_msg_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -312,7 +618,7 @@ func (x *MessageExtraInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageExtraInfo.ProtoReflect.Descriptor instead.
 func (*MessageExtraInfo) Descriptor() ([]byte, []int) {
-	return file_conversation_msg_proto_rawDescGZIP(), []int{2}
+	return file_conversation_msg_proto_rawDescGZIP(), []int{6}
 }
 
 type Message struct {
@@ -336,7 +642,7 @@ type Message struct {
 
 func (x *Message) Reset() {
 	*x = Message{}
-	mi := &file_conversation_msg_proto_msgTypes[3]
+	mi := &file_conversation_msg_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -348,7 +654,7 @@ func (x *Message) String() string {
 func (*Message) ProtoMessage() {}
 
 func (x *Message) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_msg_proto_msgTypes[3]
+	mi := &file_conversation_msg_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,7 +667,7 @@ func (x *Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Message.ProtoReflect.Descriptor instead.
 func (*Message) Descriptor() ([]byte, []int) {
-	return file_conversation_msg_proto_rawDescGZIP(), []int{3}
+	return file_conversation_msg_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Message) GetId() int64 {
@@ -459,7 +765,7 @@ var File_conversation_msg_proto protoreflect.FileDescriptor
 
 const file_conversation_msg_proto_rawDesc = "" +
 	"\n" +
-	"\x16conversation/msg.proto\x12\x03msg\x1a\x13common/common.proto\x1a\x17conversation/chat.proto\"\x9e\x03\n" +
+	"\x16conversation/msg.proto\x12\x03msg\x1a\x13common/common.proto\x1a\x17conversation/chat.proto\"\xc7\x03\n" +
 	"\vMessageItem\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\x03R\tmessageId\x12\x17\n" +
@@ -475,10 +781,41 @@ const file_conversation_msg_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\v \x01(\x03R\tupdatedAt\"T\n" +
+	"updated_at\x18\v \x01(\x03R\tupdatedAt\x12'\n" +
+	"\x0fconversation_id\x18\f \x01(\x03R\x0econversationId\"T\n" +
 	"\vMessageTurn\x12\x17\n" +
 	"\aturn_id\x18\x01 \x01(\x03R\x06turnId\x12,\n" +
-	"\bmessages\x18\x02 \x03(\v2\x10.msg.MessageItemR\bmessages\"\x12\n" +
+	"\bmessages\x18\x02 \x03(\v2\x10.msg.MessageItemR\bmessages\"\xd4\x02\n" +
+	"\x10BatchSummaryItem\x12\x19\n" +
+	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x124\n" +
+	"\x16parent_conversation_id\x18\x02 \x01(\x03R\x14parentConversationId\x12$\n" +
+	"\x0eparent_turn_id\x18\x03 \x01(\x03R\fparentTurnId\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x12\x1f\n" +
+	"\vtotal_count\x18\x06 \x01(\x05R\n" +
+	"totalCount\x12\x1f\n" +
+	"\vsummary_uri\x18\a \x01(\tR\n" +
+	"summaryUri\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\b \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\t \x01(\x03R\tupdatedAt\x12\x19\n" +
+	"\bended_at\x18\n" +
+	" \x01(\x03R\aendedAt\"\x9f\x01\n" +
+	"\x19ListBatchSummariesRequest\x12'\n" +
+	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x1c\n" +
+	"\aturn_id\x18\x02 \x01(\x03H\x00R\x06turnId\x88\x01\x01\x12\x12\n" +
+	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x04 \x01(\x05R\bpageSizeB\n" +
+	"\n" +
+	"\b_turn_id\"`\n" +
+	"\x16ListBatchSummariesData\x12+\n" +
+	"\x05items\x18\x01 \x03(\v2\x15.msg.BatchSummaryItemR\x05items\x12\x19\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"u\n" +
+	"\x1aListBatchSummariesResponse\x12/\n" +
+	"\x04data\x18\x01 \x01(\v2\x1b.msg.ListBatchSummariesDataR\x04data\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\x12\n" +
 	"\x10MessageExtraInfo\"\xea\x03\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
@@ -519,31 +856,37 @@ func file_conversation_msg_proto_rawDescGZIP() []byte {
 }
 
 var file_conversation_msg_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_conversation_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_conversation_msg_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_conversation_msg_proto_goTypes = []any{
-	(MessageContentType)(0),   // 0: msg.MessageContentType
-	(*MessageItem)(nil),       // 1: msg.MessageItem
-	(*MessageTurn)(nil),       // 2: msg.MessageTurn
-	(*MessageExtraInfo)(nil),  // 3: msg.MessageExtraInfo
-	(*Message)(nil),           // 4: msg.Message
-	(*FunctionContext)(nil),   // 5: chat.FunctionContext
-	(*common.Attachment)(nil), // 6: common.Attachment
-	(ChatContentType)(0),      // 7: chat.ChatContentType
+	(MessageContentType)(0),            // 0: msg.MessageContentType
+	(*MessageItem)(nil),                // 1: msg.MessageItem
+	(*MessageTurn)(nil),                // 2: msg.MessageTurn
+	(*BatchSummaryItem)(nil),           // 3: msg.BatchSummaryItem
+	(*ListBatchSummariesRequest)(nil),  // 4: msg.ListBatchSummariesRequest
+	(*ListBatchSummariesData)(nil),     // 5: msg.ListBatchSummariesData
+	(*ListBatchSummariesResponse)(nil), // 6: msg.ListBatchSummariesResponse
+	(*MessageExtraInfo)(nil),           // 7: msg.MessageExtraInfo
+	(*Message)(nil),                    // 8: msg.Message
+	(*FunctionContext)(nil),            // 9: chat.FunctionContext
+	(*common.Attachment)(nil),          // 10: common.Attachment
+	(ChatContentType)(0),               // 11: chat.ChatContentType
 }
 var file_conversation_msg_proto_depIdxs = []int32{
-	0, // 0: msg.MessageItem.type:type_name -> msg.MessageContentType
-	5, // 1: msg.MessageItem.function_context:type_name -> chat.FunctionContext
-	6, // 2: msg.MessageItem.attachments:type_name -> common.Attachment
-	1, // 3: msg.MessageTurn.messages:type_name -> msg.MessageItem
-	7, // 4: msg.Message.content_type:type_name -> chat.ChatContentType
-	5, // 5: msg.Message.function_context:type_name -> chat.FunctionContext
-	3, // 6: msg.Message.ext:type_name -> msg.MessageExtraInfo
-	6, // 7: msg.Message.attachments:type_name -> common.Attachment
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	0,  // 0: msg.MessageItem.type:type_name -> msg.MessageContentType
+	9,  // 1: msg.MessageItem.function_context:type_name -> chat.FunctionContext
+	10, // 2: msg.MessageItem.attachments:type_name -> common.Attachment
+	1,  // 3: msg.MessageTurn.messages:type_name -> msg.MessageItem
+	3,  // 4: msg.ListBatchSummariesData.items:type_name -> msg.BatchSummaryItem
+	5,  // 5: msg.ListBatchSummariesResponse.data:type_name -> msg.ListBatchSummariesData
+	11, // 6: msg.Message.content_type:type_name -> chat.ChatContentType
+	9,  // 7: msg.Message.function_context:type_name -> chat.FunctionContext
+	7,  // 8: msg.Message.ext:type_name -> msg.MessageExtraInfo
+	10, // 9: msg.Message.attachments:type_name -> common.Attachment
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_conversation_msg_proto_init() }
@@ -552,13 +895,14 @@ func file_conversation_msg_proto_init() {
 		return
 	}
 	file_conversation_chat_proto_init()
+	file_conversation_msg_proto_msgTypes[3].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conversation_msg_proto_rawDesc), len(file_conversation_msg_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

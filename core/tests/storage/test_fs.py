@@ -20,9 +20,24 @@
 
 """Tests for app.storage.fs — StorageFS, SCMemoryFS, ChatFS, parse_skill_frontmatter."""
 
+import pathlib
+
 import pytest
 
-from app.storage.fs import ChatFS, SCMemoryFS, StorageFS, parse_skill_frontmatter
+from app.storage.fs import ChatFS, SCMemoryFS, StorageFS, parse_skill_frontmatter, storage_pvc_root
+
+
+# ===========================================================================
+# storage_pvc_root (derived sandbox PVC mount root)
+# ===========================================================================
+
+
+class TestStoragePvcRoot:
+    def test_returns_chat_root(self, monkeypatch):
+        # The sandbox PVC root is the chat root: everything the sandbox mounts
+        # (workspace, results, copied-in skill runtimes) lives under it.
+        monkeypatch.setattr("app.storage.fs._CHAT_ROOT", pathlib.Path("/mnt/storage/chat"))
+        assert storage_pvc_root() == "/mnt/storage/chat"
 
 
 # ===========================================================================
@@ -43,7 +58,7 @@ class TestParseSkillFrontmatter:
         assert parse_skill_frontmatter("") == {}
 
     def test_quoted_values(self):
-        content = '---\nname: "Quoted Name"\ndescription: \'Single Quoted\'\n---'
+        content = "---\nname: \"Quoted Name\"\ndescription: 'Single Quoted'\n---"
         result = parse_skill_frontmatter(content)
         assert result["name"] == "Quoted Name"
         assert result["description"] == "Single Quoted"
@@ -215,6 +230,17 @@ class TestChatFS:
         assert "sub/b.txt" in paths
         assert all("size_kb" in f for f in files)
 
+    def test_list_files_hides_history_and_results(self, fs):
+        fs.write_file(1, "alice", "history/turn-1/conversation.json", "[]")
+        fs.write_file(1, "alice", "results/skills/1/report.html", "<html></html>")
+        fs.write_file(1, "alice", "visible.txt", "ok")
+
+        paths = [f["path"] for f in fs.list_files(1, "alice")]
+
+        assert "history/turn-1/conversation.json" not in paths
+        assert "results/skills/1/report.html" in paths
+        assert "visible.txt" in paths
+
     def test_list_files_empty_workspace(self, fs):
         assert fs.list_files(1, "nobody") == []
 
@@ -222,6 +248,22 @@ class TestChatFS:
         fs.plan.write(1, "alice", 100, '{"steps": []}')
         content = fs.plan.read(1, "alice", 100)
         assert "steps" in content
+
+    def test_write_conversation_pretty_prints_json(self, fs):
+        fs.write_conversation(1, "alice", 100, '[{"role":"user","contents":[{"text":"你好"}]}]')
+
+        content = fs.read_conversation(1, "alice", 100)
+
+        assert content is not None
+        assert content.startswith("[\n")
+        assert "  {" in content
+        assert '"你好"' in content
+        assert "\\u4f60" not in content
+
+    def test_write_conversation_leaves_invalid_json_unchanged(self, fs):
+        fs.write_conversation(1, "alice", 100, "not-json")
+
+        assert fs.read_conversation(1, "alice", 100) == "not-json"
 
     def test_plan_exists(self, fs):
         assert not fs.plan.exists(1, "alice", 100)
@@ -232,6 +274,25 @@ class TestChatFS:
         assert not fs.plan.is_cancelled(1, "alice", 100)
         fs.plan.write_cancelled_marker(1, "alice", 100)
         assert fs.plan.is_cancelled(1, "alice", 100)
+
+    def test_plan_ignores_conversation_id_for_path(self, fs):
+        fs.plan.write(1, "alice", 100, '{"conversation": 1}', conversation_id=1)
+        fs.plan.write(1, "alice", 100, '{"conversation": 2}', conversation_id=2)
+
+        assert "2" in fs.plan.read(1, "alice", 100)
+        assert "2" in fs.plan.read(1, "alice", 100, conversation_id=1)
+        assert "2" in fs.plan.read(1, "alice", 100, conversation_id=2)
+        plan_path = fs.plan._get_path(1, "alice", 100, conversation_id=2)
+        assert "conversation" not in plan_path.parts
+        assert plan_path == fs.get_turn_path(1, "alice", 100) / "plan.json"
+
+    def test_plan_lock_ignores_conversation_id(self, fs):
+        assert fs.plan._get_lock_name(1, "alice", 100, conversation_id=1) == fs.plan._get_lock_name(
+            1,
+            "alice",
+            100,
+            conversation_id=2,
+        )
 
     def test_workspace_path(self, fs):
         fs.get_workspace_path(1, "alice")
@@ -298,9 +359,7 @@ class TestChatFS:
 
         final = _json.loads(fs.plan.read(1, "alice", 100))
         expected = num_tasks * iterations
-        assert final["counter"] == expected, (
-            f"lost updates detected: expected {expected}, got {final['counter']}"
-        )
+        assert final["counter"] == expected, f"lost updates detected: expected {expected}, got {final['counter']}"
 
     @pytest.mark.asyncio
     async def test_plan_lock_released_after_ttl(self, fs, _fake_cache):

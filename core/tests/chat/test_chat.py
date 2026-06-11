@@ -19,6 +19,7 @@
 # SOFTWARE.
 
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -26,9 +27,12 @@ import pytest_asyncio
 import pytest_mock
 from agent_framework import ChatResponse, ChatResponseUpdate, Content
 
+from app.biz.chat import service as chat_service_module
 from app.biz.chat.service import ChatService
+from app.pb.common.common import Attachment
 from app.pb.conversation.chat import ChatContent, ChatContentType
-from app.pb.conversation.api import ChatRequest
+from app.pb.conversation.api import ChatRequest, GenerateOnboardRecommendationTasksRequest
+from app.schemas.common.common import Attachment as SchemaAttachment
 from app.schemas.conversation.chat import TopicMessage
 from app.schemas.conversation import Message
 from app.storage import redis
@@ -36,7 +40,6 @@ from app.utils.runner import AsyncJobRunner
 
 
 class FakeChatAgent:
-
     def __init__(self, *args, **kwargs):
         pass
 
@@ -48,8 +51,10 @@ class FakeChatAgent:
     async def _enqueue_memories(self, *args, **kwargs):
         pass
 
+
 async def build_fake_agent(*args, **kwargs):
     return FakeChatAgent()
+
 
 class FakeConversationService:
     _instance = None
@@ -69,8 +74,8 @@ class FakeConversationService:
         self.created_messages.append(message)
         return message
 
-class TestChat:
 
+class TestChat:
     @pytest_asyncio.fixture(scope="function", autouse=True)
     async def _init_chat_service(self):
         runner = AsyncJobRunner(workers=4, max_queue=50)
@@ -96,13 +101,9 @@ class TestChat:
 
         chat_service = ChatService.get_instance()
         chat_service._event_bus_topic_name = "test-topic"
-        _ = await chat_service.stream_chat(ChatRequest(
-            username="alice@example.com",
-            message=ChatContent(
-                type=ChatContentType.TEXT,
-                content="Hello"
-            )
-        ))
+        _ = await chat_service.stream_chat(
+            ChatRequest(username="alice@example.com", message=ChatContent(type=ChatContentType.TEXT, content="Hello"))
+        )
 
         sender: MockEventBusSender = chat_service._event_bus_sender
         sent_messages = sender.sent_messages
@@ -139,6 +140,40 @@ class TestChat:
         assert not unmarshalled[3].chat_response.is_internal
 
     @pytest.mark.asyncio
+    async def test_hard_fast_route_skips_intent_check_and_uses_fast_model(
+        self,
+        mocker: pytest_mock.MockerFixture,
+        fake_redis,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        from app.biz.reverse_grpc.conversation import ReverseConversationService
+        from app.utils.eventbus import EventBus
+        from app.utils.eventbus.mock import MockEventBus
+
+        captured: dict[str, object] = {}
+
+        async def build_capturing_agent(*args, **kwargs):
+            captured["model"] = kwargs.get("model")
+            return FakeChatAgent()
+
+        monkeypatch.setenv("FAST_MODEL", "gpt-fast-test")
+        mocker.patch.object(redis, "get_shared_redis", return_value=fake_redis)
+        mocker.patch("app.biz.chat.service.build_agent", build_capturing_agent)
+        mocker.patch("app.biz.chat.service.init_workspace", return_value=None)
+        intent_mock = mocker.patch("app.biz.chat.service.llm_intent_check")
+        mocker.patch.object(ReverseConversationService, "get_instance", return_value=FakeConversationService.get_instance())
+        mocker.patch.object(EventBus, "get_instance", return_value=MockEventBus())
+
+        chat_service = ChatService.get_instance()
+        chat_service._event_bus_topic_name = "test-topic"
+        await chat_service.stream_chat(
+            ChatRequest(username="alice@example.com", message=ChatContent(type=ChatContentType.TEXT, content="hello"))
+        )
+
+        intent_mock.assert_not_called()
+        assert captured["model"] == "gpt-fast-test"
+
+    @pytest.mark.asyncio
     async def test_experience_ingestion_skips_without_plan(self, mocker: pytest_mock.MockerFixture):
         mocker.patch("app.experiences.service.EXPERIENCES_ENABLED", True)
         read_plan_mock = mocker.patch("app.biz.chat.service.read_plan", return_value=None)
@@ -156,6 +191,7 @@ class TestChat:
         read_plan_mock.assert_awaited_once_with(
             agent_instance_id=1,
             turn_id=100,
+            conversation_id=1000,
             username="alice@example.com",
         )
         read_conversation_mock.assert_not_called()
@@ -187,3 +223,120 @@ class TestChat:
             conversation_id=1000,
             turn_id=100,
         )
+
+    @pytest.mark.asyncio
+    async def test_generate_onboard_recommendation_tasks_accepts_array_payload(self, mocker: pytest_mock.MockerFixture):
+        payload = (
+            "```json\n"
+            '[{"message": "Run the smoke test", "icon": "build"}, '
+            '{"message": "Review docs", "icon": 5}, '
+            '{"message": "Draft plan", "icon": 4}]\n'
+            "```"
+        )
+        generation = SimpleNamespace(outputs=[SimpleNamespace(text=payload)])
+
+        mocker.patch("app.biz.chat.service.get_skill_knowledge_context", return_value={"skills": [], "knowledge": []})
+        generate_mock = mocker.patch("app.llmhubs.generate", return_value=generation)
+
+        chat_service = ChatService.get_instance()
+        response = await chat_service.generate_onboard_recommendation_tasks(
+            GenerateOnboardRecommendationTasksRequest(project_id=10, agent_id="agent-1")
+        )
+
+        generate_mock.assert_awaited_once()
+        assert response.code == 0
+        assert response.data is not None
+        assert [task.message for task in response.data.tasks] == ["Run the smoke test", "Review docs", "Draft plan"]
+        assert [task.icon.value for task in response.data.tasks] == [2, 5, 4]
+
+    def test_build_intent_attachments_converts_pb_attachments(self):
+        attachments = ChatService._build_intent_attachments(
+            [
+                Attachment(
+                    name="smoke_test.md",
+                    uri="seaweed://smoke_test.md",
+                    sas_url="http://example.test/smoke_test.md",
+                    type="text",
+                    size=1490,
+                )
+            ]
+        )
+
+        assert attachments == [
+            SchemaAttachment(
+                name="smoke_test.md",
+                uri="seaweed://smoke_test.md",
+                sas_url="http://example.test/smoke_test.md",
+                type="text",
+                size=1490,
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_generate_onboard_recommendation_tasks_rejects_wrong_task_count(self, mocker: pytest_mock.MockerFixture):
+        payload = {
+            "tasks": [
+                {"message": "Run the smoke test", "icon": 2},
+                {"message": "Review docs", "icon": 5},
+            ]
+        }
+        generation = SimpleNamespace(outputs=[SimpleNamespace(text=json.dumps(payload))])
+
+        mocker.patch("app.biz.chat.service.get_skill_knowledge_context", return_value={"skills": [], "knowledge": []})
+        mocker.patch("app.llmhubs.generate", return_value=generation)
+
+        chat_service = ChatService.get_instance()
+        response = await chat_service.generate_onboard_recommendation_tasks(
+            GenerateOnboardRecommendationTasksRequest(project_id=10, agent_id="agent-1")
+        )
+
+        assert response.code == 1
+        assert response.msg == "Failed to validate LLM response"
+
+    @pytest.mark.asyncio
+    async def test_generate_onboard_recommendation_tasks_rejects_empty_task_content(self, mocker: pytest_mock.MockerFixture):
+        payload = {
+            "tasks": [
+                {"message": " ", "icon": 2},
+                {"message": "Review docs", "icon": 0},
+                {"message": "Draft plan", "icon": 4},
+            ]
+        }
+        generation = SimpleNamespace(outputs=[SimpleNamespace(text=json.dumps(payload))])
+
+        mocker.patch("app.biz.chat.service.get_skill_knowledge_context", return_value={"skills": [], "knowledge": []})
+        mocker.patch("app.llmhubs.generate", return_value=generation)
+
+        chat_service = ChatService.get_instance()
+        response = await chat_service.generate_onboard_recommendation_tasks(
+            GenerateOnboardRecommendationTasksRequest(project_id=10, agent_id="agent-1")
+        )
+
+        assert response.code == 1
+        assert response.msg == "Failed to validate LLM response"
+
+
+def test_build_prior_conversation_section_uses_last_three_text_only_turns(monkeypatch):
+    conversations = {
+        1: json.dumps(
+            [
+                {"role": "user", "contents": [{"type": "text", "text": "Please analyze first"}]},
+                {"role": "assistant", "contents": [{"type": "function_call", "name": "delegate"}]},
+                {"role": "tool", "contents": [{"type": "function_result", "result": "secret tool result"}]},
+                {"role": "assistant", "contents": [{"type": "text", "text": "I recommend task mode"}]},
+            ]
+        ),
+        2: json.dumps([{"role": "user", "contents": [{"type": "text", "text": "Analyze first"}]}]),
+        3: json.dumps([{"role": "assistant", "contents": [{"type": "text", "text": "Ready to run"}]}]),
+        4: json.dumps([{"role": "user", "contents": [{"type": "text", "text": "Run it"}]}]),
+    }
+    monkeypatch.setattr(chat_service_module.CHAT_FS, "list_turn_ids", lambda *_args: [1, 2, 3, 4, 5])
+    monkeypatch.setattr(chat_service_module.CHAT_FS, "read_conversation", lambda _aid, _user, turn_id: conversations[turn_id])
+
+    section = chat_service_module._build_prior_conversation_section(1, "alice", 5)
+
+    assert "Turn 1" not in section
+    assert "Turn 2" in section
+    assert "Turn 4" in section
+    assert "function_call" not in section
+    assert "secret tool result" not in section

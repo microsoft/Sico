@@ -45,6 +45,7 @@ const (
 type mockChatClient struct {
 	conversationrpc.ChatServiceClient
 	mockEventBus *eventbus.MockEventBus
+	callOpts     []grpc.CallOption
 }
 
 func (m *mockChatClient) StreamChat(
@@ -52,6 +53,8 @@ func (m *mockChatClient) StreamChat(
 	in *conversationdto.ChatRequest,
 	opts ...grpc.CallOption,
 ) (*conversationdto.ChatDirectResponse, error) {
+	m.callOpts = append([]grpc.CallOption(nil), opts...)
+
 	chatResponses := []*conversationdto.ChatResponse{
 		{
 			Content: &conversationdto.ChatContent{
@@ -145,6 +148,7 @@ func TestChat(t *testing.T) {
 		}
 		err = service.Chat(ctx, sseSender, chatRequest)
 		require.NoError(t, err)
+		require.True(t, hasWaitForReadyOption(mockChatClient.callOpts))
 
 		// Verify that the SSE sender received the expected events
 		allEvents := sseSender.Sent
@@ -181,4 +185,14 @@ func TestChat(t *testing.T) {
 
 		require.Equal(t, "done", sentEvents[3].Event)
 	})
+}
+
+func hasWaitForReadyOption(opts []grpc.CallOption) bool {
+	for _, opt := range opts {
+		option, ok := opt.(grpc.FailFastCallOption)
+		if ok && !option.FailFast {
+			return true
+		}
+	}
+	return false
 }

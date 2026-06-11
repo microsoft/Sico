@@ -201,6 +201,34 @@ func GetUserMessageByUserAgentTurnID(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, resp)
 }
 
+// ListBatchSummaries returns task_runtime batch metadata (including the persisted
+// HTML summary URI) for a conversation owned by the authenticated user.
+// @Router /api/sico/conversation/batch_summaries [GET]
+// @Tags Conversation
+// @Produce json
+// @Param request query conversation.ListBatchSummariesRequest true "List Batch Summaries Request"
+// @Success 200 {object} conversation.ListBatchSummariesResponse
+// @Security BearerAuth
+func ListBatchSummaries(ctx *gin.Context) {
+	var (
+		err error
+		req conversation.ListBatchSummariesRequest
+	)
+
+	if err = ctx.ShouldBindQuery(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	resp, err := conversationbiz.Default().ListBatchSummaries(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
 // GetPlan get the plan of a specific chat turn
 // @Router /api/sico/conversation/plan [GET]
 // @Tags Conversation

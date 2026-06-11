@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 
 	"sico-backend/internal/biz/agent"
 	"sico-backend/internal/biz/project"
@@ -52,6 +53,7 @@ type Components struct {
 	Storage          storage.Storage
 	CoreGRPC         coregrpc.Connection
 	Cache            *redis.Client
+	DB               *gorm.DB
 }
 
 type ChatConnection struct {
@@ -83,10 +85,12 @@ type Service struct {
 	projectSvc           project.Service
 	idGen                idgen.IDGenerator
 	storage              storage.Storage
+	coreGRPC             coregrpc.Connection
 	chatClient           conversationrpc.ChatServiceClient
 	chatConnections      map[ChatConnectionIdentifier][]*ChatConnection
 	eventBusSubscription eventbus.EventBusSubscription
 	cache                *redis.Client
+	db                   *gorm.DB
 }
 
 // NewService wires dependencies into a conversation service implementation.
@@ -103,9 +107,11 @@ func NewService(c *Components) *Service {
 		projectSvc:       c.ProjectService,
 		idGen:            c.IDGenerator,
 		storage:          c.Storage,
+		coreGRPC:         c.CoreGRPC,
 		chatClient:       chatClient,
 		chatConnections:  make(map[ChatConnectionIdentifier][]*ChatConnection),
 		cache:            c.Cache,
+		db:               c.DB,
 	}
 
 	_ = svc.SubscribeTopic()

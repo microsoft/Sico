@@ -42,6 +42,7 @@ const (
 	SkillService_ExtractSkill_FullMethodName      = "/skill.SkillService/ExtractSkill"
 	SkillService_GetSkillDetails_FullMethodName   = "/skill.SkillService/GetSkillDetails"
 	SkillService_DeleteSkillFromFS_FullMethodName = "/skill.SkillService/DeleteSkillFromFS"
+	SkillService_WriteSkillVersion_FullMethodName = "/skill.SkillService/WriteSkillVersion"
 )
 
 // SkillServiceClient is the client API for SkillService service.
@@ -51,10 +52,14 @@ type SkillServiceClient interface {
 	// ExtractSkill downloads the skill zip from the given URL,
 	// extracts it, and persists files to storage.
 	ExtractSkill(ctx context.Context, in *ExtractSkillRequest, opts ...grpc.CallOption) (*ExtractSkillResponse, error)
-	// GetSkillDetails returns the file contents of a skill.
+	// GetSkillDetails returns the current skill version details and version list.
 	GetSkillDetails(ctx context.Context, in *GetSkillDetailsGrpcRequest, opts ...grpc.CallOption) (*GetSkillDetailsGrpcResponse, error)
 	// DeleteSkillFromFS deletes the skill files from the filesystem.
 	DeleteSkillFromFS(ctx context.Context, in *DeleteSkillFromFSRequest, opts ...grpc.CallOption) (*DeleteSkillFromFSResponse, error)
+	// WriteSkillVersion writes manually edited skill files/actions.
+	// File edits are resolved into executable cortex output; action-only edits
+	// branch from source_version and update the resolved action manifest.
+	WriteSkillVersion(ctx context.Context, in *WriteSkillVersionRequest, opts ...grpc.CallOption) (*WriteSkillVersionResponse, error)
 }
 
 type skillServiceClient struct {
@@ -95,6 +100,16 @@ func (c *skillServiceClient) DeleteSkillFromFS(ctx context.Context, in *DeleteSk
 	return out, nil
 }
 
+func (c *skillServiceClient) WriteSkillVersion(ctx context.Context, in *WriteSkillVersionRequest, opts ...grpc.CallOption) (*WriteSkillVersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WriteSkillVersionResponse)
+	err := c.cc.Invoke(ctx, SkillService_WriteSkillVersion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SkillServiceServer is the server API for SkillService service.
 // All implementations must embed UnimplementedSkillServiceServer
 // for forward compatibility.
@@ -102,10 +117,14 @@ type SkillServiceServer interface {
 	// ExtractSkill downloads the skill zip from the given URL,
 	// extracts it, and persists files to storage.
 	ExtractSkill(context.Context, *ExtractSkillRequest) (*ExtractSkillResponse, error)
-	// GetSkillDetails returns the file contents of a skill.
+	// GetSkillDetails returns the current skill version details and version list.
 	GetSkillDetails(context.Context, *GetSkillDetailsGrpcRequest) (*GetSkillDetailsGrpcResponse, error)
 	// DeleteSkillFromFS deletes the skill files from the filesystem.
 	DeleteSkillFromFS(context.Context, *DeleteSkillFromFSRequest) (*DeleteSkillFromFSResponse, error)
+	// WriteSkillVersion writes manually edited skill files/actions.
+	// File edits are resolved into executable cortex output; action-only edits
+	// branch from source_version and update the resolved action manifest.
+	WriteSkillVersion(context.Context, *WriteSkillVersionRequest) (*WriteSkillVersionResponse, error)
 	mustEmbedUnimplementedSkillServiceServer()
 }
 
@@ -124,6 +143,9 @@ func (UnimplementedSkillServiceServer) GetSkillDetails(context.Context, *GetSkil
 }
 func (UnimplementedSkillServiceServer) DeleteSkillFromFS(context.Context, *DeleteSkillFromFSRequest) (*DeleteSkillFromFSResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteSkillFromFS not implemented")
+}
+func (UnimplementedSkillServiceServer) WriteSkillVersion(context.Context, *WriteSkillVersionRequest) (*WriteSkillVersionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method WriteSkillVersion not implemented")
 }
 func (UnimplementedSkillServiceServer) mustEmbedUnimplementedSkillServiceServer() {}
 func (UnimplementedSkillServiceServer) testEmbeddedByValue()                      {}
@@ -200,6 +222,24 @@ func _SkillService_DeleteSkillFromFS_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SkillService_WriteSkillVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WriteSkillVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SkillServiceServer).WriteSkillVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SkillService_WriteSkillVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SkillServiceServer).WriteSkillVersion(ctx, req.(*WriteSkillVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SkillService_ServiceDesc is the grpc.ServiceDesc for SkillService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -218,6 +258,10 @@ var SkillService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteSkillFromFS",
 			Handler:    _SkillService_DeleteSkillFromFS_Handler,
+		},
+		{
+			MethodName: "WriteSkillVersion",
+			Handler:    _SkillService_WriteSkillVersion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -20,6 +20,10 @@
 
 import asyncio
 import logging
+import re
+from pathlib import Path
+
+import requests
 
 from app.document import build_doc_extractor
 from app.pb.knowledge.knowledge import (
@@ -92,6 +96,7 @@ class KnowledgeService(KnowledgeServiceBase):
 
         try:
             full_text, summary = await self._extractor.extract_from_url(file_url)
+            await self._persist_original_document(message, file_url)
             self._logger.info(
                 "Knowledge extraction succeeded id=%s full_text_length=%d summary_length=%d\n%s\n\n%s",
                 message.id,
@@ -107,7 +112,39 @@ class KnowledgeService(KnowledgeServiceBase):
 
         return success_response(ExtractDocumentResponse(message="received"))
 
-    async def get_document_details(self, message: GetDocumentDetailsRequest) -> GetDocumentDetailsResponse:  # type: ignore[override]
+    async def _persist_original_document(self, message: KnowledgeDocument, file_url: str) -> None:
+        attachment = message.attachment
+        raw_name = getattr(attachment, "name", "") if attachment is not None else ""
+        name = _safe_original_attachment_name(raw_name)
+
+        def _download_and_write() -> str:
+            resp = requests.get(file_url, timeout=60)
+            resp.raise_for_status()
+            return str(
+                KNOWLEDGE_DOCUMENT_FS.write_bytes(
+                    message.id,
+                    f"original/{name}",
+                    resp.content,
+                    project_id=message.project_id,
+                    agent_id=message.agent_id,
+                )
+            )
+
+        try:
+            path = await asyncio.to_thread(_download_and_write)
+            self._logger.info("Persisted original knowledge document id=%s path=%s", message.id, path)
+        except Exception as exc:
+            self._logger.warning(
+                "Failed to persist original knowledge document id=%s name=%s err=%s",
+                message.id,
+                name,
+                exc,
+            )
+
+    async def get_document_details(
+        self,
+        message: GetDocumentDetailsRequest,
+    ) -> GetDocumentDetailsResponse:  # type: ignore[override]
         self._logger.info(
             "GetDocumentDetails request received id=%s project_id=%s agent_id=%s",
             message.document_id,
@@ -188,6 +225,7 @@ class KnowledgeService(KnowledgeServiceBase):
             )
             return failed_response(GetKnowledgePlaybookDetailsGrpcResponse(), msg=str(exc))
 
+
     async def _persist_extraction(self, message: KnowledgeDocument, full_text: str, summary: str) -> None:
         """Write extraction outputs to storage."""
 
@@ -244,3 +282,10 @@ class KnowledgeService(KnowledgeServiceBase):
             message.id,
             target_dir,
         )
+
+
+def _safe_original_attachment_name(name: str) -> str:
+    safe = Path(name or "").name.strip()
+    if not safe:
+        return "original"
+    return re.sub(r"[^A-Za-z0-9._ -]+", "_", safe).strip(" ._") or "original"

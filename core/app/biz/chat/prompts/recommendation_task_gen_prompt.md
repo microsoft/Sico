@@ -23,7 +23,7 @@ Each task is 1 sentence written as a natural request from the teammate to the DW
 - End with a clear deliverable
 
 
-Output exactly 3 task message sentences.
+Output exactly one JSON object with a `tasks` array containing exactly 3 task objects.
 
 Do NOT add:
 - numbering
@@ -32,22 +32,33 @@ Do NOT add:
 - prefixes
 - explanations
 
-For each sentence, when outputing the structured json, pick one icon from the following enum list:
+For each task, pick one numeric icon value from the following enum list:
 1. fallback
 2. build
 3. think
 4. write
 5. research
 
+If you cannot determine a more specific icon based on the task, use 1 (fallback) as the default.
+
 Example format:
 ```json
-[
-    {
-        "message": "Run the smoke test cases in smoke-test-cases.xlsx and generate the regression report.",
-        "icon": 2
-    },
-    ... (2 more tasks)
-]
+{
+    "tasks": [
+        {
+            "message": "Run the smoke test cases in smoke-test-cases.xlsx and generate the regression report.",
+            "icon": 2
+        },
+        {
+            "message": "Review the regression checklist and flag any uncovered release risks.",
+            "icon": 5
+        },
+        {
+            "message": "Read the release notes and identify which new features need test coverage added.",
+            "icon": 3
+        }
+    ]
+}
 ```
 
 
@@ -67,20 +78,22 @@ Skill Description: Designs and executes test cases, identifies regressions, logs
 
 Output:
 ```json
-[
-    {
-        "message": "Help me run the smoke test cases and generate the regression report.",
-        "icon": 2
-    },
-    {
-        "message": "Review the regression checklist and flag any items that weren't covered in the last cycle.",
-        "icon": 5
-    },
-    {
-        "message": "Read the v2.3 release notes and identify which new features need test coverage added.",
-        "icon": 3
-    }
-]
+{
+    "tasks": [
+        {
+            "message": "Help me run the smoke test cases and generate the regression report.",
+            "icon": 2
+        },
+        {
+            "message": "Review the regression checklist and flag any items that weren't covered in the last cycle.",
+            "icon": 5
+        },
+        {
+            "message": "Read the v2.3 release notes and identify which new features need test coverage added.",
+            "icon": 3
+        }
+    ]
+}
 ```
 
 ---
@@ -91,25 +104,27 @@ Skill Description: Designs and executes test cases, identifies regressions, logs
 
 Output:
 ```json
-[
-    {
-        "message": "Write a test plan for the checkout flow covering happy path and edge cases.",
-        "icon": 4
-    },
-    {
-        "message": "Run exploratory testing on the product tagging feature and log any bugs you find.",
-        "icon": 2
-    },
-    {
-        "message": "Review the current bug backlog and tell me which issues are highest risk for the next release.",
-        "icon": 5
-    }
-]
+{
+    "tasks": [
+        {
+            "message": "Write a test plan for the checkout flow covering happy path and edge cases.",
+            "icon": 4
+        },
+        {
+            "message": "Run exploratory testing on the product tagging feature and log any bugs you find.",
+            "icon": 2
+        },
+        {
+            "message": "Review the current bug backlog and tell me which issues are highest risk for the next release.",
+            "icon": 5
+        }
+    ]
+}
 ```
 
 ---
 
-Below are given the actual project knowledge and skill context for you to generate the sentence. Remember to only output the one sentence without any additional text.
+Below are the actual project knowledge and skill context for generating the tasks. Return only the JSON object without markdown fences or extra text.
 
 Project knowledge list:
 {{knowledge_list}}

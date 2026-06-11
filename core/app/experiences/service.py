@@ -45,7 +45,7 @@ import os
 from typing import Any
 
 from app.experiences.deduplication.config import DeduplicationConfig
-from app.experiences.llm import HubLLMClient, LLMClient
+from app.llmhubs.structured import HubLLMClient, LLMClient
 from app.experiences.playbook import Playbook
 from app.experiences.runner import ExperienceRunner, TrajectoryData
 from app.experiences.store import PlaybookStore

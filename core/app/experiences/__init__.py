@@ -26,7 +26,7 @@ with all model access routed through app.llmhubs.
 
 Quick Start:
     from app.experiences import Playbook, Reflector, Curator
-    from app.experiences.llm import HubLLMClient
+    from app.llmhubs.structured import HubLLMClient
     from app.experiences.roles import GeneratorOutput
 
     # Setup

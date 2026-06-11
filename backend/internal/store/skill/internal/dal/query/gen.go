@@ -16,34 +16,39 @@ import (
 )
 
 var (
-	Q      = new(Query)
-	TSkill *tSkill
+	Q             = new(Query)
+	TSkill        *tSkill
+	TSkillVersion *tSkillVersion
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	*Q = *Use(db, opts...)
 	TSkill = &Q.TSkill
+	TSkillVersion = &Q.TSkillVersion
 }
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:     db,
-		TSkill: newTSkill(db, opts...),
+		db:            db,
+		TSkill:        newTSkill(db, opts...),
+		TSkillVersion: newTSkillVersion(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	TSkill tSkill
+	TSkill        tSkill
+	TSkillVersion tSkillVersion
 }
 
 func (q *Query) Available() bool { return q.db != nil }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:     db,
-		TSkill: q.TSkill.clone(db),
+		db:            db,
+		TSkill:        q.TSkill.clone(db),
+		TSkillVersion: q.TSkillVersion.clone(db),
 	}
 }
 
@@ -57,18 +62,21 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:     db,
-		TSkill: q.TSkill.replaceDB(db),
+		db:            db,
+		TSkill:        q.TSkill.replaceDB(db),
+		TSkillVersion: q.TSkillVersion.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	TSkill ITSkillDo
+	TSkill        ITSkillDo
+	TSkillVersion ITSkillVersionDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		TSkill: q.TSkill.WithContext(ctx),
+		TSkill:        q.TSkill.WithContext(ctx),
+		TSkillVersion: q.TSkillVersion.WithContext(ctx),
 	}
 }
 

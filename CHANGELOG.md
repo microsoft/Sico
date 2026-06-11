@@ -20,6 +20,37 @@ Guidelines for editors:
   add the compare link at the bottom.
 -->
 
+## [0.2.0] - 2026-06-11
+
+### Added
+
+- **Android Tester skill enhancements:** precondition record-replay system, clipboard tools, file tools, swipe speed levels, force-stop app action, ternary status codes, batch execution trace grouping, structured recorder data, and multi-turn conversation history for operator.
+- **Skill resolver API:** request explicit skill versions from core, improved retry diagnostics, and skill version detail endpoints.
+- **Task runtime improvements:** batch-level liveness with orphan pod defense, bucket batch concurrency by sandbox type, state machine and event bus architecture.
+- **Chat routing fast path:** intent-check model for direct responses on simple queries, short-cutting the full planning pipeline.
+- **Conversation re-connect:** allow resuming interrupted conversations.
+- **Adapter tool:** workbook resolver adapter with general adapter support for delegating tasks.
+- **Documentation:** technical report (survey paper), updated architecture diagrams, quickstart with Android emulator instructions, DW-type creation guide, roadmap revision, and Digital Tester troubleshooting guide.
+
+### Changed
+
+- Refactored core task runtime: split manager, added dispatch union, prepared batch, view renderers, narrowed `submit_prepared` surface with `TurnContext`, and removed credentials/redaction code.
+- Plan structure now uses sub tool calls and message updates for delegated tasks.
+- Updated system prompts and extraction prompts.
+
+### Fixed
+
+- Sandbox pod stuck in `ContainerCreating` when mounts share one PVC.
+- Kafka OOM resolved via resource limits.
+- Android Tester: device offline detection, connection error retries, atomic file writes, empty text input handling, malformed script handling, precondition step reporting format.
+- Backend: auth context key fix, user retrieval from context, migration fixes.
+- Skill: return full download URL, historical skill version details.
+
+### Security
+
+- Bumped vulnerable dependencies.
+- Tightened Content Security Policy (CSP) in frontend.
+
 ## [Unreleased]
 
 ### Added

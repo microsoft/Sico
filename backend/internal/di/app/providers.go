@@ -31,6 +31,7 @@ import (
 	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/biz/sandbox"
 	"sico-backend/internal/biz/skill"
+	"sico-backend/internal/biz/taskruntime"
 )
 
 var ProviderSet = wire.NewSet(
@@ -42,4 +43,5 @@ var ProviderSet = wire.NewSet(
 	sandbox.ProviderSet,
 	llmhubs.ProviderSet,
 	skill.ProviderSet,
+	taskruntime.ProviderSet,
 )

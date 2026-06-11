@@ -69,6 +69,20 @@ var AndroidTesterSkillZip = sync.OnceValues(func() ([]byte, error) {
 	return buildZipFromFS(AndroidTesterSkillFS, AndroidTesterSkillRoot)
 })
 
+// TestCasesRewriteSkillFS embeds the test-cases-rewrite orchestrator skill tree.
+//
+//go:embed all:skills/test-cases-rewrite
+var TestCasesRewriteSkillFS embed.FS
+
+// TestCasesRewriteSkillRoot is the path prefix used inside TestCasesRewriteSkillFS.
+const TestCasesRewriteSkillRoot = "skills/test-cases-rewrite"
+
+// TestCasesRewriteSkillZip lazily builds a deterministic zip archive from the
+// embedded test-cases-rewrite directory.
+var TestCasesRewriteSkillZip = sync.OnceValues(func() ([]byte, error) {
+	return buildZipFromFS(TestCasesRewriteSkillFS, TestCasesRewriteSkillRoot)
+})
+
 // -------------- 3D Artist --------------
 
 //go:embed icons/avatar-3d-artist.svg

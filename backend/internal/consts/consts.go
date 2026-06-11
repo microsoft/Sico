@@ -48,7 +48,6 @@ const (
 
 // Sandbox-related environment variables
 const (
-	SandboxResetOnRelease       = "SANDBOX_RESET_ON_RELEASE"
 	SandboxResetCooldownSeconds = "SANDBOX_RESET_COOLDOWN_SECONDS"
 	SandboxEmulatorBaseURL      = "SANDBOX_EMULATOR_BASE_URL"
 

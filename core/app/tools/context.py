@@ -120,7 +120,21 @@ CONTEXT_TOOL = FunctionTool(
         "and knowledge/index.json as top-level fields. "
         "This is usually the first tool to call. "
         "Call it frequently to get an updated view of the workspace state, "
-        "especially after using write_file, edit, or remove tools."
+        "especially after using write_file, edit, or remove tools. "
+        "Notable top-level subfolders to look for in the listing:\n"
+        "- `skills/` — staged skill bundles (one folder per skill id; metadata in `skills/index.json`).\n"
+        "- `knowledge/` — staged knowledge docs (one folder per knowledge id; metadata in `knowledge/index.json`).\n"
+        "- `playbooks/` — distilled rules/lessons grouped by section.\n"
+        "- `attachments/` — files the user attached this turn (plus their original SAS URLs in `*_url.txt`).\n"
+        "- `results/` — per-batch outputs produced by the `delegate` task tool. Each `results/<batch_id>/` "
+        "folder holds the run records (status, payloads) and `results/<batch_id>/artifacts/` holds any "
+        "files the runs produced. Use `read`/`grep` on these to inspect prior delegate runs.\n"
+        "- `case_sources/parsed_documents/` — archived workbook / parsed-document manifests (`*.json`) and "
+        "per-sheet JSONL case sources written by the workbook adapter when an attachment or `parse_document` "
+        "call indexes a workbook. Each `<slug>.json` summarises the source and points at sibling `*.jsonl` "
+        "files with the individual cases.\n"
+        "- `history/turn-<id>/` — snapshots of prior turns (plan, conversation, reports, and prior "
+        "`results/` + `case_sources/` snapshots if any). Hidden from this file listing — read explicitly when needed."
     ),
     input_model=ContextInput,
     func=_context_func,

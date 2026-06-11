@@ -37,6 +37,7 @@ class ToolType(int, Enum):
     def to_pb(self) -> pb.ToolType:
         return pb.ToolType(self.value)
 
+
 class ToolDeliverableType(int, Enum):
     UNKNOWN = 0
     MARKDOWN = 1
@@ -50,6 +51,7 @@ class ToolDeliverableType(int, Enum):
 
     def to_pb(self) -> pb.ToolDeliverableType:
         return pb.ToolDeliverableType(self.value)
+
 
 class ToolDeliverableAcquiredSandbox(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
@@ -84,6 +86,7 @@ class ToolDeliverableAcquiredSandbox(BaseModel):
         pb_obj.vnc_url = self.vnc_url
         return pb_obj
 
+
 class ToolDeliverable(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
     type: ToolDeliverableType = Field(ToolDeliverableType.UNKNOWN, alias="type")
@@ -93,7 +96,8 @@ class ToolDeliverable(BaseModel):
     file_name: str = Field("", alias="fileName")
     web_preview_sas_url: str = Field("", alias="webPreviewSasUrl")
     acquired_sandbox: ToolDeliverableAcquiredSandbox = Field(
-        default_factory=ToolDeliverableAcquiredSandbox, alias="acquiredSandbox")
+        default_factory=ToolDeliverableAcquiredSandbox, alias="acquiredSandbox"
+    )
 
     @classmethod
     def from_pb(cls, pb_obj: pb.ToolDeliverable) -> Self:
@@ -120,56 +124,63 @@ class ToolDeliverable(BaseModel):
         return pb_obj
 
 
+class TaskRuntimeExecutionInfo(BaseModel):
+    model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
+    current_stage: str = Field("", alias="currentStage")
+    sandbox_id: str = Field("", alias="sandboxId")
+    sandbox_type: str = Field("", alias="sandboxType")
+    sandbox_endpoint: str = Field("", alias="sandboxEndpoint")
+    attempt: int = Field(0, alias="attempt")
+    max_attempts: int = Field(0, alias="maxAttempts")
+    latest_progress_message: str = Field("", alias="latestProgressMessage")
+
+    @classmethod
+    def from_pb(cls, pb_obj: pb.TaskRuntimeExecutionInfo) -> Self:
+        return cls(
+            current_stage=pb_obj.current_stage,
+            sandbox_id=pb_obj.sandbox_id,
+            sandbox_type=pb_obj.sandbox_type,
+            sandbox_endpoint=pb_obj.sandbox_endpoint,
+            attempt=pb_obj.attempt,
+            max_attempts=pb_obj.max_attempts,
+            latest_progress_message=pb_obj.latest_progress_message,
+        )
+
+    def to_pb(self) -> pb.TaskRuntimeExecutionInfo:
+        pb_obj = pb.TaskRuntimeExecutionInfo()
+        pb_obj.current_stage = self.current_stage
+        pb_obj.sandbox_id = self.sandbox_id
+        pb_obj.sandbox_type = self.sandbox_type
+        pb_obj.sandbox_endpoint = self.sandbox_endpoint
+        pb_obj.attempt = self.attempt
+        pb_obj.max_attempts = self.max_attempts
+        pb_obj.latest_progress_message = self.latest_progress_message
+        return pb_obj
+
+
 class ToolExecutionInfo(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
     tool_type: ToolType = Field(ToolType.UNKNOWN, alias="toolType")
     builtin_tool_name: str = Field("", alias="builtinToolName")
+    task_runtime: TaskRuntimeExecutionInfo = Field(default_factory=TaskRuntimeExecutionInfo, alias="taskRuntime")
 
     @classmethod
     def from_pb(cls, pb_obj: pb.ToolExecutionInfo) -> Self:
         return cls(
             tool_type=ToolType.from_pb(pb_obj.tool_type),
             builtin_tool_name=pb_obj.builtin_tool_name,
+            task_runtime=(
+                TaskRuntimeExecutionInfo.from_pb(pb_obj.task_runtime) if pb_obj.task_runtime else TaskRuntimeExecutionInfo()
+            ),
         )
 
     def to_pb(self) -> pb.ToolExecutionInfo:
         pb_obj = pb.ToolExecutionInfo()
         pb_obj.tool_type = self.tool_type.to_pb()
         pb_obj.builtin_tool_name = self.builtin_tool_name
+        pb_obj.task_runtime = self.task_runtime.to_pb()
         return pb_obj
 
-class ToolCallRunningListItemStatus(int, Enum):
-    UNKNOWN = 0
-    PENDING = 1
-    RUNNING = 2
-    DONE = 3
-    FAILED = 4
-    CANCELLED = 5
-
-    @classmethod
-    def from_pb(cls, pb_value: pb.ToolCallRunningListItemStatus) -> "ToolCallRunningListItemStatus":
-        return cls(pb_value.value)
-
-    def to_pb(self) -> pb.ToolCallRunningListItemStatus:
-        return pb.ToolCallRunningListItemStatus(self.value)
-
-class ToolCallRunningListItem(BaseModel):
-    model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
-    name: str = Field("", alias="name")
-    status: ToolCallRunningListItemStatus = Field(ToolCallRunningListItemStatus.UNKNOWN, alias="status")
-
-    @classmethod
-    def from_pb(cls, pb_obj: pb.ToolCallRunningListItem) -> Self:
-        return cls(
-            name=pb_obj.name,
-            status=ToolCallRunningListItemStatus.from_pb(pb_obj.status),
-        )
-
-    def to_pb(self) -> pb.ToolCallRunningListItem:
-        pb_obj = pb.ToolCallRunningListItem()
-        pb_obj.name = self.name
-        pb_obj.status = self.status.to_pb()
-        return pb_obj
 
 class ToolCallStatus(int, Enum):
     UNKNOWN = 0
@@ -181,6 +192,7 @@ class ToolCallStatus(int, Enum):
     RETRY_RUNNING = 6
     RETRY_SUCCESSFUL = 7
     RETRY_FAILED = 8
+    PENDING = 9
 
     @classmethod
     def from_pb(cls, pb_value: pb.ToolCallStatus) -> "ToolCallStatus":
@@ -189,59 +201,61 @@ class ToolCallStatus(int, Enum):
     def to_pb(self) -> pb.ToolCallStatus:
         return pb.ToolCallStatus(self.value)
 
+
 class ToolCall(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
     tool_name: str = Field("", alias="toolName")
     message: str = Field("", alias="message")
-    running_list: list[ToolCallRunningListItem] = Field(default_factory=list, alias="runningList")
     execution_info: ToolExecutionInfo = Field(default_factory=ToolExecutionInfo, alias="executionInfo")
     deliverables: list[ToolDeliverable] = Field(default_factory=list, alias="deliverables")
     tool_call_id: int = Field(0, alias="toolCallId")
-    batch_calls: list["ToolCall"] = Field(default_factory=list, alias="batchCalls")
-    batch_item_index: int = Field(0, alias="batchItemIndex")
+    sub_calls: list["ToolCall"] = Field(default_factory=list, alias="subCalls")
+    sub_call_index: int = Field(0, alias="subCallIndex")
+    display: dict[str, str] = Field(default_factory=dict, alias="display")
     tool_call_status: ToolCallStatus = Field(ToolCallStatus.RUNNING, alias="toolCallStatus")
+    updated_at: int = Field(0, alias="updatedAt")
 
     @classmethod
     def from_pb(cls, pb_obj: pb.ToolCall) -> Self:
         return cls(
             tool_name=pb_obj.tool_name,
             message=pb_obj.message,
-            running_list=[ToolCallRunningListItem.from_pb(item) for item in pb_obj.running_list],
             execution_info=ToolExecutionInfo.from_pb(pb_obj.execution_info) if pb_obj.execution_info else ToolExecutionInfo(),
             deliverables=[ToolDeliverable.from_pb(d) for d in pb_obj.deliverables],
             tool_call_id=pb_obj.tool_call_id,
-            batch_calls=[ToolCall.from_pb(bc) for bc in pb_obj.batch_calls] if pb_obj.batch_calls else [],
-            batch_item_index=pb_obj.batch_item_index if pb_obj.batch_item_index else 0,
+            sub_calls=[ToolCall.from_pb(bc) for bc in pb_obj.sub_calls] if pb_obj.sub_calls else [],
+            sub_call_index=pb_obj.sub_call_index if pb_obj.sub_call_index else 0,
+            display=dict(pb_obj.display) if pb_obj.display else {},
             tool_call_status=ToolCallStatus.from_pb(pb_obj.tool_call_status),
+            updated_at=pb_obj.updated_at,
         )
 
     def to_pb(self) -> pb.ToolCall:
         pb_obj = pb.ToolCall()
         pb_obj.tool_name = self.tool_name
         pb_obj.message = self.message
-        pb_obj.running_list.extend([item.to_pb() for item in self.running_list])
         pb_obj.execution_info = self.execution_info.to_pb() if self.execution_info else None
         pb_obj.deliverables.extend([d.to_pb() for d in self.deliverables])
         pb_obj.tool_call_id = self.tool_call_id
-        pb_obj.batch_calls.extend([bc.to_pb() for bc in self.batch_calls])
-        pb_obj.batch_item_index = self.batch_item_index
+        pb_obj.sub_calls.extend([bc.to_pb() for bc in self.sub_calls])
+        pb_obj.sub_call_index = self.sub_call_index
+        if self.display:
+            pb_obj.display = dict(self.display)
         pb_obj.tool_call_status = self.tool_call_status.to_pb()
+        pb_obj.updated_at = self.updated_at
         return pb_obj
 
     def remove_execution_info(self) -> Self:
         new_tool_call = self.model_copy(deep=True)
         new_tool_call.execution_info = ToolExecutionInfo()
-        for batch_call in new_tool_call.batch_calls:
-            batch_call.execution_info = ToolExecutionInfo()
+        new_tool_call.sub_calls = [sub_call.remove_execution_info() for sub_call in new_tool_call.sub_calls]
         return new_tool_call
 
     def to_cancelled(self) -> Self:
         new_tool_call = self.model_copy(deep=True)
-        for item in new_tool_call.running_list:
-            if item.status not in [ToolCallRunningListItemStatus.DONE, ToolCallRunningListItemStatus.FAILED]:
-                item.status = ToolCallRunningListItemStatus.CANCELLED
-        new_tool_call.batch_calls = [bc.to_cancelled() for bc in new_tool_call.batch_calls]
+        new_tool_call.sub_calls = [bc.to_cancelled() for bc in new_tool_call.sub_calls]
         return new_tool_call
+
 
 class PlanStepStatus(int, Enum):
     UNKNOWN = 0
@@ -276,11 +290,13 @@ class PlanStepStatus(int, Enum):
         v = {1: "pending", 2: "in_progress", 3: "completed", 4: "failed", 5: "require_human_input", 6: "cancelled"}
         return v.get(self.value, "unknown")
 
+
 class PlanStep(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
     title: str = Field("", alias="title")
     tool_calls: list[ToolCall] = Field(default_factory=list, alias="toolCalls")
     status: PlanStepStatus = Field(PlanStepStatus.UNKNOWN, alias="status")
+    updated_at: int = Field(0, alias="updatedAt")
 
     @classmethod
     def from_pb(cls, pb_obj: pb.PlanStep) -> Self:
@@ -288,6 +304,7 @@ class PlanStep(BaseModel):
             title=pb_obj.title,
             tool_calls=[ToolCall.from_pb(tc) for tc in pb_obj.tool_calls],
             status=PlanStepStatus.from_pb(pb_obj.status),
+            updated_at=pb_obj.updated_at,
         )
 
     def to_pb(self) -> pb.PlanStep:
@@ -295,7 +312,9 @@ class PlanStep(BaseModel):
         pb_obj.title = self.title
         pb_obj.tool_calls.extend([tc.to_pb() for tc in self.tool_calls])
         pb_obj.status = self.status.to_pb()
+        pb_obj.updated_at = self.updated_at
         return pb_obj
+
 
 class PlanExtra(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
@@ -330,6 +349,7 @@ class PlanExtra(BaseModel):
         pb_obj.updated_at = self.updated_at
         return pb_obj
 
+
 class PlanStatus(int, Enum):
     UNKNOWN = 0
     NO_PLAN = 1
@@ -345,6 +365,7 @@ class PlanStatus(int, Enum):
 
     def to_pb(self) -> pb.PlanStatus:
         return pb.PlanStatus(self.value)
+
 
 class Plan(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
@@ -418,9 +439,9 @@ class Plan(BaseModel):
             for tool_call in step.tool_calls:
                 if tool_call.tool_call_id == tool_call_id:
                     return tool_call
-                for batch_call in tool_call.batch_calls:
-                    if batch_call.tool_call_id == tool_call_id:
-                        return batch_call
+                for sub_call in tool_call.sub_calls:
+                    if sub_call.tool_call_id == tool_call_id:
+                        return sub_call
         return None
 
     def to_cancelled(self) -> Self:

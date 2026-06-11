@@ -1,0 +1,14 @@
+[project]
+name = "test-cases-analysis"
+version = "1.0.0"
+description = "Analyze test cases and render bilingual HTML reports (executability, prerequisite gap, quality)"
+requires-python = ">=3.11"
+# No external dependencies — stdlib only (csv, json, re, pathlib, argparse, collections, datetime)
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["report*"]

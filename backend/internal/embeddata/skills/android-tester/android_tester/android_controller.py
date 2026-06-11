@@ -36,6 +36,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from android_tester.image_store import Image
+from android_tester.retry import call_with_retry_async
+from android_tester.telemetry import measure_time
+from android_tester.utils import fetch_apk
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,35 @@ _ACTIVITY_TYPE_PATTERN = re.compile(
 _ACTIVITIES_LIST_PATTERN = re.compile(
     r"Activities=\[([^\]]*)\]",
 )
+_AM_START_FAILURE_MARKERS = (
+    "unable to resolve intent",
+    "no activities found to run",
+    "activity not started, unable to find",
+    "error type",
+    "error:",
+)
+
+_CONNECTION_FAILURE_MARKERS = (
+    "device offline",
+    "device not found",
+    "no devices/emulators found",
+    "device unauthorized",
+    "error: closed",
+    "timed out after",
+)
+
+_CONNECTION_FAILURE_REGEXES = (
+    re.compile(r"device(?:\s+'[^']+')?\s+not found"),
+)
+
+
+def _is_connection_failure(exc: "ADBCommandError") -> bool:
+    message = f"{exc.stderr}\n{exc.stdout}".lower()
+    return (
+        any(m in message for m in _CONNECTION_FAILURE_MARKERS)
+        or any(rx.search(message) for rx in _CONNECTION_FAILURE_REGEXES)
+    )
+
 
 _RUNTIME_PERMISSIONS_TO_REVOKE: tuple[str, ...] = (
     "android.permission.CAMERA",
@@ -78,9 +110,16 @@ _RUNTIME_PERMISSIONS_TO_REVOKE: tuple[str, ...] = (
     "android.permission.READ_MEDIA_VIDEO",
 )
 
-_EXTRA_RESET_PACKAGES: tuple[str, ...] = (
+_EXTRA_RESET_PACKAGES: frozenset[str] = frozenset({
     "com.android.printspooler",
-)
+})
+
+_SWIPE_DURATIONS_MS: dict[str, int] = {
+    "normal": 400,
+    "high": 50,  # 63 is the minimum for closing apps on the recent apps screen
+}
+
+_SDCARD_ROOT = "/sdcard"
 
 
 # -- exceptions ----------------------------------------------
@@ -170,41 +209,136 @@ class ADBRunner:
         self.adb_binary = _resolve_adb_binary(adb_binary)
         self.command_timeout = command_timeout
 
-    async def ensure_connected(self) -> None:
+    async def ensure_connected(self, connect_wait: float = 6.0) -> None:
+        """Ensure the device is reachable, with bounded retries.
+
+        Emulators routinely drop into ``offline`` between commands.
+        Recovery escalates through a few cheap-to-aggressive steps:
+
+        1. ``adb -s <id> reconnect`` -- kicks just this transport, often
+           the only thing that recovers a sticky ``offline`` state.
+        2. ``adb disconnect`` + ``adb connect`` -- forces a fresh
+           handshake when ``reconnect`` is not enough.
+
+        After each step we poll the device state for a few seconds
+        (``adb connect`` returns immediately but the transport may
+        linger in ``offline`` briefly before flipping to ``device``).
+        *connect_wait* bounds that final post-connect poll. The whole
+        sequence is retried with exponential backoff before surfacing
+        :class:`DeviceConnectionError`.
+        """
+        await call_with_retry_async(
+            lambda: self._ensure_connected_once(connect_wait),
+            on=DeviceConnectionError,
+            max_retries=4,
+            base_delay=2.0,
+            label=f"ensure_connected({self.device_id})",
+        )
+
+    async def _ensure_connected_once(self, connect_wait: float) -> None:
         if await self.is_connected():
+            logger.debug(
+                "ensure_connected(%s): already online",
+                self.device_id,
+            )
             return
+
+        state = await self._get_device_state()
+        logger.debug(
+            "ensure_connected(%s): not online, current state=%r",
+            self.device_id, state,
+        )
+
+        # 1. Ask adb to re-handshake just this transport.
+        if state in {"offline", "unauthorized"}:
+            logger.debug(
+                "ensure_connected(%s): trying `adb reconnect`",
+                self.device_id,
+            )
+            await self.run_raw(
+                [
+                    self.adb_binary, "-s", self.device_id,
+                    "reconnect",
+                ],
+                check=False,
+            )
+            if await self._wait_until_online(timeout=4.0):
+                logger.debug(
+                    "ensure_connected(%s): recovered via `adb reconnect`",
+                    self.device_id,
+                )
+                return
+            logger.debug(
+                "ensure_connected(%s): `adb reconnect` did not "
+                "restore the device within 4s",
+                self.device_id,
+            )
+
+        # 2. Fall back to a full disconnect + connect cycle.
+        logger.debug(
+            "ensure_connected(%s): trying `adb disconnect` + "
+            "`adb connect` (wait=%.1fs)",
+            self.device_id, connect_wait,
+        )
+        await self.run_raw(
+            [self.adb_binary, "disconnect", self.device_id],
+            check=False,
+        )
         await self.run_raw(
             [self.adb_binary, "connect", self.device_id],
             check=False,
         )
-        if not await self.is_connected():
-            raise DeviceConnectionError(
-                f"Device {self.device_id!r} is not reachable"
+        if await self._wait_until_online(timeout=connect_wait):
+            logger.debug(
+                "ensure_connected(%s): recovered via "
+                "disconnect+connect",
+                self.device_id,
             )
+            return
+
+        final_state = await self._get_device_state()
+        logger.debug(
+            "ensure_connected(%s): all recovery steps exhausted; "
+            "final state=%r",
+            self.device_id, final_state,
+        )
+        raise DeviceConnectionError(
+            f"Device {self.device_id!r} is not reachable"
+        )
+
+    async def _wait_until_online(
+        self, timeout: float, poll_interval: float = 0.5,
+    ) -> bool:
+        """Poll ``adb devices`` until this device shows ``device``.
+
+        Cheap: only talks to the local adb server, no per-poll shell
+        roundtrip, so we can poll frequently within *timeout*.
+        """
+        loop = asyncio.get_running_loop()
+        start = loop.time()
+        deadline = start + timeout
+        polls = 0
+        while True:
+            polls += 1
+            state = await self._get_device_state()
+            if state == "device":
+                logger.debug(
+                    "_wait_until_online(%s): online after %d "
+                    "poll(s) in %.2fs",
+                    self.device_id, polls, loop.time() - start,
+                )
+                return True
+            if loop.time() >= deadline:
+                logger.debug(
+                    "_wait_until_online(%s): timed out after %.2fs "
+                    "(last state=%r, %d poll(s))",
+                    self.device_id, loop.time() - start, state, polls,
+                )
+                return False
+            await asyncio.sleep(poll_interval)
 
     async def is_connected(self) -> bool:
-        proc = await self.run(
-            ["shell", "echo", "ready"], check=False,
-        )
-        return (
-            proc.returncode == 0 and "ready" in proc.stdout
-        )
-
-    async def shell(self, command: str) -> ADBResult:
-        return await self.run(["shell", command])
-
-    async def run(
-        self,
-        adb_args: list[str],
-        output_path: Path | None = None,
-        check: bool = True,
-    ) -> ADBResult:
-        base = [
-            self.adb_binary, "-s", self.device_id, *adb_args,
-        ]
-        return await self.run_raw(
-            base, output_path=output_path, check=check,
-        )
+        return await self._get_device_state() == "device"
 
     async def run_raw(
         self,
@@ -250,6 +384,64 @@ class ADBRunner:
             stdout_bytes=stdout,
         )
 
+    async def _get_device_state(self) -> str | None:
+        """Return the device's state as reported by ``adb devices -l``.
+
+        Possible values include ``"device"``, ``"offline"``,
+        ``"unauthorized"``. Returns ``None`` when the device is not
+        listed at all (e.g. never connected).
+        """
+        proc = await self.run_raw(
+            [self.adb_binary, "devices", "-l"],
+            check=False,
+        )
+        for raw_line in proc.stdout.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("List of devices"):
+                continue
+            parts = line.split()
+            if parts and parts[0] == self.device_id:
+                return parts[1] if len(parts) > 1 else None
+        return None
+
+    async def run(
+        self,
+        adb_args: list[str],
+        output_path: Path | None = None,
+        check: bool = True,
+    ) -> ADBResult:
+        """Run a device-targeted ``adb`` command.
+
+        Transparently recovers from a single connection failure
+        (offline / unauthorized / timeout) by re-running
+        :meth:`ensure_connected` and retrying the command once.
+        """
+        base = [
+            self.adb_binary, "-s", self.device_id, *adb_args,
+        ]
+        try:
+            return await self.run_raw(
+                base, output_path=output_path, check=check,
+            )
+        except ADBCommandError as exc:
+            if not _is_connection_failure(exc):
+                raise
+            logger.warning(
+                "ADB connection failure on %s; recovering: %s",
+                self.device_id, exc,
+            )
+            await self.ensure_connected()
+            logger.debug(
+                "ADB recovery on %s succeeded; retrying command: %s",
+                self.device_id, " ".join(adb_args),
+            )
+            return await self.run_raw(
+                base, output_path=output_path, check=check,
+            )
+
+    async def shell(self, command: str) -> ADBResult:
+        return await self.run(["shell", command])
+
 
 # -- helpers --------------------------------------------------
 
@@ -271,6 +463,11 @@ def _escape_for_adb_input(text: str) -> str:
     return "".join(parts)
 
 
+def _quote_for_shell_single(text: str) -> str:
+    """Return *text* as a single-quoted shell literal."""
+    return "'" + text.replace("'", "'\"'\"'") + "'"
+
+
 # -- controller ------------------------------------------------
 
 
@@ -281,11 +478,15 @@ class AndroidController:
         self,
         runner: ADBRunner,
         app_map_path: Path,
+        keep_app_state: frozenset[str] = frozenset(),
+        resources_path: Path | None = None,
     ) -> None:
         self._runner = runner
         self._app_map: dict[str, str] = json.loads(
             app_map_path.read_text(encoding="utf-8")
         )
+        self._keep_app_state = keep_app_state
+        self._resources_path = resources_path
 
     @classmethod
     def create(
@@ -295,6 +496,8 @@ class AndroidController:
         *,
         command_timeout: float | None = None,
         adb_binary: str | None = None,
+        keep_app_state: frozenset[str] = frozenset(),
+        resources_path: Path | None = None,
     ) -> AndroidController:
         """Build an :class:`AndroidController` and its underlying
         :class:`ADBRunner` in one call.
@@ -309,11 +512,27 @@ class AndroidController:
             adb_binary=adb_binary,
             command_timeout=command_timeout,
         )
-        return cls(runner=runner, app_map_path=app_map_path)
+        return cls(
+            runner=runner,
+            app_map_path=app_map_path,
+            keep_app_state=keep_app_state,
+            resources_path=resources_path,
+        )
+
+    @property
+    def keep_app_state(self) -> frozenset[str]:
+        return self._keep_app_state
 
     @property
     def device_id(self) -> str:
         return self._runner.device_id
+
+    @staticmethod
+    def is_valid_package_name(name: str) -> bool:
+        """Return ``True`` if *name* is a syntactically valid Android
+        package name (e.g. ``com.example.app``).
+        """
+        return bool(_PACKAGE_NAME_PATTERN.match(name))
 
     # -- connection / lifecycle --
 
@@ -327,8 +546,8 @@ class AndroidController:
         await self._keyevent("KEYCODE_HOME")
 
         await self.clear_running_apps()
-        for pkg in _EXTRA_RESET_PACKAGES:
-            await self._clear_app_data(pkg)
+        for pkg in _EXTRA_RESET_PACKAGES - self._keep_app_state:
+            await self._clear_app_data(pkg, suppress_warnings=True)
 
         await self._clean_shared_downloads()
         await self._clear_notifications()
@@ -354,32 +573,123 @@ class AndroidController:
         self,
         start: tuple[int, int],
         end: tuple[int, int],
-        duration_ms: int = 400,
+        duration_ms: int | None = None,
+        speed: str = "normal",
     ) -> None:
         x1, y1 = map(int, start)
         x2, y2 = map(int, end)
+        ms = (duration_ms
+              if duration_ms is not None
+              else self._get_swipe_duration(speed))
         await self._runner.shell(
-            f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"
+            f"input swipe {x1} {y1} {x2} {y2} {ms}"
+        )
+
+
+    @staticmethod
+    def _get_swipe_duration(speed: str) -> int:
+        return _SWIPE_DURATIONS_MS.get(
+            speed.lower(), _SWIPE_DURATIONS_MS["normal"],
         )
 
     async def scroll(
         self,
         start: tuple[int, int],
         end: tuple[int, int],
-        duration_ms: int = 350,
+        duration_ms: int | None = None,
+        speed: str = "normal",
     ) -> None:
-        await self.drag(start, end, duration_ms=duration_ms)
+        await self.drag(start, end, duration_ms=duration_ms, speed=speed)
 
     async def type_text(self, content: str) -> None:
+        if not content:
+            logger.warning(
+                "type_text called with empty content on %s; skipping",
+                self._runner.device_id,
+            )
+            return
         escaped = _escape_for_adb_input(content)
         await self._runner.shell(f"input text {escaped}")
 
+    async def clipboard_get(self) -> str:
+        """Return current clipboard text from Android shell."""
+        proc = await self._runner.run(
+            ["shell", "cmd", "clipboard", "get"],
+            check=False,
+        )
+        return (proc.stdout or "").strip()
+
+    async def clipboard_put(self, content: str) -> None:
+        """Put *content* into the Android clipboard."""
+        quoted = _quote_for_shell_single(content)
+        await self._runner.shell(f"cmd clipboard set text {quoted}")
+
+    async def clipboard_paste(self) -> None:
+        """Paste clipboard content into the currently focused field."""
+        proc = await self._runner.run(
+            ["shell", "input", "keyevent", "KEYCODE_PASTE"],
+            check=False,
+        )
+        if proc.returncode == 0:
+            return
+        # Fallback for devices that don't support KEYCODE_PASTE.
+        text = await self.clipboard_get()
+        if text:
+            await self.type_text(text)
+
+    @measure_time("screenshot_capture_duration")
     async def screenshot(self) -> Image:
         """Capture the current screen as a PNG :class:`Image`."""
         result = await self._runner.run(
             ["exec-out", "screencap", "-p"],
         )
         return Image.from_png_bytes(result.stdout_bytes)
+
+    @measure_time("dump_ui_tree_duration")
+    async def dump_ui_tree(self, n_retries: int = 3) -> str:
+        """Dump the UI hierarchy via uiautomator and return raw XML."""
+        async def dump_ui_tree_once() -> str:
+            result = await self._runner.shell(
+                "rm -f /sdcard/window_dump.xml"
+                " && uiautomator dump /sdcard/window_dump.xml >/dev/null 2>&1"
+                " && cat /sdcard/window_dump.xml",
+            )
+            if not result.stdout.strip():
+                raise ADBCommandError(
+                    "uiautomator dump",
+                    "dump produced an empty file",
+                )
+            return result.stdout
+
+        return await call_with_retry_async(
+            dump_ui_tree_once,
+            on=ADBError,
+            max_retries=n_retries,
+            base_delay=1.0,
+            label="dump_ui_tree",
+        )
+
+    @measure_time("dump_stable_ui_tree_duration")
+    async def dump_stable_ui_tree(
+        self,
+        *,
+        max_polls: int = 3,
+        poll_interval: float = 1.0,
+    ) -> str:
+        """Dump the UI tree, retrying until two consecutive dumps match.
+
+        Returns immediately on a stable result or after *max_polls*
+        attempts, whichever comes first.
+        """
+        prev_xml = ""
+        xml = ""
+        for _ in range(max_polls):
+            xml = await self.dump_ui_tree()
+            if xml == prev_xml:
+                return xml
+            prev_xml = xml
+            await asyncio.sleep(poll_interval)
+        return xml
 
     async def press_back(self) -> None:
         await self._keyevent("KEYCODE_BACK")
@@ -399,31 +709,390 @@ class AndroidController:
     async def _keyevent(self, key: str) -> None:
         await self._runner.shell(f"input keyevent {key}")
 
+    async def dispatch_action(
+        self, name: str, args: dict[str, object],
+    ) -> object | None:
+        """Execute a named action with the given arguments.
+
+        This is the single dispatch table for all supported actions.
+        Callers that need extra logic (e.g. package resolution for
+        ``Launch``) should handle that before calling this method.
+        """
+        match name.lower():
+            case "click":
+                self._require_args(name, args, "point")
+                await self.click(args["point"])  # type: ignore[arg-type]
+            case "longpress":
+                self._require_args(name, args, "point")
+                await self.long_press(args["point"])  # type: ignore[arg-type]
+            case "drag":
+                self._require_args(name, args, "start", "end")
+                await self.drag(
+                    args["start"],  # type: ignore[arg-type]
+                    args["end"],  # type: ignore[arg-type]
+                    speed=str(args.get("speed", "normal")),
+                )
+            case "scroll":
+                self._require_args(name, args, "start", "end")
+                await self.scroll(
+                    args["start"],  # type: ignore[arg-type]
+                    args["end"],  # type: ignore[arg-type]
+                    speed=str(args.get("speed", "normal")),
+                )
+            case "type":
+                self._require_args(name, args, "content")
+                await self.type_text(str(args["content"]))
+            case "clipboardget":
+                return await self.clipboard_get()
+            case "clipboardpaste":
+                await self.clipboard_paste()
+            case "clipboardput":
+                self._require_args(name, args, "content")
+                await self.clipboard_put(str(args["content"]))
+            case "launch":
+                self._require_args(name, args, "app")
+                await self.launch(str(args["app"]).strip("'\""))
+            case "openlink":
+                self._require_args(name, args, "url")
+                await self.open_link(str(args["url"]))
+            case "installapk":
+                self._require_args(name, args, "source")
+                await self.install_apk(str(args["source"]))
+            case "resourcelist":
+                return self.list_resources()
+            case "filelist":
+                return await self.list_device_files(
+                    str(args.get("path", "")),
+                )
+            case "fileput":
+                self._require_args(name, args, "source", "dest")
+                await self.put_file(
+                    str(args["source"]), str(args["dest"]),
+                )
+            case "filedelete":
+                self._require_args(name, args, "path")
+                await self.delete_file(str(args["path"]))
+            case "uninstall":
+                self._require_args(name, args, "app")
+                await self.uninstall(str(args["app"]))
+            case "forcestop":
+                self._require_args(name, args, "app")
+                await self.force_stop(str(args["app"]))
+            case "wait":
+                await self.wait(1.0)
+            case "pressback":
+                await self.press_back()
+            case "presshome":
+                await self.press_home()
+            case "pressenter":
+                await self.press_enter()
+            case "pressrecentapps":
+                await self.press_recent_apps()
+            case _:
+                raise ValueError(f"Unsupported action: {name}")
+
+        return None
+
+    @staticmethod
+    def _require_args(
+        name: str, args: dict[str, object], *keys: str,
+    ) -> None:
+        """Raise :class:`ValueError` if any of keys is missing from args."""
+        missing = sorted(k for k in keys if k not in args)
+        if missing:
+            raise ValueError(
+                f"Action {name!r} missing required args:"
+                f" {', '.join(missing)}",
+            )
+
     # -- app management --
 
     async def launch(self, app_name: str) -> None:
         package = self._resolve_package(app_name)
-        if not _PACKAGE_NAME_PATTERN.match(package):
+        if not self.is_valid_package_name(package):
             raise ValueError(
                 f"Invalid Android package name: {package!r}"
             )
         try:
-            await self._runner.run(
+            proc = await self._runner.run(
                 [
-                    "shell", "monkey",
-                    "-p", package,
+                    "shell", "am", "start",
+                    "-a", "android.intent.action.MAIN",
                     "-c", "android.intent.category.LAUNCHER",
-                    "1",
+                    "-p", package,
                 ],
+                check=False,
             )
         except ADBCommandError as exc:
             combined = f"{exc.stdout}\n{exc.stderr}"
-            if "No activities found to run" in combined:
-                raise UnknownAppError(
-                    f"No launchable activity for package {package!r}"
+        else:
+            combined = f"{proc.stdout}\n{proc.stderr}"
+            if proc.returncode == 0 and not self._am_start_failed(combined):
+                return
+
+        if await self._launch_resolved_activity(package):
+            return
+
+        raise UnknownAppError(
+            f"No launchable activity for package {package!r}"
+        )
+
+    @staticmethod
+    def _am_start_failed(output: str) -> bool:
+        lowered = output.lower()
+        return any(
+            m in lowered
+            for m in _AM_START_FAILURE_MARKERS
+        )
+
+    async def _launch_resolved_activity(self, package: str) -> bool:
+        component = await self._resolve_activity(package)
+        if not component:
+            return False
+
+        result = await self._runner.run(
+            ["shell", "am", "start", "-W", "-n", component],
+            check=False,
+        )
+        return result.returncode == 0 and "Error:" not in result.stdout
+
+    async def _resolve_activity(self, package: str) -> str | None:
+        proc = await self._runner.run(
+            [
+                "shell", "cmd", "package", "resolve-activity",
+                "--brief",
+                "-a", "android.intent.action.MAIN",
+                "-c", "android.intent.category.LAUNCHER",
+                "-p", package,
+            ],
+            check=False,
+        )
+        if proc.returncode != 0:
+            return None
+        return self._parse_resolved_component(proc.stdout, package)
+
+    @staticmethod
+    def _parse_resolved_component(
+        output: str,
+        package: str,
+    ) -> str | None:
+        for line in reversed(output.splitlines()):
+            line = line.strip()
+            if not line.startswith(f"{package}/"):
+                continue
+            component = line
+            if component.startswith(f"{package}/."):
+                activity = component[len(package) + 1:]
+                component = f"{package}/{package}{activity}"
+            return component
+        return None
+
+    async def install_apk(self, source: str) -> str | None:
+        """Install an APK from a local path or HTTP(S) URL via ADB."""
+        before = await self.list_installed_packages(third_party_only=True)
+        async with fetch_apk(source) as apk_path:
+            result = await self._runner.run(
+                ["install", "-r", "-t", str(apk_path)],
+                check=False,
+            )
+            output = f"{result.stdout}\n{result.stderr}".strip()
+            if result.returncode != 0:
+                raise ADBCommandError(
+                    f"adb install {apk_path}",
+                    result.stderr.strip(),
+                    stdout=result.stdout.strip(),
+                    returncode=result.returncode,
                 )
-            else:
-                raise
+            logger.info("Installed APK from %s: %s", source, output)
+            after = await self.list_installed_packages(third_party_only=True)
+            added = sorted(after - before)
+            return added[0] if len(added) == 1 else None
+
+    async def open_link(self, url: str) -> None:
+        result = await self._runner.run(
+            [
+                "shell",
+                "am",
+                "start",
+                "-a",
+                "android.intent.action.VIEW",
+                "-d",
+                url,
+            ],
+            check=False,
+        )
+        output = f"{result.stdout}\n{result.stderr}".strip()
+        if result.returncode != 0 or "Error:" in output:
+            raise ADBCommandError(
+                f"adb shell am start -a android.intent.action.VIEW -d {url}",
+                result.stderr.strip(),
+                stdout=result.stdout.strip(),
+                returncode=result.returncode,
+            )
+
+    # -- file management --
+
+    def list_resources(self) -> str:
+        """List files available in the configured resources directory.
+
+        Returns a newline-separated list of paths relative to the
+        resources root, or an explanatory line when no resources
+        directory is configured, it is missing, or it is empty.
+        """
+        if self._resources_path is None:
+            return "No resources directory configured."
+        root = self._resources_path
+        if not root.is_dir():
+            return f"Resources directory not found: {root}"
+        files = sorted(
+            p.relative_to(root).as_posix()
+            for p in root.rglob("*")
+            if p.is_file()
+        )
+        return "\n".join(files) if files else "(no files)"
+
+    async def list_device_files(self, path: str = "") -> str:
+        """List the contents of ``/sdcard/<path>`` on the device."""
+        target = self._resolve_sdcard_path(path)
+        result = await self._runner.run(
+            ["shell", f"ls -1ap {_quote_for_shell_single(target)}"],
+            check=False,
+        )
+        if result.returncode != 0:
+            return f"Could not list {target!r}: {result.stderr.strip()}"
+        return result.stdout.strip() or "(empty)"
+
+    async def put_file(self, source: str, dest: str) -> None:
+        """Push a resource file into a folder under ``/sdcard``.
+
+        *source* is a path relative to the resources directory; *dest*
+        is a destination folder under ``/sdcard``. The pushed file keeps
+        its source basename. A media scan is broadcast afterwards so the
+        file appears in gallery/Files apps.
+        """
+        local = self._resolve_resource(source)
+        dest_dir = self._resolve_sdcard_path(dest)
+        remote = f"{dest_dir}/{local.name}"
+        await self._runner.run(
+            ["shell", f"mkdir -p {_quote_for_shell_single(dest_dir)}"],
+        )
+        await self._runner.run(["push", str(local), remote])
+        await self._media_scan(remote)
+
+    async def delete_file(self, path: str) -> None:
+        """Delete a file under ``/sdcard`` and trigger a media rescan."""
+        remote = self._resolve_sdcard_path(path)
+        await self._runner.run(
+            ["shell", f"rm -f {_quote_for_shell_single(remote)}"],
+        )
+        await self._media_scan(remote)
+
+    async def _media_scan(self, remote_path: str) -> None:
+        """Ask MediaStore to (re)index *remote_path*."""
+        await self._runner.run(
+            [
+                "shell", "am", "broadcast",
+                "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+                "-d", f"file://{remote_path}",
+            ],
+            check=False,
+        )
+
+    def _resolve_resource(self, source: str) -> Path:
+        """Resolve *source* to a file inside the resources directory.
+
+        Raises :class:`ValueError` when no resources directory is
+        configured, the resolved path escapes it, or the file is
+        missing.
+        """
+        if self._resources_path is None:
+            raise ValueError(
+                "No resources directory configured"
+                " (--resources-path unset)."
+            )
+        root = self._resources_path.resolve()
+        candidate = (root / source).resolve()
+        if not candidate.is_relative_to(root):
+            raise ValueError(
+                f"Resource path {source!r} escapes the resources directory."
+            )
+        if not candidate.is_file():
+            raise ValueError(f"Resource file not found: {source!r}")
+        return candidate
+
+    @staticmethod
+    def _resolve_sdcard_path(path: str) -> str:
+        """Normalize *path* to an absolute location under ``/sdcard``.
+
+        Accepts a path relative to ``/sdcard`` or an absolute
+        ``/sdcard`` path. Raises :class:`ValueError` if it escapes
+        ``/sdcard`` via ``..`` segments.
+        """
+        relative = path.strip()
+        for prefix in ("/sdcard/", "/sdcard"):
+            if relative.startswith(prefix):
+                relative = relative[len(prefix):]
+                break
+        parts: list[str] = []
+        for segment in relative.split("/"):
+            if segment in ("", "."):
+                continue
+            if segment == "..":
+                if not parts:
+                    raise ValueError(f"Path {path!r} escapes /sdcard.")
+                parts.pop()
+                continue
+            parts.append(segment)
+        return "/".join([_SDCARD_ROOT, *parts]) if parts else _SDCARD_ROOT
+
+    async def uninstall(self, app_name: str) -> None:
+        package = self._resolve_package(app_name)
+        result = await self._runner.run(
+            ["uninstall", package],
+            check=False,
+        )
+        output = f"{result.stdout}\n{result.stderr}".strip()
+        if result.returncode != 0 and "not installed" not in output.lower():
+            raise ADBCommandError(
+                f"adb uninstall {package}",
+                result.stderr.strip(),
+                stdout=result.stdout.strip(),
+                returncode=result.returncode,
+            )
+
+    async def force_stop(self, app_name: str) -> None:
+        """Resolve *app_name* to a package and force-stop it.
+
+        Verifies the package is actually installed before running
+        ``am force-stop``. Raises :class:`UnknownAppError` if the
+        package cannot be resolved or is not installed.
+        """
+        package = self._resolve_package(app_name)
+        installed = await self.list_installed_packages()
+        if package not in installed:
+            raise UnknownAppError(
+                f"Cannot force-stop {app_name!r}: package {package!r}"
+                " is not installed on the device"
+            )
+        result = await self._force_stop(package)
+        if result.returncode != 0:
+            raise ADBCommandError(
+                f"adb shell am force-stop {package}",
+                result.stderr.strip(),
+                stdout=result.stdout.strip(),
+                returncode=result.returncode,
+            )
+
+    async def _force_stop(self, package: str) -> ADBResult:
+        """Low-level ``am force-stop`` for an already-resolved package.
+
+        Never raises on a non-zero exit code; callers that care about
+        success must inspect the returned :class:`ADBResult`.
+        """
+        return await self._runner.run(
+            ["shell", "am", "force-stop", package],
+            check=False,
+        )
 
     async def list_installed_packages(
         self,
@@ -474,32 +1143,47 @@ class AndroidController:
             self._parse_clearable_packages(proc.stdout),
         )
 
-    async def force_stop(self, package: str) -> None:
-        """Force-stop *package* (``am force-stop``)."""
-        await self._runner.run(
-            ["shell", "am", "force-stop", package],
-            check=False,
-        )
-
     async def clear_running_apps(self) -> None:
         """
         Force-stop, clear, and revoke runtime permissions for every running
-        standard (activityType=1) app.
+        standard (activityType=1) app, except for packages listed in
+        ``keep_app_state``.
         """
         for pkg in await self.get_running_apps():
-            await self.force_stop(pkg)
+            if pkg in self._keep_app_state:
+                logger.debug("Skipping reset of preserved package %s", pkg)
+                continue
+            await self._force_stop(pkg)
             await self._clear_app_data(pkg)
             await self._revoke_runtime_permissions(pkg)
 
+    async def close_running_apps(self) -> None:
+        """Force-stop running standard apps without clearing their data.
+
+        Unlike :meth:`clear_running_apps`, this only kills the processes
+        and returns to the home screen. Packages in ``keep_app_state`` are 
+        left running.
+        """
+        for pkg in await self.get_running_apps():
+            if pkg in self._keep_app_state:
+                logger.debug("Skipping close of preserved package %s", pkg)
+                continue
+            await self._force_stop(pkg)
+        await self._keyevent("KEYCODE_HOME")
+
     # -- private helpers --
 
-    async def _clear_app_data(self, package: str) -> None:
+    async def _clear_app_data(
+        self, 
+        package: str,
+        suppress_warnings: bool = False,
+    ) -> None:
         proc = await self._runner.run(
             ["shell", "pm", "clear", package],
             check=False,
         )
         output = (proc.stderr or "") + (proc.stdout or "")
-        if proc.returncode != 0:
+        if proc.returncode != 0 and not suppress_warnings:
             if "SecurityException" in output:
                 logger.warning(
                     "Cannot clear %s - permission"
@@ -568,7 +1252,7 @@ class AndroidController:
         package = self._app_map.get(key)
         if package:
             return package
-        if _PACKAGE_NAME_PATTERN.match(key):
+        if self.is_valid_package_name(key):
             return key
         for map_key, map_pkg in self._app_map.items():
             if map_key in key or key in map_key:

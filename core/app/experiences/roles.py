@@ -35,7 +35,7 @@ from urllib.request import urlopen
 from pydantic import BaseModel, ConfigDict, Field
 
 from .delta import DeltaBatch
-from .llm import LLMClient
+from app.llmhubs.structured import LLMClient
 from .playbook import Playbook
 from .prompts import PromptManager
 

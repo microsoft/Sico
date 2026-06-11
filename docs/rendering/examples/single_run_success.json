@@ -1,0 +1,31 @@
+{
+  "toolName": "run_python",
+  "toolCallId": 1001,
+  "toolCallStatus": 3,
+  "executionInfo": {
+    "toolType": 1,
+    "builtinToolName": "run_python",
+    "taskRuntime": {
+      "currentStage": "upload",
+      "attempt": 1,
+      "maxAttempts": 3,
+      "latestProgressMessage": "Parsed 4 input files, wrote 1 report"
+    }
+  },
+  "display": {},
+  "deliverables": [
+    {
+      "type": 1,
+      "markdownTitle": "Analysis summary",
+      "markdownContent": "## Result\n\n- rows processed: **4096**\n- anomalies: **3**\n\n```\nmean=12.4 stddev=2.1\n```"
+    },
+    {
+      "type": 2,
+      "fileName": "analysis_report.md",
+      "fileUrl": "https://files.example.com/turns/42/analysis_report.md"
+    }
+  ],
+  "subCalls": [],
+  "subCallIndex": 0,
+  "message": "Executed run_python successfully. Report uploaded as analysis_report.md."
+}

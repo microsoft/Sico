@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sico Authors
+﻿# Copyright (c) 2026 Sico Authors
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,11 @@ import asyncio
 import json
 import logging
 import os
+import re
+import time
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 from agent_framework import (
     ChatResponseUpdate,
@@ -37,8 +41,37 @@ from pydantic import BaseModel
 import pydantic
 
 import app.schemas.conversation
+from app.biz.chat.adapters import build_default_adapters
 from app.biz.chat.chat import build_error_response
-from app.biz.chat.workspace_init import init_workspace
+from app.biz.chat.prompt_sections import (
+    PromptSectionContext,
+    collect_prompt_sections,
+)
+from app.biz.chat.router import hard_guard_route, llm_intent_check, tools_for_route
+from app.biz.chat.turn_timing import begin_turn, time_awaitable, time_sync
+from app.biz.task_runtime.rerun_sources import (
+    RERUN_SOURCE_INLINE_MAX_CHARS,
+    RERUN_SOURCES_DIR,
+    compact_rerun_source_payload,
+)
+from app.biz.task_runtime.skill_loader import SkillLoader
+from app.biz.chat.types import (
+    AdapterExcerpt,
+    ChatIntentCheckerInput,
+    ChatIntentCheckerOutput,
+    ChatRouteMode,
+    ToolExcerpt,
+)
+from app.biz.chat.workspace_init import WorkspaceInitOptions, init_workspace
+from app.tools import (
+    CONTEXT_TOOL,
+    EDIT_TOOL,
+    GREP_TOOL,
+    READ_TOOL,
+    REMOVE_TOOL,
+    REPORT_TOOL,
+    WRITE_FILE_TOOL,
+)
 from app.pb.conversation.chat import (
     ChatContent,
     ChatContentType,
@@ -56,31 +89,107 @@ from app.pb.conversation.api import (
     GetPlanData,
     GetPlanRequest,
     GetPlanResponse,
-    GenerateOnboardRecommendationTasksData,
     GenerateOnboardRecommendationTasksRequest,
     GenerateOnboardRecommendationTasksResponse,
 )
 import app.llmhubs
 from app.pb.common.common import Attachment
+from app.schemas.common.common import Attachment as SchemaAttachment
 from app.schemas.conversation.chat import TopicMessage
 from app.schemas.conversation.plan import Plan, PlanStatus
 from app.storage import redis
 from app.storage.fs import CHAT_FS
-from app.tools import BUILTIN_TOOLS
 from app.tools.common import ToolContext
+from app.tools.delegate import build_adapter_tools
 from app.tools.plan import PlanEditor, read_plan
 from app.tools.plan import cancel_plan as cancel_plan_async
-from app.tools.sandbox_tools import SANDBOX_LIFECYCLE_TOOLS
 from app.utils.eventbus import EventBus
 from app.utils.response import error_response, success_response
 from app.utils.runner import AsyncJobRunner
 
 from .chat import RunOptions, build_agent
-from .prompt import compose_system_prompt, PromptFile
 from .context import get_skill_knowledge_context
+from .prompt import PromptFile, compose_system_prompt, render_prompt_file
 
 ONGOING_CHAT_CACHE_TIME_TO_LIVE = 3 * 24 * 60 * 60  # 3 days
 KEEPALIVE_INTERVAL_SECONDS = 5
+_JSON_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.IGNORECASE | re.DOTALL)
+_LOG_PREVIEW_CHARS = 1000
+_INTENT_PRIOR_CONVERSATION_TURNS = 3
+_FAST_MODEL_ENV = "FAST_MODEL"
+
+
+def _load_recommendation_tasks_json(text: str) -> Any:
+    payload = text.strip()
+    match = _JSON_FENCE_PATTERN.match(payload)
+    if match:
+        payload = match.group(1).strip()
+    parsed = json.loads(payload)
+    if isinstance(parsed, list):
+        return {"tasks": parsed}
+    return parsed
+
+
+def _text_preview(text: str) -> str:
+    if len(text) <= _LOG_PREVIEW_CHARS:
+        return text
+    return text[:_LOG_PREVIEW_CHARS].rstrip() + "..."
+
+
+def _build_prior_conversation_section(agent_instance_id: int, username: str, current_turn_id: int) -> str:
+    turn_ids = [turn_id for turn_id in CHAT_FS.list_turn_ids(agent_instance_id, username) if turn_id < current_turn_id]
+    if not turn_ids:
+        return ""
+
+    sections: list[str] = []
+    for turn_id in turn_ids[-_INTENT_PRIOR_CONVERSATION_TURNS:]:
+        conversation_json = CHAT_FS.read_conversation(agent_instance_id, username, turn_id)
+        messages = _text_only_conversation_messages(conversation_json or "")
+        if not messages:
+            continue
+        sections.append(f"Turn {turn_id}:\n" + "\n".join(messages))
+
+    if not sections:
+        return ""
+    return "Recent prior conversation text (tool calls/results omitted; oldest to newest):\n\n" + "\n\n".join(sections)
+
+
+def _text_only_conversation_messages(conversation_json: str) -> list[str]:
+    try:
+        loaded = json.loads(conversation_json)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(loaded, list):
+        return []
+
+    messages: list[str] = []
+    for item in loaded:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        if role not in {"user", "assistant"}:
+            continue
+        text = _conversation_item_text(item)
+        if text:
+            messages.append(f"{role}: {_compact_history_text(text)}")
+    return messages
+
+
+def _conversation_item_text(item: dict[str, Any]) -> str:
+    parts: list[str] = []
+    contents = item.get("contents")
+    if isinstance(contents, list):
+        for content in contents:
+            if isinstance(content, dict) and content.get("type") == "text" and isinstance(content.get("text"), str):
+                parts.append(content["text"])
+    content = item.get("content")
+    if isinstance(content, str):
+        parts.append(content)
+    return "\n".join(part for part in parts if part.strip()).strip()
+
+
+def _compact_history_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
 
 
 # Singleton
@@ -105,7 +214,8 @@ class ChatService(ChatServiceBase):
             raise RuntimeError("ChatService must be initialized before use.")
         return ChatService._instance
 
-    async def stream_chat(self, chat_request: ChatRequest) -> ChatDirectResponse:
+    async def stream_chat(self, chat_request: ChatRequest) -> ChatDirectResponse:  # noqa: PLR0915
+        timings = begin_turn()
         response_queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None] = asyncio.Queue()
 
         send_keepalive_task = asyncio.create_task(self._send_keepalive_loop(chat_request))
@@ -141,32 +251,14 @@ class ChatService(ChatServiceBase):
             len(chat_request.agent_attachments),
         )
 
-        system_message = compose_system_prompt(
-            PromptFile.SYSTEM,
-            name=chat_request.agent_instance_name or "",
-            role_name=chat_request.agent_role or "",
-            project_name=chat_request.project_name or "",
-            sico_port=os.getenv("SICO_PORT", "8080"),
-        )
-
         async def on_plan_update(plan: Plan):
-            # we only notify that there is a plan (or plan update)
-            # but don't need to send the actual plan because
-            # the frontend will poll the plan content automatically.
-            chat_content = ChatContent(
-                type=ChatContentType.PLAN,
-            )
-            await response_queue.put(
-                self._build_chat_response(
-                    chat_content,
-                    is_final=False,
-                    is_internal=False,
-                )
-            )
+            chat_content = ChatContent(type=ChatContentType.PLAN)
+            await response_queue.put(self._build_chat_response(chat_content, is_final=False, is_internal=False))
 
         plan_editor = PlanEditor(
             agent_instance_id=chat_request.agent_instance_id,
             turn_id=chat_request.turn_id,
+            conversation_id=chat_request.conversation_id,
             username=chat_request.username,
             notify_plan_updated_callback=on_plan_update,
         )
@@ -179,31 +271,8 @@ class ChatService(ChatServiceBase):
             conversation_id=chat_request.conversation_id,
             response_queue=response_queue,
             plan_editor=plan_editor,
+            raw_user_message=chat_request.message.content,
         )
-
-        agent = await build_agent(
-            chat_request.username,
-            chat_request.agent_id,
-            chat_request.agent_instance_id,
-            self._mem_runner,
-            tool_context=tool_context,
-            model=chat_request.model or None,
-        )
-
-        # Initialize workspace: copy skills, knowledge, history, attachments
-        await init_workspace(
-            agent_instance_id=chat_request.agent_instance_id,
-            username=chat_request.username,
-            turn_id=chat_request.turn_id,
-            project_id=chat_request.project_id,
-            agent_id=chat_request.agent_id,
-            attachments=chat_request.message.attachments + chat_request.agent_attachments,
-        )
-
-        user_message = await self._build_user_message(chat_request)
-
-        all_tools = BUILTIN_TOOLS + SANDBOX_LIFECYCLE_TOOLS
-        tool_context.all_tools = all_tools
 
         sequence_id = 0
 
@@ -212,26 +281,150 @@ class ChatService(ChatServiceBase):
             sequence_id += 1
             await self._yield_response(chat_request, redis_client, cache_key, sequence_id, chat_message)
 
-        # start a background task to run the agent and put updates into the queue
-        await self._stream_chat_runner.submit(
-            agent.run_stream,
-            queue=response_queue,
-            user_message=user_message,
-            system_message=system_message,
-            options=RunOptions(
-                turn_id=chat_request.turn_id,
-                save_history=True,
-                save_memory=True,
-                tools=all_tools,
-            ),
-        )
-
+        route = ChatRouteMode.TASK
         try:
-            await self._drain_response_queue(response_queue, yield_response, chat_request)
+            # Always initialize the workspace: every route benefits from having
+            # attachments + knowledge/skills materialized before routing.
+            workspace_started_at = time.perf_counter()
+            await init_workspace(
+                agent_instance_id=chat_request.agent_instance_id,
+                username=chat_request.username,
+                turn_id=chat_request.turn_id,
+                project_id=chat_request.project_id,
+                agent_id=chat_request.agent_id,
+                attachments=chat_request.message.attachments + chat_request.agent_attachments,
+                options=WorkspaceInitOptions(),
+            )
+            timings.record("workspace_init_ms", workspace_started_at)
+
+            # Build rendered context sections once; reuse for both the router
+            # input and the chat agent user message.
+            workspace = CHAT_FS.get_workspace_path(chat_request.agent_instance_id, chat_request.username)
+            skill_loader = SkillLoader(
+                workspace,
+                project_id=int(chat_request.project_id or 0),
+                agent_id=chat_request.agent_id,
+            )
+            tool_context.skill_loader = skill_loader
+            sections = self._build_context_sections(chat_request, skill_loader)
+
+            # Adapter registry for routing.
+            adapters = build_default_adapters()
+            adapter_excerpts = [AdapterExcerpt.from_adapter(a) for a in adapters.values()]
+            direct_tool_excerpts = self._direct_tool_excerpts()
+
+            # --- routing ---
+            route_started_at = time.perf_counter()
+            hard = hard_guard_route(
+                chat_request.message.content or "",
+                has_attachments=bool(chat_request.message.attachments or chat_request.agent_attachments),
+            )
+            intent: ChatIntentCheckerOutput
+
+            import app.schemas.common.common
+            attachments = [
+                app.schemas.common.common.Attachment.from_pb(item)
+                for item in list(chat_request.message.attachments) + list(chat_request.agent_attachments)
+            ]
+
+            if hard.route != ChatRouteMode.UNSPECIFIED:
+                intent = ChatIntentCheckerOutput(
+                    route=hard.route, confidence=1.0, reason=f"hard_guard:{hard.reason}"
+                )
+                timings.record("route_ms", route_started_at)
+            else:
+                # UNSPECIFIED → normal LLM routing. Hard-guard FAST/TASK
+                # decisions skip the LLM intent check entirely.
+                timings.record("route_ms", route_started_at)
+                intent_started_at = time.perf_counter()
+                intent = await llm_intent_check(
+                    ChatIntentCheckerInput(
+                        user_prompt=chat_request.message.content or "",
+                        attachments=attachments,
+                        adapters=adapter_excerpts,
+                        direct_tools=direct_tool_excerpts,
+                        workspace_attachments_section=sections.get("workspace_attachments", ""),
+                        workspace_knowledge_section=sections.get("workspace_knowledge", ""),
+                        prior_rerun_sources_section=sections.get("prior_rerun_sources", ""),
+                        prior_parsed_workbook_sources_section=sections.get("prior_parsed_workbook_sources", ""),
+                        prior_conversation_section=self._build_prior_conversation_section(chat_request),
+                        skills_section=sections.get("skills", ""),
+                    )
+                )
+                timings.record("intent_check_ms", intent_started_at)
+            route = intent.route
             self._logger.info(
-                "chat_stream_completed conversation_id=%s turn_id=%s emitted_seq_count=%d",
+                "chat_route_decided conversation_id=%s turn_id=%s route=%s confidence=%.2f reason=%s",
                 chat_request.conversation_id,
                 chat_request.turn_id,
+                route.value,
+                intent.confidence,
+                intent.reason,
+            )
+
+            # Build common chat agent + user message + system prompt.
+            agent = await time_awaitable(
+                timings,
+                "agent_build_ms",
+                build_agent(
+                    chat_request.username,
+                    chat_request.agent_id,
+                    chat_request.agent_instance_id,
+                    self._mem_runner,
+                    tool_context=tool_context,
+                    model=_model_for_route(route, chat_request.model or None),
+                ),
+            )
+            system_message = time_sync(
+                timings,
+                "prompt_build_ms",
+                compose_system_prompt,
+                prompt_mode=_prompt_mode_for_route(route),
+                name=chat_request.agent_instance_name,
+                role_name=chat_request.agent_role,
+                project_name=chat_request.project_name,
+            )
+            user_msg_started_at = time.perf_counter()
+            user_message = await asyncio.to_thread(self._build_user_message_from_sections, chat_request, sections)
+            timings.record("user_message_build_ms", user_msg_started_at)
+
+            if route == ChatRouteMode.TASK:
+                adapter_tools = build_adapter_tools(adapters)
+            else:
+                adapter_tools = []
+
+            tools_started_at = time.perf_counter()
+            all_tools = tools_for_route(route) + adapter_tools
+            tool_context.all_tools = all_tools
+            timings.record("tools_build_ms", tools_started_at)
+
+            await time_awaitable(
+                timings,
+                "stream_submit_ms",
+                self._stream_chat_runner.submit(
+                    agent.run_stream,
+                    queue=response_queue,
+                    user_message=user_message,
+                    system_message=system_message,
+                    options=RunOptions(
+                        turn_id=chat_request.turn_id,
+                        save_history=True,
+                        save_memory=True,
+                        tools=all_tools,
+                    ),
+                ),
+            )
+            await time_awaitable(
+                timings,
+                "response_drain_ms",
+                self._drain_response_queue(response_queue, yield_response, chat_request),
+            )
+
+            self._logger.info(
+                "chat_stream_completed conversation_id=%s turn_id=%s route=%s emitted_seq_count=%d",
+                chat_request.conversation_id,
+                chat_request.turn_id,
+                route.value,
                 sequence_id,
             )
 
@@ -251,6 +444,8 @@ class ChatService(ChatServiceBase):
             raise GRPCError(Status.INTERNAL, "Chat agent execution failed") from exc
 
         finally:
+            timings.stages["turn_total_ms"] = int((time.perf_counter() - timings.started_at) * 1000)
+            timings.log(conversation_id=chat_request.conversation_id, turn_id=chat_request.turn_id, route=route)
             await clear_ongoing_chat_cache()
             send_keepalive_task.cancel()
 
@@ -353,16 +548,26 @@ class ChatService(ChatServiceBase):
                 parts, accumulated_text = self._extract_parts_from_update(update, accumulated_text, chat_request)
                 accumulated_text = await self._yield_parts(parts, accumulated_text, yield_response)
 
-        # Flush any remaining accumulated text response
-        if accumulated_text.text:
-            await yield_response(
-                self._build_chat_response(
-                    self._build_text_content(accumulated_text.text),
-                    is_final=False,
-                    is_internal=True,
+        # Flush any remaining accumulated text response.
+        # Use a try/finally to guarantee the END event is always sent, even if
+        # the DB persist for the accumulated text fails or hangs.
+        try:
+            if accumulated_text.text:
+                await yield_response(
+                    self._build_chat_response(
+                        self._build_text_content(accumulated_text.text),
+                        is_final=False,
+                        is_internal=True,
+                    )
                 )
+        except Exception:
+            self._logger.exception(
+                "chat_drain_accumulated_text_persist_failed conversation_id=%s turn_id=%s",
+                chat_request.conversation_id,
+                chat_request.turn_id,
             )
-        await yield_response(self._build_chat_response(self._build_end_content(), is_final=True, is_internal=False))
+        finally:
+            await yield_response(self._build_chat_response(self._build_end_content(), is_final=True, is_internal=False))
 
     def _extract_parts_from_update(
         self,
@@ -437,10 +642,11 @@ class ChatService(ChatServiceBase):
             plan = await read_plan(
                 agent_instance_id=agent_instance_id,
                 turn_id=turn_id,
+                conversation_id=conversation_id,
                 username=username,
             )
             if plan is None:
-                self._logger.info("No plan for turn %s, skipping experience ingestion", turn_id)
+                self._logger.info("No task-runtime plan for turn %s, skipping experience ingestion", turn_id)
                 return
 
             conversation_json = await asyncio.to_thread(
@@ -490,6 +696,7 @@ class ChatService(ChatServiceBase):
             plan = await read_plan(
                 agent_instance_id=request.agent_instance_id,
                 turn_id=request.turn_id,
+                conversation_id=request.conversation_id,
                 username=request.username,
             )
         except Exception as exc:
@@ -503,51 +710,95 @@ class ChatService(ChatServiceBase):
         await cancel_plan_async(
             agent_instance_id=request.agent_instance_id,
             turn_id=request.turn_id,
+            conversation_id=request.conversation_id,
             username=request.username,
         )
+        try:
+            from app.biz.task_runtime.manager import cancel_turn_task_runtime_once
+
+            plan_editor = PlanEditor(
+                agent_instance_id=request.agent_instance_id,
+                turn_id=request.turn_id,
+                conversation_id=request.conversation_id,
+                username=request.username,
+            )
+            cancelled_count = await cancel_turn_task_runtime_once(
+                ToolContext(
+                    username=request.username,
+                    agent_id="",
+                    agent_instance_id=request.agent_instance_id or None,
+                    turn_id=request.turn_id,
+                    project_id=0,
+                    conversation_id=request.conversation_id,
+                    response_queue=asyncio.Queue(),
+                    plan_editor=plan_editor,
+                )
+            )
+            if cancelled_count:
+                self._logger.info(
+                    "cancel_plan_task_runtime_cancelled conversation_id=%s turn_id=%s batch_count=%s",
+                    request.conversation_id,
+                    request.turn_id,
+                    cancelled_count,
+                )
+        except Exception:
+            self._logger.warning(
+                "cancel_plan_task_runtime_cleanup_failed conversation_id=%s turn_id=%s",
+                request.conversation_id,
+                request.turn_id,
+                exc_info=True,
+            )
         return success_response(CancelPlanResponse())
 
-
     async def generate_onboard_recommendation_tasks(
-        self,
-        request: GenerateOnboardRecommendationTasksRequest
+        self, request: GenerateOnboardRecommendationTasksRequest
     ) -> GenerateOnboardRecommendationTasksResponse:
         from app.llmhubs.request_builder import build_llm_request
         from app.schemas.conversation.api import RecommendationTasks
+
         workspace_context = get_skill_knowledge_context(
             request.project_id,
             request.agent_id,
             retrieve_knowledge_summary=True,
         )
-        prompt = compose_system_prompt(
+        prompt = render_prompt_file(
             PromptFile.RECOMMENDATION_TASK,
+            fallback="",
             knowledge_list=json.dumps(workspace_context.get("knowledge", []), ensure_ascii=False, indent=2),
             skills_list=json.dumps(workspace_context.get("skills", []), ensure_ascii=False, indent=2),
         )
-
-        generation = await app.llmhubs.generate(request=build_llm_request(
-            [{
-                "role": "user",
-                "content": [{"type": "text", "text": prompt}],
-            }],
-            response_format=RecommendationTasks,
-        ))
-        text = generation.outputs[0].text or ""
+        self._logger.info(
+            "onboard_recommendation_context_ready project_id=%s agent_id=%s knowledge_count=%d skill_count=%d",
+            request.project_id,
+            request.agent_id,
+            len(workspace_context.get("knowledge", [])),
+            len(workspace_context.get("skills", [])),
+        )
+        generation = await app.llmhubs.generate(
+            request=build_llm_request(
+                [
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": prompt}],
+                    }
+                ],
+                response_format=RecommendationTasks,
+            )
+        )
+        text = (generation.outputs[0].text if generation.outputs else "") or ""
+        self._logger.debug("onboard_recommendation_llm_response preview=%s", _text_preview(text))
         try:
-            json_object = json.loads(text)
+            json_object = _load_recommendation_tasks_json(text or "")
             outputs = RecommendationTasks.model_validate(json_object)
-            return success_response(GenerateOnboardRecommendationTasksResponse(
-                data=GenerateOnboardRecommendationTasksData(
-                    tasks=[a.to_pb() for a in outputs.tasks]
-                )
-            ))
+            return success_response(outputs.to_pb())
         except json.JSONDecodeError as exc:
-            self._logger.warning("Failed to decode JSON from LLM response: %s. Response text: %s", exc, text)
+            self._logger.warning("Failed to decode JSON from LLM response: %s. Response preview: %s", exc, _text_preview(text))
             return error_response(GenerateOnboardRecommendationTasksResponse(), 1, "Failed to decode LLM response")
         except pydantic.ValidationError as exc:
-            self._logger.warning("Failed to validate LLM response with Pydantic model: %s. Response text: %s", exc, text)
+            self._logger.warning(
+                "Failed to validate LLM response with Pydantic model: %s. Response preview: %s", exc, _text_preview(text)
+            )
             return error_response(GenerateOnboardRecommendationTasksResponse(), 1, "Failed to validate LLM response")
-
 
     async def _persist_chat_response(
         self, conversation_id: int, username: str, agent_instance_id: int, turn_id: int, resp: ChatResponse
@@ -582,12 +833,12 @@ class ChatService(ChatServiceBase):
             updated_at=resp.timestamp,
         )
 
-        # persist message
+        # persist message via reverse gRPC (run in thread to avoid blocking the event loop)
         from app.biz.reverse_grpc.conversation import ReverseConversationService
 
         conversation_service = ReverseConversationService.get_instance()
         try:
-            _ = conversation_service.create_message(message)
+            await asyncio.to_thread(conversation_service.create_message, message)
         except Exception:
             self._logger.exception(
                 "chat_response_persist_failed conversation_id=%s turn_id=%s "
@@ -601,32 +852,95 @@ class ChatService(ChatServiceBase):
             )
             raise
 
-    async def _build_user_message(self, chat_request: ChatRequest) -> Message:
-        msg = chat_request.message.content
+    async def _build_user_message(
+        self,
+        chat_request: ChatRequest,
+    ) -> Message:
+        """Compatibility wrapper: build user message from freshly-rendered sections."""
+        workspace = CHAT_FS.get_workspace_path(chat_request.agent_instance_id, chat_request.username)
+        skill_loader = SkillLoader(
+            workspace,
+            project_id=int(chat_request.project_id or 0),
+            agent_id=chat_request.agent_id,
+        )
+        sections = self._build_context_sections(chat_request, skill_loader)
+        return await asyncio.to_thread(self._build_user_message_from_sections, chat_request, sections)
 
+    def _build_user_message_from_sections(
+        self,
+        chat_request: ChatRequest,
+        sections: dict[str, str],
+    ) -> Message:
+        msg = chat_request.message.content or ""
         if chat_request.message.attachments:
             attachment_names = ", ".join(att.name for att in chat_request.message.attachments)
             msg += f"\nMy Attachments: {attachment_names}"
-
-        # Append available skills
-        skills_section = self._build_skills_section(chat_request.agent_instance_id, chat_request.username)
-        if skills_section:
-            msg += f"\n\n{skills_section}"
-
+        for value in sections.values():
+            if value:
+                msg += f"\n\n{value}"
         self._logger.info(
-            "chat_user_message_build conversation_id=%s turn_id=%s text_len=%d attachment_count=%d msg=%s",
+            "chat_user_message_build conversation_id=%s turn_id=%s text_len=%d attachment_count=%d",
             chat_request.conversation_id,
             chat_request.turn_id,
             len(msg),
             len(chat_request.message.attachments),
-            msg,
         )
+        return self._build_user_message_with_images(message=msg, attachments=chat_request.message.attachments)
 
-        # Only include image attachments in the user message so that the LLM is not confused
-        return self._build_user_message_with_images(
-            message=msg,
-            attachments=chat_request.message.attachments,
-        )
+    def _build_context_sections(self, chat_request: ChatRequest, skill_loader: SkillLoader) -> dict[str, str]:
+        """Render all reusable context sections; safe to call multiple times."""
+        sections: dict[str, str] = {
+            "workspace_attachments": self._build_workspace_attachments_section(
+                chat_request.agent_instance_id, chat_request.username
+            ),
+            "workspace_knowledge": self._build_workspace_knowledge_section(
+                chat_request.agent_instance_id, chat_request.username
+            ),
+            "prior_rerun_sources": self._build_prior_rerun_sources_section(
+                chat_request.agent_instance_id, chat_request.username
+            ),
+            "skills": skill_loader.render_cards_section(),
+        }
+        try:
+            workspace = CHAT_FS.get_workspace_path(chat_request.agent_instance_id, chat_request.username)
+            adapter_sections = collect_prompt_sections(
+                PromptSectionContext(chat_request=chat_request, workspace=workspace)
+            )
+        except Exception as exc:
+            self._logger.warning("Failed to collect adapter prompt sections: %s", exc)
+            adapter_sections = {}
+        for name, value in adapter_sections.items():
+            if value:
+                sections[name] = value
+        return sections
+
+    def _build_prior_conversation_section(self, chat_request: ChatRequest) -> str:
+        try:
+            return _build_prior_conversation_section(
+                agent_instance_id=chat_request.agent_instance_id,
+                username=chat_request.username,
+                current_turn_id=chat_request.turn_id,
+            )
+        except Exception as exc:
+            self._logger.warning("Failed to build prior conversation section: %s", exc)
+            return ""
+
+    def _direct_tool_excerpts(self) -> list[ToolExcerpt]:
+        # A compact list of frequently-used tools so the intent LLM can choose
+        # between the INSPECT and TASK routes. The chat agent later receives the
+        # full tool list selected by the route.
+        # TODO: command execution is no longer a main-loop tool; it is unified
+        # under the task runtime (TaskManager.submit_prepared -> command_backend).
+        tools = [
+            CONTEXT_TOOL,
+            READ_TOOL,
+            GREP_TOOL,
+            WRITE_FILE_TOOL,
+            EDIT_TOOL,
+            REMOVE_TOOL,
+            REPORT_TOOL,
+        ]
+        return [ToolExcerpt.from_agent_framework_function_tool(t) for t in tools]
 
     def _build_skills_section(self, agent_instance_id: int, username: str) -> str:
         """Read skills/index.json from workspace and format as a skills list."""
@@ -650,6 +964,96 @@ class ChatService(ChatServiceBase):
             self._logger.warning("Failed to build skills section: %s", exc)
             return ""
 
+    def _build_capability_cards_section(
+        self,
+        agent_instance_id: int,
+        username: str,
+        *,
+        project_id: int = 0,
+        agent_id: str = "",
+    ) -> str:
+        try:
+            workspace = CHAT_FS.get_workspace_path(agent_instance_id, username)
+            section = SkillLoader(workspace, project_id=project_id, agent_id=agent_id).render_cards_section()
+            if section:
+                return section
+            return self._build_skills_section(agent_instance_id, username)
+        except Exception as exc:
+            self._logger.warning("Failed to build capability cards section: %s", exc)
+            return self._build_skills_section(agent_instance_id, username)
+
+    def _build_workspace_attachments_section(self, agent_instance_id: int, username: str) -> str:
+        try:
+            workspace = CHAT_FS.get_workspace_path(agent_instance_id, username)
+            index_path = workspace / "attachments" / "index.json"
+            if not index_path.exists():
+                return ""
+            loaded = json.loads(index_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, list) or not loaded:
+                return ""
+            lines = ["Workspace attachments available:"]
+            for item in loaded:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or "")
+                path = str(item.get("path") or "")
+                if not name or not path:
+                    continue
+                source_turn_id = item.get("source_turn_id")
+                suffix = f" (uploaded in turn {source_turn_id})" if source_turn_id else ""
+                lines.append(f"- {name}: {path}{suffix}")
+            return "\n".join(lines) if len(lines) > 1 else ""
+        except Exception as exc:
+            self._logger.warning("Failed to build workspace attachments section: %s", exc)
+            return ""
+
+    def _build_workspace_knowledge_section(self, agent_instance_id: int, username: str) -> str:
+        try:
+            workspace = CHAT_FS.get_workspace_path(agent_instance_id, username)
+            knowledge_dir = workspace / "knowledge"
+            index_path = knowledge_dir / "index.json"
+            if not index_path.exists():
+                return ""
+            loaded = json.loads(index_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, list) or not loaded:
+                return ""
+            lines = ["Workspace project knowledge available:"]
+            for item in loaded[:8]:
+                if not isinstance(item, dict):
+                    continue
+                knowledge_id = str(item.get("id") or "")
+                name = str(item.get("name") or knowledge_id)
+                knowledge_type = str(item.get("type") or "")
+                if not knowledge_id:
+                    continue
+                label = f"{name} ({knowledge_type})" if knowledge_type else name
+                lines.append(f"- {label}: knowledge/{knowledge_id}")
+            workbook_paths = _workspace_knowledge_workbook_paths(workspace)
+            if workbook_paths:
+                lines.append("Knowledge workbook sources available for delegate kind=workbook:")
+                for path in workbook_paths[:8]:
+                    lines.append(f"- {path}")
+            return "\n".join(lines) if len(lines) > 1 else ""
+        except Exception as exc:
+            self._logger.warning("Failed to build workspace knowledge section: %s", exc)
+            return ""
+
+    def _build_prior_rerun_sources_section(self, agent_instance_id: int, username: str) -> str:
+        try:
+            sources = _load_prior_rerun_sources(CHAT_FS.get_workspace_path(agent_instance_id, username))
+            if not sources:
+                return ""
+            lines = [
+                "Prior delegated task sources available for repeat or referenced execution requests (newest first):",
+                "Use the newest matching source before parsing older attachments.",
+            ]
+            for source in sources[:3]:
+                lines.extend(_format_prior_rerun_source(source))
+            return "\n".join(lines)
+        except Exception as exc:
+            self._logger.warning("Failed to build prior rerun sources section: %s", exc)
+            return ""
+
     def _build_chat_response(self, content: ChatContent, *, is_final: bool, is_internal: bool) -> ChatResponse:
         return ChatResponse(
             content=content,
@@ -670,6 +1074,13 @@ class ChatService(ChatServiceBase):
     @staticmethod
     def _current_timestamp_ms() -> int:
         return int(datetime.now(UTC).timestamp() * 1000)
+
+    @staticmethod
+    def _build_intent_attachments(attachments: list[Attachment]) -> list[SchemaAttachment]:
+        return [
+            attachment if isinstance(attachment, SchemaAttachment) else SchemaAttachment.from_pb(attachment)
+            for attachment in attachments
+        ]
 
     def _build_user_message_with_images(self, message: str, attachments: list[Attachment]) -> Message:
         image_contents = self._build_image_contents(attachments)
@@ -754,7 +1165,14 @@ class ChatService(ChatServiceBase):
         try:
             await self._ensure_event_bus_sender()
             payload = topic_message.model_dump_json(by_alias=True, exclude_none=True, exclude_defaults=True, exclude_unset=True)
-            self._logger.debug("sending payload=%s", payload)
+            self._logger.debug(
+                "chat_event_bus_publish conversation_id=%s turn_id=%s seq=%s content_type=%s is_final=%s",
+                topic_message.conversation_id,
+                topic_message.turn_id,
+                topic_message.seq,
+                topic_message.chat_response.content.type,
+                topic_message.chat_response.is_final,
+            )
             await self._event_bus_sender.send(bytes(payload, encoding="utf-8"))
         except Exception:
             self._logger.warning(
@@ -778,3 +1196,113 @@ def _get_ongoing_chat_cache_key(conversation_id: int, turn_id: int) -> _CacheKey
         turn_id_cache_key=f"ongoing-chat:conversation:{conversation_id}",
         chat_responses_cache_key=f"ongoing-chat:conversation:{conversation_id}:turn:{turn_id}",
     )
+
+
+def _prompt_mode_for_route(route: ChatRouteMode) -> str:
+    if route == ChatRouteMode.FAST:
+        return "fast"
+    if route == ChatRouteMode.INSPECT:
+        return "inspect"
+    return "task"
+
+
+def _model_for_route(route: ChatRouteMode, requested_model: str | None) -> str | None:
+    if route == ChatRouteMode.FAST:
+        fast_model = os.getenv(_FAST_MODEL_ENV, "").strip()
+        if fast_model:
+            return fast_model
+    return requested_model
+
+
+def _load_prior_rerun_sources(workspace: Path) -> list[dict[str, Any]]:
+    history_dir = workspace / "history"
+    if not history_dir.exists():
+        return []
+    sources: list[dict[str, Any]] = []
+    for turn_dir in sorted(history_dir.glob("turn-*"), key=_history_turn_sort_key, reverse=True):
+        source_dir = turn_dir / RERUN_SOURCES_DIR
+        if not source_dir.exists():
+            continue
+        for source_path in sorted(source_dir.glob("*.json"), reverse=True):
+            source = _load_prior_rerun_source(source_path, workspace)
+            if source:
+                sources.append(source)
+    return sorted(sources, key=_prior_rerun_source_sort_key, reverse=True)
+
+
+def _workspace_knowledge_workbook_paths(workspace: Path) -> list[str]:
+    knowledge_dir = workspace / "knowledge"
+    if not knowledge_dir.exists():
+        return []
+    suffixes = {".xlsx", ".xlsm", ".csv"}
+    paths: list[str] = []
+    for path in sorted(knowledge_dir.rglob("*")):
+        if path.is_file() and path.suffix.lower() in suffixes:
+            paths.append(path.relative_to(workspace).as_posix())
+    return paths
+
+
+def _history_turn_sort_key(path: Path) -> int:
+    try:
+        return int(path.name.removeprefix("turn-"))
+    except ValueError:
+        return -1
+
+
+def _load_prior_rerun_source(source_path: Path, workspace: Path) -> dict[str, Any] | None:
+    try:
+        loaded = json.loads(source_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(loaded, dict) or not isinstance(loaded.get("tasks"), list) or not loaded["tasks"]:
+        return None
+    loaded = compact_rerun_source_payload(loaded)
+    loaded["workspace_path"] = source_path.relative_to(workspace).as_posix()
+    return loaded
+
+
+def _prior_rerun_source_sort_key(source: dict[str, Any]) -> tuple[int, int]:
+    return (_safe_int(source.get("turn_id"), -1), _safe_int(source.get("created_at"), 0))
+
+
+def _safe_int(value: object, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _format_prior_rerun_source(source: dict[str, Any]) -> list[str]:
+    turn_id = source.get("turn_id") or "unknown"
+    batch_id = source.get("batch_id") or "unknown"
+    task_count = source.get("task_count") or len(source.get("tasks") or [])
+    path = source.get("workspace_path") or ""
+    lines = [
+        f"- turn {turn_id}, batch {batch_id}: {task_count} delegated task(s); source: {path}",
+        f"  reason: {source.get('reason') or ''}",
+    ]
+    lines.append(f"  task titles: {_prior_rerun_task_titles(source)}")
+    inline_payload = _inline_prior_rerun_payload(source)
+    if inline_payload:
+        lines.append("  Use rerun_input_json directly; do not read the source JSON unless this payload is missing.")
+        lines.append(f"  rerun_input_json: {inline_payload}")
+    else:
+        lines.append("  Read the source JSON path above to recover the full TaskSpec list before delegating.")
+    return lines
+
+
+def _prior_rerun_task_titles(source: dict[str, Any], *, limit: int = 8) -> str:
+    titles = [str(task.get("title") or task.get("task_id") or "") for task in source.get("tasks") or [] if isinstance(task, dict)]
+    shown = [title for title in titles if title][:limit]
+    suffix = f"; +{len(titles) - limit} more" if len(titles) > limit else ""
+    return "; ".join(shown) + suffix if shown else "unknown"
+
+
+def _inline_prior_rerun_payload(source: dict[str, Any], *, max_chars: int = RERUN_SOURCE_INLINE_MAX_CHARS) -> str:
+    payload = {
+        "reason": source.get("reason") or "rerun previous delegated tests",
+        "join_strategy": source.get("join_strategy") or "partial_ok",
+        "tasks": source.get("tasks") or [],
+    }
+    serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return serialized if len(serialized) <= max_chars else ""

@@ -1,0 +1,374 @@
+<!--
+  Reference HTML template for Test Cases Requirement reports.
+  This is a REDUCED example showing one representative item per requirement category.
+  The actual report repeats these patterns for all extracted requirements.
+  
+  Used by: .github/skills/test-cases-requirement/SKILL.md
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{APP} {PLATFORM} — Test Case Requirements Report</title>
+<style>
+/* ══ Full CSS — copy verbatim into generated reports ══ */
+:root { --bg:#f8f9fa; --card:#fff; --border:#dee2e6; --text:#212529; --text2:#6c757d; --accent:#0d6efd; --green:#198754; --green-bg:#d1e7dd; --red:#dc3545; --red-bg:#f8d7da; --orange:#fd7e14; --orange-bg:#fff3cd; --gray:#adb5bd; --blue-bg:#cfe2ff; --blue:#084298; --purple:#6f42c1; --purple-bg:#e8daef; --cyan:#0dcaf0; --cyan-bg:#cff4fc; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:24px; }
+.container { max-width:1500px; margin:0 auto; }
+h1 { font-size:1.75rem; margin-bottom:8px; color:var(--accent); }
+.subtitle { color:var(--text2); margin-bottom:24px; font-size:0.95rem; }
+h2 { font-size:1.35rem; margin:28px 0 14px; padding-bottom:8px; border-bottom:2px solid var(--accent); display:inline-block; }
+h3 { font-size:1.05rem; margin-bottom:10px; }
+.summary-bar { display:flex; gap:14px; flex-wrap:wrap; margin:16px 0 24px; }
+.summary-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 20px; text-align:center; flex:1; min-width:130px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+.summary-card .label { font-size:0.8rem; color:var(--text2); margin-bottom:4px; }
+.summary-card .value { font-size:1.8rem; font-weight:700; }
+.summary-card .sub { font-size:0.78rem; color:var(--text2); margin-top:2px; }
+.summary-card.total .value { color:var(--accent); }
+.summary-card.with-reqs .value { color:var(--green); }
+.summary-card.cat-apps .value { color:#084298; }
+.summary-card.cat-accts .value { color:#6f42c1; }
+.summary-card.cat-files .value { color:#198754; }
+.summary-card.cat-urls .value { color:#087990; }
+.summary-card.cat-env .value { color:#856404; }
+.summary-card.cat-hw .value { color:#dc3545; }
+.summary-card.cat-preconf .value { color:#495057; }
+
+.cat-header { padding:12px 16px; border-radius:8px; font-size:1.05rem; font-weight:700; margin:24px 0 10px; border-left:5px solid; }
+.cat-header.cat-apps { background:#cfe2ff; color:#084298; border-color:#0d6efd; }
+.cat-header.cat-accts { background:#e8daef; color:#6f42c1; border-color:#6f42c1; }
+.cat-header.cat-files { background:#d1e7dd; color:#198754; border-color:#198754; }
+.cat-header.cat-urls { background:#cff4fc; color:#087990; border-color:#0dcaf0; }
+.cat-header.cat-env { background:#fff3cd; color:#856404; border-color:#fd7e14; }
+.cat-header.cat-hw { background:#f8d7da; color:#dc3545; border-color:#dc3545; }
+.cat-header.cat-preconf { background:#e9ecef; color:#495057; border-color:#6c757d; }
+
+.req-table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--border); border-radius:8px; overflow:hidden; margin:10px 0 20px; }
+.req-table th { background:#343a40; color:white; padding:10px 14px; text-align:left; font-size:0.82rem; }
+.req-table td { padding:8px 14px; border-bottom:1px solid #f1f3f5; font-size:0.83rem; vertical-align:top; }
+.req-table tr:hover { background:#f8f9fa; }
+
+.case-table { width:100%; border-collapse:collapse; font-size:0.83rem; margin:8px 0; }
+.case-table th { background:#f1f3f5; padding:7px 10px; text-align:left; font-size:0.78rem; color:var(--text2); }
+.case-table td { padding:6px 10px; border-bottom:1px solid #f1f3f5; vertical-align:top; }
+.case-id { font-weight:600; color:var(--accent); white-space:nowrap; font-family:monospace; }
+
+.req-tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:600; margin:2px 3px; white-space:nowrap; }
+.req-tag.apps { background:#cfe2ff; color:#084298; }
+.req-tag.accounts { background:#e8daef; color:#6f42c1; }
+.req-tag.files { background:#d1e7dd; color:#198754; }
+.req-tag.urls { background:#cff4fc; color:#087990; }
+.req-tag.environment { background:#fff3cd; color:#856404; }
+.req-tag.hardware { background:#f8d7da; color:#dc3545; }
+.req-tag.preconfig { background:#e9ecef; color:#495057; }
+
+.badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:0.72rem; font-weight:600; margin:1px 2px; white-space:nowrap; }
+.badge.green { background:var(--green-bg); color:var(--green); }
+.badge.gray { background:#e9ecef; color:#495057; }
+.badge.red { background:var(--red-bg); color:var(--red); }
+
+.checklist { list-style:none; padding:0; margin:8px 0; }
+.checklist li { padding:4px 0; font-size:0.85rem; }
+.checklist li::before { content:"☐ "; color:var(--text2); }
+
+.detail-section { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:15px 20px; margin:15px 0; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+
+.footer { margin-top:32px; padding-top:16px; border-top:1px solid var(--border); color:var(--text2); font-size:0.8rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 1: Title + Summary Cards
+     ═══════════════════════════════════════════════════════ -->
+<h1>Copilot Android — Test Case Requirements Report</h1>
+<p class="subtitle">53 test cases · 6 requirement categories · Generated on 2026-04-28 · Source: <code>Smoke test.csv</code></p>
+
+<div class="summary-bar">
+<div class="summary-card total"><div class="label">Total Cases</div><div class="value">53</div><div class="sub">test cases analyzed</div></div>
+<div class="summary-card with-reqs"><div class="label">Cases with Requirements</div><div class="value">41</div><div class="sub">77% of total</div></div>
+<div class="summary-card" style="border-top:3px solid var(--red)"><div class="label">⛔ Platform Blocked</div><div class="value" style="color:var(--red)">11</div><div class="sub">cases blocked · skipped</div></div>
+<div class="summary-card cat-apps"><div class="label">📱 Apps to Download</div><div class="value">5</div><div class="sub">unique apps · 12 cases</div></div>
+<div class="summary-card cat-accts"><div class="label">🔐 Account Credentials</div><div class="value">3</div><div class="sub">account types · 28 cases</div></div>
+<div class="summary-card cat-files"><div class="label">📁 Required Files</div><div class="value">8</div><div class="sub">file types · 15 cases</div></div>
+<div class="summary-card cat-urls"><div class="label">🔗 Required URLs</div><div class="value">4</div><div class="sub">URL types · 6 cases</div></div>
+<div class="summary-card cat-env"><div class="label">🌐 Special Environment</div><div class="value">2</div><div class="sub">requirements · 3 cases</div></div>
+<div class="summary-card cat-hw"><div class="label">📲 Hardware Requirements</div><div class="value">3</div><div class="sub">hardware types · 8 cases</div></div>
+<div class="summary-card cat-preconf"><div class="label">📋 Pre-configured Data</div><div class="value">6</div><div class="sub">data types · 18 cases</div></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 2: Requirements Summary (Grouped by Category)
+     ═══════════════════════════════════════════════════════ -->
+<h2>Requirements Summary</h2>
+
+<!-- ──── Category: Apps to Download ──── -->
+<div class="cat-header cat-apps">📱 Apps to Download — 5 unique apps · 12 cases</div>
+<table class="req-table">
+<tr><th>App Name</th><th>Purpose</th><th>Required State</th><th>Referenced Cases</th></tr>
+<tr>
+  <td><b>Microsoft Outlook</b></td>
+  <td>Email search source / calendar sync</td>
+  <td>Logged in with same Microsoft account</td>
+  <td><a href="#case-STCAQA-2851">STCAQA-2851</a>, <a href="#case-STCAQA-3100">STCAQA-3100</a>, <a href="#case-STCAQA-3200">STCAQA-3200</a></td>
+</tr>
+<tr>
+  <td><b>Google Calendar</b></td>
+  <td>Calendar event source</td>
+  <td>Logged in with Google account, has test events</td>
+  <td><a href="#case-STCAQA-4001">STCAQA-4001</a></td>
+</tr>
+<tr>
+  <td><b>OneDrive</b></td>
+  <td>Cloud file source for upload</td>
+  <td>Logged in, has test files</td>
+  <td><a href="#case-STCAQA-4500">STCAQA-4500</a>, <a href="#case-STCAQA-4501">STCAQA-4501</a></td>
+</tr>
+</table>
+
+<!-- ──── Category: Account Credentials ──── -->
+<div class="cat-header cat-accts">🔐 Account Credentials — 3 account types · 28 cases</div>
+<table class="req-table">
+<tr><th>Account Type</th><th>Sign-in Method</th><th>Special Requirements</th><th>Referenced Cases</th></tr>
+<tr>
+  <td><b>Pro account (MSA)</b></td>
+  <td>Email + Password</td>
+  <td>Must have active Copilot Pro subscription; OneDrive linked</td>
+  <td><a href="#case-STCAQA-2851">STCAQA-2851</a>, <a href="#case-STCAQA-3574">STCAQA-3574</a>, ... (18 cases)</td>
+</tr>
+<tr>
+  <td><b>Free account (MSA)</b></td>
+  <td>Email + Password</td>
+  <td>Non-Pro account to verify upsell prompts</td>
+  <td><a href="#case-STCAQA-5001">STCAQA-5001</a>, ... (6 cases)</td>
+</tr>
+<tr>
+  <td><b>AAD / Entra ID</b></td>
+  <td>SSO / Organization login</td>
+  <td>Enterprise tenant with Copilot license</td>
+  <td><a href="#case-STCAQA-6001">STCAQA-6001</a>, ... (4 cases)</td>
+</tr>
+</table>
+
+<!-- ──── Category: Required Files ──── -->
+<div class="cat-header cat-files">📁 Required Files — 8 file types · 15 cases</div>
+<table class="req-table">
+<tr><th>File Type</th><th>Quantity</th><th>Size Requirements</th><th>Special Properties</th><th>Location</th><th>Referenced Cases</th></tr>
+<tr>
+  <td><b>Image (JPG/PNG)</b></td>
+  <td>3+</td>
+  <td>At least 1 image &gt;1MB</td>
+  <td>—</td>
+  <td>Device gallery</td>
+  <td><a href="#case-STCAQA-3574">STCAQA-3574</a>, <a href="#case-STCAQA-817">STCAQA-817</a>, ... (8 cases)</td>
+</tr>
+<tr>
+  <td><b>PDF document</b></td>
+  <td>1</td>
+  <td>No specific requirement</td>
+  <td>Multi-page (3+ pages)</td>
+  <td>Device storage / OneDrive</td>
+  <td><a href="#case-STCAQA-4502">STCAQA-4502</a></td>
+</tr>
+<tr>
+  <td><b>Audio file (MP3/WAV)</b></td>
+  <td>1</td>
+  <td>&lt;10MB recommended</td>
+  <td>Contains speech content</td>
+  <td>Device storage</td>
+  <td><a href="#case-STCAQA-7001">STCAQA-7001</a></td>
+</tr>
+</table>
+
+<!-- ──── Category: Required URLs ──── -->
+<div class="cat-header cat-urls">🔗 Required URLs — 4 URL types · 6 cases</div>
+<table class="req-table">
+<tr><th>URL / Link Type</th><th>Purpose</th><th>Referenced Cases</th></tr>
+<tr>
+  <td><b>Any webpage URL</b></td>
+  <td>Share to Copilot via share sheet</td>
+  <td><a href="#case-STCAQA-8001">STCAQA-8001</a>, <a href="#case-STCAQA-8002">STCAQA-8002</a></td>
+</tr>
+<tr>
+  <td><b>Copilot deep link</b></td>
+  <td>Deep link navigation entry point</td>
+  <td><a href="#case-STCAQA-8501">STCAQA-8501</a></td>
+</tr>
+<tr>
+  <td><b>Share link (generated)</b></td>
+  <td>Pre-generated conversation share link for import test</td>
+  <td><a href="#case-STCAQA-8701">STCAQA-8701</a></td>
+</tr>
+</table>
+
+<!-- ──── Category: Special Environment ──── -->
+<div class="cat-header cat-env">🌐 Special Environment — 2 requirements · 3 cases</div>
+<table class="req-table">
+<tr><th>Environment Type</th><th>Value / Setting</th><th>Referenced Cases</th></tr>
+<tr>
+  <td><b>Region / Market</b></td>
+  <td>Japan, France, or Canada (for consent dialog testing)</td>
+  <td><a href="#case-STCAQA-3829">STCAQA-3829</a></td>
+</tr>
+<tr>
+  <td><b>Display Mode</b></td>
+  <td>Dark mode enabled</td>
+  <td><a href="#case-STCAQA-9001">STCAQA-9001</a>, <a href="#case-STCAQA-9002">STCAQA-9002</a></td>
+</tr>
+</table>
+
+<!-- ──── Category: Hardware Requirements ──── -->
+<div class="cat-header cat-hw">📲 Hardware Requirements — 3 hardware types · 8 cases</div>
+<table class="req-table">
+<tr><th>Hardware</th><th>Detail</th><th>Referenced Cases</th></tr>
+<tr>
+  <td><b>Camera</b></td>
+  <td>Rear camera for photo capture / vision input</td>
+  <td><a href="#case-STCAQA-3776">STCAQA-3776</a>, ... (5 cases)</td>
+</tr>
+<tr>
+  <td><b>Microphone</b></td>
+  <td>Voice input for duplex / voice UI testing</td>
+  <td><a href="#case-STCAQA-6655">STCAQA-6655</a>, <a href="#case-STCAQA-6656">STCAQA-6656</a></td>
+</tr>
+<tr>
+  <td><b>Screen Sharing</b></td>
+  <td>System-level screen capture permission</td>
+  <td><a href="#case-STCAQA-3776">STCAQA-3776</a></td>
+</tr>
+</table>
+
+<!-- ──── Category: Pre-configured Data ──── -->
+<div class="cat-header cat-preconf">📋 Pre-configured Data — 6 data types · 18 cases</div>
+<table class="req-table">
+<tr><th>Data Type</th><th>Quantity</th><th>Details</th><th>Referenced Cases</th></tr>
+<tr>
+  <td><b>Existing conversation</b></td>
+  <td>At least 1</td>
+  <td>Previous chat with text responses (for history/thread tests)</td>
+  <td><a href="#case-STCAQA-1001">STCAQA-1001</a>, ... (8 cases)</td>
+</tr>
+<tr>
+  <td><b>Calendar events</b></td>
+  <td>2–3</td>
+  <td>Events scheduled for today and tomorrow (Outlook and/or Google Calendar)</td>
+  <td><a href="#case-STCAQA-4001">STCAQA-4001</a>, <a href="#case-STCAQA-3100">STCAQA-3100</a></td>
+</tr>
+<tr>
+  <td><b>OneDrive files</b></td>
+  <td>3+</td>
+  <td>Mixed file types (doc, image, PDF) in OneDrive root</td>
+  <td><a href="#case-STCAQA-4500">STCAQA-4500</a>, <a href="#case-STCAQA-4501">STCAQA-4501</a></td>
+</tr>
+<tr>
+  <td><b>Outlook emails</b></td>
+  <td>5+</td>
+  <td>Recent emails with varied subjects for search testing</td>
+  <td><a href="#case-STCAQA-3200">STCAQA-3200</a></td>
+</tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 3: Per-Case Requirement Details
+     ═══════════════════════════════════════════════════════ -->
+<h2>Per-Case Requirements</h2>
+
+<table class="case-table">
+<tr><th style="width:40px">#</th><th style="width:110px">Case ID</th><th style="width:40%">Title</th><th>Requirements</th></tr>
+
+<!-- Case with multiple requirement categories -->
+<tr id="case-STCAQA-2851">
+  <td>1</td>
+  <td class="case-id">STCAQA-2851</td>
+  <td>[Deep Research] Pro account: Tap the dropdown menu and select Deep Research, then type "Why does the message sent..."</td>
+  <td>
+    <span class="req-tag accounts">🔐 Pro account (MSA)</span>
+    <span class="req-tag preconfig">📋 Existing conversation</span>
+  </td>
+</tr>
+
+<!-- Case with file + app requirements -->
+<tr id="case-STCAQA-3574">
+  <td>2</td>
+  <td class="case-id">STCAQA-3574</td>
+  <td>[Composer V2][Height] Upload 3 files/images and copy long content into Composer, only show 4-5 lines...</td>
+  <td>
+    <span class="req-tag accounts">🔐 Pro account (MSA)</span>
+    <span class="req-tag files">📁 3+ images (device gallery)</span>
+  </td>
+</tr>
+
+<!-- Case with URL requirement -->
+<tr id="case-STCAQA-8001">
+  <td>3</td>
+  <td class="case-id">STCAQA-8001</td>
+  <td>[Share to Copilot] Open a webpage in browser, share to Copilot via share sheet</td>
+  <td>
+    <span class="req-tag urls">🔗 Any webpage URL</span>
+    <span class="req-tag apps">📱 Browser (Chrome/Edge)</span>
+  </td>
+</tr>
+
+<!-- Case with hardware requirement -->
+<tr id="case-STCAQA-3776">
+  <td>4</td>
+  <td class="case-id">STCAQA-3776</td>
+  <td>[Screen Sharing] Launch screen sharing, navigate to home and open browser...</td>
+  <td>
+    <span class="req-tag hardware">📲 Camera</span>
+    <span class="req-tag hardware">📲 Screen Sharing permission</span>
+  </td>
+</tr>
+
+<!-- Case with environment requirement -->
+<tr id="case-STCAQA-3829">
+  <td>5</td>
+  <td class="case-id">STCAQA-3829</td>
+  <td>[Vision][Consent] If the region is Japan/France/Canada, when first open vision...</td>
+  <td>
+    <span class="req-tag environment">🌐 Region: Japan/France/Canada</span>
+    <span class="req-tag hardware">📲 Camera</span>
+    <span class="req-tag accounts">🔐 Pro account (MSA)</span>
+  </td>
+</tr>
+
+<!-- Case with NO external requirements -->
+<tr id="case-STCAQA-5500">
+  <td>6</td>
+  <td class="case-id">STCAQA-5500</td>
+  <td>[Navigation] Tap bottom nav bar items to switch between Home, Discover, Library</td>
+  <td>
+    <span class="badge gray">No external requirements detected</span>
+  </td>
+</tr>
+
+<!-- Platform-blocked case (sandbox limitation) -->
+<tr id="case-STCAQA-3776-blocked" style="background:#fef2f2">
+  <td>7</td>
+  <td class="case-id">STCAQA-3776</td>
+  <td>[Screen Sharing] Launch screen sharing, navigate to home and open browser...</td>
+  <td>
+    <span class="badge red">⛔ Platform Blocked: Hardware Sensor &amp; Multimodal Input</span>
+  </td>
+</tr>
+
+<tr id="case-STCAQA-2182-blocked" style="background:#fef2f2">
+  <td>8</td>
+  <td class="case-id">STCAQA-2182</td>
+  <td>[Voice] Click microphone button will go to voice visualizer and can talk to Copilot successfully.</td>
+  <td>
+    <span class="badge red">⛔ Platform Blocked: Hardware Sensor &amp; Multimodal Input</span>
+  </td>
+</tr>
+
+<!-- ... more cases ... -->
+</table>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="footer">Generated on 2026-04-28 · Input: <code>Smoke test.csv</code> (53 cases) · App: Copilot Android</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "toolName": "run_command",
+  "toolCallId": 2002,
+  "toolCallStatus": 8,
+  "executionInfo": {
+    "toolType": 1,
+    "builtinToolName": "run_command",
+    "taskRuntime": {
+      "currentStage": "release",
+      "sandboxId": "sbx-and-007",
+      "sandboxType": "android",
+      "sandboxEndpoint": "grpc://10.0.3.27:50080",
+      "attempt": 2,
+      "maxAttempts": 2,
+      "latestProgressMessage": "12 passed, 1 failed"
+    }
+  },
+  "display": {
+    "failure_reason": "Skill runtime failure (exit code 1)"
+  },
+  "deliverables": [
+    {
+      "type": 1,
+      "markdownTitle": "Failure analysis",
+      "markdownContent": "The `test_login` case failed: expected `200`, got `503` from the upstream stub."
+    }
+  ],
+  "subCalls": [],
+  "subCallIndex": 0,
+  "message": "run_command failed after retry: 1 test failed (test_login)."
+}

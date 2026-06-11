@@ -153,6 +153,7 @@ var stores = []storeSpec{
 		outDir: "internal/store/skill/internal/dal/query",
 		tables: []tableSpec{
 			{name: "t_skill"},
+			{name: "t_skill_version"},
 		},
 	},
 }

@@ -59,21 +59,24 @@ message ToolDeliverable {
     // ... more
 }
 
+message TaskRuntimeExecutionInfo {
+    // Lifecycle stage of a single task run: plan | workspace | sandbox | execute | upload | release.
+    string current_stage = 1; // @gotag: json:"currentStage,omitempty"
+    string sandbox_id = 2; // @gotag: json:"sandboxId,omitempty"
+    string sandbox_type = 3; // @gotag: json:"sandboxType,omitempty"
+    string sandbox_endpoint = 4; // @gotag: json:"sandboxEndpoint,omitempty"
+    int32 attempt = 5; // @gotag: json:"attempt,omitempty"
+    int32 max_attempts = 6; // @gotag: json:"maxAttempts,omitempty"
+    string latest_progress_message = 7; // @gotag: json:"latestProgressMessage,omitempty"
+}
+
 message ToolExecutionInfo {
     ToolType tool_type = 1; // @gotag: json:"toolType,omitempty"
     string builtin_tool_name = 6; // @gotag: json:"builtinToolName,omitempty"
+    TaskRuntimeExecutionInfo task_runtime = 7; // @gotag: json:"taskRuntime,omitempty"
 
     // Should also define other fields for Builtin tools, so that
     // we can track the ToolExecution context when needed later.
-}
-
-enum ToolCallRunningListItemStatus {
-    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN = 0;
-    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING = 1;
-    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING = 2;
-    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE = 3;
-    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED = 4;
-    TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED = 5;
 }
 
 enum ToolCallStatus {
@@ -86,24 +89,26 @@ enum ToolCallStatus {
     TOOL_CALL_STATUS_RETRY_RUNNING = 6;
     TOOL_CALL_STATUS_RETRY_SUCCESSFUL = 7;
     TOOL_CALL_STATUS_RETRY_FAILED = 8;
-}
-
-message ToolCallRunningListItem {
-    string name = 1; // @gotag: json:"name,omitempty"
-    ToolCallRunningListItemStatus status = 2; // @gotag: json:"status"
+    TOOL_CALL_STATUS_PENDING = 9;
 }
 
 message ToolCall {
     string tool_name = 1; // @gotag: json:"toolName,omitempty"
     // message is for frontend display
     string message = 2; // @gotag: json:"message,omitempty"
-    repeated ToolCallRunningListItem running_list = 6; // @gotag: json:"runningList,omitempty"
     ToolExecutionInfo execution_info = 3; // @gotag: json:"executionInfo,omitempty"
     repeated ToolDeliverable deliverables = 4; // @gotag: json:"deliverables,omitempty"
     int64 tool_call_id = 5; // @gotag: json:"toolCallId,omitempty"
-    repeated ToolCall batch_calls = 7; // @gotag: json:"batchCalls,omitempty"
-    int64 batch_item_index = 8; // @gotag: json:"batchItemIndex,omitempty"
-    ToolCallStatus tool_call_status = 9; // @gotag: json:"toolCallStatus,omitempty"
+    repeated ToolCall sub_calls = 7; // @gotag: json:"subCalls,omitempty"
+    int64 sub_call_index = 8; // @gotag: json:"subCallIndex,omitempty"
+    // Structured display labels (task_label, sandbox_label, sandbox_label_plural,
+    // sandbox_ready_label, sandbox_releasing_label, sandbox_release_label,
+    // environment_label, runner_label, batch_subject_singular,
+    // batch_subject_plural, ...) sourced from the capability card. The frontend
+    // should read these directly instead of pattern-matching `message`.
+    map<string, string> display = 9; // @gotag: json:"display,omitempty"
+    ToolCallStatus tool_call_status = 10; // @gotag: json:"toolCallStatus,omitempty"
+    int64 updated_at = 11; // @gotag: json:"updatedAt,omitempty"
 }
 
 enum PlanStepStatus {
@@ -120,6 +125,7 @@ message PlanStep {
     string title = 1; // @gotag: json:"title,omitempty"
     repeated ToolCall tool_calls = 2; // @gotag: json:"toolCalls,omitempty"
     PlanStepStatus status = 3; // @gotag: json:"status,omitempty"
+    int64 updated_at = 4; // @gotag: json:"updatedAt,omitempty"
 }
 
 message PlanExtra {

@@ -4,6 +4,8 @@
 
 **Sico: an infrastructure for symbiotic intelligence, where humans and Digital Workers co-evolve.**
 
+[![Discord](https://img.shields.io/badge/Discord-Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/F3tVCBHmE6)
+[![Microsoft Teams](https://img.shields.io/badge/Teams-Community-6264A7)](https://teams.microsoft.com/l/team/19%3AtgoS3iJHg6-s2vhO9W5PhUtsnhqNog7yiTdcEi6sNZQ1%40thread.tacv2/conversations?groupId=720e2630-e290-40c7-9c3e-55f5ab643f32&tenantId=72f988bf-86f1-41af-91ab-2d7cd011db47)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](backend/go.mod)
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB.svg)](core/pyproject.toml)
@@ -36,11 +38,13 @@ Its anatomy consists of:
 - **Action**: execution via domain skills, workflows, and sandboxed tools
 - **Memory & Sense**: accumulated knowledge, execution experience and contextual awareness for grounding and continuous improvement
 
+Human operators supervise execution quality, intervene when necessary, and guide capability improvement.
+ 
 This creates a practical **Co-Evolution** loop where humans and Digital Workers continuously improve together through real work. 
 
 For a comprehensive survey of this direction, refer to [**Agentic Evolution: From Self-Improving Agents to Co-Evolving Human–AI Systems** ](docs/agentic-evolution.pdf)
 
-> Learn more: [What is Sico](docs/overview.md)
+> Learn more: [What is Sico](docs/overview.md).
 
 ## Who is Sico for?
 

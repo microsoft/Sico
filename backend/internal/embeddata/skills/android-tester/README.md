@@ -38,134 +38,135 @@ Priority (highest wins): CLI arg > env var > `config.env` > built-in default.
 
 ## Usage
 
-The CLI has two subcommands:
-
-- `android-tester run` — run a single test instruction on one device.
-- `android-tester batch` — run a set of test cases from a JSON document, sharded across multiple devices (one async worker per device).
-
 ```sh
-android-tester run --device-id <DEVICE_ID> --instructions "<TEST_INSTRUCTION>"
-
-android-tester batch --file <CASES_JSON> --devices <DEVICE_ID> [<DEVICE_ID> ...]
+android-tester --device-id <DEVICE_ID> --instructions "<TEST_INSTRUCTION>"
 ```
 
-### Common arguments (both subcommands)
+### Arguments
+
+Argument values such as `--instructions`, `--task-name`, `--precondition`, and `--keep-app-state` are literal CLI strings, not paths to workspace files.
 
 | Argument | Required | Default | Description |
 |---|---|---|---|
-| `-o`, `--output-dir` | no | `./output/<task-id>` (run) / `./output` (batch) | Output directory. In `batch`, each task gets a `<task-id>` subdirectory under this root. |
-| `--sico-endpoint` | no | `SICO_ENDPOINT` env var | Sico platform base URL |
-| `--sico-app-name` | no | `sico` | Sico application name used to construct API paths |
-| `--sico-agent-instance-id` | no | `SICO_AGENT_INSTANCE_ID` env var | Agent instance ID for X-Sico-Context header |
-| `--llmhub-model` | no | `gpt5.4` | LLM model identifier |
-| `--llmhub-model-image-size` | no | — | LLM perceived image size as `WIDTHxHEIGHT` (e.g. `1024x768`). When set, action coordinates are rescaled to match the actual screenshot size |
-| `--model-auto-resize-width` | no | `768` | Target width (in pixels) for downscaling screenshots before sending them to the LLM. Set to `0` to disable. Only takes effect when `--llmhub-model-image-size` is unset. |
-| `--log-level` | no | `WARNING` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
-| `--telemetry` / `--no-telemetry` | no | enabled | Enable or disable telemetry collection |
-| `--reflector` / `--no-reflector` | no | disabled | Enable or disable the reflector step after each action |
-| `--max-no-progress-steps` | no | `6` | Stop after this many steps without progress |
-| `--max-repetitive-actions` | no | `5` | Stop after this many identical consecutive actions |
-| `--n-retries-if-failed` | no | `0` | Re-run the whole pipeline up to this many additional times on failure |
+| `-o`, `--output-dir` | no | `./output/<task-id>` | Directory for output files (screenshots, logs, report). |
+| `--device-id` | yes | — | ADB device serial or `host:port` (e.g. `10.0.0.5:5555`). |
+| `--instructions` | yes | — | Natural-language test instruction to execute. |
+| `--task-id` | no | auto-generated UUID | Unique task identifier. |
+| `--task-name` | no | — | Human-readable label for the test run. |
+| `--device-name` | no | same as `--device-id` | Friendly device name used in logs. |
+| `--precondition` | no | — | One atomic precondition in `label: description` form; the `label` is short, lowercase, hyphenated. **Repeatable** — supply once per precondition. On first use of a label, the precondition is established from its description and a reusable script is recorded under `<output-dir>/preconditions/<label>/` (`action_log.json` plus a `description.txt`). On repeat, the cached script is replayed without LLM calls. |
+| `--sico-app-name` | no | `sico` | Sico application name used to construct API paths. |
+| `--llmhub-model` | no | `gpt5.4` | LLM model identifier. |
+| `--coordinate-space` | no | — | `(x, y)` space the LLM emits coordinates in, as `WIDTHxHEIGHT` (e.g. `1000x1000` for UI-TARS / UI-Venus style models). When unset, the LLM is told the perceived image size equals the size of the screenshot it received. |
+| `--max-screenshot-size` | no | `784x1568` | Max size of the screenshot sent to the LLM, as `WIDTHxHEIGHT`. Screenshots are downscaled to fit within these bounds preserving aspect ratio; smaller screenshots are sent unchanged. Set to empty to disable resizing. |
+| `--log-level` | no | `WARNING` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`). |
+| `--telemetry` / `--no-telemetry` | no | enabled | Enable or disable telemetry collection. |
+| `--log-llm-inputs` / `--no-log-llm-inputs` | no | disabled | Log LLM prompts in operator/reflector records. |
+| `--reflector` / `--no-reflector` | no | disabled | Enable or disable the reflector step after each action. |
+| `--max-no-progress-steps` | no | `6` | Stop after this many steps without progress. |
+| `--max-repetitive-actions` | no | `5` | Stop after this many identical consecutive actions. |
+| `--n-retries-if-failed` | no | `0` | Re-run the whole pipeline up to this many additional times on failure. |
+| `--history-length` | no | `0` | Number of previous operator turns (prompt + screenshot + response) to include as multi-turn history. |
+| `--keep-app-state` | no | empty | Comma-separated Android package names whose state must be kept across device resets between test cases (e.g. `com.android.chrome,com.microsoft.emmx`). |
+| `--resources-path` | no | — | Directory holding files the agent can stage on the device. When set, the file tools (`ResourceList`, `FilePut`, `FileList`, `FileDelete`) become available (see [File tools](#file-tools)). |
 
-### `run` arguments
+### File tools
 
-| Argument | Required | Default | Description |
-|---|---|---|---|
-| `--device-id` | yes | — | ADB device serial or `host:port` (e.g. `10.0.0.5:5555`) |
-| `--instructions` | yes | — | Natural-language test instruction to execute |
-| `--task-id` | no | auto-generated UUID | Unique task identifier |
-| `--task-name` | no | — | Human-readable label for the test run |
-| `--device-name` | no | same as `--device-id` | Friendly device name used in logs |
+The file tools are available **only when `--resources-path` is set** — without a resources directory there is nothing to stage, so none of them are offered to the operator. When establishing preconditions, the operator can then read and write files on the device's `/sdcard` storage:
 
-### `batch` arguments
+| Tool | Description |
+|---|---|
+| `ResourceList()` | List the files available in `--resources-path` that can be staged with `FilePut`. |
+| `FilePut(source, dest)` | Copy a resource (`source`, relative to `--resources-path`) into a folder under `/sdcard` (`dest`, e.g. `Pictures`, `Download`, `DCIM`). The file keeps its name and is registered with the gallery/Files apps via a media scan. |
+| `FileList(path)` | List the contents of `/sdcard/<path>` (defaults to the `/sdcard` root). |
+| `FileDelete(path)` | Delete a file under `/sdcard` (e.g. `Pictures/cat.jpg`) and trigger a media rescan. |
 
-| Argument | Required | Default | Description |
-|---|---|---|---|
-| `--file` | one of `--file`/`--test-cases` | — | Path to a JSON file with test cases. Use `-` to read JSON from stdin. |
-| `--test-cases` | one of `--file`/`--test-cases` | — | Inline JSON document with the same shape as `--file`. |
-| `--devices` | yes | — | One or more ADB device serials or `host:port` entries. One async worker is spawned per device; cases are pulled from a shared queue. |
-
-#### Test-cases JSON format
-
-```json
-{
-  "test-cases": [
-    {
-      "instruction": "Open Settings and enable Wi-Fi",
-      "task-name": "Enable Wi-Fi",
-      "task-id": "tc-001"
-    },
-    {
-      "instruction": "Open Microsoft Edge and navigate to bing.com"
-    }
-  ]
-}
-```
-
-- `instruction` is required.
-- `task-name` and `task-id` are optional. Missing `task-id` is filled with an auto-generated UUID.
-- The root is a dict so future top-level keys can be added without breaking existing files.
+Resource and device paths are validated to stay within `--resources-path` and `/sdcard` respectively; `..` traversal is rejected. Because precondition scripts are cached and replayed, a `FilePut` recorded for a label re-reads its `source` from the resources directory on replay — pass the same `--resources-path` (containing that file) when reusing such a label.
 
 ### Examples
 
 Single run:
 
 ```sh
-android-tester run \
+android-tester \
   --device-id emulator-5554 \
   --instructions "Open Settings and enable Wi-Fi" \
   --task-name "Enable Wi-Fi"
 ```
 
-Batch from a file across two devices:
+Run with labelled preconditions (recorded on first use, replayed thereafter). `--precondition` is repeatable, one per atomic precondition:
 
 ```sh
-android-tester batch \
-  --file ./cases.json \
-  --devices 127.0.0.1:5557 127.0.0.1:5559
-```
-
-Batch from inline JSON:
-
-```sh
-android-tester batch \
-  --test-cases '{"test-cases":[{"instruction":"Open Settings"}]}' \
-  --devices emulator-5554
-```
-
-Batch from stdin:
-
-```sh
-cat cases.json | android-tester batch --file - --devices emulator-5554
+android-tester \
+  --device-id emulator-5554 \
+  --precondition "signed-in-msa: User is signed in to Edge with an MSA account" \
+  --precondition "strict-tracking-off: Tracking prevention is set to Basic" \
+  --instructions "Enable strict tracking prevention and verify" \
+  --task-name "Strict tracking prevention"
 ```
 
 ## Environment Variables
 
-Configured via `config.env` in the skill root (see `config.env.example`):
+The following environment variables can be configured via `config.env` in the skill root. Every CLI flag has a matching env var; CLI args override env vars, which override `config.env`, which overrides built-in defaults.
+
+**Platform connection**:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SICO_ENDPOINT` | yes | — | Sico platform base URL |
-| `SICO_AGENT_INSTANCE_ID` | no | — | Agent instance ID for X-Sico-Context header |
+| `SICO_ENDPOINT` | no | `http://host.docker.internal:8080` | Sico platform base URL. Defaults to the host's docker-internal address; override when pointing at a remote backend. |
+| `SICO_AGENT_INSTANCE_ID` | no | — | Agent instance ID for the `X-Sico-Context` header |
+
+**Per-task**:
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DEVICE_ID` | yes (unless `--device-id` given) | — | ADB device serial or `host:port` |
+| `INSTRUCTIONS` | yes (unless `--instructions` given) | — | Natural-language test instruction |
+| `TASK_ID` | no | auto-generated UUID | Unique task identifier |
+| `TASK_NAME` | no | — | Human-readable label for the run |
+| `DEVICE_NAME` | no | same as `DEVICE_ID` | Friendly device name used in logs |
+
+**LLM**:
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
 | `LLMHUB_MODEL` | no | `gpt5.4` | Model name for LLM Hub requests |
-| `LLMHUB_MODEL_IMAGE_SIZE` | no | — | LLM perceived image size as `WIDTHxHEIGHT` (e.g. `1024x768`). When set, action coordinates are rescaled to match the actual screenshot size |
-| `MODEL_AUTO_RESIZE_WIDTH` | no | `0` | Target width (in pixels) for downscaling screenshots before sending them to the LLM, preserving aspect ratio. Screenshots narrower than this value are sent unchanged. Required for some models (e.g. GPT-5) to effectively operate device GUIs; a typical value is `768`. Set to `0` to disable. Only takes effect when `LLMHUB_MODEL_IMAGE_SIZE` is unset. |
-| `LOG_LEVEL` | no | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
+| `COORDINATE_SPACE` | no | — | (x, y) space the LLM emits coordinates in, as `WIDTHxHEIGHT` (e.g. `1000x1000` for UI-TARS / UI-Venus style models). When unset, the LLM is told the perceived image size equals the size of the screenshot it received. Action coordinates are always rescaled to device pixels before being sent to ADB. |
+| `MAX_SCREENSHOT_SIZE` | no | `784x1568` | Max size of the screenshot sent to the LLM, as `WIDTHxHEIGHT`. Screenshots are downscaled to fit within these bounds preserving aspect ratio; smaller screenshots are sent unchanged. Required for some models (e.g. GPT-5) to effectively operate device GUIs. Leave empty to disable resizing. |
+
+**Output / platform routing**:
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SICO_RESULT_DIR` | no | `./output/<task-id>` | Directory for output files (screenshots, logs, report) |
+| `SICO_APP_NAME` | no | `sico` | Sico application name used to construct API paths (`/api/<sico-app-name>/...`) |
+| `RESOURCES_PATH` | no | — | Directory holding files the agent can stage on the device via the `FilePut` / `ResourceList` tools |
+
+**Logging / telemetry**:
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `LOG_LEVEL` | no | `WARNING` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
 | `TELEMETRY_ENABLED` | no | `true` | Enable telemetry collection (`true`, `false`) |
+| `LOG_LLM_INPUTS` | no | `false` | Log LLM prompts in operator/reflector records (`true`, `false`) |
+
+**Runner tuning**:
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
 | `REFLECTOR_ENABLED` | no | `false` | Enable reflector step after each action (`true`, `false`) |
 | `MAX_NO_PROGRESS_STEPS` | no | `6` | Maximum consecutive no-progress steps before stopping |
 | `MAX_REPETITIVE_ACTIONS` | no | `5` | Maximum repetitive actions before stopping |
+| `N_RETRIES_IF_FAILED` | no | `0` | Re-run the whole pipeline up to this many additional times on failure |
+| `HISTORY_LENGTH` | no | `0` | Number of previous operator turns (prompt + screenshot + response) to include as multi-turn history |
+| `KEEP_APP_STATE` | no | empty | Comma-separated Android package names whose state must be kept across device resets between test cases (e.g. `com.android.chrome,com.microsoft.emmx`) |
 
 ## Output
 
-Stdout emits one JSON object per line. Every message includes an `event` field and an ISO-8601 `timestamp`.
-
-In `run` mode, all per-step events are written to stdout. In `batch` mode, only aggregate progress events (`task_started`, `task_finished`, `task_error`) are written to stdout; per-task per-step events are written to `<output-dir>/<task-id>/events.jsonl`.
+Stdout emits one JSON object per line. Every message includes an `event` field and an ISO-8601 `timestamp`. All per-step events are written to stdout.
 
 All output files are written to the output directory (logged to stdout at startup):
 
-- **Per-task events file** (batch only): `<output-dir>/<task-id>/events.jsonl`
-- **Per-task error trace** (batch only, on exception): `<output-dir>/<task-id>/error.txt`
 - **Screenshots**: `step-NNN-1-before.png`, `step-NNN-2-after.png`
 - **Report**: `report.html` — self-contained HTML report with screenshots, execution summary, and per-step logs
 
@@ -195,29 +196,9 @@ All output files are written to the output directory (logged to stdout at startu
 {"event": "task_result", "timestamp": "2026-04-14T09:15:30.345678+00:00", "task_id": "...", "duration": 32.4, "status": "completed", "reason": "Task completed successfully"}
 ```
 
-### Batch progress events (stdout, `batch` mode only)
-
-**`task_started`** — emitted when a worker picks up a case:
-
-```json
-{"event": "task_started", "task_id": "...", "task_name": "...", "device_id": "127.0.0.1:5559", "instruction": "...", "log_file": "output/<task-id>/events.jsonl", "completed": 3, "succeeded": 2, "failed": 1, "total": 10, "remaining": 7, "progress": 0.3}
-```
-
-**`task_finished`** — emitted when a case finishes (success or failure):
-
-```json
-{"event": "task_finished", "task_id": "...", "task_name": "...", "device_id": "127.0.0.1:5559", "status": "completed", "log_file": "output/<task-id>/events.jsonl", "completed": 4, "succeeded": 3, "failed": 1, "total": 10, "remaining": 6, "progress": 0.4}
-```
-
-**`task_error`** — emitted when a case raises an unhandled exception. The full traceback is also written to `<output-dir>/<task-id>/error.txt`:
-
-```json
-{"event": "task_error", "task_id": "...", "task_name": "...", "device_id": "127.0.0.1:5559", "log_file": "output/<task-id>/events.jsonl", "error_file": "output/<task-id>/error.txt", "error": "...", "error_type": "ADBCommandError"}
-```
-
 ## Exit Codes
 
 | Code | Meaning |
 |---|---|
-| `0` | All test cases completed successfully |
-| `1` | At least one test case failed |
+| `0` | Test case completed successfully |
+| `1` | Test case failed |

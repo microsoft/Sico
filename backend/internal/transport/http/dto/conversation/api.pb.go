@@ -1209,6 +1209,7 @@ type GetPlanRequest struct {
 	AgentInstanceId int64                  `protobuf:"varint,1,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId,omitempty" form:"agentInstanceId"`  
 	Username        string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"-,omitempty" form:"-"`                                          
 	TurnId          int64                  `protobuf:"varint,3,opt,name=turn_id,json=turnId,proto3" json:"turnId,omitempty" form:"turnId"`                               
+	ConversationId  int64                  `protobuf:"varint,4,opt,name=conversation_id,json=conversationId,proto3" json:"conversationId,omitempty" form:"conversationId"`       
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1260,6 +1261,13 @@ func (x *GetPlanRequest) GetUsername() string {
 func (x *GetPlanRequest) GetTurnId() int64 {
 	if x != nil {
 		return x.TurnId
+	}
+	return 0
+}
+
+func (x *GetPlanRequest) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
 	}
 	return 0
 }
@@ -1381,6 +1389,7 @@ type CancelPlanRequest struct {
 	AgentInstanceId int64                  `protobuf:"varint,1,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId,omitempty" form:"agentInstanceId"`  
 	Username        string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"-,omitempty" form:"-"`                                          
 	TurnId          int64                  `protobuf:"varint,3,opt,name=turn_id,json=turnId,proto3" json:"turnId,omitempty" form:"turnId"`                               
+	ConversationId  int64                  `protobuf:"varint,4,opt,name=conversation_id,json=conversationId,proto3" json:"conversationId,omitempty" form:"conversationId"`       
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1432,6 +1441,13 @@ func (x *CancelPlanRequest) GetUsername() string {
 func (x *CancelPlanRequest) GetTurnId() int64 {
 	if x != nil {
 		return x.TurnId
+	}
+	return 0
+}
+
+func (x *CancelPlanRequest) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
 	}
 	return 0
 }
@@ -1864,11 +1880,12 @@ const file_conversation_api_proto_rawDesc = "" +
 	"\x10status_count_map\x18\x01 \x03(\v28.api.ListConversationStatusCountData.StatusCountMapEntryR\x0estatusCountMap\x1aA\n" +
 	"\x13StatusCountMapEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"q\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\x9a\x01\n" +
 	"\x0eGetPlanRequest\x12*\n" +
 	"\x11agent_instance_id\x18\x01 \x01(\x03R\x0fagentInstanceId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x17\n" +
-	"\aturn_id\x18\x03 \x01(\x03R\x06turnId\"W\n" +
+	"\aturn_id\x18\x03 \x01(\x03R\x06turnId\x12'\n" +
+	"\x0fconversation_id\x18\x04 \x01(\x03R\x0econversationId\"W\n" +
 	"\vGetPlanData\x12\x1e\n" +
 	"\x04plan\x18\x01 \x01(\v2\n" +
 	".plan.PlanR\x04plan\x12(\n" +
@@ -1876,11 +1893,12 @@ const file_conversation_api_proto_rawDesc = "" +
 	"\x0fGetPlanResponse\x12$\n" +
 	"\x04data\x18\x01 \x01(\v2\x10.api.GetPlanDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"t\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\x9d\x01\n" +
 	"\x11CancelPlanRequest\x12*\n" +
 	"\x11agent_instance_id\x18\x01 \x01(\x03R\x0fagentInstanceId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x17\n" +
-	"\aturn_id\x18\x03 \x01(\x03R\x06turnId\"<\n" +
+	"\aturn_id\x18\x03 \x01(\x03R\x06turnId\x12'\n" +
+	"\x0fconversation_id\x18\x04 \x01(\x03R\x0econversationId\"<\n" +
 	"\x12CancelPlanResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"i\n" +

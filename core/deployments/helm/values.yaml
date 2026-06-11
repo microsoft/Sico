@@ -40,10 +40,24 @@ env:
   KAFKA_BOOTSTRAP_SERVERS: "sico-kafka:9092"
   MEM0_QDRANT_HOST: sico-qdrant
   EXPERIENCES_ENABLED: "true"
-  RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE: "false"
-  RUN_PYTHON_TOOL_SANDBOX_VOLUME_TYPE: "hostpath"
-  RUN_PYTHON_TOOL_SANDBOX_HOSTPATH_BASE: "/mnt/sico-storage/chat"
+  TASK_RUNTIME_BACKEND: "k8s"
+  TASK_RUNTIME_CONTAINER_HOSTPATH_BASE: "/mnt/sico-storage/chat"
+  TASK_RUNTIME_SKILL_HOSTPATH_BASE: "/mnt/sico-storage/skills"
+  # Sandbox storage source. By default sandbox pods mount node-local hostPaths
+  # (works when the PV is hostPath-backed, as in the kind dev deployment). On
+  # clusters whose storage is networked (NFS / cloud file shares) a node
+  # hostPath cannot see core's files, so point the sandbox at the *same* PVC
+  # core uses by setting the single claim below — that is the only knob
+  # required. One claim is enough: everything the sandbox needs (including
+  # skill runtimes) is staged into the chat workspace tree, so each mount is
+  # scoped to a sub_path under the chat root (/mnt/storage/chat with the stock
+  # layout); only override it via RUN_PYTHON_TOOL_SANDBOX_STORAGE_ROOT if the
+  # PVC is mounted elsewhere. The PVC must exist in the sandbox namespace
+  # (RUN_PYTHON_TOOL_SANDBOX_NAMESPACE) and be ReadWriteMany so core and sandbox
+  # can mount it concurrently.
+  # RUN_PYTHON_TOOL_SANDBOX_STORAGE_PVC: "core-storage"
   SEAWEEDFS_ENDPOINT: "http://sico-seaweedfs-filer:14003"
+  SICO_APP_NAME: "sico"
   SICO_ENDPOINT: "http://sico-backend.sico.svc.cluster.local:8080"
 
 resources:

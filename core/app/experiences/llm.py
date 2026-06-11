@@ -18,93 +18,20 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Minimal experience learning LLM adapters backed by llmhubs."""
+"""Experience-learning LLM adapters backed by llmhubs.
+
+The generic single-shot structured-output client (:class:`LLMClient` /
+:class:`HubLLMClient`) now lives in :mod:`app.llmhubs.structured` so every layer
+can reuse it without importing across domain packages; this module keeps the
+embedding client, which is specific to experience deduplication.
+"""
 
 from __future__ import annotations
 
-import json
-from abc import ABC, abstractmethod
-from collections.abc import Sequence
-from typing import Any, TypeVar
-
-from pydantic import BaseModel
-
 from app.llmhubs.hub import LLMHub
-from app.llmhubs.response_format import build_response_format_option
-from app.llmhubs.types import Input, InputContent, Request, Response
+from app.llmhubs.structured import DEFAULT_CHAT_MODEL, HubLLMClient, LLMClient
 
-T = TypeVar("T", bound=BaseModel)
-ContentBlocks = Sequence[dict[str, Any]]
-
-DEFAULT_CHAT_MODEL = "gpt5.4"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
-
-
-class LLMClient(ABC):
-    """Structured LLM interface for experience learning."""
-
-    @abstractmethod
-    async def complete_structured(
-        self,
-        response_model: type[T],
-        *,
-        prompt: str | None = None,
-        content_blocks: ContentBlocks | None = None,
-        **kwargs: Any,
-    ) -> T:
-        """Return a structured response from either a text prompt or explicit content blocks."""
-
-
-class HubLLMClient(LLMClient):
-    """Async wrapper over LLMHub structured generation."""
-
-    def __init__(self, *, model: str = DEFAULT_CHAT_MODEL) -> None:
-        self.model = model
-        self._hub = LLMHub()
-
-    async def complete_structured(
-        self,
-        response_model: type[T],
-        *,
-        prompt: str | None = None,
-        content_blocks: ContentBlocks | None = None,
-        **kwargs: Any,
-    ) -> T:
-        user_content = _resolve_user_content(prompt=prompt, content_blocks=content_blocks)
-
-        request = Request(
-            model=self.model,
-            inputs=[
-                Input(
-                    role="user",
-                    content=[
-                        InputContent(
-                            type=block.get("type", "text"),
-                            text=block.get("text", ""),
-                            image_url=(
-                                block.get("image_url", {}).get("url", "")
-                                if isinstance(block.get("image_url"), dict)
-                                else ""
-                            ),
-                        )
-                        for block in user_content
-                    ],
-                )
-            ],
-            options={
-                "response_format": build_response_format_option(response_model),
-                **({"max_tokens": kwargs["max_tokens"]} if "max_tokens" in kwargs else {}),
-                **({"temperature": kwargs["temperature"]} if "temperature" in kwargs else {}),
-            },
-        )
-
-        response: Response = await self._hub.generate(request)
-        if response.code != 0:
-            raise RuntimeError(f"LLMHub generate failed: {response.msg}")
-
-        raw_text = response.text
-        parsed = json.loads(raw_text)
-        return response_model.model_validate(parsed)
 
 
 class LLMHubEmbeddingClient:
@@ -165,17 +92,4 @@ class LLMHubEmbeddingClient:
         return [item.embedding for item in response.data]
 
 
-def _resolve_user_content(
-    *,
-    prompt: str | None = None,
-    content_blocks: ContentBlocks | None = None,
-) -> list[dict[str, Any]]:
-    """Resolve the final user message content from either prompt text or explicit blocks."""
-    if content_blocks is not None:
-        return list(content_blocks)
-    if prompt is not None:
-        return [{"type": "text", "text": prompt}]
-    raise ValueError("Either prompt or content_blocks must be provided for structured completion.")
-
-
-__all__ = ["LLMClient", "HubLLMClient", "LLMHubEmbeddingClient"]
+__all__ = ["LLMClient", "HubLLMClient", "LLMHubEmbeddingClient", "DEFAULT_CHAT_MODEL", "DEFAULT_EMBEDDING_MODEL"]

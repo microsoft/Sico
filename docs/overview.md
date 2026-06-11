@@ -34,7 +34,7 @@ What enterprises require is not simply better content generation, but accountabl
 This requires a different kind of operational unit: one that can be managed, evaluated, supervised, and continuously improved through execution.
 
 We call this labor unit a Digital Worker.
-![Sico](images/newmode.png)
+![Sico](images/new-collaboration-paradigm.png)
 The goal of Digital Workers is not to replace humans, but to establish a new production structure:
 
 - humans define goals, provide judgment, and guide capability evolution

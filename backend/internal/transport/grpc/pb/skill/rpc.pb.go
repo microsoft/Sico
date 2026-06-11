@@ -48,6 +48,7 @@ type ExtractSkillRequest struct {
 	ProjectId     int64                  `protobuf:"varint,2,opt,name=project_id,json=projectId,proto3" json:"projectId"`       
 	AgentId       string                 `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agentId"`              
 	DownloadUrl   string                 `protobuf:"bytes,4,opt,name=download_url,json=downloadUrl,proto3" json:"downloadUrl"`  
+	Version       string                 `protobuf:"bytes,5,opt,name=version,proto3" json:"version"`                             
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -106,6 +107,13 @@ func (x *ExtractSkillRequest) GetAgentId() string {
 func (x *ExtractSkillRequest) GetDownloadUrl() string {
 	if x != nil {
 		return x.DownloadUrl
+	}
+	return ""
+}
+
+func (x *ExtractSkillRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
 	}
 	return ""
 }
@@ -183,6 +191,7 @@ type GetSkillDetailsGrpcRequest struct {
 	SkillId       int64                  `protobuf:"varint,1,opt,name=skill_id,json=skillId,proto3" json:"skillId"`        
 	ProjectId     int64                  `protobuf:"varint,2,opt,name=project_id,json=projectId,proto3" json:"projectId"`  
 	AgentId       string                 `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agentId"`         
+	Versions      []string               `protobuf:"bytes,4,rep,name=versions,proto3" json:"versions"`                      
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -238,11 +247,19 @@ func (x *GetSkillDetailsGrpcRequest) GetAgentId() string {
 	return ""
 }
 
+func (x *GetSkillDetailsGrpcRequest) GetVersions() []string {
+	if x != nil {
+		return x.Versions
+	}
+	return nil
+}
+
 type GetSkillDetailsGrpcResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Files         []*skill.SkillFile     `protobuf:"bytes,1,rep,name=files,proto3" json:"files"`   
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Version       *skill.SkillVersion    `protobuf:"bytes,1,opt,name=version,proto3" json:"version"`    
+	Versions      []*skill.SkillVersion  `protobuf:"bytes,2,rep,name=versions,proto3" json:"versions"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`       
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`          
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -277,9 +294,16 @@ func (*GetSkillDetailsGrpcResponse) Descriptor() ([]byte, []int) {
 	return file_skill_rpc_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *GetSkillDetailsGrpcResponse) GetFiles() []*skill.SkillFile {
+func (x *GetSkillDetailsGrpcResponse) GetVersion() *skill.SkillVersion {
 	if x != nil {
-		return x.Files
+		return x.Version
+	}
+	return nil
+}
+
+func (x *GetSkillDetailsGrpcResponse) GetVersions() []*skill.SkillVersion {
+	if x != nil {
+		return x.Versions
 	}
 	return nil
 }
@@ -410,29 +434,216 @@ func (x *DeleteSkillFromFSResponse) GetMsg() string {
 	return ""
 }
 
+type WriteSkillVersionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SkillId       int64                  `protobuf:"varint,1,opt,name=skill_id,json=skillId,proto3" json:"skillId"`                   
+	ProjectId     int64                  `protobuf:"varint,2,opt,name=project_id,json=projectId,proto3" json:"projectId"`             
+	AgentId       string                 `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agentId"`                    
+	Version       string                 `protobuf:"bytes,4,opt,name=version,proto3" json:"version"`                                   
+	Files         []*skill.SkillFile     `protobuf:"bytes,5,rep,name=files,proto3" json:"files"`                                       
+	Actions       []*skill.SkillAction   `protobuf:"bytes,6,rep,name=actions,proto3" json:"actions"`                                   
+	DownloadUrl   string                 `protobuf:"bytes,7,opt,name=download_url,json=downloadUrl,proto3" json:"downloadUrl"`        
+	SourceVersion string                 `protobuf:"bytes,8,opt,name=source_version,json=sourceVersion,proto3" json:"sourceVersion"`  
+	AssetId       int64                  `protobuf:"varint,9,opt,name=asset_id,json=assetId,proto3" json:"assetId"`                   
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WriteSkillVersionRequest) Reset() {
+	*x = WriteSkillVersionRequest{}
+	mi := &file_skill_rpc_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WriteSkillVersionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WriteSkillVersionRequest) ProtoMessage() {}
+
+func (x *WriteSkillVersionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_skill_rpc_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WriteSkillVersionRequest.ProtoReflect.Descriptor instead.
+func (*WriteSkillVersionRequest) Descriptor() ([]byte, []int) {
+	return file_skill_rpc_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *WriteSkillVersionRequest) GetSkillId() int64 {
+	if x != nil {
+		return x.SkillId
+	}
+	return 0
+}
+
+func (x *WriteSkillVersionRequest) GetProjectId() int64 {
+	if x != nil {
+		return x.ProjectId
+	}
+	return 0
+}
+
+func (x *WriteSkillVersionRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *WriteSkillVersionRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *WriteSkillVersionRequest) GetFiles() []*skill.SkillFile {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+func (x *WriteSkillVersionRequest) GetActions() []*skill.SkillAction {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
+func (x *WriteSkillVersionRequest) GetDownloadUrl() string {
+	if x != nil {
+		return x.DownloadUrl
+	}
+	return ""
+}
+
+func (x *WriteSkillVersionRequest) GetSourceVersion() string {
+	if x != nil {
+		return x.SourceVersion
+	}
+	return ""
+}
+
+func (x *WriteSkillVersionRequest) GetAssetId() int64 {
+	if x != nil {
+		return x.AssetId
+	}
+	return 0
+}
+
+type WriteSkillVersionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name"`                        
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description"`          
+	AssetId       int64                  `protobuf:"varint,3,opt,name=asset_id,json=assetId,proto3" json:"assetId"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                     
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                        
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WriteSkillVersionResponse) Reset() {
+	*x = WriteSkillVersionResponse{}
+	mi := &file_skill_rpc_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WriteSkillVersionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WriteSkillVersionResponse) ProtoMessage() {}
+
+func (x *WriteSkillVersionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_skill_rpc_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WriteSkillVersionResponse.ProtoReflect.Descriptor instead.
+func (*WriteSkillVersionResponse) Descriptor() ([]byte, []int) {
+	return file_skill_rpc_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *WriteSkillVersionResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *WriteSkillVersionResponse) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *WriteSkillVersionResponse) GetAssetId() int64 {
+	if x != nil {
+		return x.AssetId
+	}
+	return 0
+}
+
+func (x *WriteSkillVersionResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *WriteSkillVersionResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
 var File_skill_rpc_proto protoreflect.FileDescriptor
 
 const file_skill_rpc_proto_rawDesc = "" +
 	"\n" +
-	"\x0fskill/rpc.proto\x12\x05skill\x1a\x11skill/skill.proto\"\x8d\x01\n" +
+	"\x0fskill/rpc.proto\x12\x05skill\x1a\x11skill/skill.proto\"\xa7\x01\n" +
 	"\x13ExtractSkillRequest\x12\x19\n" +
 	"\bskill_id\x18\x01 \x01(\x03R\askillId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\x03R\tprojectId\x12\x19\n" +
 	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12!\n" +
-	"\fdownload_url\x18\x04 \x01(\tR\vdownloadUrl\"{\n" +
+	"\fdownload_url\x18\x04 \x01(\tR\vdownloadUrl\x12\x18\n" +
+	"\aversion\x18\x05 \x01(\tR\aversion\"{\n" +
 	"\x14ExtractSkillResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x13\n" +
-	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\"q\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\"\x8d\x01\n" +
 	"\x1aGetSkillDetailsGrpcRequest\x12\x19\n" +
 	"\bskill_id\x18\x01 \x01(\x03R\askillId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\x03R\tprojectId\x12\x19\n" +
-	"\bagent_id\x18\x03 \x01(\tR\aagentId\"m\n" +
-	"\x1bGetSkillDetailsGrpcResponse\x12&\n" +
-	"\x05files\x18\x01 \x03(\v2\x10.skill.SkillFileR\x05files\x12\x13\n" +
+	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12\x1a\n" +
+	"\bversions\x18\x04 \x03(\tR\bversions\"\xa5\x01\n" +
+	"\x1bGetSkillDetailsGrpcResponse\x12-\n" +
+	"\aversion\x18\x01 \x01(\v2\x13.skill.SkillVersionR\aversion\x12/\n" +
+	"\bversions\x18\x02 \x03(\v2\x13.skill.SkillVersionR\bversions\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"o\n" +
 	"\x18DeleteSkillFromFSRequest\x12\x19\n" +
@@ -442,11 +653,29 @@ const file_skill_rpc_proto_rawDesc = "" +
 	"\bagent_id\x18\x03 \x01(\tR\aagentId\"C\n" +
 	"\x19DeleteSkillFromFSResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg2\x8f\x02\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\xc4\x02\n" +
+	"\x18WriteSkillVersionRequest\x12\x19\n" +
+	"\bskill_id\x18\x01 \x01(\x03R\askillId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\x03R\tprojectId\x12\x19\n" +
+	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12\x18\n" +
+	"\aversion\x18\x04 \x01(\tR\aversion\x12&\n" +
+	"\x05files\x18\x05 \x03(\v2\x10.skill.SkillFileR\x05files\x12,\n" +
+	"\aactions\x18\x06 \x03(\v2\x12.skill.SkillActionR\aactions\x12!\n" +
+	"\fdownload_url\x18\a \x01(\tR\vdownloadUrl\x12%\n" +
+	"\x0esource_version\x18\b \x01(\tR\rsourceVersion\x12\x19\n" +
+	"\basset_id\x18\t \x01(\x03R\aassetId\"\x94\x01\n" +
+	"\x19WriteSkillVersionResponse\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x19\n" +
+	"\basset_id\x18\x03 \x01(\x03R\aassetId\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg2\xe9\x02\n" +
 	"\fSkillService\x12I\n" +
 	"\fExtractSkill\x12\x1a.skill.ExtractSkillRequest\x1a\x1b.skill.ExtractSkillResponse\"\x00\x12Z\n" +
 	"\x0fGetSkillDetails\x12!.skill.GetSkillDetailsGrpcRequest\x1a\".skill.GetSkillDetailsGrpcResponse\"\x00\x12X\n" +
-	"\x11DeleteSkillFromFS\x12\x1f.skill.DeleteSkillFromFSRequest\x1a .skill.DeleteSkillFromFSResponse\"\x00B9Z7sico-backend/internal/transport/grpc/pb/skill;skillgrpcb\x06proto3"
+	"\x11DeleteSkillFromFS\x12\x1f.skill.DeleteSkillFromFSRequest\x1a .skill.DeleteSkillFromFSResponse\"\x00\x12X\n" +
+	"\x11WriteSkillVersion\x12\x1f.skill.WriteSkillVersionRequest\x1a .skill.WriteSkillVersionResponse\"\x00B9Z7sico-backend/internal/transport/grpc/pb/skill;skillgrpcb\x06proto3"
 
 var (
 	file_skill_rpc_proto_rawDescOnce sync.Once
@@ -460,7 +689,7 @@ func file_skill_rpc_proto_rawDescGZIP() []byte {
 	return file_skill_rpc_proto_rawDescData
 }
 
-var file_skill_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_skill_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_skill_rpc_proto_goTypes = []any{
 	(*ExtractSkillRequest)(nil),         // 0: skill.ExtractSkillRequest
 	(*ExtractSkillResponse)(nil),        // 1: skill.ExtractSkillResponse
@@ -468,21 +697,30 @@ var file_skill_rpc_proto_goTypes = []any{
 	(*GetSkillDetailsGrpcResponse)(nil), // 3: skill.GetSkillDetailsGrpcResponse
 	(*DeleteSkillFromFSRequest)(nil),    // 4: skill.DeleteSkillFromFSRequest
 	(*DeleteSkillFromFSResponse)(nil),   // 5: skill.DeleteSkillFromFSResponse
-	(*skill.SkillFile)(nil),             // 6: skill.SkillFile
+	(*WriteSkillVersionRequest)(nil),    // 6: skill.WriteSkillVersionRequest
+	(*WriteSkillVersionResponse)(nil),   // 7: skill.WriteSkillVersionResponse
+	(*skill.SkillVersion)(nil),          // 8: skill.SkillVersion
+	(*skill.SkillFile)(nil),             // 9: skill.SkillFile
+	(*skill.SkillAction)(nil),           // 10: skill.SkillAction
 }
 var file_skill_rpc_proto_depIdxs = []int32{
-	6, // 0: skill.GetSkillDetailsGrpcResponse.files:type_name -> skill.SkillFile
-	0, // 1: skill.SkillService.ExtractSkill:input_type -> skill.ExtractSkillRequest
-	2, // 2: skill.SkillService.GetSkillDetails:input_type -> skill.GetSkillDetailsGrpcRequest
-	4, // 3: skill.SkillService.DeleteSkillFromFS:input_type -> skill.DeleteSkillFromFSRequest
-	1, // 4: skill.SkillService.ExtractSkill:output_type -> skill.ExtractSkillResponse
-	3, // 5: skill.SkillService.GetSkillDetails:output_type -> skill.GetSkillDetailsGrpcResponse
-	5, // 6: skill.SkillService.DeleteSkillFromFS:output_type -> skill.DeleteSkillFromFSResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	8,  // 0: skill.GetSkillDetailsGrpcResponse.version:type_name -> skill.SkillVersion
+	8,  // 1: skill.GetSkillDetailsGrpcResponse.versions:type_name -> skill.SkillVersion
+	9,  // 2: skill.WriteSkillVersionRequest.files:type_name -> skill.SkillFile
+	10, // 3: skill.WriteSkillVersionRequest.actions:type_name -> skill.SkillAction
+	0,  // 4: skill.SkillService.ExtractSkill:input_type -> skill.ExtractSkillRequest
+	2,  // 5: skill.SkillService.GetSkillDetails:input_type -> skill.GetSkillDetailsGrpcRequest
+	4,  // 6: skill.SkillService.DeleteSkillFromFS:input_type -> skill.DeleteSkillFromFSRequest
+	6,  // 7: skill.SkillService.WriteSkillVersion:input_type -> skill.WriteSkillVersionRequest
+	1,  // 8: skill.SkillService.ExtractSkill:output_type -> skill.ExtractSkillResponse
+	3,  // 9: skill.SkillService.GetSkillDetails:output_type -> skill.GetSkillDetailsGrpcResponse
+	5,  // 10: skill.SkillService.DeleteSkillFromFS:output_type -> skill.DeleteSkillFromFSResponse
+	7,  // 11: skill.SkillService.WriteSkillVersion:output_type -> skill.WriteSkillVersionResponse
+	8,  // [8:12] is the sub-list for method output_type
+	4,  // [4:8] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_skill_rpc_proto_init() }
@@ -496,7 +734,7 @@ func file_skill_rpc_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_skill_rpc_proto_rawDesc), len(file_skill_rpc_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

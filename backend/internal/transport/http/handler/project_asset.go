@@ -187,6 +187,7 @@ func detectFileTypeByMIME(ct string) string {
 	if ct == "" {
 		return ""
 	}
+
 	switch {
 	case strings.HasPrefix(ct, "image/"):
 		return "image"
@@ -197,9 +198,11 @@ func detectFileTypeByMIME(ct string) string {
 	case strings.HasPrefix(ct, "text/"):
 		return "text"
 	}
+
 	if ftype, ok := mimeTypeToFileType[ct]; ok {
 		return ftype
 	}
+
 	return ""
 }
 

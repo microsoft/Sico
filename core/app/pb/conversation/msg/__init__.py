@@ -4,6 +4,10 @@
 # This file has been @generated
 
 __all__ = (
+    "BatchSummaryItem",
+    "ListBatchSummariesData",
+    "ListBatchSummariesRequest",
+    "ListBatchSummariesResponse",
     "Message",
     "MessageContentType",
     "MessageExtraInfo",
@@ -59,6 +63,142 @@ class MessageContentType(betterproto2.Enum):
             "MESSAGE_CONTENT_TYPE_PLAYBOOK_INGESTION": 8,
             "MESSAGE_CONTENT_TYPE_PLAN": 9,
         }
+
+
+@dataclass(eq=False, repr=False)
+class BatchSummaryItem(betterproto2.Message):
+    """
+    BatchSummaryItem describes one delegated-task batch attached to a conversation.
+    ``summary_uri`` points to the persisted HTML report under SeaweedFS.
+    """
+
+    batch_id: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"batchId"
+    """
+
+    parent_conversation_id: "int" = betterproto2.field(2, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"parentConversationId"
+    """
+
+    parent_turn_id: "int" = betterproto2.field(3, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"parentTurnId"
+    """
+
+    status: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"status"
+    """
+
+    reason: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"reason"
+    """
+
+    total_count: "int" = betterproto2.field(6, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"totalCount"
+    """
+
+    summary_uri: "str" = betterproto2.field(7, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"summaryUri"
+    """
+
+    created_at: "int" = betterproto2.field(8, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"createdAt"
+    """
+
+    updated_at: "int" = betterproto2.field(9, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"updatedAt"
+    """
+
+    ended_at: "int" = betterproto2.field(10, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"endedAt"
+    """
+
+
+default_message_pool.register_message("msg", "BatchSummaryItem", BatchSummaryItem)
+
+
+@dataclass(eq=False, repr=False)
+class ListBatchSummariesData(betterproto2.Message):
+    items: "list[BatchSummaryItem]" = betterproto2.field(
+        1, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"items"
+    """
+
+    has_more: "bool" = betterproto2.field(2, betterproto2.TYPE_BOOL)
+    """
+    @gotag: json:"hasMore"
+    """
+
+
+default_message_pool.register_message(
+    "msg", "ListBatchSummariesData", ListBatchSummariesData
+)
+
+
+@dataclass(eq=False, repr=False)
+class ListBatchSummariesRequest(betterproto2.Message):
+    conversation_id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"conversationId", binding:"required", form:"conversationId"
+    """
+
+    turn_id: "int | None" = betterproto2.field(
+        2, betterproto2.TYPE_INT64, optional=True
+    )
+    """
+    @gotag: json:"turnId,omitempty" form:"turnId"
+    """
+
+    page: "int" = betterproto2.field(3, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"page" form:"page" binding:"min=1" default:"1"
+    """
+
+    page_size: "int" = betterproto2.field(4, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"20"
+    """
+
+
+default_message_pool.register_message(
+    "msg", "ListBatchSummariesRequest", ListBatchSummariesRequest
+)
+
+
+@dataclass(eq=False, repr=False)
+class ListBatchSummariesResponse(betterproto2.Message):
+    data: "ListBatchSummariesData | None" = betterproto2.field(
+        1, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"data"
+    """
+
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "msg", "ListBatchSummariesResponse", ListBatchSummariesResponse
+)
 
 
 @dataclass(eq=False, repr=False)
@@ -213,6 +353,11 @@ class MessageItem(betterproto2.Message):
     updated_at: "int" = betterproto2.field(11, betterproto2.TYPE_INT64)
     """
     @gotag: json:"updatedAt"
+    """
+
+    conversation_id: "int" = betterproto2.field(12, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"conversationId"
     """
 
 

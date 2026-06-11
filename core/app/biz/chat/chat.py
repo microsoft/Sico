@@ -25,7 +25,7 @@ import json
 import logging
 import os
 import time
-from collections.abc import Awaitable, Callable, MutableSequence
+from collections.abc import MutableSequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,8 +42,6 @@ from app.pb.conversation.chat import (
 from app.storage.fs import CHAT_FS
 from app.tools.common import _TOOL_CONTEXT_KWARGS_KEY, ToolCallStatusMiddleware, ToolContext
 from app.tools.plan import PlanEditor, is_plan_cancelled
-from app.tools.run_command import cleanup_run_command_pods
-from app.tools.sandbox_tools.lifecycle import SandboxSessionState, cleanup_sandbox_session, wrap_tools_for_sandbox_session
 from app.utils.runner import AsyncJobRunner
 from app.utils.sanitize import sanitize_mem0_entity_id
 
@@ -51,6 +49,7 @@ _LOGGER = logging.getLogger(__name__)
 CHECK_CANCELLED_PLAN_INTERVAL_SECONDS = 2
 BUFFER_TEXT_MAXIMUM_LENGTH = 32
 CONTENT_TIMESTAMP_KEY = "timestamp_ms"
+
 
 def _stamp_message_timestamp(message: Message, timestamp_ms: int) -> None:
     """Tag each content of a message with a millisecond timestamp.
@@ -112,7 +111,6 @@ class RunOptions:
     save_history: bool = False
     save_memory: bool = False
     tools: Any = None
-    cleanup_callback: Callable[[dict[str, Any]], Awaitable[None]] | None = None
     response_format: type[BaseModel] | None = None
 
 
@@ -150,8 +148,7 @@ class ChatAgent:
         *,
         options: RunOptions,
     ):
-        sandbox_session = SandboxSessionState()
-        prepared_tools = wrap_tools_for_sandbox_session(options.tools, sandbox_session)
+        prepared_tools = options.tools
         conversation_id = self._tool_context.conversation_id if self._tool_context else None
         model_name = getattr(self._client, "_model", None)
         _stamp_message_timestamp(user_message, time.time_ns() // 1_000_000)
@@ -173,6 +170,7 @@ class ChatAgent:
                         user_message,
                         system_message,
                         ctx=attempt_ctx,
+                        attempt=attempt,
                     )
                     return
                 except Exception as exc:
@@ -194,41 +192,18 @@ class ChatAgent:
                         raise
         finally:
             try:
-                # cleanup sandbox
-                cleanup_result = await cleanup_sandbox_session(
-                    self._agent_instance_id,
-                    sandbox_session,
-                )
-                if cleanup_result is not None:
-                    if options.cleanup_callback is not None:
-                        await options.cleanup_callback(cleanup_result)
-                    _LOGGER.info(
-                        "chat_sandbox_cleanup_finished agent_instance_id=%s conversation_id=%s "
-                        "turn_id=%s status=%s released=%s requested=%s",
-                        self._agent_instance_id,
-                        conversation_id,
-                        options.turn_id,
-                        cleanup_result.get("status"),
-                        cleanup_result.get("released_count"),
-                        cleanup_result.get("requested_count"),
-                    )
-
                 # mark plan items as completed if any still running
                 plan_editor = self._tool_context.plan_editor if self._tool_context else None
                 if plan_editor:
                     await _finish_plan(plan_editor)
-
-                # cleanup run-command pods
-                await cleanup_run_command_pods(self._agent_instance_id, self._username)
-
             except Exception as exc:
                 _LOGGER.exception(
-                    "chat_sandbox_cleanup_failed agent_instance_id=%s conversation_id=%s turn_id=%s",
+                    "chat_turn_finalize_failed agent_instance_id=%s conversation_id=%s turn_id=%s",
                     self._agent_instance_id,
                     conversation_id,
                     options.turn_id,
                 )
-                await queue.put(build_error_response(f"Error during cleanup of chat agent: {str(exc)}"))
+                await queue.put(build_error_response(f"Error during finalize of chat agent: {str(exc)}"))
             finally:
                 await queue.put(None)
 
@@ -239,6 +214,7 @@ class ChatAgent:
         system_message: str,
         *,
         ctx: _AttemptContext,
+        attempt: int = 1,
     ) -> None:
         prepared_messages = await self._prepare_messages(user_message, system_message)
 
@@ -270,20 +246,23 @@ class ChatAgent:
         buffered_text = ""
         updates: list[ChatResponseUpdate] = []
         plan_cancel_last_check_timestamp = time.time()
-
+        stream_started_at = time.perf_counter()
+        first_update_ms: int | None = None
         async for update in self._client.get_response(
             prepared_messages,
             stream=True,
             options=stream_options,
-            middleware=[ToolCallStatusMiddleware()],
             function_invocation_kwargs={_TOOL_CONTEXT_KWARGS_KEY: self._tool_context},
         ):
+            if first_update_ms is None:
+                first_update_ms = int((time.perf_counter() - stream_started_at) * 1000)
             _stamp_update_timestamp(update, time.time_ns() // 1_000_000)
-            # check if there is a "cancelled plan", if there is, stop outputting at once
+            # Stop streaming immediately if the plan has been cancelled.
             if time.time() - plan_cancel_last_check_timestamp > CHECK_CANCELLED_PLAN_INTERVAL_SECONDS:
-                if is_plan_cancelled(self._agent_instance_id, self._username, ctx.turn_id):
+                if is_plan_cancelled(self._agent_instance_id, self._username, ctx.turn_id, ctx.conversation_id):
                     _LOGGER.info(
-                        "chat_plan_cancel_detected agent_instance_id=%s conversation_id=%s turn_id=%s stopping_generation=true",
+                        "chat_plan_cancel_detected agent_instance_id=%s conversation_id=%s "
+                        "turn_id=%s stopping_generation=true",
                         self._agent_instance_id,
                         ctx.conversation_id,
                         ctx.turn_id,
@@ -308,16 +287,16 @@ class ChatAgent:
                 user_message,
                 Message(role="assistant", contents=[assistant_text]),
             )
-
         _LOGGER.info(
             "chat_agent_stream_completed agent_instance_id=%s conversation_id=%s turn_id=%s "
-            "model=%s update_count=%d assistant_text_len=%d",
+            "model=%s update_count=%d assistant_text_len=%d llm_first_update_ms=%s",
             self._agent_instance_id,
             ctx.conversation_id,
             ctx.turn_id,
             ctx.model_name,
             len(updates),
             len(assistant_text),
+            first_update_ms,
         )
 
     def _process_update_contents(
@@ -406,75 +385,54 @@ class ChatAgent:
             raise ValueError("turn_id must be provided when save_history is True")
 
         attempt = 0
-        sandbox_session = SandboxSessionState()
-        prepared_tools = wrap_tools_for_sandbox_session(options.tools, sandbox_session)
+        prepared_tools = options.tools
         _stamp_message_timestamp(message_payload, time.time_ns() // 1_000_000)
-        try:
-            while attempt < options.max_attempts:
-                attempt += 1
-                try:
-                    prepared_messages = await self._prepare_messages(
-                        message_payload,
-                        system_message,
-                    )
-
-                    _LOGGER.info(
-                        "The final prepared messages for chat client: %s",
-                        "\n".join(m.to_json(separators=(",", ":")) for m in prepared_messages),
-                    )
-
-                    response_options: dict[str, Any] = {
-                        "response_format": options.response_format,
-                        "allow_multiple_tool_calls": True,
-                        "reasoning": {"effort": "high"},
-                    }
-                    if prepared_tools:
-                        response_options["tools"] = prepared_tools
-                        response_options["tool_choice"] = "auto"
-
-                    response = await self._client.get_response(
-                        prepared_messages,
-                        options=response_options,
-                        middleware=[ToolCallStatusMiddleware()],
-                        function_invocation_kwargs={_TOOL_CONTEXT_KWARGS_KEY: self._tool_context},
-                    )
-                    assistant_text = response.messages[-1].text if response.messages else ""
-                    if options.save_history:
-                        await self.persist_turn(message_payload, response, options.turn_id)
-                    if options.save_memory:
-                        await self._enqueue_memories(
-                            message_payload,
-                            Message(role="assistant", contents=[assistant_text]),
-                        )
-                    return response
-                except Exception as exc:
-                    _LOGGER.warning(
-                        "chat client authentication failed (attempt %s/%s)",
-                        attempt,
-                        options.max_attempts,
-                        exc_info=exc,
-                    )
-                    if attempt >= options.max_attempts:
-                        raise
-        finally:
+        while attempt < options.max_attempts:
+            attempt += 1
             try:
-                cleanup_result = await cleanup_sandbox_session(
-                    self._agent_instance_id,
-                    sandbox_session,
+                prepared_messages = await self._prepare_messages(
+                    message_payload,
+                    system_message,
                 )
-                if cleanup_result is not None:
-                    _LOGGER.info(
-                        "sandbox session cleanup finished agent_instance_id=%s status=%s released=%s requested=%s",
-                        self._agent_instance_id,
-                        cleanup_result.get("status"),
-                        cleanup_result.get("released_count"),
-                        cleanup_result.get("requested_count"),
-                    )
 
-                # cleanup run-command pods
-                await cleanup_run_command_pods(self._agent_instance_id, self._username)
-            except Exception:
-                _LOGGER.exception("sandbox session cleanup failed in run")
+                _LOGGER.info(
+                    "The final prepared messages for chat client: %s",
+                    "\n".join(m.to_json(separators=(",", ":")) for m in prepared_messages),
+                )
+
+                response_options: dict[str, Any] = {
+                    "response_format": options.response_format,
+                    "allow_multiple_tool_calls": True,
+                    "reasoning": {"effort": "high"},
+                }
+                if prepared_tools:
+                    response_options["tools"] = prepared_tools
+                    response_options["tool_choice"] = "auto"
+
+                response = await self._client.get_response(
+                    prepared_messages,
+                    options=response_options,
+                    middleware=[ToolCallStatusMiddleware()],
+                    function_invocation_kwargs={_TOOL_CONTEXT_KWARGS_KEY: self._tool_context},
+                )
+                assistant_text = response.messages[-1].text if response.messages else ""
+                if options.save_history:
+                    await self.persist_turn(message_payload, response, options.turn_id)
+                if options.save_memory:
+                    await self._enqueue_memories(
+                        message_payload,
+                        Message(role="assistant", contents=[assistant_text]),
+                    )
+                return response
+            except Exception as exc:
+                _LOGGER.warning(
+                    "chat client authentication failed (attempt %s/%s)",
+                    attempt,
+                    options.max_attempts,
+                    exc_info=exc,
+                )
+                if attempt >= options.max_attempts:
+                    raise
 
     async def persist_turn(self, user_message: Message, response: ChatResponse, turn_id: int) -> None:
         """Persist user + assistant messages as conversation.json under the turn path."""
@@ -652,6 +610,8 @@ def _extract_text_from_message(message: Message) -> str:
 
 
 async def _finish_plan(plan_editor: PlanEditor) -> None:
+    if not plan_editor.has_plan_updates:
+        return
     plan = await plan_editor.get_plan()
     if plan:
         plan = plan.mark_finished()

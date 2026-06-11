@@ -8,6 +8,7 @@ require (
 	github.com/cloudwego/eino v0.8.7
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-sql-driver/mysql v1.8.1
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
@@ -27,6 +28,7 @@ require (
 	golang.org/x/text v0.35.0
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
+	gorm.io/datatypes v1.2.4
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gen v0.3.27
 	gorm.io/gorm v1.31.1
@@ -58,7 +60,6 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
-	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
@@ -102,6 +103,5 @@ require (
 	golang.org/x/tools v0.42.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260406210006-6f92a3bedf2d // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gorm.io/datatypes v1.2.4 // indirect
 	gorm.io/hints v1.1.0 // indirect
 )

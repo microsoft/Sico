@@ -118,23 +118,31 @@ SOFTWARE.
   <tr><td>Task Name</td><td>{{ task_name }}</td></tr>
   {% endif %}
   {% if instruction %}
-  <tr><td>Instruction</td><td>{{ instruction }}</td></tr>
+  <tr><td>Instruction</td><td>{{ instruction | e | replace('\n', '<br/>' | safe) }}</td></tr>
   {% endif %}
   {% if device_id %}
   <tr><td>Device ID</td><td>{{ device_id }}</td></tr>
+  {% endif %}
+  {% if precondition_groups %}
+  <tr><td>Preconditions</td><td>
+    {% for group in precondition_groups %}<code>{{ group.label }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+  </td></tr>
   {% endif %}
   <tr><td>Status</td><td class="status-{{ status }}">{{ status }}</td></tr>
   {%- if reason %}
   <tr><td>Reason</td><td>{{ reason }}</td></tr>
   {%- endif %}
-  <tr><td>Duration</td><td>{{ duration_fmt }}</td></tr>
+  <tr><td>Duration (total)</td><td>{{ total_duration_fmt }}</td></tr>
+  {% if precondition_duration_fmt %}
+  <tr><td>Duration (precondition)</td><td>{{ precondition_duration_fmt }}</td></tr>
+  {% endif %}
+  <tr><td>Duration (test)</td><td>{{ test_duration_fmt }}</td></tr>
   <tr><td>Started</td><td>{{ start_ts }}</td></tr>
   <tr><td>Total Steps</td><td>{{ steps | length }}</td></tr>
 </table>
 
-<h2>Steps</h2>
-{% for rec in steps %}
-<h3>Step {{ rec.step }}</h3>
+{% macro render_step(rec) %}
+<h4>Step {{ rec.step }}</h4>
 
 {% if rec.screenshots | length == 2 %}
 <div class="screenshot-grid">
@@ -159,6 +167,11 @@ SOFTWARE.
 <blockquote>{{ rec.operator }}</blockquote>
 {% endif %}
 
+{% if rec.action_result %}
+<strong>Action Result</strong>
+<blockquote>{{ rec.action_result }}</blockquote>
+{% endif %}
+
 {% if rec.reflector %}
 <strong>Reflector</strong>
 <blockquote>{{ rec.reflector }}</blockquote>
@@ -172,6 +185,29 @@ SOFTWARE.
   {% endfor %}
 </ul>
 {% endif %}
+{% endmacro %}
+
+{% if precondition_groups %}
+<h2>Preconditions</h2>
+{% for group in precondition_groups %}
+{% if group.current_step %}
+<h3>{{ group.current_step }}</h3>
+{% endif %}
+<p>Label: <code>{{ group.label }}</code></p>
+{% for rec in group.steps %}
+{{ render_step(rec) }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+<h2>Test Steps</h2>
+{% for group in step_groups %}
+{% if group.current_step %}
+<h3>{{ group.current_step }}</h3>
+{% endif %}
+{% for rec in group.steps %}
+{{ render_step(rec) }}
+{% endfor %}
 {% endfor %}
 
 {% if telemetry %}

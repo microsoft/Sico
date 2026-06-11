@@ -104,7 +104,7 @@ Key patterns:
 - **`app/biz/chat/`** — Chat orchestration: multi-turn conversation, tool calling, prompt construction, plan execution.
 - **`app/biz/llm/`** — LLM service layer.
 - **`app/biz/reverse_grpc/`** — Reverse gRPC client stubs that call back to the backend.
-- **`app/tools/`** — Agent tool implementations (read, write, grep, web_search, run_python, sandbox_tools, etc.).
+- **`app/tools/`** — Agent tool implementations (read, write, grep, web_search, run_python, etc.).
 - **`app/llmhubs/`** — LLM provider abstraction layer with adapter pattern for multiple providers.
 - **`app/schemas/`** — Pydantic models for chat, conversation.
 - **`app/pb/`** — Auto-generated protobuf/betterproto2 stubs (do not edit manually).
@@ -119,6 +119,11 @@ The sandbox subsystem manages isolated environments (Android emulators, AIO cont
 Proto definitions are organized by domain in `proto/`: agent, chat, common, conversation, knowledge, llmhubs, project, rbac, sandbox, skill. Each domain may have `rpc.proto` (backend↔core gRPC), `reverse_rpc.proto` (core→backend callbacks), and `restful.proto` (HTTP DTO definitions).
 
 ## Code Style
+
+### Source file headers
+
+- Every source/config file (`.go`, `.py`, `.proto`, `.yaml`, shell scripts, etc.) must start with the standard 19-line MIT header from `LICENSE` (`# Copyright (c) 2026 Sico Authors` for `#`-style languages, `// Copyright (c) 2026 Sico Authors` for `//`-style languages).
+- The `addlicense` pre-commit hook (`.pre-commit-config.yaml`) inserts/refreshes the header automatically — run `pre-commit run addlicense --all-files` (or `pre-commit run --files <new-file>`) before committing new files.
 
 ### Go function signatures
 

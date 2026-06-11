@@ -22,6 +22,11 @@ package impl
 
 import (
 	"context"
+	"errors"
+	"strings"
+
+	"github.com/go-sql-driver/mysql"
+	"gorm.io/gorm"
 
 	appresp "sico-backend/internal/biz/common/response"
 	messageentity "sico-backend/internal/entity/conversation/message"
@@ -31,12 +36,17 @@ import (
 	conversationdto "sico-backend/internal/transport/http/dto/conversation"
 	"sico-backend/internal/transport/http/middleware"
 	rgrpc "sico-backend/internal/transport/reverse_grpc/pb/conversation"
+	"sico-backend/pkg/logger"
 	"sico-backend/pkg/ptr"
 )
 
 const (
 	// Enable this when frontend has used the "reconnect" api.
 	OmitMessageForOngoingTurn = false
+
+	taskRuntimeRecoveryResultPrefix       = "task_runtime_recovery_batch:"
+	legacyTaskRuntimeRecoveryMarkerPrefix = "<!-- sico:task-runtime-recovery batch_id="
+	mysqlDuplicateErrNum                  = 1062
 )
 
 func (c *Service) ListMessagesByUserAndAgent(
@@ -205,6 +215,7 @@ func (c *Service) GetUserMessageByUserAgentTurnID(
 func buildMessageResponse(
 	messages []*messageentity.Message, hasMore bool,
 ) *conversationdto.ListMessagesByUserAndAgentData {
+	messages = filterRedundantTaskRuntimeRecoveryMessages(messages)
 	items := make([]*conversationdto.MessageItem, 0, len(messages))
 	for _, msg := range messages {
 		item := buildMessageItem(msg)
@@ -220,6 +231,88 @@ func buildMessageResponse(
 	}
 }
 
+type turnMessageKey struct {
+	conversationID  int64
+	turnID          int64
+	agentInstanceID int64
+	username        string
+}
+
+func messageTurnKey(msg *messageentity.Message) turnMessageKey {
+	if msg == nil {
+		return turnMessageKey{}
+	}
+	return turnMessageKey{
+		conversationID:  msg.ConversationId,
+		turnID:          msg.TurnId,
+		agentInstanceID: msg.AgentInstanceId,
+		username:        msg.Username,
+	}
+}
+
+func isAssistantTextMessage(msg *messageentity.Message) bool {
+	return msg != nil && msg.Role == roleAssistant &&
+		msg.ContentType == conversationdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT
+}
+
+func isNormalAssistantTextMessage(msg *messageentity.Message) bool {
+	return isAssistantTextMessage(msg) && taskRuntimeRecoveryMessageKey(msg) == "" && strings.TrimSpace(msg.Content) != ""
+}
+
+func isTaskRuntimeArtifactAssistantTextMessage(msg *messageentity.Message) bool {
+	return isNormalAssistantTextMessage(msg) && hasTaskRuntimeArtifactReference(msg.Content)
+}
+
+func hasTaskRuntimeArtifactReference(content string) bool {
+	lowered := strings.ToLower(content)
+	if strings.Contains(lowered, "/storage/task-runtime/") {
+		return true
+	}
+	if hasTaskRuntimeArtifactFieldReference(lowered) {
+		return true
+	}
+	if strings.Contains(lowered, "execution summary:") && strings.Contains(lowered, "://") {
+		return true
+	}
+	return strings.Contains(lowered, "run report:") && strings.Contains(lowered, "://")
+}
+
+func hasTaskRuntimeArtifactFieldReference(loweredContent string) bool {
+	if !strings.Contains(loweredContent, "://") && !strings.Contains(loweredContent, "/storage/") {
+		return false
+	}
+	return strings.Contains(loweredContent, "execution_summary_url") ||
+		strings.Contains(loweredContent, "summary_uri") ||
+		strings.Contains(loweredContent, "report_url")
+}
+
+func filterRedundantTaskRuntimeRecoveryMessages(messages []*messageentity.Message) []*messageentity.Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	hasTaskRuntimeArtifactText := make(map[turnMessageKey]bool)
+	for _, msg := range messages {
+		if isTaskRuntimeArtifactAssistantTextMessage(msg) {
+			hasTaskRuntimeArtifactText[messageTurnKey(msg)] = true
+		}
+	}
+	if len(hasTaskRuntimeArtifactText) == 0 {
+		return messages
+	}
+
+	filtered := make([]*messageentity.Message, 0, len(messages))
+	for _, msg := range messages {
+		if isAssistantTextMessage(msg) &&
+			taskRuntimeRecoveryMessageKey(msg) != "" &&
+			hasTaskRuntimeArtifactText[messageTurnKey(msg)] {
+			continue
+		}
+		filtered = append(filtered, msg)
+	}
+	return filtered
+}
+
 func buildMessageItem(msg *messageentity.Message) *conversationdto.MessageItem {
 	if msg == nil {
 		return nil
@@ -233,16 +326,27 @@ func buildMessageItem(msg *messageentity.Message) *conversationdto.MessageItem {
 	return &conversationdto.MessageItem{
 		MessageId:       msg.Id,
 		TurnId:          msg.TurnId,
+		ConversationId:  msg.ConversationId,
 		Role:            msg.Role,
 		Username:        msg.Username,
 		AgentInstanceId: msg.AgentInstanceId,
 		Type:            typeValue,
 		Content:         contentValue,
-		FunctionContext: msg.FunctionContext,
+		FunctionContext: visibleMessageFunctionContext(msg),
 		Attachments:     msg.Attachments,
 		CreatedAt:       msg.CreatedAt,
 		UpdatedAt:       msg.UpdatedAt,
 	}
+}
+
+func visibleMessageFunctionContext(msg *messageentity.Message) *conversationdto.FunctionContext {
+	if msg.ContentType == conversationdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT && msg.Role == roleAssistant {
+		if taskRuntimeRecoveryMessageKey(msg) != "" {
+			return &conversationdto.FunctionContext{}
+		}
+	}
+
+	return msg.FunctionContext
 }
 
 func NormalizeMessageContent(msg *messageentity.Message) (conversationdto.MessageContentType, string, bool) {
@@ -253,7 +357,11 @@ func NormalizeMessageContent(msg *messageentity.Message) (conversationdto.Messag
 	// 4. For other types, we keep the content as is.
 	switch msg.ContentType {
 	case conversationdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT:
-		return conversationdto.MessageContentType_MESSAGE_CONTENT_TYPE_MARKDOWN, msg.Content, true
+		content := msg.Content
+		if msg.Role == roleAssistant {
+			content = stripLegacyTaskRuntimeRecoveryMessageMarker(content)
+		}
+		return conversationdto.MessageContentType_MESSAGE_CONTENT_TYPE_MARKDOWN, content, true
 	case conversationdto.ChatContentType_CHAT_CONTENT_TYPE_END:
 		return conversationdto.MessageContentType_MESSAGE_CONTENT_TYPE_END, "", true
 	case conversationdto.ChatContentType_CHAT_CONTENT_TYPE_PLAN:
@@ -265,40 +373,213 @@ func NormalizeMessageContent(msg *messageentity.Message) (conversationdto.Messag
 	}
 }
 
-func (c *Service) RpcCreateMessage(
-	ctx context.Context, req *rgrpc.CreateMessageRequest,
-) (*rgrpc.CreateMessageResponse, error) {
+func taskRuntimeRecoveryMessageKey(msg *messageentity.Message) string {
+	if msg == nil {
+		return ""
+	}
+
+	if msg.FunctionContext != nil {
+		result := strings.TrimSpace(msg.FunctionContext.GetResult())
+		if strings.HasPrefix(result, taskRuntimeRecoveryResultPrefix) {
+			return result
+		}
+	}
+
+	if batchID, _ := legacyTaskRuntimeRecoveryMarker(msg.Content); batchID != "" {
+		return taskRuntimeRecoveryResultPrefix + batchID
+	}
+
+	return ""
+}
+
+func legacyTaskRuntimeRecoveryMarker(content string) (string, string) {
+	markerStart := strings.Index(content, legacyTaskRuntimeRecoveryMarkerPrefix)
+	if markerStart < 0 {
+		return "", ""
+	}
+
+	end := strings.Index(content[markerStart:], "-->")
+	if end < 0 {
+		return "", ""
+	}
+
+	batchIDStart := markerStart + len(legacyTaskRuntimeRecoveryMarkerPrefix)
+	markerEnd := markerStart + end + len("-->")
+	return strings.TrimSpace(content[batchIDStart : markerStart+end]), content[markerStart:markerEnd]
+}
+
+func stripLegacyTaskRuntimeRecoveryMessageMarker(content string) string {
+	_, marker := legacyTaskRuntimeRecoveryMarker(content)
+	if marker == "" {
+		return content
+	}
+
+	return strings.TrimRight(strings.Replace(content, marker, "", 1), " \r\n")
+}
+
+func isDuplicateKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) && mysqlErr.Number == mysqlDuplicateErrNum {
+		return true
+	}
+
+	return strings.Contains(err.Error(), "Duplicate entry")
+}
+
+func (c *Service) findExistingAssistantTextForRecoveredTaskRuntimeMessage(
+	ctx context.Context,
+	msg *messageentity.Message,
+	recoveryKey string,
+) (*messageentity.Message, error) {
+	existing, _, err := c.messageRepo.ListByFilter(ctx, &messagerepo.MessageFilter{
+		Username:        &msg.Username,
+		ConversationId:  &msg.ConversationId,
+		AgentInstanceId: &msg.AgentInstanceId,
+		TurnId:          &msg.TurnId,
+		Role:            ptr.Of(roleAssistant),
+		ContentTypeList: []conversationdto.ChatContentType{conversationdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var matchingRecovery *messageentity.Message
+	var artifactText *messageentity.Message
+	for _, item := range existing {
+		if isTaskRuntimeArtifactAssistantTextMessage(item) && artifactText == nil {
+			artifactText = item
+		}
+		if taskRuntimeRecoveryMessageKey(item) == recoveryKey {
+			matchingRecovery = item
+		}
+	}
+	if artifactText != nil {
+		return artifactText, nil
+	}
+
+	return matchingRecovery, nil
+}
+
+func (c *Service) RpcCreateMessage(ctx context.Context, req *rgrpc.CreateMessageRequest) (*rgrpc.CreateMessageResponse, error) {
 	message := req.Message
 
 	// if message type is Plan and there is already
 	// a plan in with same (agent_instance_id, username, turn_id),
 	// we should omit this insertion
 	if message.ContentType == conversationdto.ChatContentType_CHAT_CONTENT_TYPE_PLAN {
-		existing, _, err := c.messageRepo.ListByFilter(ctx, &messagerepo.MessageFilter{
-			Username:        &message.Username,
-			AgentInstanceId: &message.AgentInstanceId,
-			TurnId:          &message.TurnId,
-			ContentTypeList: []conversationdto.ChatContentType{
-				conversationdto.ChatContentType_CHAT_CONTENT_TYPE_PLAN,
-			},
-		})
+		resp, err := c.deduplicatePlanMessage(ctx, message)
 		if err != nil {
 			return nil, err
 		}
-		if len(existing) > 0 {
-			return appresp.Success(&rgrpc.CreateMessageResponse{
-				Data: &rgrpc.CreateMessageData{Id: existing[0].Id},
-			}), nil
+		if resp != nil {
+			return resp, nil
+		}
+	}
+
+	// Task-runtime recovery deduplication: if this is a recovered assistant text message,
+	// check if a final artifact-containing message already exists for this turn.
+	recoveryKey := c.getRecoveryKey(ctx, message)
+	if recoveryKey != "" {
+		resp, err := c.deduplicateRecoveryMessage(ctx, message, recoveryKey)
+		if err != nil {
+			return nil, err
+		}
+		if resp != nil {
+			return resp, nil
 		}
 	}
 
 	created, err := c.messageRepo.Create(ctx, message)
 	if err != nil {
-		return nil, err
+		return c.handleCreateMessageError(ctx, message, recoveryKey, err)
 	}
 	return &rgrpc.CreateMessageResponse{
 		Data: &rgrpc.CreateMessageData{Id: created.Id},
 	}, nil
+}
+
+func (c *Service) deduplicatePlanMessage(
+	ctx context.Context, message *messageentity.Message,
+) (*rgrpc.CreateMessageResponse, error) {
+	existing, _, err := c.messageRepo.ListByFilter(ctx, &messagerepo.MessageFilter{
+		Username:        &message.Username,
+		AgentInstanceId: &message.AgentInstanceId,
+		TurnId:          &message.TurnId,
+		ContentTypeList: []conversationdto.ChatContentType{
+			conversationdto.ChatContentType_CHAT_CONTENT_TYPE_PLAN,
+		},
+	})
+	if err != nil {
+		logger.CtxError(ctx,
+			"chat_plan_dedupe_lookup_failed turnId=%d agentInstanceId=%d contentType=%s err=%v",
+			message.TurnId, message.AgentInstanceId, message.ContentType.String(), err)
+		return nil, err
+	}
+	if len(existing) > 0 {
+		return appresp.Success(&rgrpc.CreateMessageResponse{
+			Data: &rgrpc.CreateMessageData{Id: existing[0].Id},
+		}), nil
+	}
+	return nil, nil
+}
+
+func (c *Service) getRecoveryKey(_ context.Context, message *messageentity.Message) string {
+	if message.ContentType == conversationdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT && message.Role == roleAssistant {
+		return taskRuntimeRecoveryMessageKey(message)
+	}
+	return ""
+}
+
+func (c *Service) deduplicateRecoveryMessage(
+	ctx context.Context, message *messageentity.Message, recoveryKey string,
+) (*rgrpc.CreateMessageResponse, error) {
+	existing, err := c.findExistingAssistantTextForRecoveredTaskRuntimeMessage(ctx, message, recoveryKey)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return appresp.Success(&rgrpc.CreateMessageResponse{
+			Data: &rgrpc.CreateMessageData{Id: existing.Id},
+		}), nil
+	}
+	return nil, nil
+}
+
+func (c *Service) handleCreateMessageError(
+	ctx context.Context, message *messageentity.Message, recoveryKey string, err error,
+) (*rgrpc.CreateMessageResponse, error) {
+	if recoveryKey != "" && isDuplicateKeyError(err) {
+		existing, findErr := c.findExistingAssistantTextForRecoveredTaskRuntimeMessage(
+			ctx, message, recoveryKey,
+		)
+		if findErr != nil {
+			return nil, findErr
+		}
+		if existing != nil {
+			return appresp.Success(&rgrpc.CreateMessageResponse{
+				Data: &rgrpc.CreateMessageData{Id: existing.Id},
+			}), nil
+		}
+	}
+	if isDuplicateKeyError(err) {
+		logger.CtxWarn(ctx,
+			"chat_message_create_duplicate conversationId=%d turnId=%d agentInstanceId=%d contentType=%s",
+			message.ConversationId, message.TurnId, message.AgentInstanceId, message.ContentType.String())
+	} else {
+		logger.CtxError(ctx,
+			"chat_message_create_failed conversationId=%d turnId=%d agentInstanceId=%d "+
+				"contentType=%s err=%v",
+			message.ConversationId, message.TurnId,
+			message.AgentInstanceId, message.ContentType.String(), err)
+	}
+	return nil, err
 }
 
 func (c *Service) RpcListUserMessageByUserAgentTurnID(
@@ -326,5 +607,78 @@ func (c *Service) RpcListUserMessageByUserAgentTurnID(
 	}
 	return appresp.Success(&rgrpc.ListUserMessageByUserAgentTurnIDResponse{
 		Data: msgs,
+	}), nil
+}
+
+// ListBatchSummaries returns delegated-task batches for a single conversation.
+// The caller MUST own the conversation (creator_username == JWT subject), so a
+// missing/foreign conversation is reported as a generic NotFound to avoid
+// leaking existence.
+func (c *Service) ListBatchSummaries(
+	ctx context.Context,
+	req *conversationdto.ListBatchSummariesRequest,
+) (*conversationdto.ListBatchSummariesResponse, error) {
+	if c.db == nil {
+		return appresp.Success(&conversationdto.ListBatchSummariesResponse{
+			Data: &conversationdto.ListBatchSummariesData{Items: []*conversationdto.BatchSummaryItem{}},
+		}), nil
+	}
+	username := middleware.MustGetUsernameFromCtx(ctx)
+	conv, err := c.conversationRepo.GetByID(ctx, req.GetConversationId())
+	if err != nil {
+		return nil, err
+	}
+	if conv == nil || conv.CreatorUsername != username {
+		return nil, apperr.New(errcode.CommonNotFound, "conversation not found")
+	}
+	pageSize := int(req.GetPageSize())
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	page := int(req.GetPage())
+	if page <= 0 {
+		page = 1
+	}
+	filter := listBatchSummariesFilter{
+		ConversationID: req.GetConversationId(),
+		Limit:          pageSize,
+		Offset:         (page - 1) * pageSize,
+	}
+	if req.TurnId != nil {
+		v := req.GetTurnId()
+		filter.TurnID = &v
+	}
+	rows, err := listBatchSummaries(ctx, c.db, filter)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(rows) > pageSize
+	if hasMore {
+		rows = rows[:pageSize]
+	}
+	items := make([]*conversationdto.BatchSummaryItem, 0, len(rows))
+	for i := range rows {
+		r := rows[i]
+		item := &conversationdto.BatchSummaryItem{
+			BatchId:              r.BatchID,
+			ParentConversationId: r.ParentConversationID,
+			ParentTurnId:         r.ParentTurnID,
+			Status:               r.Status,
+			Reason:               r.Reason,
+			TotalCount:           r.TotalCount,
+			SummaryUri:           extractSummaryURI(r.BatchJSON),
+			CreatedAt:            int64(r.CreatedAt),
+			UpdatedAt:            int64(r.UpdatedAt),
+		}
+		if r.EndedAt != nil {
+			item.EndedAt = int64(*r.EndedAt)
+		}
+		items = append(items, item)
+	}
+	return appresp.Success(&conversationdto.ListBatchSummariesResponse{
+		Data: &conversationdto.ListBatchSummariesData{
+			Items:   items,
+			HasMore: hasMore,
+		},
 	}), nil
 }

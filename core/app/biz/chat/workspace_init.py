@@ -29,11 +29,28 @@ import json
 import logging
 import re
 import shutil
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import requests
 
+from app.biz.task_runtime.rerun_sources import RERUN_SOURCES_DIR
+from app.biz.skill.paths import latest_skill_version_dir
+from app.biz.skill.resolver import (
+    ORIGINAL_DIR,
+    RESOLVED_CORTEX_DIR,
+    RESOLVED_DIR,
+    infer_required_parameter_names,
+    load_resolved_actions,
+)
+from app.biz.chat.workspace_init_hooks import (
+    AttachmentHookContext,
+    dispatch_attachment_hooks,
+    iter_history_subdirs,
+)
+from app.biz.reverse_grpc.knowledge import ReverseKnowledgeService
 from app.experiences.store import PlaybookStore
 from app.storage.fs import (
     CHAT_FS,
@@ -42,11 +59,18 @@ from app.storage.fs import (
     SKILLS_FS,
     parse_skill_frontmatter,
 )
-from app.biz.reverse_grpc.knowledge import ReverseKnowledgeService
 
 _LOGGER = logging.getLogger(__name__)
 
 _HISTORY_TURN_COUNT = 3
+
+
+@dataclass(frozen=True)
+class WorkspaceInitOptions:
+    include_knowledge: bool = True
+    include_history: bool = True
+    include_playbooks: bool = True
+    retain_previous_attachments: bool = True
 
 
 async def init_workspace(
@@ -56,10 +80,11 @@ async def init_workspace(
     project_id: int,
     agent_id: str,
     attachments: list[Any] | None = None,
+    options: WorkspaceInitOptions | None = None,
 ) -> None:
     """Initialize the workspace directory for a chat session.
 
-    Copies skills, knowledge, recent history, and user attachments into the
+    Copies skills, knowledge, and user attachments into the
     unified workspace so that all LLM tools operate on a single directory.
     """
     _LOGGER.info(
@@ -78,6 +103,7 @@ async def init_workspace(
         project_id,
         agent_id,
         attachments,
+        options or WorkspaceInitOptions(),
     )
 
     _LOGGER.info("init_workspace completed agent_instance_id=%s turn_id=%s", agent_instance_id, turn_id)
@@ -90,15 +116,40 @@ def _init_workspace_sync(
     project_id: int,
     agent_id: str,
     attachments: list[Any] | None,
+    options: WorkspaceInitOptions,
 ) -> None:
     workspace = CHAT_FS.get_workspace_path(agent_instance_id, username)
     workspace.mkdir(parents=True, exist_ok=True)
 
     _copy_skills(workspace, project_id, agent_id)
-    _copy_knowledge(workspace, project_id, agent_id)
-    _copy_history(workspace, agent_instance_id, username, turn_id)
-    _copy_playbooks(workspace, agent_instance_id)
-    _copy_attachments(workspace, attachments)
+    if options.include_knowledge:
+        _copy_knowledge(workspace, project_id, agent_id)
+    else:
+        _clear_workspace_subdir(workspace, "knowledge")
+    _clear_workspace_subdir(workspace, "history")
+    # ``results/`` (delegate_* task runtime artifacts) and ``case_sources/``
+    # (parsed workbook manifests) are retained across turns. Their filenames are
+    # content-/UUID-addressed (batch_id, run_id, ``<file>-<hash>.json``) so
+    # collisions cannot occur, and keeping them lets read/context tools and the
+    # parse_document cache surface prior-turn outputs without re-parsing.
+    if options.include_playbooks:
+        _copy_playbooks(workspace, agent_instance_id)
+    else:
+        _clear_workspace_subdir(workspace, "playbooks")
+    _copy_attachments(
+        workspace,
+        attachments,
+        turn_id,
+        retain_previous=options.retain_previous_attachments,
+        agent_instance_id=agent_instance_id,
+        username=username,
+    )
+
+
+def _clear_workspace_subdir(workspace: Path, name: str) -> None:
+    path = workspace / name
+    if path.exists():
+        shutil.rmtree(path)
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +164,7 @@ def _copy_skills(workspace: Path, project_id: int, agent_id: str) -> None:
         shutil.rmtree(skills_dir)
     skills_dir.mkdir(parents=True, exist_ok=True)
 
-    index: list[dict[str, Any]] = []
-
+    skill_dirs: list[tuple[int, Path]] = []
     for _, _, skill_root in SKILLS_FS.roots(project_id=project_id, agent_id=agent_id):
         if not skill_root.exists():
             continue
@@ -125,31 +175,103 @@ def _copy_skills(workspace: Path, project_id: int, agent_id: str) -> None:
                 skill_id = int(skill_dir.name)
             except ValueError:
                 continue
+            skill_dirs.append((skill_id, latest_skill_version_dir(skill_dir)))
 
-            dest = skills_dir / str(skill_id)
-            shutil.copytree(skill_dir, dest, dirs_exist_ok=True)
+    _prune_staged_skill_runtimes(workspace, {skill_id for skill_id, _ in skill_dirs})
 
-            name = ""
-            description = ""
-            skill_md = dest / "SKILL.md"
-            if skill_md.exists():
-                try:
-                    meta = parse_skill_frontmatter(skill_md.read_text(encoding="utf-8"))
-                    name = meta.get("name", "")
-                    description = meta.get("description", "")
-                except Exception as exc:
-                    _LOGGER.warning("Failed to parse SKILL.md for skill %s: %s", skill_id, exc)
+    index: list[dict[str, Any]] = []
+    for skill_id, skill_dir in skill_dirs:
+        dest = skills_dir / str(skill_id)
+        _stage_skill_runtime_for_workspace(workspace, skill_id, skill_dir)
+        source = skill_dir / RESOLVED_CORTEX_DIR
+        if not source.exists():
+            source = skill_dir / ORIGINAL_DIR
+        if not source.exists():
+            dest.mkdir(parents=True, exist_ok=True)
+            source_skill_md = skill_dir / "SKILL.md"
+            if source_skill_md.exists():
+                shutil.copy2(source_skill_md, dest / "SKILL.md")
+        else:
+            shutil.copytree(source, dest, dirs_exist_ok=True)
 
-            index.append(
-                {
-                    "id": skill_id,
-                    "name": name,
-                    "description": description,
-                }
-            )
+        name = ""
+        description = ""
+        skill_md = dest / "SKILL.md"
+        if skill_md.exists():
+            try:
+                meta = parse_skill_frontmatter(skill_md.read_text(encoding="utf-8"))
+                name = meta.get("name", "")
+                description = meta.get("description", "")
+            except Exception as exc:
+                _LOGGER.warning("Failed to parse SKILL.md for skill %s: %s", skill_id, exc)
+
+        index.append(
+            {
+                "id": skill_id,
+                "name": name,
+                "description": description,
+                "actions": _skill_actions_for_index(skill_dir),
+            }
+        )
 
     (skills_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
     _LOGGER.info("Copied %d skills to workspace", len(index))
+
+
+def _prune_staged_skill_runtimes(workspace: Path, active_skill_ids: set[int]) -> None:
+    staged_skills_dir = workspace.parent / "skills"
+    if not staged_skills_dir.is_dir():
+        return
+    for staged_skill_dir in staged_skills_dir.iterdir():
+        if not staged_skill_dir.is_dir():
+            continue
+        try:
+            skill_id = int(staged_skill_dir.name)
+        except ValueError:
+            continue
+        if skill_id not in active_skill_ids:
+            shutil.rmtree(staged_skill_dir)
+
+
+def _stage_skill_runtime_for_workspace(workspace: Path, skill_id: int, skill_dir: Path) -> Path:
+    staged_skill_root = workspace.parent / "skills" / str(skill_id)
+    if staged_skill_root.exists():
+        shutil.rmtree(staged_skill_root)
+    staged_skill_root.mkdir(parents=True, exist_ok=True)
+
+    runtime_source = skill_dir / ORIGINAL_DIR
+    runtime_dest = staged_skill_root / "runtime"
+    if runtime_source.exists():
+        shutil.copytree(runtime_source, runtime_dest, dirs_exist_ok=True)
+    else:
+        shutil.copytree(skill_dir, runtime_dest, dirs_exist_ok=True)
+
+    resolved_source = skill_dir / RESOLVED_DIR
+    if resolved_source.exists():
+        shutil.copytree(resolved_source, staged_skill_root / RESOLVED_DIR, dirs_exist_ok=True)
+    return staged_skill_root
+
+
+def _skill_actions_for_index(skill_dir: Path) -> list[dict[str, Any]]:
+    try:
+        actions = load_resolved_actions(skill_dir)
+    except Exception:
+        _LOGGER.warning("Failed to load resolved actions for skill index: %s", skill_dir, exc_info=True)
+        return []
+    indexed_actions: list[dict[str, Any]] = []
+    for action in actions:
+        required = infer_required_parameter_names(action)
+        indexed_actions.append(
+            {
+                "name": action.name,
+                "description": action.description,
+                "infra_requirements": list(action.infra_requirements),
+                "parameters": [
+                    {**parameter.model_dump(), "required": parameter.name in required} for parameter in action.parameters
+                ],
+            }
+        )
+    return indexed_actions
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +379,59 @@ def _copy_history(workspace: Path, agent_instance_id: int, username: str, curren
             dest_report = dest / "report"
             shutil.copytree(report_dir, dest_report, dirs_exist_ok=True)
 
-    _LOGGER.info("Copied %d history turns to workspace", len(recent_turns))
+    rerun_source_turns = _copy_rerun_sources_history(workspace, agent_instance_id, username, turn_ids, current_turn_id)
+    extra_history_turns = _copy_registered_history_subdirs(workspace, agent_instance_id, username, turn_ids, current_turn_id)
+
+    _LOGGER.info(
+        "Copied %d history turns, %d rerun source turns, and %d adapter history turns to workspace",
+        len(recent_turns),
+        rerun_source_turns,
+        extra_history_turns,
+    )
+
+
+def _copy_rerun_sources_history(
+    workspace: Path,
+    agent_instance_id: int,
+    username: str,
+    turn_ids: list[int],
+    current_turn_id: int,
+) -> int:
+    copied = 0
+    for tid in sorted((turn_id for turn_id in turn_ids if turn_id < current_turn_id), reverse=True):
+        source_dir = CHAT_FS._get_turn_path(agent_instance_id, username, tid) / RERUN_SOURCES_DIR
+        if not source_dir.exists():
+            continue
+        dest = workspace / "history" / f"turn-{tid}" / RERUN_SOURCES_DIR
+        shutil.copytree(source_dir, dest, dirs_exist_ok=True)
+        copied += 1
+    return copied
+
+
+def _copy_registered_history_subdirs(
+    workspace: Path,
+    agent_instance_id: int,
+    username: str,
+    turn_ids: list[int],
+    current_turn_id: int,
+) -> int:
+    subdirs = iter_history_subdirs()
+    if not subdirs:
+        return 0
+    copied = 0
+    for tid in sorted((turn_id for turn_id in turn_ids if turn_id < current_turn_id), reverse=True):
+        turn_root = CHAT_FS._get_turn_path(agent_instance_id, username, tid)
+        copied_turn = False
+        for subdir in subdirs:
+            source_dir = turn_root / subdir
+            if not source_dir.exists():
+                continue
+            dest = workspace / "history" / f"turn-{tid}" / subdir
+            shutil.copytree(source_dir, dest, dirs_exist_ok=True)
+            copied_turn = True
+        if copied_turn:
+            copied += 1
+    return copied
 
 
 # ---------------------------------------------------------------------------
@@ -308,20 +482,31 @@ def _copy_playbooks(workspace: Path, agent_instance_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _copy_attachments(workspace: Path, attachments: list[Any] | None) -> None:
+def _copy_attachments(
+    workspace: Path,
+    attachments: list[Any] | None,
+    turn_id: int,
+    *,
+    retain_previous: bool = False,
+    agent_instance_id: int = 0,
+    username: str = "",
+) -> None:
     attach_dir = workspace / "attachments"
-    # Clean up old attachments
-    if attach_dir.exists():
-        shutil.rmtree(attach_dir)
-
     if not attachments:
+        if retain_previous and attach_dir.exists():
+            _LOGGER.info("Retained existing workspace attachments for later turns")
+        elif attach_dir.exists():
+            shutil.rmtree(attach_dir)
         return
 
+    if attach_dir.exists() and not retain_previous:
+        shutil.rmtree(attach_dir)
     attach_dir.mkdir(parents=True, exist_ok=True)
+    index = _load_attachment_index(attach_dir) if retain_previous else {}
     copied = 0
 
     for attachment in attachments:
-        name = getattr(attachment, "name", "") or "unnamed"
+        name = _safe_attachment_name(getattr(attachment, "name", "") or "unnamed")
         att_type = getattr(attachment, "type", "") or ""
         # Skip image attachments — they're sent inline with the user message
         if att_type.lower().startswith("image"):
@@ -337,11 +522,57 @@ def _copy_attachments(workspace: Path, attachments: list[Any] | None) -> None:
             target = attach_dir / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(resp.content)
+            dispatch_attachment_hooks(
+                AttachmentHookContext(
+                    path=target,
+                    name=name,
+                    attachment_type=att_type,
+                    agent_instance_id=agent_instance_id,
+                    username=username,
+                    turn_id=turn_id,
+                )
+            )
             # Save the SAS URL alongside the file for tools that need the original link
             url_file = attach_dir / f"{name}_url.txt"
             url_file.write_text(sas_url, encoding="utf-8")
+            index[name] = {
+                "name": name,
+                "path": f"attachments/{name}",
+                "url_path": f"attachments/{name}_url.txt",
+                "type": att_type,
+                "source_turn_id": turn_id,
+                "downloaded_at": int(time.time() * 1000),
+            }
             copied += 1
         except Exception as exc:
             _LOGGER.warning("Failed to download attachment %s: %s", name, exc)
 
+    _write_attachment_index(attach_dir, index)
     _LOGGER.info("Downloaded %d attachments to workspace", copied)
+
+
+def _load_attachment_index(attach_dir: Path) -> dict[str, dict[str, Any]]:
+    index_path = attach_dir / "index.json"
+    if not index_path.exists():
+        return {}
+    try:
+        loaded = json.loads(index_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(loaded, list):
+        return {}
+    entries: dict[str, dict[str, Any]] = {}
+    for item in loaded:
+        if isinstance(item, dict) and isinstance(item.get("name"), str):
+            entries[item["name"]] = item
+    return entries
+
+
+def _write_attachment_index(attach_dir: Path, index: dict[str, dict[str, Any]]) -> None:
+    payload = sorted(index.values(), key=lambda item: str(item.get("name", "")))
+    (attach_dir / "index.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _safe_attachment_name(name: str) -> str:
+    safe = Path(name).name.strip()
+    return safe or "unnamed"

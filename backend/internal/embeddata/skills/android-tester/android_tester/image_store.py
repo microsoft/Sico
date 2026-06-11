@@ -34,6 +34,7 @@ import httpx
 from PIL import Image as _PILImage
 
 from android_tester.asset_uploader import AssetUploader
+from android_tester.utils import write_bytes_atomically
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,16 @@ class Image:
 
     ``uri`` is unset until the image has been persisted by an
     :class:`ImageStore`. Stores typically set it in place.
+
+    :attr:`original_size` is the pixel size of the source image before
+    any downscaling. For an image that has never been resized it equals
+    :attr:`size`; for a downscaled copy produced by :meth:`to_jpeg` it
+    carries the size of the original. Callers that need to map back to
+    the source coordinate space (e.g. device pixels for ADB) should use
+    :attr:`original_size`.
     """
 
-    __slots__ = ("_data", "mime", "size", "uri")
+    __slots__ = ("_data", "mime", "original_size", "size", "uri")
 
     def __init__(
         self,
@@ -56,11 +64,13 @@ class Image:
         mime: str,
         size: tuple[int, int],
         uri: str | None = None,
+        original_size: tuple[int, int] | None = None,
     ) -> None:
         self._data = data
         self.mime = mime
         self.size = size
         self.uri = uri
+        self.original_size = size if original_size is None else original_size
 
     async def read(self) -> bytes:
         try:
@@ -160,15 +170,60 @@ class Image:
             size = img.size
         return cls(data=data, mime="image/png", size=size)
 
-    def to_jpeg(self, *, quality: int = 85) -> Image:
-        """Return a JPEG copy of this image (or *self* if already JPEG)."""
-        if self.mime == "image/jpeg":
+    def to_jpeg(
+        self,
+        *,
+        quality: int = 85,
+        max_size: tuple[int, int] | None = None,
+    ) -> Image:
+        """Return a JPEG copy of this image, optionally downscaled.
+
+        If *max_size* is provided, the copy is resampled to fit within
+        ``max_size`` while preserving aspect ratio (Lanczos). This
+        method never upscales.
+
+        Returns *self* unchanged when the image is already JPEG and
+        no downscale is needed.
+        """
+        target_size = self._clamp_size(max_size)
+        if self.mime == "image/jpeg" and target_size == self.size:
             return self
+        return self._encode_jpeg(target_size, quality)
+
+    def _clamp_size(
+        self, max_size: tuple[int, int] | None,
+    ) -> tuple[int, int]:
+        """Return the output size after fitting within *max_size*.
+
+        Aspect ratio is preserved. Returns :attr:`size` unchanged when
+        *max_size* is ``None`` or already fits both bounds (this method
+        never upscales).
+        """
+        cw, ch = self.size
+        if max_size is None:
+            return self.size
+        mw, mh = max_size
+        if cw <= mw and ch <= mh:
+            return self.size
+        scale = min(mw / cw, mh / ch)
+        return (round(cw * scale), round(ch * scale))
+
+    def _encode_jpeg(
+        self, target_size: tuple[int, int], quality: int,
+    ) -> Image:
+        """Encode :attr:`_data` as JPEG, resampling to *target_size*."""
         out = io.BytesIO()
         with _PILImage.open(io.BytesIO(self._data)) as img:
-            img.convert("RGB").save(out, "JPEG", quality=quality)
-            size = img.size
-        return Image(data=out.getvalue(), mime="image/jpeg", size=size)
+            rgb = img.convert("RGB")
+            if target_size != self.size:
+                rgb = rgb.resize(
+                    target_size, _PILImage.Resampling.LANCZOS,
+                )
+            rgb.save(out, "JPEG", quality=quality)
+        return Image(
+            data=out.getvalue(), mime="image/jpeg", size=target_size,
+            original_size=self.original_size,
+        )
 
 
 class ImageStore(ABC):
@@ -196,8 +251,7 @@ class LocalImageStore(ImageStore):
 
     async def put(self, image: Image, *, name: str) -> Image:
         path = (self._root / name).resolve()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(await image.read())
+        write_bytes_atomically(path, await image.read())
         image.uri = str(path)
         return image
 

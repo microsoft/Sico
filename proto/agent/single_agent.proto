@@ -182,6 +182,7 @@ message SingleAgentInfo {
   string role = 2;       // @gotag: json:"role"
   string name = 3;       // @gotag: json:"name"
   repeated string capability_tags = 4; // @gotag: json:"capabilityTags"
+  string creator_username = 5; // @gotag: json:"creatorUsername"
 }
 
 message ListRolesResponse {

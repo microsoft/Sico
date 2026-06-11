@@ -26,6 +26,7 @@ from agent_framework._middleware import FunctionInvocationContext
 
 from app.biz.chat.chat import _Mem0MemoryTask, _store_memories
 from app.memory.mem0 import (
+    _redact_config_for_log,
     build_memory_filters,
 )
 from app.tools.common import _TOOL_CONTEXT_KWARGS_KEY, ToolContext
@@ -155,6 +156,29 @@ def test_build_memory_filters_sanitizes_mem0_entity_ids():
         "user_id": "Alice_Smith",
         "agent_id": "agent_123",
     }
+
+
+def test_mem0_config_logging_redacts_sensitive_values():
+    config = {
+        "embedder": {
+            "config": {
+                "azure_kwargs": {
+                    "api_key": "secret-key",
+                    "azure_endpoint": "https://example.test",
+                }
+            }
+        },
+        "headers": [{"Authorization": "Bearer token", "x-feature": "enabled"}],
+    }
+
+    redacted = _redact_config_for_log(config)
+
+    assert redacted["embedder"]["config"]["azure_kwargs"] == {
+        "api_key": "[REDACTED]",
+        "azure_endpoint": "https://example.test",
+    }
+    assert redacted["headers"][0] == {"Authorization": "[REDACTED]", "x-feature": "enabled"}
+    assert config["embedder"]["config"]["azure_kwargs"]["api_key"] == "secret-key"
 
 
 @pytest.mark.asyncio
