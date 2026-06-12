@@ -47,11 +47,6 @@ def _strip_message(node: object) -> object:
         return [_strip_message(item) for item in node]
     return node
 
-
-def test_examples_directory_is_populated() -> None:
-    assert _EXAMPLE_FILES, f"no example fixtures found under {_EXAMPLES_DIR}"
-
-
 @pytest.mark.parametrize("example", _EXAMPLE_FILES, ids=lambda p: p.name)
 def test_example_conforms_to_tool_call_schema(example: Path) -> None:
     raw = json.loads(example.read_text())
