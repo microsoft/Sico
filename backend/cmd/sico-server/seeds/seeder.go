@@ -912,27 +912,9 @@ func ensureSkill(ctx context.Context, injector *di.Injector, skillFiles []seedSk
 	}
 
 	// 1) Upload the skill archive as an unscoped project asset (idempotent).
-	assetIds := make([]int64, 0, len(skillFiles))
-	for i, skillFile := range skillFiles {
-		if skillFile.FileName == "" {
-			return fmt.Errorf("ensureSkill: skill file %d missing filename", i)
-		}
-		if len(skillFile.Content) == 0 {
-			return fmt.Errorf("ensureSkill: %s is empty", skillFile.FileName)
-		}
-		assetID, _, err := ensureAsset(ctx, injector, "",
-			embeddedFile{bytes.NewReader(skillFile.Content)},
-			types.FileExtraInfo{
-				FileName:    skillFile.FileName,
-				ContentType: defaultSkillContentType,
-				FileExt:     defaultSkillExt,
-				FileType:    defaultSkillFileType,
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("ensureSkill: upload asset %d: %w", i, err)
-		}
-		assetIds = append(assetIds, assetID)
+	assetIds, err := uploadSkillAssets(ctx, injector, skillFiles)
+	if err != nil {
+		return err
 	}
 
 	// CreateSkill / UpdateSkill expect an authenticated user in context.
@@ -953,44 +935,91 @@ func ensureSkill(ctx context.Context, injector *di.Injector, skillFiles []seedSk
 
 	// 3) Update existing skill records in place; create rows only when adding more seed skills.
 	for i, assetID := range assetIds {
-		if i >= len(existingSkills) {
-			if _, err := injector.SkillApp.CreateSkill(skillCtx, &skilldto.CreateSkillRequest{
-				AgentId: agentId,
-				AssetId: assetID,
-			}); err != nil {
-				return fmt.Errorf("ensureSkill: create skill: %w", err)
-			}
-			logger.CtxInfo(ctx, "ensureSkill: created skill for agent %s with asset %d", agentId, assetID)
-			continue
-		}
-
-		existing := existingSkills[i]
-		currentVersion, currentAssetID, err := currentSkillVersionForSeed(skillCtx, injector, existing.GetId())
-		if err != nil {
+		if err := syncSkillRecord(ctx, skillCtx, injector, existingSkills, i, assetID, agentId); err != nil {
 			return err
 		}
-		if currentAssetID == assetID {
-			logger.CtxInfo(
-				ctx,
-				"ensureSkill: skipped unchanged skill %d for agent %s asset=%d",
-				existing.GetId(), agentId, assetID,
-			)
-			continue
-		}
-		if _, err := injector.SkillApp.UpdateSkill(skillCtx, &skilldto.UpdateSkillRequest{
-			Id:             existing.GetId(),
-			AssetId:        assetID,
-			CurrentVersion: currentVersion,
-		}); err != nil {
-			return fmt.Errorf("ensureSkill: update skill %d: %w", existing.GetId(), err)
-		}
-		logger.CtxInfo(
-			ctx,
-			"ensureSkill: updated skill %d for agent %s asset %d -> %d",
-			existing.GetId(), agentId, currentAssetID, assetID,
-		)
 	}
 
+	return nil
+}
+
+// uploadSkillAssets uploads each skill file as an unscoped project asset and
+// returns the corresponding asset IDs.
+func uploadSkillAssets(ctx context.Context, injector *di.Injector, skillFiles []seedSkillFile) ([]int64, error) {
+	assetIds := make([]int64, 0, len(skillFiles))
+	for i, skillFile := range skillFiles {
+		if skillFile.FileName == "" {
+			return nil, fmt.Errorf("ensureSkill: skill file %d missing filename", i)
+		}
+		if len(skillFile.Content) == 0 {
+			return nil, fmt.Errorf("ensureSkill: %s is empty", skillFile.FileName)
+		}
+		assetID, _, err := ensureAsset(ctx, injector, "",
+			embeddedFile{bytes.NewReader(skillFile.Content)},
+			types.FileExtraInfo{
+				FileName:    skillFile.FileName,
+				ContentType: defaultSkillContentType,
+				FileExt:     defaultSkillExt,
+				FileType:    defaultSkillFileType,
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("ensureSkill: upload asset %d: %w", i, err)
+		}
+		assetIds = append(assetIds, assetID)
+	}
+	return assetIds, nil
+}
+
+// syncSkillRecord creates or updates a single skill record to match the
+// expected asset ID. When index exceeds the number of existing skills a new
+// record is created; otherwise the existing record is updated only when the
+// underlying asset has changed.
+func syncSkillRecord(
+	ctx context.Context,
+	skillCtx context.Context,
+	injector *di.Injector,
+	existingSkills []*skilldto.Skill,
+	index int,
+	assetID int64,
+	agentId string,
+) error {
+	if index >= len(existingSkills) {
+		if _, err := injector.SkillApp.CreateSkill(skillCtx, &skilldto.CreateSkillRequest{
+			AgentId: agentId,
+			AssetId: assetID,
+		}); err != nil {
+			return fmt.Errorf("ensureSkill: create skill: %w", err)
+		}
+		logger.CtxInfo(ctx, "ensureSkill: created skill for agent %s with asset %d", agentId, assetID)
+		return nil
+	}
+
+	existing := existingSkills[index]
+	currentVersion, currentAssetID, err := currentSkillVersionForSeed(skillCtx, injector, existing.GetId())
+	if err != nil {
+		return err
+	}
+	if currentAssetID == assetID {
+		logger.CtxInfo(
+			ctx,
+			"ensureSkill: skipped unchanged skill %d for agent %s asset=%d",
+			existing.GetId(), agentId, assetID,
+		)
+		return nil
+	}
+	if _, err := injector.SkillApp.UpdateSkill(skillCtx, &skilldto.UpdateSkillRequest{
+		Id:             existing.GetId(),
+		AssetId:        assetID,
+		CurrentVersion: currentVersion,
+	}); err != nil {
+		return fmt.Errorf("ensureSkill: update skill %d: %w", existing.GetId(), err)
+	}
+	logger.CtxInfo(
+		ctx,
+		"ensureSkill: updated skill %d for agent %s asset %d -> %d",
+		existing.GetId(), agentId, currentAssetID, assetID,
+	)
 	return nil
 }
 

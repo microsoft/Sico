@@ -26,7 +26,6 @@ from app.biz.task_runtime.sandbox_types import (
     INFRA_TO_OS,
     SANDBOX_OSES,
     SANDBOX_TYPES,
-    TYPE_OS,
     InfraRequirement,
     SandboxOS,
     SandboxType,

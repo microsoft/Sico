@@ -21,6 +21,7 @@
 """Tests for app.storage.fs — StorageFS, SCMemoryFS, ChatFS, parse_skill_frontmatter."""
 
 import pathlib
+import sys
 
 import pytest
 
@@ -32,6 +33,7 @@ from app.storage.fs import ChatFS, SCMemoryFS, StorageFS, parse_skill_frontmatte
 # ===========================================================================
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX host-path prefix assertion uses forward-slash semantics")
 class TestStoragePvcRoot:
     def test_returns_chat_root(self, monkeypatch):
         # The sandbox PVC root is the chat root: everything the sandbox mounts

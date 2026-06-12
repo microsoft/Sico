@@ -248,6 +248,7 @@ def test_to_host_path_maps_chat_root_prefix(monkeypatch):
 # --- _sandbox_volume_mounts (hostPath vs PVC storage source) ----------------
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX host-path prefix assertion uses forward-slash semantics")
 def test_sandbox_volume_mounts_default_to_hostpath(monkeypatch):
     monkeypatch.delenv("RUN_PYTHON_TOOL_SANDBOX_STORAGE_PVC", raising=False)
     monkeypatch.delenv("TASK_RUNTIME_CONTAINER_HOSTPATH_BASE", raising=False)
@@ -261,6 +262,7 @@ def test_sandbox_volume_mounts_default_to_hostpath(monkeypatch):
     assert mount.read_only is True
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX host-path prefix assertion uses forward-slash semantics")
 def test_sandbox_volume_mounts_use_pvc_with_relative_sub_path(monkeypatch):
     # Networked storage: every mount references the shared claim, scoped to its
     # path relative to the claim mount root, so the pod sees core's bytes.
@@ -280,6 +282,7 @@ def test_sandbox_volume_mounts_use_pvc_with_relative_sub_path(monkeypatch):
     assert runtime.sub_path == "ws/skills/42/runtime"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX host-path prefix assertion uses forward-slash semantics")
 def test_sandbox_volume_mounts_honor_custom_storage_root(monkeypatch):
     monkeypatch.setenv("RUN_PYTHON_TOOL_SANDBOX_STORAGE_PVC", "chat-pvc")
     monkeypatch.setenv("RUN_PYTHON_TOOL_SANDBOX_STORAGE_ROOT", "/data")
@@ -287,6 +290,7 @@ def test_sandbox_volume_mounts_honor_custom_storage_root(monkeypatch):
     assert mount.sub_path == "chat/ws"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX host-path prefix assertion uses forward-slash semantics")
 def test_sandbox_volume_mounts_auto_derive_storage_root(monkeypatch):
     # No ROOT env: the claim mount root defaults to the chat root, so operators
     # only ever supply the single claim name.

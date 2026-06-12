@@ -58,7 +58,10 @@ from .models import (
 from .progress_port import RuntimeProgressPort
 from .run_coordinator import RunCoordinator
 from .sandbox_coordinator import SandboxCoordinator
-from .config import _resolve_docker_concurrency, _resolve_k8s_pod_concurrency, _stale_run_after_ms, _task_runtime_heartbeat_interval_seconds
+from .config import (
+    _resolve_docker_concurrency, _resolve_k8s_pod_concurrency,
+    _stale_run_after_ms, _task_runtime_heartbeat_interval_seconds
+)
 from .executors.command_backend import RESOURCE_KEY_DOCKER, RESOURCE_KEY_K8S_POD, backend_resource_key
 from .tool_catalog import RUN_COMMAND_TOOL_NAME
 from .presentation.rendering.batch_view import _planned_batch_sizes, _with_result_snapshots

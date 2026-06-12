@@ -29,7 +29,9 @@ the same per-owner workspace path the live submit path uses.
 """
 
 from pathlib import Path
+import pytest
 from types import SimpleNamespace
+import sys
 
 from app.biz.task_runtime.stale_reconciler import StaleReconciler
 from app.biz.task_runtime.workspace import workspace_layout
@@ -43,6 +45,7 @@ def _raise_value_error(_batch_id: str) -> Path:
     raise ValueError("sidechain_root is required for stores without batch_dir")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX host-path prefix assertion uses forward-slash semantics")
 def test_artifacts_root_uses_batch_dir_when_available() -> None:
     reconciler = _reconciler(lambda batch_id: Path("/srv/runtime") / batch_id)
     batch = SimpleNamespace(batch_id="batch-abc")

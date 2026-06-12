@@ -227,7 +227,7 @@ class TestRunner:
     ) -> tuple[RunState | None, str | None, list[PreconditionRecord]]:
         """Establish each precondition in order, chaining their recorded
         setup steps into one cumulative warm state. The order is chosen
-        up front by the precondition planner. 
+        up front by the precondition planner.
         Returns ``(warm_state, None, records)`` on success, or
         ``(warm_state_or_none, failed_label, partial_records)`` if any
         precondition cannot be established."""
@@ -712,7 +712,7 @@ class TestRunner:
             x, y = cast(Point, value)
             if not (0 <= x < sw and 0 <= y < sh):
                 violations.append(f"{key}=({x}, {y})")
-        
+
         feedback = None
         if violations:
             feedback = (

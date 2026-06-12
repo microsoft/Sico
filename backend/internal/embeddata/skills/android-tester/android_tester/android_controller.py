@@ -1161,7 +1161,7 @@ class AndroidController:
         """Force-stop running standard apps without clearing their data.
 
         Unlike :meth:`clear_running_apps`, this only kills the processes
-        and returns to the home screen. Packages in ``keep_app_state`` are 
+        and returns to the home screen. Packages in ``keep_app_state`` are
         left running.
         """
         for pkg in await self.get_running_apps():
@@ -1174,7 +1174,7 @@ class AndroidController:
     # -- private helpers --
 
     async def _clear_app_data(
-        self, 
+        self,
         package: str,
         suppress_warnings: bool = False,
     ) -> None:

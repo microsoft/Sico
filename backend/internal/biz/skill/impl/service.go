@@ -171,7 +171,9 @@ func (s *Service) UpdateSkill(ctx context.Context, req *skill.UpdateSkillRequest
 	}), nil
 }
 
-func (s *Service) validateCurrentVersion(ctx context.Context, skillID int64, currentVersion string) (*repository.SkillVersionModel, error) {
+func (s *Service) validateCurrentVersion(
+	ctx context.Context, skillID int64, currentVersion string,
+) (*repository.SkillVersionModel, error) {
 	currentVersion = strings.TrimSpace(currentVersion)
 	if currentVersion == "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "currentVersion is required")
@@ -597,7 +599,9 @@ func (s *Service) skillVersionModelToDTO(ctx context.Context, rec *repository.Sk
 		var err error
 		url, err = s.skillDownloadURL(ctx, rec.AssetID)
 		if err != nil {
-			logger.CtxWarn(ctx, "skill: failed to build version download URL: id=%d version=%s asset=%d err=%v", rec.SkillID, rec.Version, rec.AssetID, err)
+			logger.CtxWarn(ctx,
+				"skill: failed to build version download URL: id=%d version=%s asset=%d err=%v",
+				rec.SkillID, rec.Version, rec.AssetID, err)
 		}
 		url = publicSkillDownloadURL(url)
 	}
@@ -662,7 +666,9 @@ func skillMetadataFromFiles(files []*skill.SkillFile) (string, string, bool, err
 		name := strings.TrimSpace(metadata["name"])
 		description := strings.TrimSpace(metadata["description"])
 		if name == "" || description == "" {
-			return "", "", true, apperr.New(errcode.CommonInvalidParam, "SKILL.md must contain non-empty name and description")
+			return "", "", true, apperr.New(
+				errcode.CommonInvalidParam, "SKILL.md must contain non-empty name and description",
+			)
 		}
 		return name, description, true, nil
 	}

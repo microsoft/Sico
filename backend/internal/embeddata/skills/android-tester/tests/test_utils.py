@@ -375,5 +375,3 @@ def test_write_file_atomically_concurrent_threads_no_torn_file(
         p.name for p in target.parent.iterdir() if p.name != "shared.json"
     ]
     assert leftover == []
-
-

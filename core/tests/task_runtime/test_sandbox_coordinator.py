@@ -77,7 +77,7 @@ class _ResetFailingLeaseManager:
     async def acquire(self, token: ReservationToken) -> SandboxLeaseRef:
         return SandboxLeaseRef(
             sandbox_id="sandbox-1",
-            type=token.type,
+            type="emulator",
             endpoint="127.0.0.1:5555",
             acquired_at=int(time.time() * 1000),
         )
@@ -109,7 +109,7 @@ def _run() -> TaskRun:
         task_id="task-1",
         title="Task 1",
         dispatch=ToolDispatch(tool_name="echo"),
-        required_sandbox="emulator",
+        required_sandbox="android",
     )
     return TaskRun(
         run_id="run-1",

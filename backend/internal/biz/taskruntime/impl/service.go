@@ -179,7 +179,9 @@ func (s *Service) RpcUpdateRun(ctx context.Context, req *rgrpc.UpdateRunRequest)
 // still in a retryable terminal status at the caller's expected_attempt (so a
 // duplicate or stale reopen cannot fire twice), then writes the caller-provided
 // next-attempt payload and drops the now-stale terminal result.
-func (s *Service) RpcReopenRunForRetry(ctx context.Context, req *rgrpc.ReopenRunForRetryRequest) (*rgrpc.EmptyTaskRuntimeResponse, error) {
+func (s *Service) RpcReopenRunForRetry(
+	ctx context.Context, req *rgrpc.ReopenRunForRetryRequest,
+) (*rgrpc.EmptyTaskRuntimeResponse, error) {
 	const op = "RpcReopenRunForRetry"
 	row, _, err := runRowFromJSON(req.GetRunJson())
 	if err != nil {
@@ -763,7 +765,8 @@ func ensureReopenable(row *taskRuntimeRunRow, expectedAttempt int) error {
 		return fmt.Errorf("%w: run %s is %s and cannot be reopened for retry", errStaleToken, row.RunID, row.Status)
 	}
 	if row.Attempt != expectedAttempt {
-		return fmt.Errorf("%w: run %s attempt %d does not match expected %d", errStaleToken, row.RunID, row.Attempt, expectedAttempt)
+		return fmt.Errorf("%w: run %s attempt %d does not match expected %d",
+			errStaleToken, row.RunID, row.Attempt, expectedAttempt)
 	}
 	return nil
 }
@@ -778,7 +781,10 @@ func ensureReopenable(row *taskRuntimeRunRow, expectedAttempt int) error {
 // rather than corrupting the row.
 func ensureReopenPayload(existing, incoming *taskRuntimeRunRow, expectedAttempt int) error {
 	if incoming.Status != statusQueued {
-		return fmt.Errorf("%w: reopen payload for run %s must be queued, got %s", errStaleToken, existing.RunID, incoming.Status)
+		return fmt.Errorf(
+			"%w: reopen payload for run %s must be queued, got %s",
+			errStaleToken, existing.RunID, incoming.Status,
+		)
 	}
 	if incoming.Attempt != expectedAttempt+1 {
 		return fmt.Errorf(
@@ -787,7 +793,9 @@ func ensureReopenPayload(existing, incoming *taskRuntimeRunRow, expectedAttempt 
 		)
 	}
 	if incoming.WorkerID != "" || incoming.FencingToken != "" || incoming.StartedAt != nil || incoming.EndedAt != nil {
-		return fmt.Errorf("%w: reopen payload for run %s must clear worker/fencing/timestamps", errStaleToken, existing.RunID)
+		return fmt.Errorf(
+			"%w: reopen payload for run %s must clear worker/fencing/timestamps",
+			errStaleToken, existing.RunID)
 	}
 	if incoming.BatchID != existing.BatchID ||
 		incoming.IdempotencyKey != existing.IdempotencyKey ||

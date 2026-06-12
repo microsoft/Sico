@@ -111,7 +111,9 @@ func TestEnsureReopenableRejectsNonRetryableStatuses(t *testing.T) {
 			t.Fatalf("status %q must not be reopenable", status)
 		}
 		if !IsStaleToken(err) {
-			t.Fatalf("status %q should surface a stale-token sentinel for FailedPrecondition mapping, got %v", status, err)
+			t.Fatalf(
+				"status %q should surface a stale-token sentinel "+
+					"for FailedPrecondition mapping, got %v", status, err)
 		}
 	}
 }
