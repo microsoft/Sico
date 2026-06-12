@@ -21,6 +21,7 @@ import (
 	"github.com/google/wire"
 
 	"sico-backend/internal/biz/taskruntime/impl"
+	taskruntimerepo "sico-backend/internal/store/taskruntime/repository"
 	"sico-backend/pkg/logger"
 )
 
@@ -35,8 +36,10 @@ func InitService(svc *impl.Service) Service {
 	return defaultSvc
 }
 
-// ProviderSet wires the task runtime persistence service.
+// ProviderSet wires the task runtime persistence service: the store-layer
+// repository, the reverse-gRPC adapter over it, and the singleton installer.
 var ProviderSet = wire.NewSet(
+	taskruntimerepo.NewTaskRuntimeRepo,
 	impl.NewService,
 	InitService,
 )

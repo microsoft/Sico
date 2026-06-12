@@ -121,6 +121,12 @@ _SWIPE_DURATIONS_MS: dict[str, int] = {
 
 _SDCARD_ROOT = "/sdcard"
 
+# On-device location for external-storage snapshots.
+_DEFAULT_BACKUP_DIR = "/data/local/tmp/.android-tester/backup"
+
+# External-storage trees snapshotted and restored around each run.
+_SNAPSHOT_ROOTS: tuple[str, ...] = ("/storage/emulated/0",)
+
 
 # -- exceptions ----------------------------------------------
 
@@ -468,6 +474,159 @@ def _quote_for_shell_single(text: str) -> str:
     return "'" + text.replace("'", "'\"'\"'") + "'"
 
 
+async def _broadcast_media_scan(
+    runner: ADBRunner, remote_path: str,
+) -> None:
+    """Ask MediaStore to (re)index *remote_path*."""
+    await runner.run(
+        [
+            "shell", "am", "broadcast",
+            "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+            "-d", f"file://{remote_path}",
+        ],
+        check=False,
+    )
+
+
+class _FileBaseline:
+    """Snapshots external storage at startup and restores it on cleanup.
+
+    :meth:`snapshot` gzips a tar of each configured root before the run.
+    :meth:`restore` then deletes the live contents of each root and
+    re-extracts its snapshot.
+    """
+
+    def __init__(
+        self,
+        runner: ADBRunner,
+        backup_dir: str,
+        roots: tuple[str, ...] = _SNAPSHOT_ROOTS,
+    ) -> None:
+        self._runner = runner
+        self._dir = backup_dir.rstrip("/")
+        self._roots = roots
+        self._snapshots: dict[str, str] = {}
+
+    async def snapshot(self) -> None:
+        """Archive each root so :meth:`restore` can recreate it."""
+        await self._runner.ensure_connected()
+        await self._runner.run(
+            ["shell", f"mkdir -p {_quote_for_shell_single(self._dir)}"],
+            check=False,
+        )
+        for root in self._roots:
+            await self._snapshot_root(root)
+
+    async def _snapshot_root(self, root: str) -> None:
+        tarball = self._build_tarball_path(root)
+        result = await self._runner.run(
+            [
+                "shell",
+                f"tar -czf {_quote_for_shell_single(tarball)} "
+                f"-C {_quote_for_shell_single(root)} .",
+            ],
+            check=False,
+        )
+        if result.returncode == 0:
+            self._snapshots[root] = tarball
+        else:
+            logger.warning(
+                "snapshot of %s failed: %s", root, result.stderr.strip(),
+            )
+
+    @staticmethod
+    def _build_archive_name(root: str) -> str:
+        return root.strip("/").replace("/", "_") or "root"
+
+    def _build_tarball_path(self, root: str) -> str:
+        return f"{self._dir}/{self._build_archive_name(root)}.tar.gz"
+
+    async def restore(self) -> None:
+        """Sync each snapshotted root to its archive, then rescan media."""
+        if not self._snapshots:
+            return
+        await self._runner.ensure_connected()
+        for root, tarball in self._snapshots.items():
+            await self._sync_root(root, tarball)
+        await self._rescan_media()
+        await self._runner.run(
+            ["shell", f"rm -rf {_quote_for_shell_single(self._dir)}"],
+            check=False,
+        )
+        self._snapshots.clear()
+
+    async def _sync_root(self, root: str, tarball: str) -> None:
+        """Restore *root* to its snapshot without crossing mount points.
+
+        Computes which files were created during the run, deletes just those, 
+        then extracts the archive to bring back modified or deleted files.
+        """
+        archived = await self._read_archived_files(root, tarball)
+        live = await self._read_live_files(root)
+        await self._delete_files(sorted(live - archived))
+        await self._extract_archive(root, tarball)
+
+    async def _read_archived_files(
+        self, root: str, tarball: str,
+    ) -> set[str]:
+        """Return the absolute paths of the files inside *tarball*."""
+        result = await self._runner.run(
+            ["shell", f"tar -tzf {_quote_for_shell_single(tarball)}"],
+            check=False,
+        )
+        prefix = root.rstrip("/")
+        files: set[str] = set()
+        for line in result.stdout.splitlines():
+            if not line or line.endswith("/"):  # skip blanks + directories
+                continue
+            relative = line[2:] if line.startswith("./") else line
+            files.add(f"{prefix}/{relative}")
+        return files
+
+    async def _read_live_files(self, root: str) -> set[str]:
+        """Return the absolute paths of the files currently under *root*."""
+        result = await self._runner.run(
+            ["shell", f"find {_quote_for_shell_single(root)} -type f"],
+            check=False,
+        )
+        return {line for line in result.stdout.splitlines() if line}
+
+    async def _delete_files(
+        self, 
+        paths: list[str], 
+        batch_size: int = 200,
+    ) -> None:
+        """Delete *paths* in batches small enough for one shell command."""
+        for start in range(0, len(paths), batch_size):
+            batch = paths[start:start + batch_size]
+            quoted = " ".join(_quote_for_shell_single(p) for p in batch)
+            await self._runner.run(
+                ["shell", f"rm -f {quoted}"], check=False,
+            )
+
+    async def _extract_archive(self, root: str, tarball: str) -> None:
+        """Extract *tarball* into *root*, restoring its snapshot files."""
+        await self._runner.run(
+            [
+                "shell",
+                f"tar -xzf {_quote_for_shell_single(tarball)} "
+                f"-C {_quote_for_shell_single(root)}",
+            ],
+            check=False,
+        )
+
+    async def _rescan_media(self) -> None:
+        await self._runner.run(
+            [
+                "shell", "content", "call",
+                "--uri", "content://media",
+                "--method", "scan_volume",
+                "--arg", "external_primary",
+            ],
+            check=False,
+        )
+
+
 # -- controller ------------------------------------------------
 
 
@@ -480,6 +639,7 @@ class AndroidController:
         app_map_path: Path,
         keep_app_state: frozenset[str] = frozenset(),
         resources_path: Path | None = None,
+        backup_dir: str = _DEFAULT_BACKUP_DIR,
     ) -> None:
         self._runner = runner
         self._app_map: dict[str, str] = json.loads(
@@ -487,6 +647,7 @@ class AndroidController:
         )
         self._keep_app_state = keep_app_state
         self._resources_path = resources_path
+        self._baseline = _FileBaseline(runner, backup_dir)
 
     @classmethod
     def create(
@@ -498,6 +659,7 @@ class AndroidController:
         adb_binary: str | None = None,
         keep_app_state: frozenset[str] = frozenset(),
         resources_path: Path | None = None,
+        backup_dir: str = _DEFAULT_BACKUP_DIR,
     ) -> AndroidController:
         """Build an :class:`AndroidController` and its underlying
         :class:`ADBRunner` in one call.
@@ -517,6 +679,7 @@ class AndroidController:
             app_map_path=app_map_path,
             keep_app_state=keep_app_state,
             resources_path=resources_path,
+            backup_dir=backup_dir,
         )
 
     @property
@@ -968,7 +1131,9 @@ class AndroidController:
         *source* is a path relative to the resources directory; *dest*
         is a destination folder under ``/sdcard``. The pushed file keeps
         its source basename. A media scan is broadcast afterwards so the
-        file appears in gallery/Files apps.
+        file appears in gallery/Files apps. The remote path is tracked
+        so :meth:`restore_file_baseline` can reverse the copy when the
+        session ends.
         """
         local = self._resolve_resource(source)
         dest_dir = self._resolve_sdcard_path(dest)
@@ -980,23 +1145,32 @@ class AndroidController:
         await self._media_scan(remote)
 
     async def delete_file(self, path: str) -> None:
-        """Delete a file under ``/sdcard`` and trigger a media rescan."""
+        """Delete a file under ``/sdcard`` and trigger a media rescan.
+
+        The pre-run snapshot taken by :meth:`snapshot_baseline` brings
+        the file back on cleanup if it pre-existed at the baseline.
+        """
         remote = self._resolve_sdcard_path(path)
         await self._runner.run(
             ["shell", f"rm -f {_quote_for_shell_single(remote)}"],
         )
         await self._media_scan(remote)
 
+    async def snapshot_baseline(self) -> None:
+        """Snapshot external storage so it can be restored after the run."""
+        await self._baseline.snapshot()
+
+    async def restore_file_baseline(self) -> None:
+        """Restore external storage to its pre-run snapshot.
+
+        Delegates to the file baseline, which deletes the live contents
+        of each snapshotted root and re-extracts the archive, then
+        rescans MediaStore.
+        """
+        await self._baseline.restore()
+
     async def _media_scan(self, remote_path: str) -> None:
-        """Ask MediaStore to (re)index *remote_path*."""
-        await self._runner.run(
-            [
-                "shell", "am", "broadcast",
-                "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
-                "-d", f"file://{remote_path}",
-            ],
-            check=False,
-        )
+        await _broadcast_media_scan(self._runner, remote_path)
 
     def _resolve_resource(self, source: str) -> Path:
         """Resolve *source* to a file inside the resources directory.

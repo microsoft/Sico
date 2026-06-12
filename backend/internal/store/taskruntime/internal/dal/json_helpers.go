@@ -1,21 +1,4 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
-package impl
+package dal
 
 import (
 	"bytes"
@@ -25,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/datatypes"
 )
 
@@ -36,12 +18,15 @@ func decodeJSONMap(payload string, label string) (jsonMap, error) {
 	if trimmed == "" {
 		return nil, fmt.Errorf("%s is required", label)
 	}
+
 	decoder := json.NewDecoder(bytes.NewBufferString(trimmed))
 	decoder.UseNumber()
+
 	var result map[string]any
 	if err := decoder.Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", label, err)
 	}
+
 	return result, nil
 }
 
@@ -51,11 +36,13 @@ func decodeJSONValue[T any](payload string, label string) (T, error) {
 	if trimmed == "" {
 		return result, fmt.Errorf("%s is required", label)
 	}
+
 	decoder := json.NewDecoder(bytes.NewBufferString(trimmed))
 	decoder.UseNumber()
 	if err := decoder.Decode(&result); err != nil {
 		return result, fmt.Errorf("decode %s: %w", label, err)
 	}
+
 	return result, nil
 }
 
@@ -69,6 +56,7 @@ func marshalJSON(value any) datatypes.JSON {
 	if err != nil {
 		panic(fmt.Sprintf("taskruntime: marshalJSON failed for %T: %v", value, err))
 	}
+
 	return datatypes.JSON(payload)
 }
 
@@ -81,6 +69,7 @@ func compactJSON(payload string) string {
 	if err := json.Compact(&buf, []byte(payload)); err != nil {
 		return payload
 	}
+
 	return buf.String()
 }
 
@@ -89,9 +78,11 @@ func getString(m jsonMap, key string) string {
 	if !ok || value == nil {
 		return ""
 	}
+
 	if text, ok := value.(string); ok {
 		return text
 	}
+
 	return fmt.Sprint(value)
 }
 
@@ -104,15 +95,8 @@ func getInt64(m jsonMap, key string) int64 {
 	if !ok || value == nil {
 		return 0
 	}
-	return anyToInt64(value)
-}
 
-func getUint64(m jsonMap, key string) uint64 {
-	value := getInt64(m, key)
-	if value < 0 {
-		return 0
-	}
-	return uint64(value)
+	return anyToInt64(value)
 }
 
 func getOptionalInt64(m jsonMap, key string) *int64 {
@@ -120,43 +104,9 @@ func getOptionalInt64(m jsonMap, key string) *int64 {
 	if !ok || value == nil {
 		return nil
 	}
+
 	converted := anyToInt64(value)
 	return &converted
-}
-
-func getOptionalUint64(m jsonMap, key string) *uint64 {
-	value, ok := m[key]
-	if !ok || value == nil {
-		return nil
-	}
-	converted := anyToInt64(value)
-	if converted < 0 {
-		converted = 0
-	}
-	result := uint64(converted)
-	return &result
-}
-
-func getMap(m jsonMap, key string) jsonMap {
-	value, ok := m[key]
-	if !ok || value == nil {
-		return nil
-	}
-	if result, ok := value.(map[string]any); ok {
-		return result
-	}
-	return nil
-}
-
-func getArray(m jsonMap, key string) []any {
-	value, ok := m[key]
-	if !ok || value == nil {
-		return nil
-	}
-	if result, ok := value.([]any); ok {
-		return result
-	}
-	return nil
 }
 
 func anyToInt64(value any) int64 {
@@ -184,10 +134,6 @@ func putValue(m jsonMap, key string, value any) {
 	m[key] = value
 }
 
-func nowMS() uint64 {
-	return uint64(time.Now().UnixMilli())
-}
-
-func newID(prefix string) string {
-	return prefix + "-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+func nowMS() int64 {
+	return time.Now().UnixMilli()
 }

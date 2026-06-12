@@ -140,6 +140,9 @@ class RunFactory:
             command_timeout=self.cfg.adb_command_timeout,
             keep_app_state=frozenset(self.cfg.keep_app_state or ()),
             resources_path=self.cfg.resources_path,
+            backup_dir=(
+                f"/data/local/tmp/.android-tester/backup/{self.cfg.task_id}"
+            ),
         )
 
     @cached_property

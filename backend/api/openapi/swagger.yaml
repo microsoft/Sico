@@ -4832,8 +4832,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Apply for a sandbox of the specified type. One instanceID can have
-        multiple sandboxes.
+      description: Apply for a sandbox supplying the requested OS. One instanceID
+        can have multiple sandboxes.
       parameters:
       - description: Instance context (JSON with agentInstanceId)
         in: header
@@ -4860,7 +4860,7 @@ paths:
         name: X-Sico-Signature
         required: true
         type: string
-      - description: Sandbox type to apply
+      - description: Sandbox OS to apply
         in: body
         name: request
         required: true

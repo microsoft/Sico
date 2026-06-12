@@ -35,6 +35,7 @@ import (
 	"sico-backend/internal/store/rbac/enforcer"
 	repository2 "sico-backend/internal/store/rbac/repository"
 	repository7 "sico-backend/internal/store/skill/repository"
+	repository9 "sico-backend/internal/store/taskruntime/repository"
 )
 
 // Injectors from wire.go:
@@ -155,7 +156,8 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 	modelRegistryRepository := repository8.NewModelRegistryRepo(db)
 	modelRegistrySecretRepository := repository8.NewModelRegistrySecretRepo(db)
 	llmhubsService := llmhubs.InitService(db, clientConn, modelRegistryRepository, modelRegistrySecretRepository, singleAgentLLMHubConfigRepository)
-	service3 := impl8.NewService(db)
+	taskRuntimeRepository := repository9.NewTaskRuntimeRepo(db)
+	service3 := impl8.NewService(taskRuntimeRepository)
 	taskruntimeService := taskruntime.InitService(service3)
 	injector := &Injector{
 		DB:              db,

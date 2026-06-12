@@ -118,8 +118,7 @@ class PreconditionManager:
         self._cache_dir = cache_dir
         self._event_logger = event_logger
         self._image_store = image_store
-        self._runner_kwargs = runner_kwargs or {}
-        # reset would undo the precondition established
+        self._runner_kwargs = dict(runner_kwargs or {})
         self._runner_kwargs["reset_after_execution"] = False
 
     @measure_time("precondition_establish_duration")
@@ -139,7 +138,8 @@ class PreconditionManager:
         starts from a clean home screen, independent of where the
         previous precondition's UI happened to end.
         """
-        await self._controller.close_running_apps()
+        if step_offset > 0:
+            await self._controller.close_running_apps()
 
         script_path = self._get_script_path(label)
         script = self._try_load_script(script_path)

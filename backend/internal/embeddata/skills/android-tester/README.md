@@ -83,6 +83,8 @@ The file tools are available **only when `--resources-path` is set** — without
 
 Resource and device paths are validated to stay within `--resources-path` and `/sdcard` respectively; `..` traversal is rejected. Because precondition scripts are cached and replayed, a `FilePut` recorded for a label re-reads its `source` from the resources directory on replay — pass the same `--resources-path` (containing that file) when reusing such a label.
 
+At the **start of every run**, external storage (`/storage/emulated/0`, i.e. `/sdcard`) is snapshotted to a gzipped tar under `/data/local/tmp/.android-tester/backup/<task-id>/`. When the run ends, that snapshot is restored as a **sync**: every live file whose path is absent from the archive (data created during the run, e.g. camera shots, temp files, prepared files) is deleted, then the archive is extracted to bring back modified or deleted files, followed by a single MediaStore volume rescan.
+
 ### Examples
 
 Single run:

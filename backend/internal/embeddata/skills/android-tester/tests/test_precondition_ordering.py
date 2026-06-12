@@ -68,6 +68,29 @@ def _make_manager(tmp_path: Path, llm: MagicMock | None = None):
     )
 
 
+def test_runner_kwargs_not_mutated(tmp_path: Path) -> None:
+    """The manager must not mutate the runner_kwargs it is given.
+
+    The factory shares one ``_runner_kwargs`` dict between the
+    precondition manager and the main runner. Forcing
+    ``reset_after_execution=False`` for preconditions must not leak into
+    the main runner, or the device is never reset after a test case.
+    """
+    shared = {"reset_after_execution": True}
+    manager = PreconditionManager(
+        controller=MagicMock(),
+        llm=MagicMock(),
+        data_root=_DATA_ROOT,
+        cache_dir=tmp_path / "preconditions",
+        event_logger=MagicMock(),
+        image_store=MagicMock(),
+        runner_kwargs=shared,
+    )
+    assert shared["reset_after_execution"] is True
+    assert manager._runner_kwargs is not shared
+    assert manager._runner_kwargs["reset_after_execution"] is False
+
+
 # ---------------------------------------------------------------------------
 # parse_precondition_order
 # ---------------------------------------------------------------------------

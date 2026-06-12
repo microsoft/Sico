@@ -339,3 +339,55 @@ class TestActionExecutionResultLogging:
         assert "ClipboardGet" in html
         assert "Hello world" in html
         assert "line 1<br/>line 2" in html
+
+
+# ---------------------------------------------------------------------------
+# Retries re-establish preconditions (and re-snapshot) per attempt.
+# ---------------------------------------------------------------------------
+
+
+class TestRetryReestablishesPreconditions:
+    async def test_each_attempt_reestablishes_and_snapshots(self) -> None:
+        runner = _make_runner([MaxStepsPolicy(max_steps=10)])
+        runner._n_retries = 1  # two attempts total
+        runner._precondition_manager = MagicMock()
+        runner._controller.snapshot_baseline = AsyncMock()
+        runner._establish_preconditions = AsyncMock(  # type: ignore[method-assign]
+            side_effect=lambda *_: (RunState(instruction="x"), None, []),
+        )
+        runner._run_attempt = AsyncMock(  # type: ignore[method-assign]
+            return_value=TaskStatus.FAILED,
+        )
+
+        status = await runner.run(
+            "do thing", task_id="t",
+            preconditions=[("p", "desc")],
+        )
+
+        assert status == TaskStatus.FAILED
+        # The fix: preconditions and snapshot are redone every attempt,
+        # not just once before the first.
+        assert runner._run_attempt.await_count == 2
+        assert runner._establish_preconditions.await_count == 2
+        assert runner._controller.snapshot_baseline.await_count == 2
+
+    async def test_completed_attempt_skips_further_setup(self) -> None:
+        runner = _make_runner([MaxStepsPolicy(max_steps=10)])
+        runner._n_retries = 2
+        runner._precondition_manager = MagicMock()
+        runner._controller.snapshot_baseline = AsyncMock()
+        runner._establish_preconditions = AsyncMock(  # type: ignore[method-assign]
+            side_effect=lambda *_: (RunState(instruction="x"), None, []),
+        )
+        runner._run_attempt = AsyncMock(  # type: ignore[method-assign]
+            return_value=TaskStatus.COMPLETED,
+        )
+
+        status = await runner.run(
+            "do thing", task_id="t",
+            preconditions=[("p", "desc")],
+        )
+
+        assert status == TaskStatus.COMPLETED
+        assert runner._run_attempt.await_count == 1
+        assert runner._establish_preconditions.await_count == 1

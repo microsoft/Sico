@@ -26,6 +26,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
+
+	taskruntimerepo "sico-backend/internal/store/taskruntime/repository"
 )
 
 func TestTranslateErrorPassesThroughNil(t *testing.T) {
@@ -46,8 +48,9 @@ func TestTranslateErrorMapsRecordNotFoundToNotFound(t *testing.T) {
 }
 
 func TestTranslateErrorMapsStaleTokenToFailedPrecondition(t *testing.T) {
-	// Errors that wrap errStaleToken via fmt.Errorf("%w: ...") must still be detected.
-	wrapped := fmt.Errorf("%w: run abc", errStaleToken)
+	// Errors that wrap the stale-token sentinel via fmt.Errorf("%w: ...") must
+	// still be detected after crossing the repository boundary.
+	wrapped := fmt.Errorf("%w: run abc", taskruntimerepo.ErrStaleToken)
 	got := translateError("RpcHeartbeatBatch", wrapped)
 	st, ok := status.FromError(got)
 	if !ok {
@@ -56,13 +59,10 @@ func TestTranslateErrorMapsStaleTokenToFailedPrecondition(t *testing.T) {
 	if st.Code() != codes.FailedPrecondition {
 		t.Fatalf("expected FailedPrecondition, got %s", st.Code())
 	}
-	if !errors.Is(wrapped, errStaleToken) {
-		t.Fatalf("sanity: wrapped error should still match errStaleToken")
-	}
 }
 
-func TestTranslateErrorMapsMySQLDuplicateKeyToAlreadyExists(t *testing.T) {
-	got := translateError("RpcCreateRun", &mysql.MySQLError{Number: mysqlDuplicateErrNum, Message: "Duplicate entry"})
+func TestTranslateErrorMapsDuplicateSentinelToAlreadyExists(t *testing.T) {
+	got := translateError("RpcCreateRun", taskruntimerepo.ErrDuplicate)
 	st, ok := status.FromError(got)
 	if !ok {
 		t.Fatalf("translateError did not return a status error: %v", got)
@@ -72,9 +72,10 @@ func TestTranslateErrorMapsMySQLDuplicateKeyToAlreadyExists(t *testing.T) {
 	}
 }
 
-func TestTranslateErrorMapsWrappedDuplicateKey(t *testing.T) {
-	// gorm typically wraps the raw driver error; ensure the unwrap path works.
-	inner := &mysql.MySQLError{Number: mysqlDuplicateErrNum, Message: "Duplicate entry"}
+func TestTranslateErrorMapsRawMySQLDuplicateToAlreadyExists(t *testing.T) {
+	// A raw driver duplicate (e.g. from a unique-constraint update that never
+	// went through the create path) must still map to AlreadyExists.
+	inner := &mysql.MySQLError{Number: 1062, Message: "Duplicate entry"}
 	wrapped := fmt.Errorf("create: %w", inner)
 	got := translateError("RpcCreateRun", wrapped)
 	st, _ := status.FromError(got)
@@ -83,76 +84,10 @@ func TestTranslateErrorMapsWrappedDuplicateKey(t *testing.T) {
 	}
 }
 
-func TestTranslateErrorDuplicateKeyFallsBackOnMessage(t *testing.T) {
-	// Some test doubles surface a plain error with the duplicate-entry message
-	// but no underlying mysql.MySQLError. The string-fallback must still catch it.
-	got := translateError("RpcCreateRun", errors.New("Error 1062 (23000): Duplicate entry 'x' for key 'uniq'"))
-	st, _ := status.FromError(got)
-	if st.Code() != codes.AlreadyExists {
-		t.Fatalf("expected AlreadyExists from message fallback, got %s", st.Code())
-	}
-}
-
 func TestTranslateErrorDefaultIsInternal(t *testing.T) {
 	got := translateError("RpcCreateRun", errors.New("kaboom"))
 	st, _ := status.FromError(got)
 	if st.Code() != codes.Internal {
 		t.Fatalf("expected Internal, got %s", st.Code())
-	}
-}
-
-func TestIsStaleTokenIdentifiesWrappedErrors(t *testing.T) {
-	if IsStaleToken(nil) {
-		t.Fatal("nil should not be a stale token")
-	}
-	if IsStaleToken(errors.New("other")) {
-		t.Fatal("unrelated error should not be a stale token")
-	}
-	if !IsStaleToken(fmt.Errorf("ctx: %w", errStaleToken)) {
-		t.Fatal("wrapped errStaleToken should be detected")
-	}
-}
-
-func TestIsDuplicateKeyHandlesDirectAndWrapped(t *testing.T) {
-	direct := &mysql.MySQLError{Number: mysqlDuplicateErrNum}
-	if !isDuplicateKey(direct) {
-		t.Fatal("direct MySQLError 1062 should be a duplicate key")
-	}
-	wrapped := fmt.Errorf("create: %w", direct)
-	if !isDuplicateKey(wrapped) {
-		t.Fatal("wrapped MySQLError 1062 should be a duplicate key")
-	}
-	other := &mysql.MySQLError{Number: 1234}
-	if isDuplicateKey(other) {
-		t.Fatal("MySQLError with unrelated number should not be a duplicate key")
-	}
-	if isDuplicateKey(errors.New("unrelated")) {
-		t.Fatal("unrelated error should not be a duplicate key")
-	}
-}
-
-func TestIsRetryableTransactionErrorHandlesMySQLDeadlocks(t *testing.T) {
-	if !isRetryableTransactionError(&mysql.MySQLError{Number: mysqlDeadlockErrNum}) {
-		t.Fatal("MySQLError 1213 should be retryable")
-	}
-	if !isRetryableTransactionError(&mysql.MySQLError{Number: mysqlLockWaitErrNum}) {
-		t.Fatal("MySQLError 1205 should be retryable")
-	}
-	wrapped := fmt.Errorf("write result: %w", &mysql.MySQLError{Number: mysqlDeadlockErrNum})
-	if !isRetryableTransactionError(wrapped) {
-		t.Fatal("wrapped MySQLError 1213 should be retryable")
-	}
-}
-
-func TestIsRetryableTransactionErrorFallsBackOnMessage(t *testing.T) {
-	deadlock := errors.New("Error 1213 (40001): Deadlock found when trying to get lock; try restarting transaction")
-	if !isRetryableTransactionError(deadlock) {
-		t.Fatal("deadlock message should be retryable")
-	}
-	if !isRetryableTransactionError(errors.New("Lock wait timeout exceeded; try restarting transaction")) {
-		t.Fatal("lock wait timeout message should be retryable")
-	}
-	if isRetryableTransactionError(errors.New("unrelated")) {
-		t.Fatal("unrelated error should not be retryable")
 	}
 }

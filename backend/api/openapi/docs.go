@@ -3123,7 +3123,7 @@ const docTemplate = `{
         },
         "/api/sico/sandbox/apply": {
             "post": {
-                "description": "Apply for a sandbox of the specified type. One instanceID can have multiple sandboxes.",
+                "description": "Apply for a sandbox supplying the requested OS. One instanceID can have multiple sandboxes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3171,7 +3171,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Sandbox type to apply",
+                        "description": "Sandbox OS to apply",
                         "name": "request",
                         "in": "body",
                         "required": true,

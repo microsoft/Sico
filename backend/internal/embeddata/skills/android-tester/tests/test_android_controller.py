@@ -108,6 +108,7 @@ def _build_controller(
     runner: ADBRunner,
     tmp_path: Path,
     resources_path: Path | None = None,
+    backup_dir: str = "/data/local/tmp/.android-tester/test/backup",
 ) -> AndroidController:
     app_map = tmp_path / "app_packages.json"
     app_map.write_text("{}", encoding="utf-8")
@@ -115,6 +116,7 @@ def _build_controller(
         runner=runner,
         app_map_path=app_map,
         resources_path=resources_path,
+        backup_dir=backup_dir,
     )
 
 
@@ -194,7 +196,7 @@ def test_list_resources_unset(tmp_path: Path) -> None:
     controller = _build_controller(
         FakeRunner(device_id="d", run_raw_outcomes=[]), tmp_path,
     )
-    assert "unset" in controller.list_resources()
+    assert "No resources directory" in controller.list_resources()
 
 
 async def test_put_file_pushes_and_scans(tmp_path: Path) -> None:
@@ -250,3 +252,113 @@ async def test_list_device_files(tmp_path: Path) -> None:
 
     assert out == "cat.jpg\ndog.png"
     assert runner.calls[0][-1] == "ls -1ap '/sdcard/Pictures'"
+
+
+async def test_snapshot_baseline_archives_storage(tmp_path: Path) -> None:
+    backup = "/data/local/tmp/.android-tester/backup/T"
+    runner = FakeRunner(
+        device_id="d",
+        run_raw_outcomes=[
+            ADBResult(returncode=0, stdout="", stderr=""),  # mkdir backup dir
+            ADBResult(returncode=0, stdout="", stderr=""),  # tar -czf
+        ],
+    )
+    controller = _build_controller(runner, tmp_path, backup_dir=backup)
+
+    await controller.snapshot_baseline()
+
+    assert runner.calls[0][-1] == f"mkdir -p '{backup}'"
+    assert runner.calls[1][-1] == (
+        f"tar -czf '{backup}/storage_emulated_0.tar.gz' "
+        "-C '/storage/emulated/0' ."
+    )
+
+
+async def test_restore_file_baseline_syncs_and_rescans(
+    tmp_path: Path,
+) -> None:
+    backup = "/data/local/tmp/.android-tester/backup/T"
+    tarball = f"{backup}/storage_emulated_0.tar.gz"
+    root = "/storage/emulated/0"
+    runner = FakeRunner(
+        device_id="d",
+        run_raw_outcomes=[
+            ADBResult(returncode=0, stdout="", stderr=""),  # snapshot mkdir
+            ADBResult(returncode=0, stdout="", stderr=""),  # snapshot tar -czf
+            # restore:
+            ADBResult(  # tar -tzf (archived)
+                returncode=0,
+                stdout="./\n./DCIM/\n./DCIM/keep.jpg\n",
+                stderr="",
+            ),
+            ADBResult(  # find (live: keep.jpg + a run-generated new.jpg)
+                returncode=0,
+                stdout=f"{root}/DCIM/keep.jpg\n{root}/DCIM/new.jpg\n",
+                stderr="",
+            ),
+            ADBResult(returncode=0, stdout="", stderr=""),  # rm extras
+            ADBResult(returncode=0, stdout="", stderr=""),  # tar -xzf
+            ADBResult(returncode=0, stdout="", stderr=""),  # scan_volume
+            ADBResult(returncode=0, stdout="", stderr=""),  # rm -rf dir
+        ],
+    )
+    controller = _build_controller(runner, tmp_path, backup_dir=backup)
+
+    await controller.snapshot_baseline()
+    await controller.restore_file_baseline()
+
+    assert runner.calls[2][-1] == f"tar -tzf '{tarball}'"
+    assert runner.calls[3][-1] == f"find '{root}' -type f"
+    # Only the run-generated file (absent from the archive) is deleted.
+    assert runner.calls[4][-1] == f"rm -f '{root}/DCIM/new.jpg'"
+    assert runner.calls[5][-1] == f"tar -xzf '{tarball}' -C '{root}'"
+    assert "scan_volume" in runner.calls[6]
+    assert runner.calls[7][-1] == f"rm -rf '{backup}'"
+
+
+async def test_restore_skips_delete_when_no_extras(tmp_path: Path) -> None:
+    backup = "/data/local/tmp/.android-tester/backup/T"
+    root = "/storage/emulated/0"
+    runner = FakeRunner(
+        device_id="d",
+        run_raw_outcomes=[
+            ADBResult(returncode=0, stdout="", stderr=""),  # snapshot mkdir
+            ADBResult(returncode=0, stdout="", stderr=""),  # snapshot tar -czf
+            ADBResult(  # tar -tzf
+                returncode=0, stdout="./DCIM/keep.jpg\n", stderr="",
+            ),
+            ADBResult(  # find: identical to archive, nothing added
+                returncode=0, stdout=f"{root}/DCIM/keep.jpg\n", stderr="",
+            ),
+            ADBResult(returncode=0, stdout="", stderr=""),  # tar -xzf
+            ADBResult(returncode=0, stdout="", stderr=""),  # scan_volume
+            ADBResult(returncode=0, stdout="", stderr=""),  # rm -rf dir
+        ],
+    )
+    controller = _build_controller(runner, tmp_path, backup_dir=backup)
+
+    await controller.snapshot_baseline()
+    await controller.restore_file_baseline()
+
+    # No extras => no rm; extract follows the find directly.
+    assert runner.calls[4][-1] == (
+        f"tar -xzf '{backup}/storage_emulated_0.tar.gz' -C '{root}'"
+    )
+
+
+async def test_restore_file_baseline_noop_without_snapshot(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner(
+        device_id="d",
+        run_raw_outcomes=[
+            ADBResult(returncode=0, stdout="", stderr=""),  # mkdir
+            ADBResult(returncode=1, stdout="", stderr="tar failed"),  # tar
+        ],
+    )
+    controller = _build_controller(runner, tmp_path)
+
+    await controller.snapshot_baseline()  # tar fails -> nothing recorded
+    call_count = len(runner.calls)
+    await controller.restore_file_baseline()
+    assert len(runner.calls) == call_count

@@ -160,54 +160,27 @@ class TestRunner:
         max_attempts = max(1, self._n_retries + 1)
         status = TaskStatus.BLOCKED
 
-        # Establish preconditions (if any) before first attempt
-        if (
-            warm_state is None
-            and preconditions
-            and self._precondition_manager
-        ):
-            precondition_timer = measure_time("precondition_total_duration")
-            with precondition_timer:
-                warm_state, failed_label, precondition_records = (
-                    await self._establish_preconditions(preconditions, job_id)
-                )
-            if failed_label is None and warm_state is not None:
-                warm_state.precondition_duration_s = (
-                    precondition_timer.elapsed
-                )
-            else:
-                reason = (
-                    f"precondition {failed_label!r} could not be "
-                    f"established; aborting before any attempt"
-                )
-                logger.warning(reason)
-                await self._event_logger.record_completion(
-                    job_id, 0.0, TaskStatus.BLOCKED.value,
-                    task_name=task_name,
-                    instruction=instruction,
-                    device_id=self._controller.device_id,
-                    reason=reason,
-                    preconditions=(
-                        precondition_records
-                        if precondition_records
-                        else [
-                            PreconditionRecord(label, text, 0)
-                            for label, text in preconditions
-                        ]
-                    ),
-                    precondition_duration=precondition_timer.elapsed,
-                    total_duration=precondition_timer.elapsed,
-                    precondition_step_boundary=(
-                        self._event_logger.recorded_step_count
-                    ),
-                )
-                return TaskStatus.BLOCKED
-
         for attempt in range(1, max_attempts + 1):
             attempt_label = attempt if max_attempts > 1 else None
+
+            if finalize:
+                await self._controller.snapshot_baseline()
+
+            attempt_state = warm_state
+            if (
+                attempt_state is None
+                and preconditions
+                and self._precondition_manager
+            ):
+                attempt_state = await self._prepare_preconditions(
+                    preconditions, job_id, instruction, task_name,
+                )
+                if attempt_state is None:
+                    return TaskStatus.BLOCKED
+
             status = await self._run_attempt(
                 job_id, instruction, task_name, attempt_label,
-                warm_state=warm_state,
+                warm_state=attempt_state,
                 step_offset=step_offset,
                 finalize=finalize,
             )
@@ -219,6 +192,54 @@ class TestRunner:
                     attempt, max_attempts, status.value,
                 )
         return status
+
+    async def _prepare_preconditions(
+        self,
+        preconditions: list[tuple[str, str]],
+        job_id: str,
+        instruction: str,
+        task_name: str | None,
+    ) -> RunState | None:
+        """Establish every precondition for a single attempt.
+
+        Returns the resulting warm state, or ``None`` after recording a
+        BLOCKED completion if any precondition cannot be established.
+        """
+        precondition_timer = measure_time("precondition_total_duration")
+        with precondition_timer:
+            warm_state, failed_label, records = (
+                await self._establish_preconditions(preconditions, job_id)
+            )
+        if failed_label is None and warm_state is not None:
+            warm_state.precondition_duration_s = precondition_timer.elapsed
+            return warm_state
+
+        reason = (
+            f"precondition {failed_label!r} could not be "
+            f"established; aborting before any attempt"
+        )
+        logger.warning(reason)
+        await self._event_logger.record_completion(
+            job_id, 0.0, TaskStatus.BLOCKED.value,
+            task_name=task_name,
+            instruction=instruction,
+            device_id=self._controller.device_id,
+            reason=reason,
+            preconditions=(
+                records
+                if records
+                else [
+                    PreconditionRecord(label, text, 0)
+                    for label, text in preconditions
+                ]
+            ),
+            precondition_duration=precondition_timer.elapsed,
+            total_duration=precondition_timer.elapsed,
+            precondition_step_boundary=(
+                self._event_logger.recorded_step_count
+            ),
+        )
+        return None
 
     async def _establish_preconditions(
         self,
@@ -929,11 +950,21 @@ class TestRunner:
         return False
 
     async def _safe_cleanup(self) -> None:
-        if self._reset_after_execution:
-            try:
-                await self._controller.reset()
-            except Exception:
-                pass
+        if not self._reset_after_execution:
+            return
+        try:
+            await self._controller.reset()
+        except Exception:
+            logger.warning(
+                "device reset during cleanup failed", exc_info=True,
+            )
+        try:
+            await self._controller.restore_file_baseline()
+        except Exception:
+            logger.warning(
+                "file baseline restore during cleanup failed",
+                exc_info=True,
+            )
 
 
 class ScriptRecordingRunner(TestRunner):

@@ -1,21 +1,4 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
-package impl
+package dal
 
 import (
 	"encoding/json"
@@ -24,14 +7,14 @@ import (
 )
 
 func TestBatchRowFromJSONRequiresBatchID(t *testing.T) {
-	_, _, err := batchRowFromJSON(`{"parent_conversation_id":1}`)
+	_, err := batchRowFromJSON(`{"parent_conversation_id":1}`)
 	if err == nil {
 		t.Fatal("expected error when batch_id is missing")
 	}
 }
 
 func TestBatchRowFromJSONAppliesDefaults(t *testing.T) {
-	row, _, err := batchRowFromJSON(`{"batch_id":"b1","total_count":2}`)
+	row, err := batchRowFromJSON(`{"batch_id":"b1","total_count":2}`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -53,7 +36,7 @@ func TestBatchRowFromJSONAppliesDefaults(t *testing.T) {
 }
 
 func TestBatchRowFromJSONPreservesProvidedTimestamps(t *testing.T) {
-	row, _, err := batchRowFromJSON(`{"batch_id":"b1","created_at":111,"updated_at":222}`)
+	row, err := batchRowFromJSON(`{"batch_id":"b1","created_at":111,"updated_at":222}`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -66,16 +49,16 @@ func TestBatchRowFromJSONPreservesProvidedTimestamps(t *testing.T) {
 }
 
 func TestRunRowFromJSONRequiresRunAndBatchID(t *testing.T) {
-	if _, _, err := runRowFromJSON(`{"batch_id":"b1","spec":{"task_id":"t"}}`); err == nil {
+	if _, err := runRowFromJSON(`{"batch_id":"b1","spec":{"task_id":"t"}}`); err == nil {
 		t.Fatal("expected error when run_id is missing")
 	}
-	if _, _, err := runRowFromJSON(`{"run_id":"r1","spec":{"task_id":"t"}}`); err == nil {
+	if _, err := runRowFromJSON(`{"run_id":"r1","spec":{"task_id":"t"}}`); err == nil {
 		t.Fatal("expected error when batch_id is missing")
 	}
 }
 
 func TestRunRowFromJSONAppliesDefaults(t *testing.T) {
-	row, _, err := runRowFromJSON(`{"run_id":"r1","batch_id":"b1","spec":{"task_id":"t","title":"x","kind":"tool"}}`)
+	row, err := runRowFromJSON(`{"run_id":"r1","batch_id":"b1","spec":{"task_id":"t","title":"x","kind":"tool"}}`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -95,7 +78,7 @@ func TestRunRowFromJSONAppliesDefaults(t *testing.T) {
 
 func TestRunRowFromJSONCarriesIdempotencyKey(t *testing.T) {
 	payload := `{"run_id":"r1","batch_id":"b1","idempotency_key":"abc","spec":{"task_id":"t","title":"x","kind":"tool"}}`
-	row, _, err := runRowFromJSON(payload)
+	row, err := runRowFromJSON(payload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -105,7 +88,7 @@ func TestRunRowFromJSONCarriesIdempotencyKey(t *testing.T) {
 }
 
 func TestStaleRunJSONIncludesCoreFields(t *testing.T) {
-	row := taskRuntimeRunRow{
+	row := runRow{
 		RunID:    "r1",
 		BatchID:  "b1",
 		Status:   "running",
@@ -125,7 +108,7 @@ func TestStaleRunJSONIncludesCoreFields(t *testing.T) {
 }
 
 func TestStaleBatchJSONCanTriggerBatchFinalization(t *testing.T) {
-	got := staleBatchJSON(taskRuntimeBatchRow{BatchID: "batch-1", Status: statusRunning})
+	got := staleBatchJSON(batchRow{BatchID: "batch-1", Status: statusRunning})
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
 		t.Fatalf("staleBatchJSON output is not valid JSON: %v", err)
@@ -151,23 +134,23 @@ func TestTerminalBatchStatusesIncludePartialRecoveryState(t *testing.T) {
 }
 
 func TestStaleRunStartedAtIgnoresZeroStartedAt(t *testing.T) {
-	zero := uint64(0)
-	row := &taskRuntimeRunRow{QueuedAt: 1_000, StartedAt: &zero}
+	zero := int64(0)
+	row := &runRow{QueuedAt: 1_000, StartedAt: &zero}
 	if got := staleRunStartedAt(row, 2_000); got != 1_000 {
 		t.Fatalf("expected queued_at fallback, got %d", got)
 	}
-	if got := staleRunStartedAt(&taskRuntimeRunRow{}, 2_000); got != 2_000 {
+	if got := staleRunStartedAt(&runRow{}, 2_000); got != 2_000 {
 		t.Fatalf("expected now fallback, got %d", got)
 	}
 }
 
 func TestStaleRunDurationRequiresTrustedStartedAt(t *testing.T) {
-	zero := uint64(0)
-	if _, ok := staleRunDuration(&taskRuntimeRunRow{QueuedAt: 1_000, StartedAt: &zero}, 2_000); ok {
+	zero := int64(0)
+	if _, ok := staleRunDuration(&runRow{QueuedAt: 1_000, StartedAt: &zero}, 2_000); ok {
 		t.Fatal("zero started_at should not produce duration_ms")
 	}
-	startedAt := uint64(1_000)
-	duration, ok := staleRunDuration(&taskRuntimeRunRow{QueuedAt: 500, StartedAt: &startedAt}, 2_000)
+	startedAt := int64(1_000)
+	duration, ok := staleRunDuration(&runRow{QueuedAt: 500, StartedAt: &startedAt}, 2_000)
 	if !ok || duration != 1_000 {
 		t.Fatalf("expected trusted started_at duration=1000, got duration=%d ok=%v", duration, ok)
 	}
@@ -176,7 +159,7 @@ func TestStaleRunDurationRequiresTrustedStartedAt(t *testing.T) {
 func TestCanonicalRunJSONUsesRowIdentifiers(t *testing.T) {
 	payload := `{"run_id":"stale-json-run","batch_id":"old-batch","parent_turn_id":1,` +
 		`"spec":{"task_id":"t","title":"x","kind":"tool"}}`
-	row := taskRuntimeRunRow{
+	row := runRow{
 		RunID:                "row-run",
 		BatchID:              "row-batch",
 		ParentConversationID: 7,
@@ -204,9 +187,9 @@ func TestCanonicalRunJSONUsesRowIdentifiers(t *testing.T) {
 }
 
 func TestCanonicalBatchJSONUsesRowTerminalStatus(t *testing.T) {
-	endedAt := uint64(456)
+	endedAt := int64(456)
 	parentToolCallID := int64(2)
-	row := taskRuntimeBatchRow{
+	row := batchRow{
 		BatchID:              "batch-1",
 		ParentConversationID: 7,
 		ParentTurnID:         8,
@@ -239,12 +222,12 @@ func TestCanonicalBatchJSONUsesRowTerminalStatus(t *testing.T) {
 	}
 }
 
-// liveness_at is a backend-only column: it is bumped by RpcHeartbeatBatch and
-// must never be serialized into batch_json, because the core BatchRecord forbids
+// liveness_at is a backend-only column: it is bumped by HeartbeatBatch and must
+// never be serialized into batch_json, because the core BatchRecord forbids
 // unknown fields and would reject the payload on the next update_batch round-trip.
 func TestCanonicalBatchJSONOmitsLivenessAt(t *testing.T) {
-	liveness := uint64(999)
-	row := taskRuntimeBatchRow{
+	liveness := int64(999)
+	row := batchRow{
 		BatchID:    "batch-1",
 		Status:     statusRunning,
 		BatchJSON:  jsonBytes(`{"batch_id":"batch-1","status":"running"}`),
