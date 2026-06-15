@@ -250,4 +250,8 @@ This project may contain trademarks or logos for projects, products, or services
 
 ## Acknowledgements
 
-Sico stands on the shoulders of the open-source community: Go, Gin, GORM, Wire, Python, asyncio, grpclib, betterproto, React, Vite, and many more. Thank you to everyone who has [contributed](https://github.com/microsoft/Sico/graphs/contributors) to Sico.
+Sico stands on the shoulders of the open-source community: Go, Gin, GORM, Wire, Python, asyncio, grpclib, betterproto, React, Vite, and many more.
+Some example skills included in this repository are adapted from the [RefoundAI lenny-skills](https://github.com/RefoundAI/lenny-skills) project.
+
+We are grateful to the maintainers, contributors, and the broader open-source community whose work makes Sico possible.
+Thank you to everyone who has [contributed](https://github.com/microsoft/Sico/graphs/contributors) to Sico.

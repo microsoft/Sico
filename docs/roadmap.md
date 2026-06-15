@@ -9,11 +9,10 @@ We track concrete work items as [GitHub Issues](https://github.com/microsoft/Sic
 What is shipping today:
 
 - **Operator Console**: the primary Sico interface for running, supervising and observing Digital Workers.
-- **Developer Interface**: allowing developers to configure and deploy Digital Workers without a dedicated frontend builder UI.
 - **Digital Workers**: multiple built-in Digital Worker roles, including Android Tester, Product Manager, Marketing and 3D Artist.
 - **Android Sandbox**: emulator-based execution environment with H264 live view, VNC, and full traces.
 - **Project & Knowledge**: project workspaces with durable knowledge bases.
-- **LLM Hub**: unified model runtime; supports OpenAI, Azure OpenAI, Anthropic, Gemini, OpenRouter, and any OpenAI-compatible endpoint.
+- **LLM Hub**: unified model runtime; supports OpenAI, Azure OpenAI, OpenRouter, and any OpenAI-compatible endpoint.
 - **Experience Learning (v1)**: first iteration of execution experience capture for the Evolution loop.
 - **RBAC & auth**: JWT + Casbin for users; HMAC for sandbox machine-to-machine.
 
@@ -23,6 +22,7 @@ Frontend source code is not currently published in this repository. For now, the
 ## Near-Term Direction
 
 - **More Digital Workers & Richer Capability Structures**: expand Digital Worker roles and role-specific capabilities to further demonstrate the capability-unit architecture rather than building a generic agent marketplace. The focus is not the number of roles, but how different Cortex, Action, and Memory&Sense structures support different forms of work execution.
+- **Developer Interface**: allowing developers to configure and deploy Digital Workers without a dedicated frontend builder UI.
 - **Broader Execution Environments**: expand beyond Android into additional sandbox runtimes, including Web Sandbox and Windows Sandbox.
 - **Frontend Release Path**: continue improving the packaged frontend distribution model while preparing a future path for frontend source publication when ready.
 - **Documentation**: expanded guides for authoring skills, onboarding models, configuring Digital Workers, and extending the sandbox layer.

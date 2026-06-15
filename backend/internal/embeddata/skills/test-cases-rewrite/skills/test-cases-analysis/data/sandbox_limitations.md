@@ -6,7 +6,7 @@
 
 ## Sandbox Overview
 
-The sandbox is a **single device instance** — one Android phone. The GUI Agent controls this device by executing actions defined in the [Action Space](Action_Space.md).
+The sandbox is a **single device instance** — one Android phone. The GUI Agent controls this device by executing actions defined in the [Action Space](../../rewrite-from-doc/data/Action_Space.md).
 
 ### What the Agent CAN Do
 

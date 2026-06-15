@@ -115,6 +115,7 @@ All per-step events go to stdout. The output directory path is logged to stdout 
 
 - `0`: test case executed successfully
 - `1`: test case failed
+- `2`: test case blocked
 
 `README.md` contains full documentation on `android-tester` arguments, environment variables, and output event types. Its lecture is optional.
 

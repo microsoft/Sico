@@ -204,3 +204,4 @@ All output files are written to the output directory (logged to stdout at startu
 |---|---|
 | `0` | Test case completed successfully |
 | `1` | Test case failed |
+| `2` | Test case blocked |
