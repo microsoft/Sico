@@ -25,6 +25,9 @@ Priority (highest wins):  CLI arg  >  env var  >  config.env  >  default.
 ``load_dotenv`` only sets env vars that are not already present, so real
 environment variables win over ``config.env`` values.  ``argparse``
 defaults read from ``os.getenv``, so CLI args win over everything.
+Platform connection fields such as ``SICO_ENDPOINT`` and
+``SICO_AGENT_INSTANCE_ID`` are intentionally environment-only and are not
+exposed as CLI arguments.
 
 We use ``config.env`` instead of the conventional ``.env`` because
 LLM safety filters may flag ``.env`` files as sensitive information
@@ -35,12 +38,15 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+
+from android_tester.android_controller import AndroidController
 
 # Hard code these values here to avoid the LLM modifying them
 _EXTRA_CONFIG = dict(
@@ -52,6 +58,7 @@ _EXTRA_CONFIG = dict(
     first_step_sleep=6.0,
     max_steps=60,
 )
+_PRECONDITION_RE = re.compile(r"(?P<label>[^:]+):\s*(?P<desc>.*)", re.DOTALL)
 
 
 def _env(
@@ -103,6 +110,29 @@ def _parse_log_level(value: str) -> str:
     return level
 
 
+def _parse_package_set(value: str | None) -> frozenset[str]:
+    """Parse a comma-separated list of Android package names.
+
+    Empty / whitespace-only entries are ignored. Each remaining entry is
+    validated against the Android package-name pattern; invalid entries
+    raise :class:`argparse.ArgumentTypeError` so the operator fixes the
+    config rather than silently passing through a typo.
+    """
+    if not value:
+        return frozenset()
+    packages: set[str] = set()
+    for raw in value.split(","):
+        pkg = raw.strip()
+        if not pkg:
+            continue
+        if not AndroidController.is_valid_package_name(pkg):
+            raise argparse.ArgumentTypeError(
+                f"Invalid Android package name: {pkg!r}"
+            )
+        packages.add(pkg)
+    return frozenset(packages)
+
+
 def _parse_string_to_bool(value: str) -> bool:
     """Convert common string representations of boolean values to bool."""
     true_values = {"true", "1", "yes", "on"}
@@ -118,8 +148,27 @@ def _parse_string_to_bool(value: str) -> bool:
     )
 
 
+def _parse_precondition(value: str) -> tuple[str, str]:
+    """Parse a ``label: description`` precondition argument.
+
+    The label is everything before the first ``:`` (short, lowercase,
+    hyphenated, no colon); the description is the declarative state to
+    establish. Both parts must be non-empty.
+    """
+    match = _PRECONDITION_RE.fullmatch(value.strip())
+    label = match.group("label").strip() if match else ""
+    desc = match.group("desc").strip() if match else ""
+    if not label or not desc:
+        raise argparse.ArgumentTypeError(
+            f"Invalid --precondition {value!r}. Expected 'label: description' "
+            f"with both parts non-empty (e.g. 'home-screen: device is on "
+            f"the home screen')."
+        )
+    return label, desc
+
+
 def _add_common_args(p: argparse.ArgumentParser) -> None:
-    """Args shared between the ``run`` and ``batch`` subcommands."""
+    """Common args for the CLI."""
     # -- LLM --
     p.add_argument(
         "--llmhub-model",
@@ -127,23 +176,27 @@ def _add_common_args(p: argparse.ArgumentParser) -> None:
         help="LLM model identifier (default: %(default)s)",
     )
     p.add_argument(
-        "--llmhub-model-image-size",
+        "--coordinate-space",
         type=_parse_image_size,
-        default=_env("LLMHUB_MODEL_IMAGE_SIZE", None, _parse_image_size),
-        help="LLM model image size (default: %(default)s)",
+        default=_env("COORDINATE_SPACE", None, _parse_image_size),
+        help=(
+            "(x, y) space the LLM emits coordinates in, as WIDTHxHEIGHT "
+            "(e.g. 1000x1000 for UI-TARS / UI-Venus style models). When "
+            "unset, the LLM is told the perceived image size is the "
+            "size of the screenshot it received (default: %(default)s)"
+        ),
     )
     p.add_argument(
-        "--model-auto-resize-width",
-        type=int,
-        default=_env("MODEL_AUTO_RESIZE_WIDTH", 768, int),
+        "--max-screenshot-size",
+        type=_parse_image_size,
+        default=_env("MAX_SCREENSHOT_SIZE", (768, 1365), _parse_image_size),
         help=(
-            "target width (in pixels) for downscaling screenshots before "
-            "sending them to the LLM, preserving aspect ratio. Screenshots "
-            "narrower than this value are sent unchanged. Required for some "
-            "models (e.g. GPT-5) to effectively operate device GUIs; a "
-            "typical value is 768. Set to 0 to disable auto-resize. Only "
-            "takes effect when --llmhub-model-image-size is unset "
-            "(default: %(default)s)"
+            "max size of the screenshot sent to the LLM, as "
+            "WIDTHxHEIGHT. Screenshots are downscaled to fit within "
+            "these bounds preserving aspect ratio; smaller screenshots "
+            "are sent unchanged. Required for some models (e.g. GPT-5) "
+            "to effectively operate device GUIs. Set to empty (unset) "
+            "to disable resizing (default: %(default)s)"
         ),
     )
 
@@ -167,34 +220,32 @@ def _add_common_args(p: argparse.ArgumentParser) -> None:
         default=_env("SICO_RESULT_DIR"),
         metavar="DIR",
         help=(
-            "directory for output files (screenshots, logs, report). "
-            "For 'run', defaults to ./output/<task-id>. "
-            "For 'batch', defaults to ./output and each task gets a "
-            "<task-id> subdirectory."
+            "top-level output directory. Per-task artifacts "
+            "(screenshots, logs, report) go under <output-dir>/<task-id>/. "
+            "Precondition scripts are stored in <output-dir>/preconditions/"
+            "<label>/."
+        ),
+    )
+
+    # -- resources --
+    p.add_argument(
+        "--resources-path",
+        default=_env("RESOURCES_PATH"),
+        metavar="DIR",
+        help=(
+            "directory holding files the agent can stage on the device "
+            "via the FilePut tool (and enumerate via ResourceList). When "
+            "unset, the resource-backed file tools are unavailable."
         ),
     )
 
     # -- platform --
-    p.add_argument(
-        "--sico-endpoint",
-        default=_env("SICO_ENDPOINT", "http://host.docker.internal:8080"),
-        help="Sico platform base URL",
-    )
     p.add_argument(
         "--sico-app-name",
         default=_env("SICO_APP_NAME", "sico"),
         help=(
             "Sico application name used to construct API paths "
             "(/api/<sico-app-name>/...) (default: %(default)s)"
-        ),
-    )
-    p.add_argument(
-        "--sico-agent-instance-id",
-        default=_env("SICO_AGENT_INSTANCE_ID", convert=int),
-        type=int,
-        help=(
-            "agent instance ID sent to the platform "
-            "via X-Sico-Context header"
         ),
     )
 
@@ -251,10 +302,25 @@ def _add_common_args(p: argparse.ArgumentParser) -> None:
             "(default: %(default)s)"
         ),
     )
+    p.add_argument(
+        "--keep-app-state",
+        type=_parse_package_set,
+        default=_env("KEEP_APP_STATE", frozenset(), _parse_package_set),
+        metavar="PKG[,PKG...]",
+        help=(
+            "comma-separated list of Android package names whose state "
+            "(app data, runtime permissions, recents entry) must be "
+            "kept across device resets between test cases. Use when a "
+            "test depends on pre-existing state such as a logged-in "
+            "browser session. "
+            "Example: com.android.chrome,com.microsoft.emmx "
+            "(default: empty)"
+        ),
+    )
 
 
 def _add_run_args(p: argparse.ArgumentParser) -> None:
-    """Args specific to the ``run`` subcommand (single instruction)."""
+    """Args specific to running a single instruction."""
     p.add_argument(
         "--task-id",
         default=_env("TASK_ID"),
@@ -282,39 +348,19 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
         required="INSTRUCTIONS" not in os.environ,
         help="natural-language test instruction to execute",
     )
-
-
-def _add_batch_args(p: argparse.ArgumentParser) -> None:
-    """Args specific to the ``batch`` subcommand (cases × devices)."""
     p.add_argument(
-        "--file",
-        type=Path,
+        "--precondition",
+        action="append",
+        type=_parse_precondition,
         default=None,
-        metavar="FILE",
+        metavar="LABEL: DESC",
         help=(
-            "JSON file with shape {\"test-cases\": [...]}. Each case "
-            "requires 'instruction' and may include 'task-id' and "
-            "'task-name'. Use '-' to read JSON from stdin. Mutually "
-            "exclusive with --test-cases."
-        ),
-    )
-    p.add_argument(
-        "--test-cases",
-        default=None,
-        metavar="JSON",
-        help=(
-            "inline JSON object, same shape as --file. Mutually "
-            "exclusive with --file."
-        ),
-    )
-    p.add_argument(
-        "--devices",
-        nargs="+",
-        required=True,
-        metavar="DEVICE",
-        help=(
-            "ADB device serials or host:port entries to run cases on. "
-            "One worker is spawned per device."
+            "an atomic precondition as 'label: description'. Repeatable "
+            "— supply once per precondition. The label (text before the "
+            "first ':') keys a cached setup script at <output-dir>/"
+            "preconditions/<label>/action_script.json: on first use the "
+            "description is established and recorded; on reuse the script "
+            "is replayed without LLM calls."
         ),
     )
 
@@ -326,21 +372,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "operator/reflector loop."
         ),
     )
-    sub = p.add_subparsers(dest="command", required=True)
-
-    run_p = sub.add_parser(
-        "run", help="run a single test instruction on one device",
-    )
-    _add_common_args(run_p)
-    _add_run_args(run_p)
-
-    batch_p = sub.add_parser(
-        "batch",
-        help="run test cases from a JSON file across multiple devices",
-    )
-    _add_common_args(batch_p)
-    _add_batch_args(batch_p)
-
+    _add_common_args(p)
+    _add_run_args(p)
     return p
 
 
@@ -348,6 +381,12 @@ def _add_extra_args(args: argparse.Namespace) -> None:
     for arg_name, arg_value in _EXTRA_CONFIG.items():
         if getattr(args, arg_name, None) is None:
             setattr(args, arg_name, arg_value)
+
+
+def _add_env_only_args(args: argparse.Namespace) -> None:
+    """Populate fields that are intentionally environment-only."""
+    args.sico_endpoint = _env("SICO_ENDPOINT", "http://host.docker.internal:8080")
+    args.sico_agent_instance_id = _env("SICO_AGENT_INSTANCE_ID", convert=int)
 
 
 def load_config(
@@ -362,4 +401,5 @@ def load_config(
     parser = _build_parser()
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     _add_extra_args(args)
+    _add_env_only_args(args)
     return args

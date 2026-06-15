@@ -54,6 +54,10 @@ type Service interface {
 		ctx context.Context,
 		req *dto.GetUserMessageByUserAgentTurnIDRequest,
 	) (*dto.GetUserMessageByUserAgentTurnIDResponse, error)
+	ListBatchSummaries(
+		ctx context.Context,
+		req *dto.ListBatchSummariesRequest,
+	) (*dto.ListBatchSummariesResponse, error)
 
 	Chat(ctx context.Context, sender sse.SSESender, req *dto.ChatRequestHttp) error
 	Reconnect(ctx context.Context, sender sse.SSESender, req *dto.ReconnectRequest) error

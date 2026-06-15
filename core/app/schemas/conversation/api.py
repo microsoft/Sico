@@ -20,7 +20,7 @@
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import app.pb.conversation.api as pb
 
@@ -40,9 +40,43 @@ class RecommendationTaskIcon(int, Enum):
     def to_pb(self) -> pb.RecommendationTaskIcon:
         return pb.RecommendationTaskIcon(self.value)
 
+
+_ICON_ALIASES = {
+    "unknown": RecommendationTaskIcon.UNKNOWN,
+    "fallback": RecommendationTaskIcon.FALLBACK,
+    "build": RecommendationTaskIcon.BUILD,
+    "think": RecommendationTaskIcon.THINK,
+    "write": RecommendationTaskIcon.WRITE,
+    "research": RecommendationTaskIcon.RESEARCH,
+}
+
+
 class RecommendationTask(BaseModel):
-    message: str = Field("", description="The suggested message text")
-    icon: RecommendationTaskIcon = Field(RecommendationTaskIcon.UNKNOWN, description="The icon representing the suggestion")
+    message: str = Field(..., min_length=1, description="The suggested message text")
+    icon: RecommendationTaskIcon = Field(..., description="The icon representing the suggestion")
+
+    @field_validator("message")
+    @classmethod
+    def _normalize_message(cls, value: str) -> str:
+        message = value.strip()
+        if not message:
+            raise ValueError("message must not be empty")
+        return message
+
+    @field_validator("icon", mode="before")
+    @classmethod
+    def _normalize_icon(cls, value):
+        if isinstance(value, str):
+            key = value.strip().lower().removeprefix("recommendation_task_icon_")
+            return _ICON_ALIASES.get(key, value)
+        return value
+
+    @field_validator("icon")
+    @classmethod
+    def _reject_unknown_icon(cls, value: RecommendationTaskIcon) -> RecommendationTaskIcon:
+        if value == RecommendationTaskIcon.UNKNOWN:
+            return RecommendationTaskIcon.FALLBACK
+        return value
 
     @classmethod
     def from_pb(cls, pb_obj: pb.RecommendationTask) -> "RecommendationTask":
@@ -59,15 +93,15 @@ class RecommendationTask(BaseModel):
 
 
 class RecommendationTasks(BaseModel):
-    tasks: list[RecommendationTask] = Field(default_factory=list, description="List of recommended tasks")
+    tasks: list[RecommendationTask] = Field(..., min_length=3, max_length=3, description="Exactly three recommended tasks")
 
     @classmethod
     def from_pb(cls, pb_obj: pb.GenerateOnboardRecommendationTasksResponse) -> "RecommendationTasks":
-        return cls(
-            tasks=[RecommendationTask.from_pb(s) for s in pb_obj.tasks]
-        )
+        if not pb_obj.data:
+            return cls.model_construct(tasks=[])
+        return cls(tasks=[RecommendationTask.from_pb(s) for s in pb_obj.data.tasks])
 
     def to_pb(self) -> pb.GenerateOnboardRecommendationTasksResponse:
-        pb_obj = pb.GenerateOnboardRecommendationTasksResponse()
-        pb_obj.tasks.extend([s.to_pb() for s in self.tasks])
-        return pb_obj
+        return pb.GenerateOnboardRecommendationTasksResponse(
+            data=pb.GenerateOnboardRecommendationTasksData(tasks=[s.to_pb() for s in self.tasks])
+        )

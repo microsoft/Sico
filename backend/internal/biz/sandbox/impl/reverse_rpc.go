@@ -40,15 +40,17 @@ func (s *Service) RpcApplySandbox(
 		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: "instanceId is required"}, nil
 	}
 
-	sandboxType := strings.TrimSpace(req.GetType())
-	if sandboxType == "" {
+	sandboxOS := strings.TrimSpace(req.GetType())
+	if sandboxOS == "" {
 		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: "type is required"}, nil
 	}
-	if !enum.IsValidSandboxType(sandboxType) {
-		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: "invalid sandbox type: " + sandboxType}, nil
+	// Scheduling is OS-only: the type field carries an OS selector (e.g.
+	// "windows") and ApplySandbox resolves it to a concrete pool.
+	if !enum.IsOSSelector(sandboxOS) {
+		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: "invalid sandbox os: " + sandboxOS}, nil
 	}
 
-	appliedSandbox, err := s.ApplySandbox(ctx, instanceID, sandboxType)
+	appliedSandbox, err := s.ApplySandbox(ctx, instanceID, sandboxOS)
 	if err != nil {
 		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: err.Error()}, nil
 	}
@@ -56,7 +58,7 @@ func (s *Service) RpcApplySandbox(
 	applied, appliedSandboxID := getApplyOutcome(appliedSandbox)
 	msg := "success"
 	if !applied {
-		msg = "no available sandbox for requested type"
+		msg = "no available sandbox for requested os"
 	}
 	providerBaseURL, deviceID := getApplyMetadata(appliedSandbox)
 

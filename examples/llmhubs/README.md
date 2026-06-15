@@ -1,6 +1,6 @@
 # LLMHub Examples
 
-This group is the runnable companion to [backend/docs/llmhub.md](../backend/docs/llmhub.md).
+This group is the runnable companion to [backend/docs/llmhub.md](../../backend/docs/llmhub.md).
 
 ## Layout
 

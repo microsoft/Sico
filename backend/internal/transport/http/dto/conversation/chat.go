@@ -47,6 +47,7 @@ type ChatStreamResponse struct {
 	Timestamp       int64              `json:"timestamp"`
 	IsFinal         bool               `json:"isFinal"`
 	Role            string             `json:"role"`
+	ConversationID  int64              `json:"conversationId"`
 	TurnID          int64              `json:"turnId"`
 }
 

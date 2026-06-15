@@ -41,6 +41,7 @@ func newTMessage(db *gorm.DB, opts ...gen.DOOption) tMessage {
 	_tMessage.Attachments = field.NewField(tableName, "attachments")
 	_tMessage.CreatedAt = field.NewInt64(tableName, "created_at")
 	_tMessage.UpdatedAt = field.NewInt64(tableName, "updated_at")
+	_tMessage.TaskRuntimeRecoveryKey = field.NewString(tableName, "task_runtime_recovery_key")
 
 	_tMessage.fillFieldMap()
 
@@ -51,20 +52,21 @@ func newTMessage(db *gorm.DB, opts ...gen.DOOption) tMessage {
 type tMessage struct {
 	tMessageDo
 
-	ALL             field.Asterisk
-	ID              field.Int64  // Primary key ID
-	TurnID          field.Int64  // Id of a conversation turn
-	ConversationID  field.Int64  // Conversation ID
-	Username        field.String // Username
-	AgentInstanceID field.Int64  // Agent instance ID
-	Role            field.String // Role: user, assistant, system
-	ContentType     field.Int32  // Content type (0=unknown, 1=text, 2=function_call, 3=function_result, 4=attachment)
-	Content         field.String // Content
-	FunctionContext field.Field  // Function call/result context
-	Ext             field.Field  // Message extension fields
-	Attachments     field.Field  // Message attachments
-	CreatedAt       field.Int64  // Creation time
-	UpdatedAt       field.Int64  // Update time
+	ALL                    field.Asterisk
+	ID                     field.Int64  // Primary key ID
+	TurnID                 field.Int64  // Id of a conversation turn
+	ConversationID         field.Int64  // Conversation ID
+	Username               field.String // Username
+	AgentInstanceID        field.Int64  // Agent instance ID
+	Role                   field.String // Role: user, assistant, system
+	ContentType            field.Int32  // Content type (0=unknown, 1=text, 2=function_call, 3=function_result, 4=attachment)
+	Content                field.String // Content
+	FunctionContext        field.Field  // Function call/result context
+	Ext                    field.Field  // Message extension fields
+	Attachments            field.Field  // Message attachments
+	CreatedAt              field.Int64  // Creation time
+	UpdatedAt              field.Int64  // Update time
+	TaskRuntimeRecoveryKey field.String
 
 	fieldMap map[string]field.Expr
 }
@@ -94,6 +96,7 @@ func (t *tMessage) updateTableName(table string) *tMessage {
 	t.Attachments = field.NewField(table, "attachments")
 	t.CreatedAt = field.NewInt64(table, "created_at")
 	t.UpdatedAt = field.NewInt64(table, "updated_at")
+	t.TaskRuntimeRecoveryKey = field.NewString(table, "task_runtime_recovery_key")
 
 	t.fillFieldMap()
 
@@ -110,7 +113,7 @@ func (t *tMessage) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (t *tMessage) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 13)
+	t.fieldMap = make(map[string]field.Expr, 14)
 	t.fieldMap["id"] = t.ID
 	t.fieldMap["turn_id"] = t.TurnID
 	t.fieldMap["conversation_id"] = t.ConversationID
@@ -124,6 +127,7 @@ func (t *tMessage) fillFieldMap() {
 	t.fieldMap["attachments"] = t.Attachments
 	t.fieldMap["created_at"] = t.CreatedAt
 	t.fieldMap["updated_at"] = t.UpdatedAt
+	t.fieldMap["task_runtime_recovery_key"] = t.TaskRuntimeRecoveryKey
 }
 
 func (t tMessage) clone(db *gorm.DB) tMessage {

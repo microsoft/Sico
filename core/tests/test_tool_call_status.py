@@ -40,7 +40,7 @@ class _FakePlanEditor:
         initial_message,
         execution_info=None,
         parent_tool_call_id=None,
-        batch_item_index=0,
+        sub_call_index=0,
         tool_call_status=ToolCallStatus.RUNNING,
     ):
         tool_call_status = ToolCallStatus.RUNNING if tool_call_status == ToolCallStatus.UNKNOWN else tool_call_status
@@ -51,7 +51,7 @@ class _FakePlanEditor:
                 "initial_message": initial_message,
                 "execution_info": execution_info,
                 "parent_tool_call_id": parent_tool_call_id,
-                "batch_item_index": batch_item_index,
+                "sub_call_index": sub_call_index,
                 "tool_call_status": tool_call_status,
             }
         )
@@ -98,7 +98,7 @@ def test_retry_creation_marks_failed_analyzing_tool_calls_as_analyzed():
                     ToolCall(
                         tool_call_id=2,
                         tool_call_status=ToolCallStatus.RUNNING,
-                        batch_calls=[
+                        sub_calls=[
                             ToolCall(tool_call_id=3, tool_call_status=ToolCallStatus.FAILED_ANALYZING),
                         ],
                     ),
@@ -111,7 +111,7 @@ def test_retry_creation_marks_failed_analyzing_tool_calls_as_analyzed():
 
     assert plan.steps[0].tool_calls[0].tool_call_status == ToolCallStatus.FAILED_ANALYZED
     assert plan.steps[0].tool_calls[1].tool_call_status == ToolCallStatus.RUNNING
-    assert plan.steps[0].tool_calls[1].batch_calls[0].tool_call_status == ToolCallStatus.FAILED_ANALYZED
+    assert plan.steps[0].tool_calls[1].sub_calls[0].tool_call_status == ToolCallStatus.FAILED_ANALYZED
 
 
 @pytest.mark.asyncio

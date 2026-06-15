@@ -43,6 +43,7 @@ env:
   CORE_GRPC_ADDRESS: "sico-core:50053"
   REVERSE_GRPC_SERVE_ADDRESS: "0.0.0.0:50054"
   SEAWEEDFS_ENDPOINT: "http://sico-seaweedfs-filer:14003"
+  SICO_PUBLIC_ENDPOINT: "http://localhost:8080"
   EVENT_BUS_TYPE: kafka
   EVENT_BUS_TOPIC: core-backend
   KAFKA_BOOTSTRAP_SERVERS: "sico-kafka:9092"

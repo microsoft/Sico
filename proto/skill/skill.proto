@@ -38,12 +38,27 @@ message Skill {
   string agent_id = 3;            // @gotag: json:"agentId"
   string name = 4;                // @gotag: json:"name"
   string description = 5;        // @gotag: json:"description"
-  int64 asset_id = 6;            // @gotag: json:"assetId"
-  string creator_username = 7;   // @gotag: json:"creatorUsername"
-  SkillStatus status = 8;        // @gotag: json:"status"
-  string fail_reason = 9;        // @gotag: json:"failReason"
+  reserved 6 to 9;
+  reserved "asset_id", "creator_username", "status", "fail_reason";
   int64 created_at = 10;         // @gotag: json:"createdAt"
   int64 updated_at = 11;         // @gotag: json:"updatedAt"
+  string version = 12;           // @gotag: json:"version"
+}
+
+// Skill version entity
+message SkillVersion {
+  int64 id = 1;                   // @gotag: json:"id"
+  int64 skill_id = 2;             // @gotag: json:"skillId"
+  string version = 3;             // @gotag: json:"version"
+  string url = 4;                 // @gotag: json:"url"
+  string name = 5;                // @gotag: json:"name"
+  string description = 6;         // @gotag: json:"description"
+  string creator_username = 7;    // @gotag: json:"creatorUsername"
+  SkillStatus status = 8;         // @gotag: json:"status"
+  int64 created_at = 9;           // @gotag: json:"createdAt"
+  int64 updated_at = 10;          // @gotag: json:"updatedAt"
+  repeated SkillAction actions = 12; // @gotag: json:"actions"
+  string fail_reason = 13;        // @gotag: json:"failReason"
 }
 
 // Create Skill
@@ -75,13 +90,17 @@ message GetSkillResponse {
 }
 
 message GetSkillData {
-  Skill skill = 1; // @gotag: json:"skill"
+  Skill skill = 1;                    // @gotag: json:"skill"
+  repeated SkillVersion versions = 2; // @gotag: json:"versions"
 }
 
 // Update Skill
 message UpdateSkillRequest {
-  int64 id = 1;             // @gotag: json:"id" form:"id" binding:"required"
-  int64 asset_id = 2;       // @gotag: json:"assetId" form:"assetId" binding:"required"
+  int64 id = 1;                       // @gotag: json:"id" form:"id" binding:"required"
+  int64 asset_id = 2;                 // @gotag: json:"assetId" form:"assetId"
+  repeated SkillFile files = 3;       // @gotag: json:"files"
+  repeated SkillAction actions = 4;   // @gotag: json:"actions"
+  string current_version = 5;         // @gotag: json:"currentVersion" binding:"required"
 }
 
 message UpdateSkillResponse {
@@ -91,7 +110,11 @@ message UpdateSkillResponse {
 }
 
 message UpdateSkillData {
-  Skill skill = 1; // @gotag: json:"skill"
+  int64 skill_id = 1;       // @gotag: json:"skillId"
+  string version = 3;       // @gotag: json:"version"
+  string name = 4;          // @gotag: json:"name"
+  string description = 5;   // @gotag: json:"description"
+  int64 asset_id = 6;       // @gotag: json:"assetId"
 }
 
 // Delete Skill
@@ -125,19 +148,10 @@ message ListSkillData {
   bool has_next = 3;         // @gotag: json:"hasNext"
 }
 
-// Get Skill Details (returns file contents)
-message GetSkillDetailsRequest {
-  int64 id = 1; // @gotag: form:"id" binding:"required"
-}
-
-message GetSkillDetailsResponse {
-  GetSkillDetailsData data = 1; // @gotag: json:"data"
-  int32 code = 253;             // @gotag: json:"code"
-  string msg = 254;             // @gotag: json:"msg"
-}
-
-message GetSkillDetailsData {
-  repeated SkillFile files = 1; // @gotag: json:"files"
+message SkillAction {
+  string name = 1;               // @gotag: json:"name"
+  string description = 2;        // @gotag: json:"description"
+  string advanced_settings = 3;  // @gotag: json:"advancedSettings"
 }
 
 message SkillFile {

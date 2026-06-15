@@ -176,11 +176,7 @@ make kind-down
 The Docker Compose and Kind stacks expose nginx, backend, core, and supporting
 infrastructure. Frontend source code is currently distributed separately as a
 packaged archive, so this public checkout does not contain a runnable frontend
-source package or `frontend/package.json`. If you are working from a separate
-frontend source checkout, run the React UI in a separate terminal with
-`cd frontend && pnpm install && pnpm dev`, then open
-[http://localhost:8080/login](http://localhost:8080/login) and sign in with the
-default account shown in §4 below.
+source package or `frontend/package.json`.
 
 For API service lifecycle management (`make emulator-start` / `make emulator-status` /
 `make emulator-logs`) and explicit device bootstrap (`make emulator-bootstrap`), see

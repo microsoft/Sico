@@ -182,31 +182,3 @@ func ListSkills(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, resp)
 }
-
-// GetSkillDetails .
-// @Router /api/sico/skills/details [GET]
-// @Tags skills
-// @Produce json
-// @Param request query skill.GetSkillDetailsRequest true "Get Skill Details"
-// @Success 200 {object} skill.GetSkillDetailsResponse
-// @Security BearerAuth
-func GetSkillDetails(ctx *gin.Context) {
-	var req skill.GetSkillDetailsRequest
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		invalidParamRequestResponse(ctx, err.Error())
-		return
-	}
-
-	svc, ok := skillService(ctx)
-	if !ok {
-		return
-	}
-
-	resp, err := svc.GetSkillDetails(reqctx(ctx), &req)
-	if err != nil {
-		internalServerErrorResponse(ctx, err)
-		return
-	}
-
-	ctx.JSON(http.StatusOK, resp)
-}

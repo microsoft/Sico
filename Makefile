@@ -37,6 +37,7 @@ help:
 	@echo "  make compose-up              Build and start full stack"
 	@echo "  make compose-up SERVICE=core Rebuild/recreate one service image"
 	@echo "  make compose-down            Stop and remove containers"
+	@echo "  make compose-down-volumes    Stop and remove containers + volumes (data loss)"
 	@echo "  make compose-logs            Tail logs"
 	@echo ""
 	@echo "Kind (local Kubernetes):"
@@ -134,6 +135,9 @@ compose-up:
 
 compose-down:
 	$(COMPOSE) down --remove-orphans
+
+compose-down-volumes:
+	$(COMPOSE) down --volumes --remove-orphans
 
 compose-logs:
 	$(COMPOSE) logs -f

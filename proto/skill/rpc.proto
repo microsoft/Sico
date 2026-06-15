@@ -31,11 +31,16 @@ service SkillService {
     // extracts it, and persists files to storage.
     rpc ExtractSkill(ExtractSkillRequest) returns (ExtractSkillResponse) {}
 
-    // GetSkillDetails returns the file contents of a skill.
+    // GetSkillDetails returns the current skill version details and version list.
     rpc GetSkillDetails(GetSkillDetailsGrpcRequest) returns (GetSkillDetailsGrpcResponse) {}
 
     // DeleteSkillFromFS deletes the skill files from the filesystem.
     rpc DeleteSkillFromFS(DeleteSkillFromFSRequest) returns (DeleteSkillFromFSResponse) {}
+
+    // WriteSkillVersion writes manually edited skill files/actions.
+    // File edits are resolved into executable cortex output; action-only edits
+    // branch from source_version and update the resolved action manifest.
+    rpc WriteSkillVersion(WriteSkillVersionRequest) returns (WriteSkillVersionResponse) {}
 }
 
 message ExtractSkillRequest {
@@ -43,12 +48,13 @@ message ExtractSkillRequest {
     int64 project_id = 2;     // @gotag: json:"projectId"
     string agent_id = 3;      // @gotag: json:"agentId"
     string download_url = 4;  // @gotag: json:"downloadUrl"
+    string version = 5;       // @gotag: json:"version"
 }
 
 message ExtractSkillResponse {
-    string message = 1;     // @gotag: json:"message"
-    string name = 2;        // @gotag: json:"name"
-    string description = 3; // @gotag: json:"description"
+    string message = 1;                  // @gotag: json:"message"
+    string name = 2;                     // @gotag: json:"name"
+    string description = 3;              // @gotag: json:"description"
     int32 code = 253;       // @gotag: json:"code"
 }
 
@@ -56,12 +62,14 @@ message GetSkillDetailsGrpcRequest {
     int64 skill_id = 1;    // @gotag: json:"skillId"
     int64 project_id = 2;  // @gotag: json:"projectId"
     string agent_id = 3;   // @gotag: json:"agentId"
+    repeated string versions = 4; // @gotag: json:"versions"
 }
 
 message GetSkillDetailsGrpcResponse {
-    repeated SkillFile files = 1; // @gotag: json:"files"
-    int32 code = 253;             // @gotag: json:"code"
-    string msg = 254;             // @gotag: json:"msg"
+    SkillVersion version = 1;           // @gotag: json:"version"
+    repeated SkillVersion versions = 2; // @gotag: json:"versions"
+    int32 code = 253;                   // @gotag: json:"code"
+    string msg = 254;                   // @gotag: json:"msg"
 }
 
 message DeleteSkillFromFSRequest {
@@ -71,6 +79,26 @@ message DeleteSkillFromFSRequest {
 }
 
 message DeleteSkillFromFSResponse {
+    int32 code = 253;  // @gotag: json:"code"
+    string msg = 254;  // @gotag: json:"msg"
+}
+
+message WriteSkillVersionRequest {
+    int64 skill_id = 1;              // @gotag: json:"skillId"
+    int64 project_id = 2;            // @gotag: json:"projectId"
+    string agent_id = 3;             // @gotag: json:"agentId"
+    string version = 4;              // @gotag: json:"version"
+    repeated SkillFile files = 5;    // @gotag: json:"files"
+    repeated SkillAction actions = 6; // @gotag: json:"actions"
+    string download_url = 7;         // @gotag: json:"downloadUrl"
+    string source_version = 8;       // @gotag: json:"sourceVersion"
+    int64 asset_id = 9;              // @gotag: json:"assetId"
+}
+
+message WriteSkillVersionResponse {
+    string name = 1;     // @gotag: json:"name"
+    string description = 2; // @gotag: json:"description"
+    int64 asset_id = 3;  // @gotag: json:"assetId"
     int32 code = 253;  // @gotag: json:"code"
     string msg = 254;  // @gotag: json:"msg"
 }

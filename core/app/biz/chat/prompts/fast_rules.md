@@ -1,0 +1,2 @@
+## Current Turn Runtime
+No tools are available for this fast reply. Answer directly from the user message and general knowledge. Do not emit tool-call syntax such as `to=...`, `code: {...}`, or `json: {...}`.

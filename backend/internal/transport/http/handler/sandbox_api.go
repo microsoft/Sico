@@ -40,9 +40,9 @@ import (
 
 // ==================== Client APIs (require SandboxAuthMiddleware) ====================
 
-// SandboxApply applies for a sandbox of the specified type
+// SandboxApply applies for a sandbox supplying the requested OS
 // @Summary Apply for a sandbox
-// @Description Apply for a sandbox of the specified type. One instanceID can have multiple sandboxes.
+// @Description Apply for a sandbox supplying the requested OS. One instanceID can have multiple sandboxes.
 // @Router /api/sico/sandbox/apply [POST]
 // @Tags Sandbox
 // @Accept json
@@ -52,7 +52,7 @@ import (
 // @Param X-Sico-Timestamp header string true "Unix timestamp"
 // @Param X-Sico-Nonce header string true "Random nonce"
 // @Param X-Sico-Signature header string true "HMAC signature"
-// @Param request body sandboxdto.SandboxApplyRequest true "Sandbox type to apply"
+// @Param request body sandboxdto.SandboxApplyRequest true "Sandbox OS to apply"
 // @Success 200 {object} commondto.StandardResponse
 func SandboxApply(c *gin.Context) {
 	var req sandboxdto.SandboxApplyRequest
@@ -61,11 +61,12 @@ func SandboxApply(c *gin.Context) {
 		return
 	}
 
-	if !enum.IsValidSandboxType(req.Type) {
+	// Scheduling is OS-only: the type field carries an OS selector (e.g.
+	// "android") and ApplySandbox resolves it to whichever concrete pool has a
+	// free machine. Concrete sandbox types are an internal provider detail.
+	if !enum.IsOSSelector(req.Type) {
 		invalidParamRequestResponse(c, fmt.Sprintf(
-			"invalid sandbox type: %s, valid types are: %v",
-			req.Type, enum.AllSandboxTypes(),
-		))
+			"invalid sandbox os: %s, valid values are: %v", req.Type, enum.AllSandboxOSes()))
 		return
 	}
 
@@ -298,6 +299,14 @@ func SandboxGetInstanceSandboxes(c *gin.Context) {
 	}
 
 	typeFilter := strings.TrimSpace(req.Type)
+	// Scheduling/listing is OS-only. An empty filter lists all sandboxes; a
+	// non-empty filter must name an OS (e.g. "android"). Concrete sandbox types
+	// are an internal provider detail, never a public filter.
+	if typeFilter != "" && !enum.IsOSSelector(typeFilter) {
+		invalidParamRequestResponse(c, fmt.Sprintf(
+			"invalid sandbox os: %s, valid values are: %v", typeFilter, enum.AllSandboxOSes()))
+		return
+	}
 
 	svc := sandboxbiz.Default()
 	result, err := svc.GetInstanceSandboxesWithStatus(reqctx(c), instanceID, typeFilter)

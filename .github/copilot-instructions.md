@@ -10,6 +10,12 @@ Backend ↔ Core communicate via gRPC (`:50053`). Core calls back to the backend
 
 See `CLAUDE.md` for the full architecture and coding-style reference.
 
+## Source file conventions
+
+- Every new source/config file (`.go`, `.py`, `.proto`, `.yaml`, shell scripts, etc.) must start with the standard 19-line MIT header from `LICENSE` — `# Copyright (c) 2026 Sico Authors` for `#`-comment languages, `// Copyright (c) 2026 Sico Authors` for `//`-comment languages.
+- The `addlicense` pre-commit hook (`.pre-commit-config.yaml`) inserts/refreshes the header automatically; run `pre-commit run addlicense --all-files` (or `pre-commit run --files <new-file>`) before committing new files.
+- Do not strip the header when editing existing files.
+
 ## Backend (Go) guidelines
 
 - **Do not edit generated files:**

@@ -39,6 +39,7 @@ from app.utils.sanitize import sanitize_mem0_entity_id
 LOGGER = logging.getLogger(__name__)
 
 _shared_memory: AsyncMemory | None = None
+_SENSITIVE_CONFIG_KEY_PARTS = ("api_key", "apikey", "api-key", "secret", "token", "password", "authorization")
 
 
 def build_memory_filters(*, username: str | None = None, agent_id: str | None = None) -> dict[str, str]:
@@ -100,7 +101,7 @@ async def init_shared_mem0(config_file_path: str) -> None:
     config = yaml.safe_load(raw)
     if not isinstance(config, dict):
         raise ValueError(f"Mem0 config file {config_file_path} must contain a YAML mapping at the top level.")
-    LOGGER.info("Loaded Mem0 config from %s: %s", config_file_path, config)
+    LOGGER.info("Loaded Mem0 config from %s: %s", config_file_path, _redact_config_for_log(config))
     try:
         _shared_memory = AsyncMemory.from_config(config)
     except Exception as exc:  # pragma: no cover - relies on external services
@@ -110,7 +111,21 @@ async def init_shared_mem0(config_file_path: str) -> None:
 
 def get_shared_mem0() -> AsyncMemory:
     if _shared_memory is None:
-        raise RuntimeError(
-            "Shared Mem0 instance is not initialized. Call init_shared_mem0() during application startup."
-        )
+        raise RuntimeError("Shared Mem0 instance is not initialized. Call init_shared_mem0() during application startup.")
     return _shared_memory
+
+
+def _redact_config_for_log(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]" if _is_sensitive_config_key(str(key)) else _redact_config_for_log(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_config_for_log(item) for item in value]
+    return value
+
+
+def _is_sensitive_config_key(key: str) -> bool:
+    normalized = key.casefold().replace("-", "_")
+    return any(part in normalized for part in _SENSITIVE_CONFIG_KEY_PARTS)

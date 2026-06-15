@@ -32,6 +32,7 @@ import (
 	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/biz/sandbox"
 	"sico-backend/internal/biz/skill"
+	"sico-backend/internal/biz/taskruntime"
 	"sico-backend/internal/infra/coregrpc"
 	"sico-backend/internal/infra/idgen"
 	"sico-backend/internal/infra/storage"
@@ -52,4 +53,5 @@ type Injector struct {
 	SandboxApp      sandbox.Service
 	SkillApp        skill.Service
 	LLMHubApp       llmhubs.Service
+	TaskRuntimeApp  taskruntime.Service
 }

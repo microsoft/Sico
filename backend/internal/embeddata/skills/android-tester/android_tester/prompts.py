@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -27,8 +28,16 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from android_tester.models import RunState
 
 
+_MAX_OPERATOR_DATA_CHARS = 2000
+
+
 class PromptRenderer:
-    def __init__(self, data_root: Path) -> None:
+    def __init__(
+        self,
+        data_root: Path,
+        resources_available: bool = False,
+    ) -> None:
+        self._resources_available = resources_available
         self._env = Environment(
             loader=FileSystemLoader(str(data_root / "prompts")),
             autoescape=select_autoescape(
@@ -39,14 +48,22 @@ class PromptRenderer:
             lstrip_blocks=True,
         )
 
-    async def render_operator(self, state: RunState) -> str:
+    async def render_operator(
+        self,
+        state: RunState,
+        *,
+        image_size: tuple[int, int] | None = None,
+    ) -> str:
         template = self._env.get_template("operator.j2")
         return template.render(
             problem=state.instruction,
             previous_actions=self._previous_actions(state),
+            data=self._operator_data(state),
             progress_status=state.progress_status,
             current_step_goal=state.current_step_goal,
             last_reflection=self._format_last_reflection(state),
+            image_size=image_size,
+            resources_available=self._resources_available,
         )
 
     async def render_reflector(self,
@@ -90,3 +107,52 @@ class PromptRenderer:
         if r is None:
             return ""
         return f"{r.outcome}: {r.what_happened}"
+
+    @staticmethod
+    def _operator_data(state: RunState) -> list[tuple[str, str]]:
+        if not state.operator_data:
+            return []
+        rows: list[tuple[str, str]] = []
+        for key, value in sorted(state.operator_data.items()):
+            sanitized = value.replace("\x00", "")
+            if len(sanitized) > _MAX_OPERATOR_DATA_CHARS:
+                sanitized = (
+                    sanitized[:_MAX_OPERATOR_DATA_CHARS]
+                    + " ...(truncated)"
+                )
+            rows.append((key, json.dumps(sanitized, ensure_ascii=False)))
+        return rows
+
+
+class PreconditionPromptRenderer(PromptRenderer):
+    """Swaps the operator prompt for the precondition-specific variant."""
+
+    async def render_operator(
+        self,
+        state: RunState,
+        *,
+        image_size: tuple[int, int] | None = None,
+    ) -> str:
+        template = self._env.get_template("precondition_operator.j2")
+        return template.render(
+            problem=state.instruction,
+            previous_actions=self._previous_actions(state),
+            data=self._operator_data(state),
+            progress_status=state.progress_status,
+            current_step_goal=state.current_step_goal,
+            last_reflection=self._format_last_reflection(state),
+            image_size=image_size,
+            resources_available=self._resources_available,
+        )
+
+    async def render_precondition_planner(
+        self,
+        preconditions: list[tuple[str, str]],
+    ) -> str:
+        """Render the prompt that asks the LLM to order *preconditions*.
+
+        *preconditions* is a list of ``(label, description)`` pairs in
+        their original (CLI) order.
+        """
+        template = self._env.get_template("precondition_planner.j2")
+        return template.render(preconditions=preconditions)

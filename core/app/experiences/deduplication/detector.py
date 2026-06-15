@@ -25,11 +25,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from ..llm import LLMHubEmbeddingClient
+from app.llmhubs.embedding import LLMHubEmbeddingClient
+
 from .config import DeduplicationConfig
 
 try:
     import numpy as np
+
     _NUMPY_AVAILABLE = True
 except ImportError:
     np = None
@@ -124,9 +126,7 @@ class SimilarityDetector:
         Returns:
             Number of embeddings computed
         """
-        bullets_needing_embeddings = [
-            b for b in playbook.bullets() if b.embedding is None
-        ]
+        bullets_needing_embeddings = [b for b in playbook.bullets() if b.embedding is None]
 
         if not bullets_needing_embeddings:
             return 0
@@ -201,9 +201,7 @@ class SimilarityDetector:
                 if playbook.has_keep_decision(bullet_a.id, bullet_b.id):
                     continue
 
-                similarity = self.cosine_similarity(
-                    bullet_a.embedding, bullet_b.embedding
-                )
+                similarity = self.cosine_similarity(bullet_a.embedding, bullet_b.embedding)
 
                 if similarity >= threshold:
                     pairs.append((bullet_a, bullet_b, similarity))

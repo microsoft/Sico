@@ -47,6 +47,7 @@ message MessageItem {
   repeated common.Attachment attachments = 9; // @gotag: json:"attachments"
   int64 created_at = 10; // @gotag: json:"createdAt"
   int64 updated_at = 11; // @gotag: json:"updatedAt"
+  int64 conversation_id = 12; // @gotag: json:"conversationId"
 }
 
 message MessageTurn {
@@ -54,6 +55,39 @@ message MessageTurn {
   repeated MessageItem messages = 2; // @gotag: json:"messages"
 }
 
+
+// BatchSummaryItem describes one delegated-task batch attached to a conversation.
+// ``summary_uri`` points to the persisted HTML report under SeaweedFS.
+message BatchSummaryItem {
+  string batch_id = 1; // @gotag: json:"batchId"
+  int64 parent_conversation_id = 2; // @gotag: json:"parentConversationId"
+  int64 parent_turn_id = 3; // @gotag: json:"parentTurnId"
+  string status = 4; // @gotag: json:"status"
+  string reason = 5; // @gotag: json:"reason"
+  int32 total_count = 6; // @gotag: json:"totalCount"
+  string summary_uri = 7; // @gotag: json:"summaryUri"
+  int64 created_at = 8; // @gotag: json:"createdAt"
+  int64 updated_at = 9; // @gotag: json:"updatedAt"
+  int64 ended_at = 10; // @gotag: json:"endedAt"
+}
+
+message ListBatchSummariesRequest {
+  int64 conversation_id = 1; // @gotag: json:"conversationId", binding:"required", form:"conversationId"
+  optional int64 turn_id = 2; // @gotag: json:"turnId,omitempty" form:"turnId"
+  int32 page = 3; // @gotag: json:"page" form:"page" binding:"min=1" default:"1"
+  int32 page_size = 4; // @gotag: json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"20"
+}
+
+message ListBatchSummariesData {
+  repeated BatchSummaryItem items = 1; // @gotag: json:"items"
+  bool has_more = 2; // @gotag: json:"hasMore"
+}
+
+message ListBatchSummariesResponse {
+  ListBatchSummariesData data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
 
 message MessageExtraInfo {
     // Reserved for future use

@@ -14,24 +14,25 @@ __all__ = (
     "ExtractSkillRequest",
     "ExtractSkillResponse",
     "GetSkillData",
-    "GetSkillDetailsData",
     "GetSkillDetailsGrpcRequest",
     "GetSkillDetailsGrpcResponse",
-    "GetSkillDetailsRequest",
-    "GetSkillDetailsResponse",
     "GetSkillRequest",
     "GetSkillResponse",
     "ListSkillData",
     "ListSkillRequest",
     "ListSkillResponse",
     "Skill",
+    "SkillAction",
     "SkillFile",
     "SkillServiceBase",
     "SkillServiceStub",
     "SkillStatus",
+    "SkillVersion",
     "UpdateSkillData",
     "UpdateSkillRequest",
     "UpdateSkillResponse",
+    "WriteSkillVersionRequest",
+    "WriteSkillVersionResponse",
 )
 
 from dataclasses import dataclass
@@ -254,6 +255,11 @@ class ExtractSkillRequest(betterproto2.Message):
     @gotag: json:"downloadUrl"
     """
 
+    version: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"version"
+    """
+
 
 default_message_pool.register_message(
     "skill", "ExtractSkillRequest", ExtractSkillRequest
@@ -297,23 +303,15 @@ class GetSkillData(betterproto2.Message):
     @gotag: json:"skill"
     """
 
-
-default_message_pool.register_message("skill", "GetSkillData", GetSkillData)
-
-
-@dataclass(eq=False, repr=False)
-class GetSkillDetailsData(betterproto2.Message):
-    files: "list[SkillFile]" = betterproto2.field(
-        1, betterproto2.TYPE_MESSAGE, repeated=True
+    versions: "list[SkillVersion]" = betterproto2.field(
+        2, betterproto2.TYPE_MESSAGE, repeated=True
     )
     """
-    @gotag: json:"files"
+    @gotag: json:"versions"
     """
 
 
-default_message_pool.register_message(
-    "skill", "GetSkillDetailsData", GetSkillDetailsData
-)
+default_message_pool.register_message("skill", "GetSkillData", GetSkillData)
 
 
 @dataclass(eq=False, repr=False)
@@ -333,6 +331,13 @@ class GetSkillDetailsGrpcRequest(betterproto2.Message):
     @gotag: json:"agentId"
     """
 
+    versions: "list[str]" = betterproto2.field(
+        4, betterproto2.TYPE_STRING, repeated=True
+    )
+    """
+    @gotag: json:"versions"
+    """
+
 
 default_message_pool.register_message(
     "skill", "GetSkillDetailsGrpcRequest", GetSkillDetailsGrpcRequest
@@ -341,11 +346,18 @@ default_message_pool.register_message(
 
 @dataclass(eq=False, repr=False)
 class GetSkillDetailsGrpcResponse(betterproto2.Message):
-    files: "list[SkillFile]" = betterproto2.field(
-        1, betterproto2.TYPE_MESSAGE, repeated=True
+    version: "SkillVersion | None" = betterproto2.field(
+        1, betterproto2.TYPE_MESSAGE, optional=True
     )
     """
-    @gotag: json:"files"
+    @gotag: json:"version"
+    """
+
+    versions: "list[SkillVersion]" = betterproto2.field(
+        2, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"versions"
     """
 
     code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
@@ -361,48 +373,6 @@ class GetSkillDetailsGrpcResponse(betterproto2.Message):
 
 default_message_pool.register_message(
     "skill", "GetSkillDetailsGrpcResponse", GetSkillDetailsGrpcResponse
-)
-
-
-@dataclass(eq=False, repr=False)
-class GetSkillDetailsRequest(betterproto2.Message):
-    """
-    Get Skill Details (returns file contents)
-    """
-
-    id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
-    """
-    @gotag: form:"id" binding:"required"
-    """
-
-
-default_message_pool.register_message(
-    "skill", "GetSkillDetailsRequest", GetSkillDetailsRequest
-)
-
-
-@dataclass(eq=False, repr=False)
-class GetSkillDetailsResponse(betterproto2.Message):
-    data: "GetSkillDetailsData | None" = betterproto2.field(
-        1, betterproto2.TYPE_MESSAGE, optional=True
-    )
-    """
-    @gotag: json:"data"
-    """
-
-    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
-    """
-    @gotag: json:"code"
-    """
-
-    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"msg"
-    """
-
-
-default_message_pool.register_message(
-    "skill", "GetSkillDetailsResponse", GetSkillDetailsResponse
 )
 
 
@@ -558,28 +528,6 @@ class Skill(betterproto2.Message):
     @gotag: json:"description"
     """
 
-    asset_id: "int" = betterproto2.field(6, betterproto2.TYPE_INT64)
-    """
-    @gotag: json:"assetId"
-    """
-
-    creator_username: "str" = betterproto2.field(7, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"creatorUsername"
-    """
-
-    status: "SkillStatus" = betterproto2.field(
-        8, betterproto2.TYPE_ENUM, default_factory=lambda: SkillStatus(0)
-    )
-    """
-    @gotag: json:"status"
-    """
-
-    fail_reason: "str" = betterproto2.field(9, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"failReason"
-    """
-
     created_at: "int" = betterproto2.field(10, betterproto2.TYPE_INT64)
     """
     @gotag: json:"createdAt"
@@ -590,8 +538,34 @@ class Skill(betterproto2.Message):
     @gotag: json:"updatedAt"
     """
 
+    version: "str" = betterproto2.field(12, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"version"
+    """
+
 
 default_message_pool.register_message("skill", "Skill", Skill)
+
+
+@dataclass(eq=False, repr=False)
+class SkillAction(betterproto2.Message):
+    name: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"name"
+    """
+
+    description: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"description"
+    """
+
+    advanced_settings: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"advancedSettings"
+    """
+
+
+default_message_pool.register_message("skill", "SkillAction", SkillAction)
 
 
 @dataclass(eq=False, repr=False)
@@ -611,12 +585,104 @@ default_message_pool.register_message("skill", "SkillFile", SkillFile)
 
 
 @dataclass(eq=False, repr=False)
-class UpdateSkillData(betterproto2.Message):
-    skill: "Skill | None" = betterproto2.field(
-        1, betterproto2.TYPE_MESSAGE, optional=True
+class SkillVersion(betterproto2.Message):
+    """
+    Skill version entity
+    """
+
+    id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"id"
+    """
+
+    skill_id: "int" = betterproto2.field(2, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"skillId"
+    """
+
+    version: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"version"
+    """
+
+    url: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"url"
+    """
+
+    name: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"name"
+    """
+
+    description: "str" = betterproto2.field(6, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"description"
+    """
+
+    creator_username: "str" = betterproto2.field(7, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"creatorUsername"
+    """
+
+    status: "SkillStatus" = betterproto2.field(
+        8, betterproto2.TYPE_ENUM, default_factory=lambda: SkillStatus(0)
     )
     """
-    @gotag: json:"skill"
+    @gotag: json:"status"
+    """
+
+    created_at: "int" = betterproto2.field(9, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"createdAt"
+    """
+
+    updated_at: "int" = betterproto2.field(10, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"updatedAt"
+    """
+
+    actions: "list[SkillAction]" = betterproto2.field(
+        12, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"actions"
+    """
+
+    fail_reason: "str" = betterproto2.field(13, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"failReason"
+    """
+
+
+default_message_pool.register_message("skill", "SkillVersion", SkillVersion)
+
+
+@dataclass(eq=False, repr=False)
+class UpdateSkillData(betterproto2.Message):
+    skill_id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"skillId"
+    """
+
+    version: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"version"
+    """
+
+    name: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"name"
+    """
+
+    description: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"description"
+    """
+
+    asset_id: "int" = betterproto2.field(6, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"assetId"
     """
 
 
@@ -636,7 +702,26 @@ class UpdateSkillRequest(betterproto2.Message):
 
     asset_id: "int" = betterproto2.field(2, betterproto2.TYPE_INT64)
     """
-    @gotag: json:"assetId" form:"assetId" binding:"required"
+    @gotag: json:"assetId" form:"assetId"
+    """
+
+    files: "list[SkillFile]" = betterproto2.field(
+        3, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"files"
+    """
+
+    actions: "list[SkillAction]" = betterproto2.field(
+        4, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"actions"
+    """
+
+    current_version: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"currentVersion" binding:"required"
     """
 
 
@@ -668,6 +753,96 @@ default_message_pool.register_message(
 )
 
 
+@dataclass(eq=False, repr=False)
+class WriteSkillVersionRequest(betterproto2.Message):
+    skill_id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"skillId"
+    """
+
+    project_id: "int" = betterproto2.field(2, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"projectId"
+    """
+
+    agent_id: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"agentId"
+    """
+
+    version: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"version"
+    """
+
+    files: "list[SkillFile]" = betterproto2.field(
+        5, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"files"
+    """
+
+    actions: "list[SkillAction]" = betterproto2.field(
+        6, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"actions"
+    """
+
+    download_url: "str" = betterproto2.field(7, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"downloadUrl"
+    """
+
+    source_version: "str" = betterproto2.field(8, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"sourceVersion"
+    """
+
+    asset_id: "int" = betterproto2.field(9, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"assetId"
+    """
+
+
+default_message_pool.register_message(
+    "skill", "WriteSkillVersionRequest", WriteSkillVersionRequest
+)
+
+
+@dataclass(eq=False, repr=False)
+class WriteSkillVersionResponse(betterproto2.Message):
+    name: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"name"
+    """
+
+    description: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"description"
+    """
+
+    asset_id: "int" = betterproto2.field(3, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"assetId"
+    """
+
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "skill", "WriteSkillVersionResponse", WriteSkillVersionResponse
+)
+
+
 class SkillServiceStub:
     def __init__(self, channel: grpc.Channel):
         self._channel = channel
@@ -688,7 +863,7 @@ class SkillServiceStub:
         self, message: "GetSkillDetailsGrpcRequest"
     ) -> "GetSkillDetailsGrpcResponse":
         """
-        GetSkillDetails returns the file contents of a skill.
+        GetSkillDetails returns the current skill version details and version list.
         """
 
         return self._channel.unary_unary(
@@ -710,6 +885,21 @@ class SkillServiceStub:
             DeleteSkillFromFsResponse.FromString,
         )(message)
 
+    def write_skill_version(
+        self, message: "WriteSkillVersionRequest"
+    ) -> "WriteSkillVersionResponse":
+        """
+        WriteSkillVersion writes manually edited skill files/actions.
+        File edits are resolved into executable cortex output; action-only edits
+        branch from source_version and update the resolved action manifest.
+        """
+
+        return self._channel.unary_unary(
+            "/skill.SkillService/WriteSkillVersion",
+            WriteSkillVersionRequest.SerializeToString,
+            WriteSkillVersionResponse.FromString,
+        )(message)
+
 
 class SkillServiceBase(betterproto2_grpclib.ServiceBase):
     async def extract_skill(
@@ -726,7 +916,7 @@ class SkillServiceBase(betterproto2_grpclib.ServiceBase):
         self, message: "GetSkillDetailsGrpcRequest"
     ) -> "GetSkillDetailsGrpcResponse":
         """
-        GetSkillDetails returns the file contents of a skill.
+        GetSkillDetails returns the current skill version details and version list.
         """
 
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
@@ -736,6 +926,17 @@ class SkillServiceBase(betterproto2_grpclib.ServiceBase):
     ) -> "DeleteSkillFromFsResponse":
         """
         DeleteSkillFromFS deletes the skill files from the filesystem.
+        """
+
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
+    async def write_skill_version(
+        self, message: "WriteSkillVersionRequest"
+    ) -> "WriteSkillVersionResponse":
+        """
+        WriteSkillVersion writes manually edited skill files/actions.
+        File edits are resolved into executable cortex output; action-only edits
+        branch from source_version and update the resolved action manifest.
         """
 
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
@@ -766,6 +967,15 @@ class SkillServiceBase(betterproto2_grpclib.ServiceBase):
         response = await self.delete_skill_from_fs(request)
         await stream.send_message(response)
 
+    async def __rpc_write_skill_version(
+        self,
+        stream: "grpclib.server.Stream[WriteSkillVersionRequest, WriteSkillVersionResponse]",
+    ) -> None:
+        request = await stream.recv_message()
+        assert request is not None
+        response = await self.write_skill_version(request)
+        await stream.send_message(response)
+
     def __mapping__(self) -> "dict[str, grpclib.const.Handler]":
         return {
             "/skill.SkillService/ExtractSkill": grpclib.const.Handler(
@@ -785,5 +995,11 @@ class SkillServiceBase(betterproto2_grpclib.ServiceBase):
                 grpclib.const.Cardinality.UNARY_UNARY,
                 DeleteSkillFromFsRequest,
                 DeleteSkillFromFsResponse,
+            ),
+            "/skill.SkillService/WriteSkillVersion": grpclib.const.Handler(
+                self.__rpc_write_skill_version,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                WriteSkillVersionRequest,
+                WriteSkillVersionResponse,
             ),
         }

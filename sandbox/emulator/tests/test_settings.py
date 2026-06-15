@@ -20,9 +20,7 @@
 
 from __future__ import annotations
 
-import os
 
-import pytest
 
 from app.settings import Settings, _default_android_home, detect_android_home, get_settings
 

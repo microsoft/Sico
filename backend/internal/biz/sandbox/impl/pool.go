@@ -1750,36 +1750,27 @@ redis.call('SET', KEYS[1], updated)
 return updated
 `)
 
-// AcquireAvailableLease finds the first sandbox of the given type assigned to
-// the instance that is NOT currently in use, atomically marks it as InUse=true,
-// and returns it. Returns nil if all assigned sandboxes are in use or none exist.
-func (p *Pool) AcquireAvailableLease(ctx context.Context, instanceID, sandboxType string) (*Lease, error) {
-	return p.acquireAvailableLease(ctx, instanceID, sandboxType, nil)
-}
-
-func (p *Pool) AcquireAvailableLeaseFromResources(
-	ctx context.Context, instanceID, sandboxType string, availableResources map[string]*Resource,
+// AcquireAssignedLease tries, in the given priority order, to acquire one of the
+// candidate sandboxes that is assigned to the instance.
+//
+// candidateSandboxIDs are pre-filtered by the caller to available resources of
+// the requested OS (see Service.appliableResourcesForOS) and ordered by
+// scheduling priority. This routine intersects them with the instance's
+// assignment set and acquires the first that can be leased; the assignment hash
+// value (concrete type) is irrelevant here — selection is purely OS-driven
+// upstream and identity-driven (assigned to this instance) here.
+func (p *Pool) AcquireAssignedLease(
+	ctx context.Context, instanceID string, candidateSandboxIDs []string,
 ) (*Lease, error) {
-	allowedResourceIDs := make(map[string]struct{}, len(availableResources))
-	for resourceID, resource := range availableResources {
-		if resource == nil || resource.Status != ResourceStatusAvailable || resourceID == "" {
-			continue
-		}
-		allowedResourceIDs[resourceID] = struct{}{}
-	}
-
-	return p.acquireAvailableLease(ctx, instanceID, sandboxType, allowedResourceIDs)
-}
-
-func (p *Pool) acquireAvailableLease(
-	ctx context.Context,
-	instanceID, sandboxType string,
-	allowedResourceIDs map[string]struct{},
-) (*Lease, error) {
-	if instanceID == "" || sandboxType == "" {
+	if instanceID == "" || len(candidateSandboxIDs) == 0 {
 		return nil, nil
 	}
-	if allowedResourceIDs != nil && len(allowedResourceIDs) == 0 {
+
+	assignments, err := p.rds.HGetAll(ctx, assignKey(instanceID)).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(assignments) == 0 {
 		return nil, nil
 	}
 
@@ -1789,17 +1780,8 @@ func (p *Pool) acquireAvailableLease(
 	}
 	expectedOwnerPattern := `"User":` + string(expectedOwnerJSON)
 
-	aKey := assignKey(instanceID)
-	assignments, err := p.rds.HGetAll(ctx, aKey).Result()
-	if err != nil {
-		return nil, err
-	}
-
-	for sandboxID, sType := range assignments {
-		if sType != sandboxType {
-			continue
-		}
-		if !assignmentMatchesAllowedResources(sandboxID, allowedResourceIDs) {
+	for _, sandboxID := range candidateSandboxIDs {
+		if _, assigned := assignments[sandboxID]; !assigned {
 			continue
 		}
 
@@ -1813,20 +1795,6 @@ func (p *Pool) acquireAvailableLease(
 	}
 
 	return nil, nil
-}
-
-func assignmentMatchesAllowedResources(sandboxID string, allowedResourceIDs map[string]struct{}) bool {
-	if allowedResourceIDs == nil {
-		return true
-	}
-
-	parts := strings.SplitN(sandboxID, ":", 2)
-	if len(parts) != 2 {
-		return false
-	}
-
-	_, ok := allowedResourceIDs[parts[1]]
-	return ok
 }
 
 func (p *Pool) tryAcquireAssignedLease(ctx context.Context, sandboxID, expectedOwnerPattern string) (*Lease, error) {
@@ -1848,7 +1816,7 @@ func (p *Pool) tryAcquireAssignedLease(ctx context.Context, sandboxID, expectedO
 
 	var lease Lease
 	if jsonErr := json.Unmarshal([]byte(updatedJSON), &lease); jsonErr != nil {
-		logger.CtxError(ctx, "AcquireAvailableLease: failed to parse lease JSON: %v", jsonErr)
+		logger.CtxError(ctx, "AcquireAssignedLease: failed to parse lease JSON: %v", jsonErr)
 		return nil, nil
 	}
 
@@ -1904,7 +1872,7 @@ const resourceSnapshotKeyPrefix = "sandbox:snapshot:resource:"
 const resourcePendingShrinkKeyPrefix = "sandbox:snapshot:resource:pending-shrink:"
 const resourceSnapshotLeaderKey = "sandbox:snapshot:resource:leader"
 const cooldownKeyPrefix = "sandbox:cooldown:"
-const releaseCooldown = 5 * time.Second
+const releaseCooldown = 3 * time.Second
 
 func resourceKey(t, id string) string { return resourceKeyPrefix + t + ":" + id }
 

@@ -56,8 +56,7 @@ class JsonlBroker:
     The stream is not owned by the broker; the caller is responsible
     for opening and closing it. A lock guards ``write``/``flush`` so
     a single broker instance can be safely shared across concurrent
-    asyncio workers (e.g. a stdout progress broker shared by a batch
-    runner).
+    asyncio tasks.
     """
 
     def __init__(self, stream: IO[str] | None = None) -> None:

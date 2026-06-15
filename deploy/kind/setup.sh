@@ -64,6 +64,8 @@ REGISTRY="${REGISTRY:-localhost:5000}"
 KIND_CONFIG="${KIND_CONFIG:-${SCRIPT_DIR}/kind-config.yaml}"
 KUBE_CONTEXT="${KUBE_CONTEXT:-kind-${CLUSTER_NAME}}"
 VERSION="${VERSION:-local}"
+BACKEND_DEPLOY_TIMEOUT="${BACKEND_DEPLOY_TIMEOUT:-300s}"
+BACKEND_ROLLOUT_TIMEOUT="${BACKEND_ROLLOUT_TIMEOUT:-300s}"
 
 # -- stop / down -----------------------------------------------------------------
 
@@ -231,9 +233,9 @@ deploy_kind_service() {
         --set image.tag=${VERSION} \
         "${BACKEND_HELM_EXTRA_ARGS[@]}" \
         --kube-context "${KUBE_CONTEXT}" \
-        --wait --timeout 60s
+        --wait --timeout "${BACKEND_DEPLOY_TIMEOUT}"
       kubectl --context "${KUBE_CONTEXT}" -n sico rollout restart deployment/sico-backend
-      kubectl --context "${KUBE_CONTEXT}" -n sico rollout status deployment/sico-backend --timeout=120s
+      kubectl --context "${KUBE_CONTEXT}" -n sico rollout status deployment/sico-backend --timeout="${BACKEND_ROLLOUT_TIMEOUT}"
       ;;
     core)
       prepare_core_helm_extra_args

@@ -28,7 +28,7 @@ from typing import Any
 import httpx
 
 from android_tester.image_store import Image
-from android_tester.retry import call_with_retry
+from android_tester.retry import call_http_with_retry
 from android_tester.telemetry import measure_time
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,7 @@ class LLMHubClient:
             return resp.json()
 
         try:
-            data = await call_with_retry(
+            data = await call_http_with_retry(
                 _attempt,
                 max_retries=self._max_retries,
                 label=f"LLMHub {self._model} -",

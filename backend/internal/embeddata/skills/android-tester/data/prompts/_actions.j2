@@ -1,0 +1,58 @@
+{#
+Copyright (c) 2026 Sico Authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+#}
+
+### Available Actions
+You may execute one of the following functions:
+- Click(box=(x1,y1))
+- Drag(start=(x1,y1), end=(x2,y2), speed='normal'|'high'): Drag from start to end. *speed* is optional and defaults to 'normal'.
+- Scroll(start=(x1,y1), end=(x2,y2), speed='normal'|'high'): Simulate a finger swipe. *speed* is optional and defaults to 'normal'; use 'high' for a fast fling.
+    * To scroll DOWN (reveal bottom content): Swipe finger UP (start_y > end_y).
+    * To scroll UP (reveal top content): Swipe finger DOWN (start_y < end_y).
+    * To scroll LEFT (reveal right content): Swipe finger LEFT (start_x > end_x).
+    * To scroll RIGHT (reveal left content): Swipe finger RIGHT (start_x < end_x).
+- Type(content='')
+- Launch(app='')
+- OpenLink(url='')
+- InstallApk(source='')
+- Uninstall(app='')
+- ForceStop(app=''): Quit the app immediately. Use this action preferably to kill/quit/terminate an app.
+- Wait()
+- Finished(verdict='pass'|'bug'|'blocker', content='')
+- LongPress(box=(x1,y1))
+- PressBack()
+- PressHome()
+- PressRecentApps()
+- PressEnter()
+- ClipboardGet(): Get current clipboard contents
+- ClipboardPaste(): Paste current clipboard contents into the focused text field
+- ClipboardPut(content=''): Set the clipboard content to the specified value
+{% if resources_available %}
+- ResourceList(): List the files available in the resources directory that you can stage on the device with FilePut.
+- FilePut(source='', dest=''): Copy a resource file onto the device. *source* is a path relative to the resources directory (see ResourceList); *dest* is a destination folder under /sdcard (e.g. 'Pictures', 'Download', 'DCIM', 'Documents', 'Movies'). You may have to refresh or restart the Files or Gallery app afterwards.
+- FileList(path=''): List files under /sdcard/<path> on the device. *path* is optional and defaults to the /sdcard root (e.g. path='Pictures').
+- FileDelete(path=''): Delete a file under /sdcard (e.g. path='Pictures/cat.jpg').
+{% endif %}
+{% if image_size %}
+
+Coordinates must satisfy `0 <= x < {{ image_size[0] }}` and `0 <= y < {{ image_size[1] }}`.
+The point ({{ image_size[0] }}, {{ image_size[1] }}) corresponds to the bottom-right corner of the screenshot.
+{% endif %}

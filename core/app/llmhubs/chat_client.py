@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import AsyncIterable, Awaitable, Callable, MutableSequence, Sequence
 from typing import Any
 
@@ -37,6 +38,73 @@ from app.llmhubs.response_format import build_response_format_option
 from app.llmhubs.types import Input, InputContent, OutputItem, Request, Response, StreamChunk
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Image compaction: limit total images sent per LLM request.
+# ---------------------------------------------------------------------------
+
+_DEFAULT_MAX_IMAGES_PER_REQUEST = 40
+
+
+def _get_max_images_per_request() -> int:
+    raw = os.getenv("CHAT_MAX_IMAGES_PER_REQUEST", "")
+    if raw.strip():
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return _DEFAULT_MAX_IMAGES_PER_REQUEST
+
+
+def _is_image_content(part: InputContent) -> bool:
+    """Return True if *part* carries an image payload."""
+    if part.type == "image":
+        return True
+    if part.type == "computer_call_output":
+        output = part.output
+        if isinstance(output, dict):
+            return output.get("type") == "computer_screenshot" or bool(output.get("image_url"))
+        return False
+    return False
+
+
+def _compact_images(inputs: list[Input], max_images: int) -> list[Input]:
+    """Replace the earliest images with ``[image omitted]`` when the total exceeds *max_images*.
+
+    The most recent images are the most relevant to the current LLM reasoning
+    step, so we keep the *last* ``max_images`` and replace earlier ones with a
+    lightweight text placeholder.
+    """
+    # First pass: collect (input_idx, content_idx) of every image.
+    image_positions: list[tuple[int, int]] = []
+    for i, inp in enumerate(inputs):
+        for j, part in enumerate(inp.content):
+            if _is_image_content(part):
+                image_positions.append((i, j))
+
+    if len(image_positions) <= max_images:
+        return inputs
+
+    logger.info(
+        "chat_image_compaction total_images=%d max_allowed=%d compacting=%d",
+        len(image_positions),
+        max_images,
+        len(image_positions) - max_images,
+    )
+
+    # Positions to replace: everything except the last *max_images*.
+    positions_to_replace: set[tuple[int, int]] = set(image_positions[: len(image_positions) - max_images])
+
+    for i, inp in enumerate(inputs):
+        new_content: list[InputContent] = []
+        for j, part in enumerate(inp.content):
+            if (i, j) in positions_to_replace:
+                new_content.append(InputContent(type="text", text="[image omitted]"))
+            else:
+                new_content.append(part)
+        inp.content = new_content
+
+    return inputs
 
 
 class ChatClient(FunctionInvocationLayer, BaseChatClient):
@@ -297,6 +365,9 @@ def _chat_messages_to_llm_request(
     tools = _prepare_tools(options.get("tools"))
 
     previous_response_id = options.get("previous_response_id", "")
+
+    # Compact images to stay within provider limits (e.g. OpenAI 50-image cap).
+    inputs = _compact_images(inputs, _get_max_images_per_request())
 
     return Request(
         model=model,

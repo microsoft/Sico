@@ -31,9 +31,10 @@ import (
 type Service interface {
 	// ==================== Client APIs (require X-Sico-* auth) ====================
 
-	// ApplySandbox returns an available pre-assigned sandbox for the instance by type.
-	// Marks the sandbox as in-use. Returns empty result if none available.
-	ApplySandbox(ctx context.Context, instanceID, sandboxType string) (map[string]interface{}, error)
+	// ApplySandbox returns an available pre-assigned sandbox supplying the
+	// requested OS for the instance. Marks the sandbox as in-use. Returns empty
+	// result if none available.
+	ApplySandbox(ctx context.Context, instanceID, sandboxOS string) (map[string]interface{}, error)
 
 	// ReleaseSandbox marks a sandbox as no longer in use so it can be re-acquired.
 	ReleaseSandbox(ctx context.Context, instanceID, sandboxID string) error
@@ -66,8 +67,8 @@ type Service interface {
 	UnassignSandbox(ctx context.Context, instanceID string, sandboxID string) error
 
 	// GetInstanceSandboxesWithStatus returns sandboxes for an instance including type, status, and endpoints.
-	// If typeFilter is empty, returns all types.
-	GetInstanceSandboxesWithStatus(ctx context.Context, instanceID, typeFilter string) ([]map[string]interface{}, error)
+	// osFilter, when non-empty, is an OS selector (e.g. "windows"); empty returns all.
+	GetInstanceSandboxesWithStatus(ctx context.Context, instanceID, osFilter string) ([]map[string]interface{}, error)
 
 	// CleanupInstanceSandboxes removes sandbox bindings for an instance.
 	// In-use sandboxes are released first, then all matching leases are unassigned.

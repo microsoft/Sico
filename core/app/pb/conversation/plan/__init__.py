@@ -9,9 +9,8 @@ __all__ = (
     "PlanStatus",
     "PlanStep",
     "PlanStepStatus",
+    "TaskRuntimeExecutionInfo",
     "ToolCall",
-    "ToolCallRunningListItem",
-    "ToolCallRunningListItemStatus",
     "ToolCallStatus",
     "ToolDeliverable",
     "ToolDeliverableAcquiredSandbox",
@@ -110,42 +109,6 @@ class PlanStepStatus(betterproto2.Enum):
         }
 
 
-class ToolCallRunningListItemStatus(betterproto2.Enum):
-    UNKNOWN = 0
-
-    PENDING = 1
-
-    RUNNING = 2
-
-    DONE = 3
-
-    FAILED = 4
-
-    CANCELLED = 5
-
-    @classmethod
-    def betterproto_value_to_renamed_proto_names(cls) -> dict[int, str]:
-        return {
-            0: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN",
-            1: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING",
-            2: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING",
-            3: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE",
-            4: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED",
-            5: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED",
-        }
-
-    @classmethod
-    def betterproto_renamed_proto_names_to_value(cls) -> dict[str, int]:
-        return {
-            "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN": 0,
-            "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING": 1,
-            "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING": 2,
-            "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE": 3,
-            "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED": 4,
-            "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED": 5,
-        }
-
-
 class ToolCallStatus(betterproto2.Enum):
     UNKNOWN = 0
 
@@ -165,6 +128,8 @@ class ToolCallStatus(betterproto2.Enum):
 
     RETRY_FAILED = 8
 
+    PENDING = 9
+
     @classmethod
     def betterproto_value_to_renamed_proto_names(cls) -> dict[int, str]:
         return {
@@ -177,6 +142,7 @@ class ToolCallStatus(betterproto2.Enum):
             6: "TOOL_CALL_STATUS_RETRY_RUNNING",
             7: "TOOL_CALL_STATUS_RETRY_SUCCESSFUL",
             8: "TOOL_CALL_STATUS_RETRY_FAILED",
+            9: "TOOL_CALL_STATUS_PENDING",
         }
 
     @classmethod
@@ -191,6 +157,7 @@ class ToolCallStatus(betterproto2.Enum):
             "TOOL_CALL_STATUS_RETRY_RUNNING": 6,
             "TOOL_CALL_STATUS_RETRY_SUCCESSFUL": 7,
             "TOOL_CALL_STATUS_RETRY_FAILED": 8,
+            "TOOL_CALL_STATUS_PENDING": 9,
         }
 
 
@@ -336,8 +303,58 @@ class PlanStep(betterproto2.Message):
     @gotag: json:"status,omitempty"
     """
 
+    updated_at: "int" = betterproto2.field(4, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"updatedAt,omitempty"
+    """
+
 
 default_message_pool.register_message("plan", "PlanStep", PlanStep)
+
+
+@dataclass(eq=False, repr=False)
+class TaskRuntimeExecutionInfo(betterproto2.Message):
+    current_stage: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    Lifecycle stage of a single task run: plan | workspace | sandbox | execute | upload | release.
+
+    @gotag: json:"currentStage,omitempty"
+    """
+
+    sandbox_id: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"sandboxId,omitempty"
+    """
+
+    sandbox_type: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"sandboxType,omitempty"
+    """
+
+    sandbox_endpoint: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"sandboxEndpoint,omitempty"
+    """
+
+    attempt: "int" = betterproto2.field(5, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"attempt,omitempty"
+    """
+
+    max_attempts: "int" = betterproto2.field(6, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"maxAttempts,omitempty"
+    """
+
+    latest_progress_message: "str" = betterproto2.field(7, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"latestProgressMessage,omitempty"
+    """
+
+
+default_message_pool.register_message(
+    "plan", "TaskRuntimeExecutionInfo", TaskRuntimeExecutionInfo
+)
 
 
 @dataclass(eq=False, repr=False)
@@ -352,13 +369,6 @@ class ToolCall(betterproto2.Message):
     message is for frontend display
 
     @gotag: json:"message,omitempty"
-    """
-
-    running_list: "list[ToolCallRunningListItem]" = betterproto2.field(
-        6, betterproto2.TYPE_MESSAGE, repeated=True
-    )
-    """
-    @gotag: json:"runningList,omitempty"
     """
 
     execution_info: "ToolExecutionInfo | None" = betterproto2.field(
@@ -380,49 +390,49 @@ class ToolCall(betterproto2.Message):
     @gotag: json:"toolCallId,omitempty"
     """
 
-    batch_calls: "list[ToolCall]" = betterproto2.field(
+    sub_calls: "list[ToolCall]" = betterproto2.field(
         7, betterproto2.TYPE_MESSAGE, repeated=True
     )
     """
-    @gotag: json:"batchCalls,omitempty"
+    @gotag: json:"subCalls,omitempty"
     """
 
-    batch_item_index: "int" = betterproto2.field(8, betterproto2.TYPE_INT64)
+    sub_call_index: "int" = betterproto2.field(8, betterproto2.TYPE_INT64)
     """
-    @gotag: json:"batchItemIndex,omitempty"
+    @gotag: json:"subCallIndex,omitempty"
+    """
+
+    display: "dict[str, str]" = betterproto2.field(
+        9,
+        betterproto2.TYPE_MAP,
+        map_meta=betterproto2.map_meta(
+            betterproto2.TYPE_STRING, betterproto2.TYPE_STRING
+        ),
+    )
+    """
+    Structured display labels (task_label, sandbox_label, sandbox_label_plural,
+    sandbox_ready_label, sandbox_releasing_label, sandbox_release_label,
+    environment_label, runner_label, batch_subject_singular,
+    batch_subject_plural, ...) sourced from the capability card. The frontend
+    should read these directly instead of pattern-matching `message`.
+
+    @gotag: json:"display,omitempty"
     """
 
     tool_call_status: "ToolCallStatus" = betterproto2.field(
-        9, betterproto2.TYPE_ENUM, default_factory=lambda: ToolCallStatus(0)
+        10, betterproto2.TYPE_ENUM, default_factory=lambda: ToolCallStatus(0)
     )
     """
     @gotag: json:"toolCallStatus,omitempty"
     """
 
+    updated_at: "int" = betterproto2.field(11, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"updatedAt,omitempty"
+    """
+
 
 default_message_pool.register_message("plan", "ToolCall", ToolCall)
-
-
-@dataclass(eq=False, repr=False)
-class ToolCallRunningListItem(betterproto2.Message):
-    name: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"name,omitempty"
-    """
-
-    status: "ToolCallRunningListItemStatus" = betterproto2.field(
-        2,
-        betterproto2.TYPE_ENUM,
-        default_factory=lambda: ToolCallRunningListItemStatus(0),
-    )
-    """
-    @gotag: json:"status"
-    """
-
-
-default_message_pool.register_message(
-    "plan", "ToolCallRunningListItem", ToolCallRunningListItem
-)
 
 
 @dataclass(eq=False, repr=False)
@@ -525,6 +535,13 @@ class ToolExecutionInfo(betterproto2.Message):
     builtin_tool_name: "str" = betterproto2.field(6, betterproto2.TYPE_STRING)
     """
     @gotag: json:"builtinToolName,omitempty"
+    """
+
+    task_runtime: "TaskRuntimeExecutionInfo | None" = betterproto2.field(
+        7, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"taskRuntime,omitempty"
     """
 
 

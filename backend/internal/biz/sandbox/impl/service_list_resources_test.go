@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Sico Authors
+﻿// Copyright (c) 2026 Sico Authors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -34,9 +34,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 
-	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/enum"
-	"sico-backend/internal/shared/errcode"
 )
 
 type fakeProvider struct {
@@ -132,12 +130,12 @@ func newTestPoolWithProviders(rds *redis.Client, missingHideAfter time.Duration,
 	}
 
 	return &Pool{
-		providers:               providerMap,
-		rds:                     rds,
-		refreshInterval:         15 * time.Second,
-		providerFailureCount:    make(map[string]int),
-		providerLastSuccessAt:   make(map[string]time.Time),
-		missingLeaseMarkAfter:   30 * time.Second,
+		providers:                providerMap,
+		rds:                      rds,
+		refreshInterval:          15 * time.Second,
+		providerFailureCount:     make(map[string]int),
+		providerLastSuccessAt:    make(map[string]time.Time),
+		missingLeaseMarkAfter:    30 * time.Second,
 		missingLeaseHideAfter:    missingHideAfter,
 		missingLeaseDeleteAfter:  24 * time.Hour,
 		instanceID:               newPoolInstanceID(),
@@ -222,6 +220,13 @@ func testEmulatorResource(status ResourceStatus) *Resource {
 			"adbPort":         "16480",
 		},
 	}
+}
+
+// osForLease returns the OS a lease supplies, for use as an OS scheduling
+// selector. Apply/list speak OS only, so tests pass this rather than lease.Type.
+func osForLease(lease *Lease) string {
+	os, _ := enum.ResolveResourceOS(lease.Type, lease.Metadata)
+	return os.String()
 }
 
 func TestListAllResourcesDoesNotIncludeLeaseWithoutSnapshot(t *testing.T) {
@@ -370,7 +375,7 @@ func TestTransientProviderEmptyResponsePreservesAvailableDuringGrace(t *testing.
 		Metadata:   map[string]string{"adbAddress": "74.179.80.110:16704"},
 	}
 
-	// First refresh: provider returns both resources → snapshot contains 2 available
+	// First refresh: provider returns both resources â†’ snapshot contains 2 available
 	provider := &fakeProvider{
 		providerType: enum.SandboxTypeEmulator.String(),
 		responses: [][]*Resource{
@@ -392,7 +397,7 @@ func TestTransientProviderEmptyResponsePreservesAvailableDuringGrace(t *testing.
 	require.Equal(t, true, emulatorResources[0]["allocatable"])
 	require.Equal(t, true, emulatorResources[1]["allocatable"])
 
-	// Second refresh: provider returns empty once → keep last accepted snapshot untouched.
+	// Second refresh: provider returns empty once â†’ keep last accepted snapshot untouched.
 	require.NoError(t, pool.refreshResources(ctx))
 
 	result, err = svc.ListAllResources(ctx)
@@ -406,7 +411,7 @@ func TestTransientProviderEmptyResponsePreservesAvailableDuringGrace(t *testing.
 			"resource %s should not be allocatable for new assignment while shrink is pending", r["resource_id"])
 	}
 
-	// Third refresh: provider returns both → resources still available, missingSinceAt cleared
+	// Third refresh: provider returns both â†’ resources still available, missingSinceAt cleared
 	require.NoError(t, pool.refreshResources(ctx))
 
 	result, err = svc.ListAllResources(ctx)
@@ -534,7 +539,7 @@ func TestAssignSandboxRejectsGracePeriodResource(t *testing.T) {
 
 	// Refresh 1: resource is available.
 	// Refresh 2: provider returns empty (resource enters grace period).
-	// AssignSandbox should fail — grace-period resources are visible but not allocatable.
+	// AssignSandbox should fail â€” grace-period resources are visible but not allocatable.
 	provider := &fakeProvider{
 		providerType: enum.SandboxTypeEmulator.String(),
 		responses: [][]*Resource{
@@ -591,7 +596,7 @@ func TestApplySandboxAllowsGracePeriodAssignedResource(t *testing.T) {
 	require.NoError(t, pool.refreshResources(ctx))
 
 	svc := &Service{Pool: pool}
-	result, err := svc.ApplySandbox(ctx, lease.User, lease.Type)
+	result, err := svc.ApplySandbox(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, lease.SandboxID, result["sandbox_id"])
@@ -690,7 +695,7 @@ func TestRefreshResourcesDoesNotConfirmShrinkAcrossProviderError(t *testing.T) {
 	require.ErrorIs(t, getErr, redis.Nil)
 
 	// Provider error clears pending shrink but snapshot still has MissingSinceAt
-	// from the pending delay — resource remains non-allocatable (safe behavior).
+	// from the pending delay â€” resource remains non-allocatable (safe behavior).
 	result, err = svc.ListAllResources(ctx)
 	require.NoError(t, err)
 	emulatorResources = result[enum.SandboxTypeEmulator.String()].([]map[string]interface{})
@@ -750,8 +755,8 @@ func TestRefreshResourcesRequiresSameShrinkCandidateToConfirm(t *testing.T) {
 	emulatorResources := result[enum.SandboxTypeEmulator.String()].([]map[string]interface{})
 	require.Len(t, emulatorResources, 2)
 
-	// After refresh 3: candidate changed (B→A missing), pending shrink resets.
-	// A is missing → allocatable=false; B recovered → allocatable=true.
+	// After refresh 3: candidate changed (Bâ†’A missing), pending shrink resets.
+	// A is missing â†’ allocatable=false; B recovered â†’ allocatable=true.
 	allocatableByID := map[string]bool{}
 	for _, resource := range emulatorResources {
 		allocatableByID[resource["resource_id"].(string)] = resource["allocatable"].(bool)
@@ -837,7 +842,7 @@ func TestRefreshResourcesReleasesLeadershipWhenAllProvidersFail(t *testing.T) {
 	leaderPool.instanceID = "leader-pod"
 	followerPool.instanceID = "follower-pod"
 
-	// Leader has no previous snapshots and all providers fail → error + release.
+	// Leader has no previous snapshots and all providers fail â†’ error + release.
 	err := leaderPool.refreshResources(ctx)
 	require.Error(t, err)
 	require.Equal(t, 1, leaderEmulator.calls)
@@ -1002,7 +1007,7 @@ func TestListAllResourcesHidesUnavailableResourceAfterGracePeriod(t *testing.T) 
 	require.NoError(t, err)
 	require.Len(t, listResult[enum.SandboxTypeEmulator.String()].([]map[string]interface{}), 0)
 
-	instanceResult, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, lease.Type)
+	instanceResult, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.Len(t, instanceResult, 1)
 	require.Equal(t, string(ResourceStatusUnavailable), instanceResult[0]["status"])
@@ -1049,7 +1054,7 @@ func TestRefreshResourcesHidesExplicitlyUnhealthyResourceAfterGracePeriod(t *tes
 	require.NoError(t, err)
 	require.Len(t, listResult[enum.SandboxTypeEmulator.String()].([]map[string]interface{}), 0)
 
-	instanceResult, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, lease.Type)
+	instanceResult, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.Len(t, instanceResult, 1)
 	require.Equal(t, string(ResourceStatusUnavailable), instanceResult[0]["status"])
@@ -1075,7 +1080,7 @@ func TestApplySandboxSkipsUnavailableSnapshotResource(t *testing.T) {
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.ApplySandbox(ctx, lease.User, lease.Type)
+	result, err := svc.ApplySandbox(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.Nil(t, result)
 	require.Equal(t, 0, provider.calls)
@@ -1105,7 +1110,7 @@ func TestApplySandboxUsesFreshSnapshotWithoutProviderCall(t *testing.T) {
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.ApplySandbox(ctx, lease.User, lease.Type)
+	result, err := svc.ApplySandbox(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, lease.SandboxID, result["sandbox_id"])
@@ -1139,7 +1144,7 @@ func TestApplySandboxUsesStaleSnapshotWithoutProviderCall(t *testing.T) {
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.ApplySandbox(ctx, lease.User, lease.Type)
+	result, err := svc.ApplySandbox(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, 0, provider.calls)
@@ -1168,7 +1173,7 @@ func TestApplySandboxFailsWhenSnapshotUnavailable(t *testing.T) {
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.ApplySandbox(ctx, lease.User, lease.Type)
+	result, err := svc.ApplySandbox(ctx, lease.User, osForLease(lease))
 	require.Nil(t, result)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "snapshot unavailable")
@@ -1311,7 +1316,7 @@ func TestUnassignSandboxReleasesInUseSandboxBeforeDeleting(t *testing.T) {
 
 	err := svc.UnassignSandbox(ctx, lease.User, lease.SandboxID)
 	require.NoError(t, err)
-	require.Equal(t, 1, provider.resetCalls)
+	require.Equal(t, 0, provider.resetCalls)
 
 	_, getErr := rds.Get(ctx, resourceKeyPrefix+lease.SandboxID).Result()
 	require.ErrorIs(t, getErr, redis.Nil)
@@ -1347,7 +1352,7 @@ func TestApplySandboxUsesStaleSnapshotWhenProviderWouldFail(t *testing.T) {
 	}
 	svc := &Service{Pool: newTestPoolWithProviders(rds, time.Minute, emulatorProvider)}
 
-	result, err := svc.ApplySandbox(ctx, lease.User, lease.Type)
+	result, err := svc.ApplySandbox(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, 0, emulatorProvider.calls)
@@ -1422,7 +1427,7 @@ func TestGetInstanceSandboxesWithStatusKeepsProviderMissingResourceAssignedDurin
 	require.NoError(t, pool.refreshResources(ctx))
 
 	svc := &Service{Pool: pool}
-	result, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, lease.Type)
+	result, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 	require.Equal(t, string(ResourceStatusAssigned), result[0]["status"])
@@ -1447,7 +1452,7 @@ func TestGetInstanceSandboxesWithStatusReturnsErrorWhenSnapshotUnavailable(t *te
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, lease.Type)
+	result, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, osForLease(lease))
 	require.Nil(t, result)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "failed to load sandbox status")
@@ -1475,7 +1480,7 @@ func TestGetInstanceSandboxesWithStatusReturnsErrorWhenAssignedLeaseIsUnreadable
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, lease.Type)
+	result, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, osForLease(lease))
 	require.Nil(t, result)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "invalid character")
@@ -1498,7 +1503,7 @@ func TestGetInstanceSandboxesWithStatusReturnsEmptyWithoutAssignments(t *testing
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.GetInstanceSandboxesWithStatus(ctx, "123", enum.SandboxTypeEmulator.String())
+	result, err := svc.GetInstanceSandboxesWithStatus(ctx, "123", enum.SandboxOSAndroid.String())
 	require.NoError(t, err)
 	require.Empty(t, result)
 }
@@ -1567,7 +1572,7 @@ func TestMissingAssignmentIsHiddenFromDashboardButStillAssignedBeforeDeleteWindo
 	require.NoError(t, err)
 	require.Len(t, listResult[enum.SandboxTypeEmulator.String()].([]map[string]interface{}), 0)
 
-	instanceResult, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, lease.Type)
+	instanceResult, err := svc.GetInstanceSandboxesWithStatus(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.Len(t, instanceResult, 1)
 	require.Equal(t, string(ResourceStatusUnavailable), instanceResult[0]["status"])
@@ -1636,7 +1641,7 @@ func TestResolveResourceByHashFallsBackToLeaseMetadataWithoutSnapshot(t *testing
 	require.Equal(t, 0, provider.calls)
 }
 
-func TestReleaseSandboxKeepsLeaseInUseUntilResetCompletes(t *testing.T) {
+func TestReleaseSandboxDoesNotResetBeforeReleasingLease(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1654,49 +1659,26 @@ func TestReleaseSandboxKeepsLeaseInUseUntilResetCompletes(t *testing.T) {
 		time.Now(), testEmulatorResource(ResourceStatusAvailable),
 	)
 
-	resetStarted := make(chan struct{})
-	allowReset := make(chan struct{})
 	provider := &fakeProvider{
 		providerType: enum.SandboxTypeEmulator.String(),
 		resetFn: func(context.Context, string) error {
-			select {
-			case <-resetStarted:
-			default:
-				close(resetStarted)
-			}
-			<-allowReset
-			return nil
+			return errors.New("reset should not be called")
 		},
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- svc.ReleaseSandbox(ctx, lease.User, lease.SandboxID)
-	}()
-
-	<-resetStarted
-
-	applied, err := svc.ApplySandbox(ctx, lease.User, lease.Type)
-	require.NoError(t, err)
-	require.Nil(t, applied)
+	require.NoError(t, svc.ReleaseSandbox(ctx, lease.User, lease.SandboxID))
 
 	storedLease := loadLease(t, ctx, rds, lease.SandboxID)
-	require.True(t, storedLease.InUse)
-
-	close(allowReset)
-	require.NoError(t, <-errCh)
-
-	storedLease = loadLease(t, ctx, rds, lease.SandboxID)
 	require.False(t, storedLease.InUse)
 
 	cooldownExists, err := rds.Exists(ctx, cooldownKeyPrefix+lease.SandboxID).Result()
 	require.NoError(t, err)
 	require.Equal(t, int64(1), cooldownExists)
-	require.Equal(t, 1, provider.resetCalls)
+	require.Equal(t, 0, provider.resetCalls)
 }
 
-func TestReleaseSandboxReturnsResetFailedAndKeepsLeaseInUse(t *testing.T) {
+func TestReleaseSandboxDoesNotRequireConfiguredProvider(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1710,27 +1692,16 @@ func TestReleaseSandboxReturnsResetFailedAndKeepsLeaseInUse(t *testing.T) {
 	lease.InUse = true
 	seedLease(t, ctx, rds, lease)
 
-	provider := &fakeProvider{
-		providerType: enum.SandboxTypeEmulator.String(),
-		resetFn: func(context.Context, string) error {
-			return errors.New("reset boom")
-		},
-	}
-	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
+	svc := &Service{Pool: newTestPool(rds, nil, time.Minute)}
 
-	err := svc.ReleaseSandbox(ctx, lease.User, lease.SandboxID)
-	require.Error(t, err)
-	ae, ok := apperr.As(err)
-	require.True(t, ok)
-	require.Equal(t, errcode.SandboxResetFailed, ae.Code())
+	require.NoError(t, svc.ReleaseSandbox(ctx, lease.User, lease.SandboxID))
 
 	storedLease := loadLease(t, ctx, rds, lease.SandboxID)
-	require.True(t, storedLease.InUse)
+	require.False(t, storedLease.InUse)
 
 	cooldownExists, cdErr := rds.Exists(ctx, cooldownKeyPrefix+lease.SandboxID).Result()
 	require.NoError(t, cdErr)
-	require.Equal(t, int64(0), cooldownExists)
-	require.Equal(t, 1, provider.resetCalls)
+	require.Equal(t, int64(1), cooldownExists)
 }
 
 func TestRefreshResourcesClearsMissingStateWhenProviderRecovers(t *testing.T) {
@@ -1843,7 +1814,7 @@ func TestApplySandboxDoesNotAcquireLeaseOwnedByAnotherInstance(t *testing.T) {
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.ApplySandbox(ctx, "123", lease.Type)
+	result, err := svc.ApplySandbox(ctx, "123", osForLease(lease))
 	require.NoError(t, err)
 	require.Nil(t, result)
 
@@ -1996,7 +1967,7 @@ func TestApplySandboxReturnsNilWhenSnapshotIsStaleAndDegraded(t *testing.T) {
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
-	result, err := svc.ApplySandbox(ctx, lease.User, lease.Type)
+	result, err := svc.ApplySandbox(ctx, lease.User, osForLease(lease))
 	require.NoError(t, err)
 	require.Nil(t, result, "no sandbox should be available when snapshot is stale and degraded")
 	require.Equal(t, 0, provider.calls)
@@ -2066,7 +2037,7 @@ func TestStaleSnapshotDegradationIsPerType(t *testing.T) {
 		require.NoError(t, rds.Close())
 	})
 
-	// emulator snapshot is stale (>60s) → should degrade to unhealthy
+	// emulator snapshot is stale (>60s) â†’ should degrade to unhealthy
 	seedSnapshot(
 		t, ctx, rds, enum.SandboxTypeEmulator.String(),
 		time.Now().Add(-65*time.Second), testEmulatorResource(ResourceStatusAvailable),
@@ -2123,7 +2094,7 @@ func TestPendingShrinkMergesCurrentResourceState(t *testing.T) {
 	// First refresh: both resources available.
 	require.NoError(t, pool.refreshResources(ctx))
 
-	// Second refresh: A becomes unhealthy, B disappears → pending shrink.
+	// Second refresh: A becomes unhealthy, B disappears â†’ pending shrink.
 	require.NoError(t, pool.refreshResources(ctx))
 
 	result, err := svc.ListAllResources(ctx)
@@ -2145,7 +2116,7 @@ func TestPendingShrinkMergesCurrentResourceState(t *testing.T) {
 	require.Equal(t, false, allocatableByID[resourceA.ResourceID],
 		"unhealthy resource should not be allocatable")
 
-	// B: missing, should have MissingSinceAt → not allocatable.
+	// B: missing, should have MissingSinceAt â†’ not allocatable.
 	require.Equal(t, string(ResourceStatusAvailable), statusByID[resourceB.ResourceID],
 		"missing resource keeps previous status during pending shrink")
 	require.Equal(t, false, allocatableByID[resourceB.ResourceID],

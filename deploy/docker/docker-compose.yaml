@@ -93,6 +93,7 @@ services:
       - REVERSE_GRPC_SERVE_ADDRESS=0.0.0.0:50054
       - REVERSE_GRPC_ADDRESS=backend:50054
       - SEAWEEDFS_ENDPOINT=http://seaweedfs-filer:${SEAWEEDFS_FILER_PORT:-14003}
+      - SICO_PUBLIC_ENDPOINT=${SICO_PUBLIC_ENDPOINT:-http://localhost:${SICO_PORT:-8080}}
       - EVENT_BUS_TYPE=${EVENT_BUS_TYPE:-kafka}
       - EVENT_BUS_TOPIC=core-backend
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
@@ -114,9 +115,9 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/sico/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 10
       start_period: 10s
     networks:
       - sico
@@ -128,6 +129,7 @@ services:
       dockerfile: core/deployments/docker/Dockerfile
     container_name: sico-core
     environment:
+      - LOGLEVEL=${LOGLEVEL:-info}
       - SICO_PORT=${SICO_PORT:-8080}
       - GRPC_SERVER_ADDRESS=0.0.0.0:50053
       - REDIS_HOST=redis
@@ -141,7 +143,16 @@ services:
       - EXPERIENCES_ENABLED=${EXPERIENCES_ENABLED:-true}
       - RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE=${RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE:-false}
       - CHAT_AGENT_MAX_ITERATIONS=${CHAT_AGENT_MAX_ITERATIONS:-1000}
+      - TASK_RUNTIME_RUN_STORE=${TASK_RUNTIME_RUN_STORE:-backend}
+      - TASK_RUNTIME_ARTIFACT_STORE=${TASK_RUNTIME_ARTIFACT_STORE:-seaweedfs}
+      - TASK_RUNTIME_ARTIFACT_PUBLIC_BASE_URL=${TASK_RUNTIME_ARTIFACT_PUBLIC_BASE_URL:-/storage}
+      - TASK_RUNTIME_MAX_CONCURRENCY=${TASK_RUNTIME_MAX_CONCURRENCY:-20}
+      # Sandbox image for the run_command tool. Override to ship a pre-baked
+      # image with skill dependencies (e.g. adb/fastboot for Android skills)
+      # so the LLM does not have to ``apk add`` them on every turn.
+      - TASK_RUNTIME_PYTHON_RUNNER_IMAGE=${TASK_RUNTIME_PYTHON_RUNNER_IMAGE:-ghcr.io/astral-sh/uv:python3.14-alpine}
       - SEAWEEDFS_ENDPOINT=http://seaweedfs-filer:${SEAWEEDFS_FILER_PORT:-14003}
+      - SICO_APP_NAME=${SICO_APP_NAME:-sico}
       - SICO_ENDPOINT=http://backend:8080
     volumes:
       - core-storage:/mnt/storage

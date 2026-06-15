@@ -1,0 +1,187 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+
+package reverse_rpc;
+option go_package = "sico-backend/internal/transport/reverse_grpc/pb/taskruntime/reverse_rpc";
+
+service ReverseTaskRuntimeRPC {
+    rpc RpcCreateBatch(CreateBatchRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcUpdateBatch(UpdateBatchRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcGetBatch(GetBatchRequest) returns (GetBatchResponse) {}
+    rpc RpcCreateRun(CreateRunRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcUpdateRun(UpdateRunRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcLookupIdempotent(LookupIdempotentRequest) returns (GetRunResponse) {}
+    rpc RpcClaimRun(ClaimRunRequest) returns (ClaimRunResponse) {}
+    rpc RpcHeartbeatBatch(HeartbeatBatchRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcSetRunProgress(SetRunProgressRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcWriteResult(WriteResultRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcCancelBatch(CancelBatchRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcCancelRun(CancelRunRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcGetRun(GetRunRequest) returns (GetRunResponse) {}
+    rpc RpcGetTaskDetail(GetTaskDetailRequest) returns (GetTaskDetailResponse) {}
+    rpc RpcListBatchRuns(ListBatchRunsRequest) returns (ListBatchRunsResponse) {}
+    rpc RpcListBatchesByTurn(ListBatchesByTurnRequest) returns (ListBatchesByTurnResponse) {}
+    rpc RpcSweepStaleRuns(SweepStaleRunsRequest) returns (SweepStaleRunsResponse) {}
+    rpc RpcReopenRunForRetry(ReopenRunForRetryRequest) returns (EmptyTaskRuntimeResponse) {}
+}
+
+message EmptyTaskRuntimeResponse {
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message CreateBatchRequest {
+    string batch_json = 1; // @gotag: json:"batchJson"
+}
+
+message UpdateBatchRequest {
+    string batch_json = 1; // @gotag: json:"batchJson"
+}
+
+message GetBatchRequest {
+    string batch_id = 1; // @gotag: json:"batchId"
+}
+
+message GetBatchResponse {
+    string batch_json = 1; // @gotag: json:"batchJson"
+    bool found = 2; // @gotag: json:"found"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message CreateRunRequest {
+    string run_json = 1; // @gotag: json:"runJson"
+}
+
+message UpdateRunRequest {
+    string run_json = 1; // @gotag: json:"runJson"
+}
+
+message LookupIdempotentRequest {
+    string idempotency_key = 1; // @gotag: json:"idempotencyKey"
+}
+
+message ClaimRunRequest {
+    string run_id = 1; // @gotag: json:"runId"
+    string worker_id = 2; // @gotag: json:"workerId"
+}
+
+message ClaimRunResponse {
+    string token_json = 1; // @gotag: json:"tokenJson"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message HeartbeatBatchRequest {
+    string batch_id = 1; // @gotag: json:"batchId"
+}
+
+message SetRunProgressRequest {
+    string run_id = 1; // @gotag: json:"runId"
+    string message = 2; // @gotag: json:"message"
+    int64 ts = 3; // @gotag: json:"ts"
+}
+
+message WriteResultRequest {
+    string run_id = 1; // @gotag: json:"runId"
+    string result_json = 2; // @gotag: json:"resultJson"
+    string token_json = 3; // @gotag: json:"tokenJson"
+}
+
+message CancelBatchRequest {
+    string batch_id = 1; // @gotag: json:"batchId"
+    string reason = 2; // @gotag: json:"reason"
+}
+
+message CancelRunRequest {
+    string run_id = 1; // @gotag: json:"runId"
+    string reason = 2; // @gotag: json:"reason"
+}
+
+message GetRunRequest {
+    string run_id = 1; // @gotag: json:"runId"
+}
+
+message GetRunResponse {
+    string run_json = 1; // @gotag: json:"runJson"
+    bool found = 2; // @gotag: json:"found"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message GetTaskDetailRequest {
+    string run_id = 1; // @gotag: json:"runId"
+    string view = 2; // @gotag: json:"view"
+}
+
+message GetTaskDetailResponse {
+    string run_json = 1; // @gotag: json:"runJson"
+    string result_json = 2; // @gotag: json:"resultJson"
+    string view = 3; // @gotag: json:"view"
+    string content = 4; // @gotag: json:"content"
+    string artifacts_json = 5; // @gotag: json:"artifactsJson"
+    bool found = 6; // @gotag: json:"found"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message ListBatchRunsRequest {
+    string batch_id = 1; // @gotag: json:"batchId"
+}
+
+message ListBatchRunsResponse {
+    repeated string runs_json = 1; // @gotag: json:"runsJson"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message ListBatchesByTurnRequest {
+    int64 parent_conversation_id = 1; // @gotag: json:"parentConversationId"
+    int64 parent_turn_id = 2; // @gotag: json:"parentTurnId"
+    bool active_only = 3; // @gotag: json:"activeOnly"
+}
+
+message ListBatchesByTurnResponse {
+    repeated string batches_json = 1; // @gotag: json:"batchesJson"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message SweepStaleRunsRequest {
+    int64 before_ts = 1; // @gotag: json:"beforeTs"
+}
+
+message SweepStaleRunsResponse {
+    repeated string stale_runs_json = 1; // @gotag: json:"staleRunsJson"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+// ReopenRunForRetryRequest re-queues a run that already settled into a
+// retryable terminal status (failed / timed_out / blocked) for another
+// attempt. ``run_json`` carries the fully-reset next attempt (status=queued,
+// attempt incremented, worker/fencing/sandbox cleared); ``expected_attempt``
+// is the attempt number the run currently holds in the store and acts as a
+// compare-and-set guard so a stale or duplicate reopen cannot resurrect a run
+// twice. The backend persists the payload only when the stored row is still in
+// a retryable terminal status at ``expected_attempt``.
+message ReopenRunForRetryRequest {
+    string run_json = 1; // @gotag: json:"runJson"
+    int32 expected_attempt = 2; // @gotag: json:"expectedAttempt"
+}

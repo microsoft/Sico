@@ -53,7 +53,9 @@ Carefully compare the two screenshots and provide your analysis.
 
 **CRITICAL FORMAT REQUIREMENT**: You MUST use the EXACT markdown headers shown below (with ### prefix).
 Do NOT use colon format like "What Happened: ..." — use "### What Happened" on its own line.
-You MUST include ALL four sections with the EXACT headers shown.
+You MUST include the four required sections (What Happened, Outcome, Updated State, Next Step Goal)
+with the EXACT headers shown. The Current Step section is optional — include it only when the
+condition described under that section is met.
 
 ### What Happened
 Describe the concrete visual changes (or lack thereof) between the BEFORE and AFTER screenshots.
@@ -79,3 +81,10 @@ If the action failed, keep the previous progress and note the failure.
 Based on the current state and the overall task, what should be the immediate next goal?
 State it as a clear, actionable objective (e.g., "Tap the search bar and type 'Edge'").
 If the task appears complete, state "Task is complete."
+
+### Current Step
+OPTIONAL. Include this section ONLY when, as a result of the last action, the run has
+just transitioned to a NEW step of the user task (i.e. the user-task step the *next*
+operator action will be working on differs from the previous step). Use a short phrase,
+ideally taken verbatim from the user query. Omit this section entirely while still
+working on the same step.

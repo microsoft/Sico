@@ -27,6 +27,7 @@ import (
 	entity "sico-backend/internal/entity/conversation/conversation"
 	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/errcode"
+	messageRepo "sico-backend/internal/store/conversation/message/repository"
 	model "sico-backend/internal/transport/http/dto/conversation"
 	"sico-backend/internal/transport/http/middleware"
 	"sico-backend/pkg/logger"
@@ -150,7 +151,31 @@ func (c *Service) getAgentInstanceInfo(ctx context.Context, agentInstanceID int6
 }
 
 func (s *Service) GetPlan(ctx context.Context, req *model.GetPlanRequest) (*model.GetPlanResponse, error) {
-	response, err := s.chatClient.GetPlan(ctx, req)
+	conversationID, resolved, err := s.resolvePlanConversationID(
+		ctx, req.Username, req.AgentInstanceId, req.TurnId, req.ConversationId,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !resolved {
+		logger.CtxWarn(
+			ctx,
+			"ambiguous plan lookup without conversation_id: username=%s agent_instance_id=%d turn_id=%d",
+			req.Username,
+			req.AgentInstanceId,
+			req.TurnId,
+		)
+		return appresp.Success(&model.GetPlanResponse{
+			Data: &model.GetPlanData{Status: model.PlanStatus_PLAN_STATUS_NO_PLAN},
+		}), nil
+	}
+
+	var planReq model.GetPlanRequest
+	planReq.AgentInstanceId = req.AgentInstanceId
+	planReq.Username = req.Username
+	planReq.TurnId = req.TurnId
+	planReq.ConversationId = conversationID
+	response, err := s.chatClient.GetPlan(ctx, &planReq)
 	if err != nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "failed to query plan")
 	}
@@ -167,12 +192,68 @@ func (s *Service) GetPlan(ctx context.Context, req *model.GetPlanRequest) (*mode
 }
 
 func (s *Service) CancelPlan(ctx context.Context, req *model.CancelPlanRequest) (*model.CancelPlanResponse, error) {
-	_, err := s.chatClient.CancelPlan(ctx, req)
+	conversationID, resolved, err := s.resolvePlanConversationID(
+		ctx, req.Username, req.AgentInstanceId, req.TurnId, req.ConversationId,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !resolved {
+		logger.CtxWarn(
+			ctx,
+			"ambiguous plan cancel without conversation_id: username=%s agent_instance_id=%d turn_id=%d",
+			req.Username,
+			req.AgentInstanceId,
+			req.TurnId,
+		)
+		return appresp.Success(&model.CancelPlanResponse{}), nil
+	}
+
+	var cancelReq model.CancelPlanRequest
+	cancelReq.AgentInstanceId = req.AgentInstanceId
+	cancelReq.Username = req.Username
+	cancelReq.TurnId = req.TurnId
+	cancelReq.ConversationId = conversationID
+	_, err = s.chatClient.CancelPlan(ctx, &cancelReq)
 	if err != nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "failed to cancel plan")
 	}
 
 	return appresp.Success(&model.CancelPlanResponse{}), nil
+}
+
+func (s *Service) resolvePlanConversationID(
+	ctx context.Context,
+	username string,
+	agentInstanceID int64,
+	turnID int64,
+	conversationID int64,
+) (int64, bool, error) {
+	if conversationID != 0 {
+		return conversationID, true, nil
+	}
+
+	role := roleUser
+	messages, hasMore, err := s.messageRepo.ListByFilter(ctx, &messageRepo.MessageFilter{
+		Username:        &username,
+		AgentInstanceId: &agentInstanceID,
+		TurnId:          &turnID,
+		Role:            &role,
+		IdDescending:    true,
+		UsePagination:   true,
+		Page:            1,
+		PageSize:        2,
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	if len(messages) > 1 || hasMore {
+		return 0, false, nil
+	}
+	if len(messages) > 0 {
+		return messages[0].ConversationId, true, nil
+	}
+	return 0, false, nil
 }
 
 func (s *Service) GenerateOnboardRecommendationTasks(

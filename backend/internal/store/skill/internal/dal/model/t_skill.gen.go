@@ -12,18 +12,14 @@ const TableNameTSkill = "t_skill"
 
 // TSkill Skill table
 type TSkill struct {
-	ID              int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:Primary key" json:"id"`                                 // Primary key
-	ProjectID       int64          `gorm:"column:project_id;not null;comment:Project ID" json:"project_id"`                                       // Project ID
-	AgentID         string         `gorm:"column:agent_id;not null;comment:Agent ID (references t_single_agent.agent_id)" json:"agent_id"`        // Agent ID (references t_single_agent.agent_id)
-	Name            string         `gorm:"column:name;not null;comment:Skill name" json:"name"`                                                   // Skill name
-	Description     string         `gorm:"column:description;not null;comment:Skill description" json:"description"`                              // Skill description
-	AssetID         int64          `gorm:"column:asset_id;not null;comment:Associated project asset ID" json:"asset_id"`                          // Associated project asset ID
-	CreatorUsername string         `gorm:"column:creator_username;not null;comment:Creator username" json:"creator_username"`                     // Creator username
-	Status          int32          `gorm:"column:status;not null;comment:Skill status: 0-UNKNOWN,1-UPLOADING,2-UPLOADED,3-FAILED" json:"status"`  // Skill status: 0-UNKNOWN,1-UPLOADING,2-UPLOADED,3-FAILED
-	FailReason      string         `gorm:"column:fail_reason;not null;comment:Failure reason if status=FAILED" json:"fail_reason"`                // Failure reason if status=FAILED
-	CreatedAt       int64          `gorm:"column:created_at;not null;autoCreateTime:milli;comment:Create Time in Milliseconds" json:"created_at"` // Create Time in Milliseconds
-	UpdatedAt       int64          `gorm:"column:updated_at;not null;autoUpdateTime:milli;comment:Update Time in Milliseconds" json:"updated_at"` // Update Time in Milliseconds
-	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;comment:Delete Time" json:"deleted_at"`                                               // Delete Time
+	ID          int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:Primary key" json:"id"`                                 // Primary key
+	ProjectID   int64          `gorm:"column:project_id;not null;comment:Project ID" json:"project_id"`                                       // Project ID
+	AgentID     string         `gorm:"column:agent_id;not null;comment:Agent ID (references t_single_agent.agent_id)" json:"agent_id"`        // Agent ID (references t_single_agent.agent_id)
+	Name        string         `gorm:"column:name;not null;comment:Skill name" json:"name"`                                                   // Skill name
+	Description string         `gorm:"column:description;not null;comment:Skill description" json:"description"`                              // Skill description
+	CreatedAt   int64          `gorm:"column:created_at;not null;autoCreateTime:milli;comment:Create Time in Milliseconds" json:"created_at"` // Create Time in Milliseconds
+	UpdatedAt   int64          `gorm:"column:updated_at;not null;autoUpdateTime:milli;comment:Update Time in Milliseconds" json:"updated_at"` // Update Time in Milliseconds
+	DeletedAt   gorm.DeletedAt `gorm:"column:deleted_at;comment:Delete Time" json:"deleted_at"`                                               // Delete Time
 }
 
 // TableName TSkill's table name

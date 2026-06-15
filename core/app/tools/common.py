@@ -26,7 +26,7 @@ from typing import Any
 
 from agent_framework import ChatResponse, ChatResponseUpdate, FunctionTool
 from agent_framework._middleware import FunctionInvocationContext, FunctionMiddleware
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.conversation.plan import ToolCallStatus
 
@@ -42,6 +42,7 @@ def get_tool_context(ctx: FunctionInvocationContext | None = None) -> "ToolConte
         return ctx.kwargs.get(_TOOL_CONTEXT_KWARGS_KEY)
     return None
 
+
 class ToolContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -53,7 +54,10 @@ class ToolContext(BaseModel):
     conversation_id: int
     response_queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None]
     plan_editor: PlanEditor
-    all_tools: list[FunctionTool | dict[str, Any]] = []
+    all_tools: list[FunctionTool | dict[str, Any]] = Field(default_factory=list)
+    raw_user_message: str = ""
+    task_runtime_batch_ids: list[str] = Field(default_factory=list)
+    skill_loader: Any | None = None
 
     def replace_plan_editor(self, new_plan_editor: PlanEditor) -> "ToolContext":
         return ToolContext(
@@ -66,6 +70,9 @@ class ToolContext(BaseModel):
             response_queue=self.response_queue,
             plan_editor=new_plan_editor,
             all_tools=self.all_tools,
+            raw_user_message=self.raw_user_message,
+            task_runtime_batch_ids=self.task_runtime_batch_ids,
+            skill_loader=self.skill_loader,
         )
 
 

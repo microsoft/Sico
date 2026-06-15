@@ -23,7 +23,7 @@ FROM python:3.13-slim
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ripgrep \
+    && apt-get install -y --no-install-recommends adb curl ripgrep \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv
 

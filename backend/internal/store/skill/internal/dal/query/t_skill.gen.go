@@ -33,10 +33,6 @@ func newTSkill(db *gorm.DB, opts ...gen.DOOption) tSkill {
 	_tSkill.AgentID = field.NewString(tableName, "agent_id")
 	_tSkill.Name = field.NewString(tableName, "name")
 	_tSkill.Description = field.NewString(tableName, "description")
-	_tSkill.AssetID = field.NewInt64(tableName, "asset_id")
-	_tSkill.CreatorUsername = field.NewString(tableName, "creator_username")
-	_tSkill.Status = field.NewInt32(tableName, "status")
-	_tSkill.FailReason = field.NewString(tableName, "fail_reason")
 	_tSkill.CreatedAt = field.NewInt64(tableName, "created_at")
 	_tSkill.UpdatedAt = field.NewInt64(tableName, "updated_at")
 	_tSkill.DeletedAt = field.NewField(tableName, "deleted_at")
@@ -50,19 +46,15 @@ func newTSkill(db *gorm.DB, opts ...gen.DOOption) tSkill {
 type tSkill struct {
 	tSkillDo
 
-	ALL             field.Asterisk
-	ID              field.Int64  // Primary key
-	ProjectID       field.Int64  // Project ID
-	AgentID         field.String // Agent ID (references t_single_agent.agent_id)
-	Name            field.String // Skill name
-	Description     field.String // Skill description
-	AssetID         field.Int64  // Associated project asset ID
-	CreatorUsername field.String // Creator username
-	Status          field.Int32  // Skill status: 0-UNKNOWN,1-UPLOADING,2-UPLOADED,3-FAILED
-	FailReason      field.String // Failure reason if status=FAILED
-	CreatedAt       field.Int64  // Create Time in Milliseconds
-	UpdatedAt       field.Int64  // Update Time in Milliseconds
-	DeletedAt       field.Field  // Delete Time
+	ALL         field.Asterisk
+	ID          field.Int64  // Primary key
+	ProjectID   field.Int64  // Project ID
+	AgentID     field.String // Agent ID (references t_single_agent.agent_id)
+	Name        field.String // Skill name
+	Description field.String // Skill description
+	CreatedAt   field.Int64  // Create Time in Milliseconds
+	UpdatedAt   field.Int64  // Update Time in Milliseconds
+	DeletedAt   field.Field  // Delete Time
 
 	fieldMap map[string]field.Expr
 }
@@ -84,10 +76,6 @@ func (t *tSkill) updateTableName(table string) *tSkill {
 	t.AgentID = field.NewString(table, "agent_id")
 	t.Name = field.NewString(table, "name")
 	t.Description = field.NewString(table, "description")
-	t.AssetID = field.NewInt64(table, "asset_id")
-	t.CreatorUsername = field.NewString(table, "creator_username")
-	t.Status = field.NewInt32(table, "status")
-	t.FailReason = field.NewString(table, "fail_reason")
 	t.CreatedAt = field.NewInt64(table, "created_at")
 	t.UpdatedAt = field.NewInt64(table, "updated_at")
 	t.DeletedAt = field.NewField(table, "deleted_at")
@@ -107,16 +95,12 @@ func (t *tSkill) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (t *tSkill) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 12)
+	t.fieldMap = make(map[string]field.Expr, 8)
 	t.fieldMap["id"] = t.ID
 	t.fieldMap["project_id"] = t.ProjectID
 	t.fieldMap["agent_id"] = t.AgentID
 	t.fieldMap["name"] = t.Name
 	t.fieldMap["description"] = t.Description
-	t.fieldMap["asset_id"] = t.AssetID
-	t.fieldMap["creator_username"] = t.CreatorUsername
-	t.fieldMap["status"] = t.Status
-	t.fieldMap["fail_reason"] = t.FailReason
 	t.fieldMap["created_at"] = t.CreatedAt
 	t.fieldMap["updated_at"] = t.UpdatedAt
 	t.fieldMap["deleted_at"] = t.DeletedAt

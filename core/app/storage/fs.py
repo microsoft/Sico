@@ -18,6 +18,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import json
+import logging
 import os
 import shutil
 from pathlib import Path
@@ -25,6 +27,11 @@ from typing import Any
 
 from app.storage.plan_fs import PlanFS
 from app.utils.sanitize import sanitize_user_id
+
+_LOGGER = logging.getLogger(__name__)
+
+_WORKSPACE_HIDDEN_DIRS = {"history"}
+
 
 class StorageFS:
     """Filesystem helper for project/agent/agent-instance-scoped resources.
@@ -95,11 +102,13 @@ class StorageFS:
         if agent_id:
             paths.append(("agent", agent_id, self._root / "agent" / agent_id / self._resource_dir))
         if agent_instance_id:
-            paths.append((
-                "agent_instance",
-                agent_instance_id,
-                self._root / "agent_instance" / str(agent_instance_id) / self._resource_dir,
-            ))
+            paths.append(
+                (
+                    "agent_instance",
+                    agent_instance_id,
+                    self._root / "agent_instance" / str(agent_instance_id) / self._resource_dir,
+                )
+            )
         return paths
 
     def resolve_file_path(
@@ -113,17 +122,16 @@ class StorageFS:
     ) -> Path:
         # Search across all provided scopes (agent > project > agent_instance)
         scope_roots = self.roots(
-            project_id=project_id, agent_id=agent_id, agent_instance_id=agent_instance_id,
+            project_id=project_id,
+            agent_id=agent_id,
+            agent_instance_id=agent_instance_id,
         )
         for _, _, root_path in scope_roots:
             target = root_path / str(resource_id) / filename
             if target.exists():
                 return target
         # Build a descriptive error with all searched paths
-        searched = [
-            str(root / str(resource_id) / filename)
-            for _, _, root in scope_roots
-        ]
+        searched = [str(root / str(resource_id) / filename) for _, _, root in scope_roots]
         raise FileNotFoundError(f"file not found, searched: {searched}")
 
     def read_text(
@@ -137,8 +145,11 @@ class StorageFS:
         encoding: str = "utf-8",
     ) -> str:
         path = self.resolve_file_path(
-            resource_id, filename,
-            project_id=project_id, agent_id=agent_id, agent_instance_id=agent_instance_id,
+            resource_id,
+            filename,
+            project_id=project_id,
+            agent_id=agent_id,
+            agent_instance_id=agent_instance_id,
         )
         return path.read_text(encoding=encoding)
 
@@ -154,12 +165,43 @@ class StorageFS:
         encoding: str = "utf-8",
     ) -> Path:
         self._validate_single_id(project_id, agent_id, agent_instance_id)
-        target = self._scope_path(
-            project_id=project_id, agent_id=agent_id,
-            agent_instance_id=agent_instance_id, resource_id=resource_id, must_exist=False,
-        ) / filename
+        target = (
+            self._scope_path(
+                project_id=project_id,
+                agent_id=agent_id,
+                agent_instance_id=agent_instance_id,
+                resource_id=resource_id,
+                must_exist=False,
+            )
+            / filename
+        )
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding=encoding)
+        return target
+
+    def write_bytes(
+        self,
+        resource_id: int,
+        filename: str,
+        content: bytes,
+        *,
+        project_id: int = 0,
+        agent_id: str = "",
+        agent_instance_id: int = 0,
+    ) -> Path:
+        self._validate_single_id(project_id, agent_id, agent_instance_id)
+        target = (
+            self._scope_path(
+                project_id=project_id,
+                agent_id=agent_id,
+                agent_instance_id=agent_instance_id,
+                resource_id=resource_id,
+                must_exist=False,
+            )
+            / filename
+        )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
         return target
 
     def delete_resource(
@@ -288,6 +330,7 @@ class ChatFS:
     """Filesystem helper for chat-related filesystem storage.
 
     Workspace path: {root}/agent_instance/{id}/user/{user}/workspace/
+    Skills path:    {root}/agent_instance/{id}/user/{user}/skills/{skill_id}/
     Turn path:      {root}/agent_instance/{id}/user/{user}/turn/{turn_id}/
     """
 
@@ -296,7 +339,7 @@ class ChatFS:
 
         # Plan persistence + Redis-backed locking lives in its own module; ChatFS
         # exposes it as ``self.plan`` so callers do ``CHAT_FS.plan.read(...)``.
-        self.plan = PlanFS(self._get_turn_path)
+        self.plan = PlanFS(self._get_user_path)
 
     @property
     def root(self) -> Path:
@@ -304,13 +347,7 @@ class ChatFS:
 
     def _get_user_path(self, agent_instance_id: int, user_id: str) -> Path:
         safe_user_id = sanitize_user_id(user_id)
-        return (
-            self._root
-            / "agent_instance"
-            / str(agent_instance_id)
-            / "user"
-            / safe_user_id
-        )
+        return self._root / "agent_instance" / str(agent_instance_id) / "user" / safe_user_id
 
     def _get_turn_path(self, agent_instance_id: int, user_id: str, turn_id: int) -> Path:
         return self._get_user_path(agent_instance_id, user_id) / "turn" / str(turn_id)
@@ -318,6 +355,18 @@ class ChatFS:
     def get_workspace_path(self, agent_instance_id: int, user_id: str) -> Path:
         """Return the workspace directory path for the given agent instance + user."""
         return self._get_user_path(agent_instance_id, user_id) / "workspace"
+
+    def get_user_path(self, agent_instance_id: int, user_id: str) -> Path:
+        """Return the user-scoped chat storage root for the given agent instance + user."""
+        return self._get_user_path(agent_instance_id, user_id)
+
+    def get_skill_path(self, agent_instance_id: int, user_id: str, skill_id: int) -> Path:
+        """Return the staged skill storage path for the given agent instance + user + skill."""
+        return self._get_user_path(agent_instance_id, user_id) / "skills" / str(skill_id)
+
+    def get_turn_path(self, agent_instance_id: int, user_id: str, turn_id: int) -> Path:
+        """Return the turn directory path for the given agent instance + user + turn."""
+        return self._get_turn_path(agent_instance_id, user_id, turn_id)
 
     # ---- workspace file operations ------------------------------------ #
 
@@ -360,6 +409,8 @@ class ChatFS:
             if not p.is_file():
                 continue
             rel = p.relative_to(workspace).as_posix()
+            if rel.split("/", 1)[0] in _WORKSPACE_HIDDEN_DIRS:
+                continue
             try:
                 size_kb = round(p.stat().st_size / 1024, 1)
             except Exception:
@@ -378,8 +429,14 @@ class ChatFS:
     # ---- turn-scoped operations (report, conversation) ---------- #
 
     def write_report(
-        self, agent_instance_id: int, user_id: str, turn_id: int,
-        filename: str, content: str, *, encoding: str = "utf-8",
+        self,
+        agent_instance_id: int,
+        user_id: str,
+        turn_id: int,
+        filename: str,
+        content: str,
+        *,
+        encoding: str = "utf-8",
     ) -> Path:
         """Write a report markdown file to the report/ directory under the turn path."""
         turn_path = self._get_turn_path(agent_instance_id, user_id, turn_id)
@@ -389,13 +446,22 @@ class ChatFS:
         return target
 
     def write_conversation(
-        self, agent_instance_id: int, user_id: str, turn_id: int,
-        content: str, *, encoding: str = "utf-8",
+        self,
+        agent_instance_id: int,
+        user_id: str,
+        turn_id: int,
+        content: str,
+        *,
+        encoding: str = "utf-8",
     ) -> Path:
         """Write conversation.json under the turn path."""
         turn_path = self._get_turn_path(agent_instance_id, user_id, turn_id)
         target = turn_path / "conversation.json"
         target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            content = json.dumps(json.loads(content), ensure_ascii=False, indent=2)
+        except json.JSONDecodeError:
+            pass
         target.write_text(content, encoding=encoding)
         return target
 
@@ -423,6 +489,24 @@ class ChatFS:
 
 
 CHAT_FS = ChatFS(root=_CHAT_ROOT)
+
+
+def storage_pvc_root() -> str:
+    """Return the root the sandbox PVC mounts (the chat workspace root).
+
+    Every path the sandbox sees lives under the chat root: the workspace and
+    result dirs are native to it, and skill runtimes are *copied* into it at
+    workspace-init time (see ``workspace_init._stage_skill_runtime_for_workspace``).
+    The skills/knowledge/playbook roots are never mounted into the sandbox, so
+    the PVC root is exactly the chat root — each sandbox mount is then scoped by
+    its ``sub_path`` relative to this directory.
+
+    Override only if the PVC is mounted at a different path than the chat root
+    via ``RUN_PYTHON_TOOL_SANDBOX_STORAGE_ROOT``.
+    """
+    root = str(_CHAT_ROOT).rstrip("/") or "/"
+    _LOGGER.debug("storage_pvc_root=%s", root)
+    return root
 
 
 def parse_skill_frontmatter(content: str) -> dict[str, Any]:

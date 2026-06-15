@@ -146,6 +146,7 @@ message GetPlanRequest {
   int64 agent_instance_id = 1; // @gotag: json:"agentInstanceId,omitempty" form:"agentInstanceId"
   string username = 2; // @gotag: json:"-,omitempty" form:"-"
   int64 turn_id = 3; // @gotag: json:"turnId,omitempty" form:"turnId"
+  int64 conversation_id = 4; // @gotag: json:"conversationId,omitempty" form:"conversationId"
 }
 
 message GetPlanData {
@@ -163,6 +164,7 @@ message CancelPlanRequest {
   int64 agent_instance_id = 1; // @gotag: json:"agentInstanceId,omitempty" form:"agentInstanceId"
   string username = 2; // @gotag: json:"-,omitempty" form:"-"
   int64 turn_id = 3; // @gotag: json:"turnId,omitempty" form:"turnId"
+  int64 conversation_id = 4; // @gotag: json:"conversationId,omitempty" form:"conversationId"
 }
 
 message CancelPlanResponse {

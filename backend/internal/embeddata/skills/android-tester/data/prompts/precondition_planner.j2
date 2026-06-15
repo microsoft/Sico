@@ -1,0 +1,59 @@
+{#
+Copyright (c) 2026 Sico Authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+#}
+
+You are planning the setup of an Android device before a UI test runs.
+
+Several independent preconditions must all be established on the device.
+They are applied one after another: each precondition is set up on the
+device state the previous one left behind, and only the first one starts
+from a freshly reset device. The device is left exactly where the LAST
+precondition finishes, and that screen becomes the starting point for the
+test — so the final precondition decides where the test begins.
+
+Order them so that:
+- Preconditions that only set up background or global state come FIRST.
+  These include connectivity, signing in or choosing an account,
+  granting permissions, app installation, and making files, messages, or
+  other data available. They can be satisfied by navigating anywhere; the
+  screen they happen to end on does not matter, because a later
+  precondition will move the device to its final position.
+- A precondition that pins a specific visible screen or on-screen
+  location comes LAST (for example "the X screen is visible"). Establishing
+  it last guarantees the device is actually left on that screen for the
+  test.
+- If two preconditions both pin a screen, the one matching where the
+  test's first step starts goes last. When two preconditions are
+  otherwise equivalent, keep their original relative order.
+
+### Preconditions
+{% for label, description in preconditions %}
+- {{ label }}: {{ description }}
+{% endfor %}
+
+### Output Format
+Respond with a single JSON object and nothing else:
+
+  {"order": ["label-1", "label-2", ...]}
+
+List every label exactly once, copied verbatim from the list above, in
+the order they should be established. Do not wrap the JSON in code
+fences and do not add any explanation before or after it.

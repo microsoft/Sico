@@ -12,7 +12,7 @@ project asset, and registers it through `POST /api/sico/skills`.
 - `TOKEN`: required
 - `PROJECT_ID`: defaults to `1`
 - `AGENT_ID`: optional
-- `SKILL_PATH`: optional; defaults to `skills/android-tester-skill`
+- `SKILL_PATH`: optional; defaults to `backend/internal/embeddata/skills/android-tester-skill`
 
 If `SKILL_PATH` points at a directory, the script zips it in memory before
 uploading it.

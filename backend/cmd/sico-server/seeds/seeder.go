@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"mime/multipart"
+	"sort"
 	"strconv"
 	"time"
 
@@ -44,6 +45,7 @@ import (
 	agentrepo "sico-backend/internal/store/agent/singleagent/repository"
 	projectrepo "sico-backend/internal/store/project/repository"
 	userrepo "sico-backend/internal/store/rbac/repository"
+	skillrepo "sico-backend/internal/store/skill/repository"
 	agentdto "sico-backend/internal/transport/http/dto/agent/single_agent"
 	projectdto "sico-backend/internal/transport/http/dto/project"
 	rbacCommon "sico-backend/internal/transport/http/dto/rbac/common"
@@ -61,10 +63,21 @@ const (
 	iconExt         = "svg"
 	iconFileType    = "image"
 
-	androidTesterSkillName  = "android-tester.zip"
-	defaultSkillContentType = "application/zip"
-	defaultSkillExt         = "zip"
-	defaultSkillFileType    = "archive"
+	androidTesterSkillName        = "android-tester.zip"
+	testCasesRewriteSkillName     = "test-cases-rewrite.zip"
+	threeDArtistSkillName         = "ai-3d-model.zip"
+	pmCompetitiveSkillName        = "pm-competitive-analysis.zip"
+	pmSlidesSkillName             = "pm-frontend-slides.zip"
+	pmOKRsSkillName               = "pm-setting-okrs-goals.zip"
+	pmPRDsSkillName               = "pm-writing-prds.zip"
+	marketingBrandSkillName       = "marketing-brand-storytelling.zip"
+	marketingContentSkillName     = "marketing-content-marketing.zip"
+	marketingImageSkillName       = "marketing-image-generation.zip"
+	marketingLaunchSkillName      = "marketing-launch-marketing.zip"
+	marketingPositioningSkillName = "marketing-positioning-messaging.zip"
+	defaultSkillContentType       = "application/zip"
+	defaultSkillExt               = "zip"
+	defaultSkillFileType          = "archive"
 
 	defaultProjectId = 1
 
@@ -82,6 +95,11 @@ type embeddedFile struct {
 }
 
 func (embeddedFile) Close() error { return nil }
+
+type seedSkillFile struct {
+	FileName string
+	Content  []byte
+}
 
 // ---------- Required Data ------------
 
@@ -699,12 +717,19 @@ func ensureAgentAndroidTester(ctx context.Context, injector *di.Injector) error 
 		return err
 	}
 
-	// Register the default android-tester skill against the tester agent.
+	// Register the default Android tester skills against the tester agent.
 	androidTesterSkillBytes, err := embeddata.AndroidTesterSkillZip()
 	if err != nil {
 		return err
 	}
-	skills := [][]byte{androidTesterSkillBytes}
+	testCasesRewriteSkillBytes, err := embeddata.TestCasesRewriteSkillZip()
+	if err != nil {
+		return err
+	}
+	skills := []seedSkillFile{
+		{FileName: androidTesterSkillName, Content: androidTesterSkillBytes},
+		{FileName: testCasesRewriteSkillName, Content: testCasesRewriteSkillBytes},
+	}
 	if err := ensureSkill(ctx, injector, skills, testerAgent.AgentId); err != nil {
 		return err
 	}
@@ -742,8 +767,7 @@ func ensureAgent3DArtist(ctx context.Context, injector *di.Injector) error {
 	}
 
 	// Register the default 3D artist skill against the 3D artist agent.
-	artistSkillBytes := embeddata.ThreeDArtistSkillZip
-	skills := [][]byte{artistSkillBytes}
+	skills := []seedSkillFile{{FileName: threeDArtistSkillName, Content: embeddata.ThreeDArtistSkillZip}}
 	if err := ensureSkill(ctx, injector, skills, artistAgent.AgentId); err != nil {
 		return err
 	}
@@ -770,11 +794,11 @@ func ensureAgentProductManager(ctx context.Context, injector *di.Injector) error
 		return err
 	}
 
-	skills := [][]byte{
-		embeddata.ProductManagerSkillCompetitiveAnalysisZip,
-		embeddata.ProductManagerSkillFrontendSlidesZip,
-		embeddata.ProductManagerSkillSettingOKRsGoalsZip,
-		embeddata.ProductManagerSkillWritingPRDsZip,
+	skills := []seedSkillFile{
+		{FileName: pmCompetitiveSkillName, Content: embeddata.ProductManagerSkillCompetitiveAnalysisZip},
+		{FileName: pmSlidesSkillName, Content: embeddata.ProductManagerSkillFrontendSlidesZip},
+		{FileName: pmOKRsSkillName, Content: embeddata.ProductManagerSkillSettingOKRsGoalsZip},
+		{FileName: pmPRDsSkillName, Content: embeddata.ProductManagerSkillWritingPRDsZip},
 	}
 	if err := ensureSkill(ctx, injector, skills, pmAgent.AgentId); err != nil {
 		return err
@@ -801,12 +825,12 @@ func ensureAgentMarketing(ctx context.Context, injector *di.Injector) error {
 		return err
 	}
 
-	skills := [][]byte{
-		embeddata.MarketingSkillBrandStorytellingZip,
-		embeddata.MarketingSkillContentMarketingZip,
-		embeddata.MarketingSkillImageGenerationZip,
-		embeddata.MarketingSkillLaunchMarketingZip,
-		embeddata.MarketingSkillPositioningMessagingZip,
+	skills := []seedSkillFile{
+		{FileName: marketingBrandSkillName, Content: embeddata.MarketingSkillBrandStorytellingZip},
+		{FileName: marketingContentSkillName, Content: embeddata.MarketingSkillContentMarketingZip},
+		{FileName: marketingImageSkillName, Content: embeddata.MarketingSkillImageGenerationZip},
+		{FileName: marketingLaunchSkillName, Content: embeddata.MarketingSkillLaunchMarketingZip},
+		{FileName: marketingPositioningSkillName, Content: embeddata.MarketingSkillPositioningMessagingZip},
 	}
 	if err := ensureSkill(ctx, injector, skills, marketingAgent.AgentId); err != nil {
 		return err
@@ -874,12 +898,12 @@ func Run(ctx context.Context, injector *di.Injector) error {
 	return nil
 }
 
-// ensureSkill uploads `skillFileContent` as an unscoped project asset and
+// ensureSkill uploads each skill archive as an unscoped project asset and
 // ensures a skill record bound to `agentId` exists via the skill application
 // service. The app layer is used (rather than the repository) because it
 // handles zip extraction via the core gRPC `ExtractSkill` call after the
 // record is created or its asset_id changes.
-func ensureSkill(ctx context.Context, injector *di.Injector, skillFileContents [][]byte, agentId string) error {
+func ensureSkill(ctx context.Context, injector *di.Injector, skillFiles []seedSkillFile, agentId string) error {
 	if injector == nil || injector.SkillApp == nil {
 		return errors.New("ensureSkill: skill service not initialized")
 	}
@@ -888,21 +912,9 @@ func ensureSkill(ctx context.Context, injector *di.Injector, skillFileContents [
 	}
 
 	// 1) Upload the skill archive as an unscoped project asset (idempotent).
-	assetIds := make([]int64, 0, len(skillFileContents))
-	for i, content := range skillFileContents {
-		assetID, _, err := ensureAsset(ctx, injector, "",
-			embeddedFile{bytes.NewReader(content)},
-			types.FileExtraInfo{
-				FileName:    androidTesterSkillName,
-				ContentType: defaultSkillContentType,
-				FileExt:     defaultSkillExt,
-				FileType:    defaultSkillFileType,
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("ensureSkill: upload asset %d: %w", i, err)
-		}
-		assetIds = append(assetIds, assetID)
+	assetIds, err := uploadSkillAssets(ctx, injector, skillFiles)
+	if err != nil {
+		return err
 	}
 
 	// CreateSkill / UpdateSkill expect an authenticated user in context.
@@ -918,18 +930,61 @@ func ensureSkill(ctx context.Context, injector *di.Injector, skillFileContents [
 		return fmt.Errorf("ensureSkill: list existing skills: %w", err)
 	}
 
-	// 3) Delete all existing skills
-	for _, skill := range listResp.GetData().GetSkills() {
-		if _, err := injector.SkillApp.DeleteSkill(
-			skillCtx, &skilldto.DeleteSkillRequest{Id: skill.GetId()},
-		); err != nil {
-			return fmt.Errorf("ensureSkill: delete existing skill %d: %w", skill.GetId(), err)
+	existingSkills := append([]*skilldto.Skill(nil), listResp.GetData().GetSkills()...)
+	sort.Slice(existingSkills, func(i, j int) bool { return existingSkills[i].GetId() < existingSkills[j].GetId() })
+
+	// 3) Update existing skill records in place; create rows only when adding more seed skills.
+	for i, assetID := range assetIds {
+		if err := syncSkillRecord(ctx, skillCtx, injector, existingSkills, i, assetID, agentId); err != nil {
+			return err
 		}
-		logger.CtxInfo(ctx, "ensureSkill: deleted existing skill %d for agent %s", skill.GetId(), agentId)
 	}
 
-	// 4) Create new skill records for each uploaded asset.
-	for _, assetID := range assetIds {
+	return nil
+}
+
+// uploadSkillAssets uploads each skill file as an unscoped project asset and
+// returns the corresponding asset IDs.
+func uploadSkillAssets(ctx context.Context, injector *di.Injector, skillFiles []seedSkillFile) ([]int64, error) {
+	assetIds := make([]int64, 0, len(skillFiles))
+	for i, skillFile := range skillFiles {
+		if skillFile.FileName == "" {
+			return nil, fmt.Errorf("ensureSkill: skill file %d missing filename", i)
+		}
+		if len(skillFile.Content) == 0 {
+			return nil, fmt.Errorf("ensureSkill: %s is empty", skillFile.FileName)
+		}
+		assetID, _, err := ensureAsset(ctx, injector, "",
+			embeddedFile{bytes.NewReader(skillFile.Content)},
+			types.FileExtraInfo{
+				FileName:    skillFile.FileName,
+				ContentType: defaultSkillContentType,
+				FileExt:     defaultSkillExt,
+				FileType:    defaultSkillFileType,
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("ensureSkill: upload asset %d: %w", i, err)
+		}
+		assetIds = append(assetIds, assetID)
+	}
+	return assetIds, nil
+}
+
+// syncSkillRecord creates or updates a single skill record to match the
+// expected asset ID. When index exceeds the number of existing skills a new
+// record is created; otherwise the existing record is updated only when the
+// underlying asset has changed.
+func syncSkillRecord(
+	ctx context.Context,
+	skillCtx context.Context,
+	injector *di.Injector,
+	existingSkills []*skilldto.Skill,
+	index int,
+	assetID int64,
+	agentId string,
+) error {
+	if index >= len(existingSkills) {
 		if _, err := injector.SkillApp.CreateSkill(skillCtx, &skilldto.CreateSkillRequest{
 			AgentId: agentId,
 			AssetId: assetID,
@@ -937,7 +992,51 @@ func ensureSkill(ctx context.Context, injector *di.Injector, skillFileContents [
 			return fmt.Errorf("ensureSkill: create skill: %w", err)
 		}
 		logger.CtxInfo(ctx, "ensureSkill: created skill for agent %s with asset %d", agentId, assetID)
+		return nil
 	}
 
+	existing := existingSkills[index]
+	currentVersion, currentAssetID, err := currentSkillVersionForSeed(skillCtx, injector, existing.GetId())
+	if err != nil {
+		return err
+	}
+	if currentAssetID == assetID {
+		logger.CtxInfo(
+			ctx,
+			"ensureSkill: skipped unchanged skill %d for agent %s asset=%d",
+			existing.GetId(), agentId, assetID,
+		)
+		return nil
+	}
+	if _, err := injector.SkillApp.UpdateSkill(skillCtx, &skilldto.UpdateSkillRequest{
+		Id:             existing.GetId(),
+		AssetId:        assetID,
+		CurrentVersion: currentVersion,
+	}); err != nil {
+		return fmt.Errorf("ensureSkill: update skill %d: %w", existing.GetId(), err)
+	}
+	logger.CtxInfo(
+		ctx,
+		"ensureSkill: updated skill %d for agent %s asset %d -> %d",
+		existing.GetId(), agentId, currentAssetID, assetID,
+	)
 	return nil
+}
+
+func currentSkillVersionForSeed(
+	ctx context.Context,
+	injector *di.Injector,
+	skillID int64,
+) (string, int64, error) {
+	if injector.DB == nil {
+		return "", 0, errors.New("ensureSkill: database not initialized")
+	}
+	version, err := skillrepo.NewSkillRepo(injector.DB).GetLatestVersion(ctx, skillID)
+	if err != nil {
+		return "", 0, fmt.Errorf("ensureSkill: get latest version for skill %d: %w", skillID, err)
+	}
+	if version == nil || version.Version == "" {
+		return "", 0, fmt.Errorf("ensureSkill: skill %d has no current version", skillID)
+	}
+	return version.Version, version.AssetID, nil
 }

@@ -30,6 +30,9 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
+
 	"sico-backend/internal/consts"
 	conventity "sico-backend/internal/entity/conversation/conversation"
 	"sico-backend/internal/entity/conversation/message"
@@ -49,8 +52,9 @@ import (
 )
 
 const (
-	roleUser      = "user"
-	roleAssistant = "assistant"
+	roleUser             = "user"
+	roleAssistant        = "assistant"
+	coreChatStartTimeout = 30 * time.Second
 )
 
 var (
@@ -179,6 +183,7 @@ func (s *Service) sendChunkEvent(
 		Timestamp:       resp.GetTimestamp(),
 		IsFinal:         resp.GetIsFinal(),
 		Role:            roleAssistant,
+		ConversationID:  connection.conversationId,
 		TurnID:          connection.turnId,
 	})
 	if marshalErr != nil {
@@ -404,9 +409,15 @@ func (s *Service) Chat(ctx context.Context, sender sse.SSESender, req *conversat
 	}
 
 	chatReq := s.buildChatRequest(
-		ctx, req,
-		username, singleAgent, agentInstance, conversation, turnID,
-		requestAttachments, agentAttachments,
+		ctx,
+		req,
+		username,
+		singleAgent,
+		agentInstance,
+		conversation,
+		turnID,
+		requestAttachments,
+		agentAttachments,
 	)
 	logger.CtxInfo(ctx,
 		"chat_stream_start conversationId=%d turnId=%d agentId=%s "+
@@ -440,7 +451,7 @@ func (s *Service) Chat(ctx context.Context, sender sse.SSESender, req *conversat
 	safego.Go(ctx, func() {
 		// Use WithoutCancel so the gRPC stream survives SSE disconnection,
 		// while still propagating the OTel trace context to core.
-		_, streamErr := s.chatClient.StreamChat(context.WithoutCancel(ctx), chatReq)
+		streamErr := s.startCoreChat(ctx, chatReq)
 		if streamErr != nil {
 			logger.CtxError(ctx,
 				"chat_grpc_stream_failed conversationId=%d turnId=%d agentInstanceId=%d model=%s err=%v",
@@ -459,6 +470,37 @@ func (s *Service) Chat(ctx context.Context, sender sse.SSESender, req *conversat
 	<-channel
 
 	return nil
+}
+
+func (s *Service) startCoreChat(ctx context.Context, chatReq *conversationdto.ChatRequest) error {
+	if err := s.waitCoreChatReady(ctx); err != nil {
+		return err
+	}
+	_, err := s.chatClient.StreamChat(context.WithoutCancel(ctx), chatReq, grpc.WaitForReady(true))
+	return err
+}
+
+func (s *Service) waitCoreChatReady(ctx context.Context) error {
+	if s.coreGRPC == nil {
+		return nil
+	}
+	waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), coreChatStartTimeout)
+	defer cancel()
+
+	s.coreGRPC.ResetConnectBackoff()
+	s.coreGRPC.Connect()
+	for {
+		state := s.coreGRPC.GetState()
+		if state == connectivity.Ready {
+			return nil
+		}
+		if !s.coreGRPC.WaitForStateChange(waitCtx, state) {
+			if err := waitCtx.Err(); err != nil {
+				return err
+			}
+			return context.DeadlineExceeded
+		}
+	}
 }
 
 // Chat bridges the HTTP SSE endpoint to the gRPC ChatService StreamChat call.
@@ -684,10 +726,13 @@ func (s *Service) buildChatRequest(
 	requestAttachments []*commondto.Attachment,
 	agentAttachments []*commondto.Attachment,
 ) *conversationdto.ChatRequest {
-	agentInstanceName := ""
-	projectId := int64(0)
-	projectName := ""
-	agentRole := ""
+	var (
+		agentInstanceName string
+		projectName       string
+		agentRole         string
+		projectId         int64
+	)
+
 	if agentInstance != nil {
 		agentInstanceName = agentInstance.GetName()
 		projectId = agentInstance.GetProjectId()
@@ -702,6 +747,7 @@ func (s *Service) buildChatRequest(
 			}
 		}
 	}
+
 	return &conversationdto.ChatRequest{
 		Username:          username,
 		Message:           buildUserChatContent(req.Message, requestAttachments),
@@ -710,10 +756,10 @@ func (s *Service) buildChatRequest(
 		AgentInstanceId:   req.AgentInstanceID,
 		AgentInstanceName: agentInstanceName,
 		ConversationId:    conversation.ID,
+		ProjectName:       projectName,
 		TurnId:            turnID,
 		AgentAttachments:  agentAttachments,
 		ProjectId:         projectId,
-		ProjectName:       projectName,
 		Model:             resolveAgentModel(singleAgent),
 		AgentRole:         agentRole,
 	}

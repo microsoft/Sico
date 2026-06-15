@@ -23,6 +23,8 @@ import (
 	impl6 "sico-backend/internal/biz/sandbox/impl"
 	"sico-backend/internal/biz/skill"
 	impl7 "sico-backend/internal/biz/skill/impl"
+	"sico-backend/internal/biz/taskruntime"
+	impl8 "sico-backend/internal/biz/taskruntime/impl"
 	"sico-backend/internal/di/infra"
 	repository4 "sico-backend/internal/store/agent/singleagent/repository"
 	repository5 "sico-backend/internal/store/conversation/conversation/repository"
@@ -33,6 +35,7 @@ import (
 	"sico-backend/internal/store/rbac/enforcer"
 	repository2 "sico-backend/internal/store/rbac/repository"
 	repository7 "sico-backend/internal/store/skill/repository"
+	repository9 "sico-backend/internal/store/taskruntime/repository"
 )
 
 // Injectors from wire.go:
@@ -130,6 +133,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		Storage:          storage,
 		CoreGRPC:         clientConn,
 		Cache:            client,
+		DB:               db,
 	}
 	conversationService := conversation.InitService(components4)
 	emulatorProvider := impl6.NewEmulatorProvider()
@@ -152,6 +156,9 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 	modelRegistryRepository := repository8.NewModelRegistryRepo(db)
 	modelRegistrySecretRepository := repository8.NewModelRegistrySecretRepo(db)
 	llmhubsService := llmhubs.InitService(db, clientConn, modelRegistryRepository, modelRegistrySecretRepository, singleAgentLLMHubConfigRepository)
+	taskRuntimeRepository := repository9.NewTaskRuntimeRepo(db)
+	service3 := impl8.NewService(taskRuntimeRepository)
+	taskruntimeService := taskruntime.InitService(service3)
 	injector := &Injector{
 		DB:              db,
 		Cache:           client,
@@ -166,6 +173,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		SandboxApp:      sandboxService,
 		SkillApp:        skillService,
 		LLMHubApp:       llmhubsService,
+		TaskRuntimeApp:  taskruntimeService,
 	}
 	return injector, func() {
 		cleanup3()

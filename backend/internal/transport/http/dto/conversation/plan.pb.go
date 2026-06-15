@@ -142,64 +142,6 @@ func (ToolDeliverableType) EnumDescriptor() ([]byte, []int) {
 	return file_conversation_plan_proto_rawDescGZIP(), []int{1}
 }
 
-type ToolCallRunningListItemStatus int32
-
-const (
-	ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN   ToolCallRunningListItemStatus = 0
-	ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING   ToolCallRunningListItemStatus = 1
-	ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING   ToolCallRunningListItemStatus = 2
-	ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE      ToolCallRunningListItemStatus = 3
-	ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED    ToolCallRunningListItemStatus = 4
-	ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED ToolCallRunningListItemStatus = 5
-)
-
-// Enum value maps for ToolCallRunningListItemStatus.
-var (
-	ToolCallRunningListItemStatus_name = map[int32]string{
-		0: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN",
-		1: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING",
-		2: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING",
-		3: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE",
-		4: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED",
-		5: "TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED",
-	}
-	ToolCallRunningListItemStatus_value = map[string]int32{
-		"TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN":   0,
-		"TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING":   1,
-		"TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING":   2,
-		"TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE":      3,
-		"TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED":    4,
-		"TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED": 5,
-	}
-)
-
-func (x ToolCallRunningListItemStatus) Enum() *ToolCallRunningListItemStatus {
-	p := new(ToolCallRunningListItemStatus)
-	*p = x
-	return p
-}
-
-func (x ToolCallRunningListItemStatus) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (ToolCallRunningListItemStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_conversation_plan_proto_enumTypes[2].Descriptor()
-}
-
-func (ToolCallRunningListItemStatus) Type() protoreflect.EnumType {
-	return &file_conversation_plan_proto_enumTypes[2]
-}
-
-func (x ToolCallRunningListItemStatus) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use ToolCallRunningListItemStatus.Descriptor instead.
-func (ToolCallRunningListItemStatus) EnumDescriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{2}
-}
-
 type ToolCallStatus int32
 
 const (
@@ -212,6 +154,7 @@ const (
 	ToolCallStatus_TOOL_CALL_STATUS_RETRY_RUNNING    ToolCallStatus = 6
 	ToolCallStatus_TOOL_CALL_STATUS_RETRY_SUCCESSFUL ToolCallStatus = 7
 	ToolCallStatus_TOOL_CALL_STATUS_RETRY_FAILED     ToolCallStatus = 8
+	ToolCallStatus_TOOL_CALL_STATUS_PENDING          ToolCallStatus = 9
 )
 
 // Enum value maps for ToolCallStatus.
@@ -226,6 +169,7 @@ var (
 		6: "TOOL_CALL_STATUS_RETRY_RUNNING",
 		7: "TOOL_CALL_STATUS_RETRY_SUCCESSFUL",
 		8: "TOOL_CALL_STATUS_RETRY_FAILED",
+		9: "TOOL_CALL_STATUS_PENDING",
 	}
 	ToolCallStatus_value = map[string]int32{
 		"TOOL_CALL_STATUS_UNKNOWN":          0,
@@ -237,6 +181,7 @@ var (
 		"TOOL_CALL_STATUS_RETRY_RUNNING":    6,
 		"TOOL_CALL_STATUS_RETRY_SUCCESSFUL": 7,
 		"TOOL_CALL_STATUS_RETRY_FAILED":     8,
+		"TOOL_CALL_STATUS_PENDING":          9,
 	}
 )
 
@@ -251,11 +196,11 @@ func (x ToolCallStatus) String() string {
 }
 
 func (ToolCallStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_conversation_plan_proto_enumTypes[3].Descriptor()
+	return file_conversation_plan_proto_enumTypes[2].Descriptor()
 }
 
 func (ToolCallStatus) Type() protoreflect.EnumType {
-	return &file_conversation_plan_proto_enumTypes[3]
+	return &file_conversation_plan_proto_enumTypes[2]
 }
 
 func (x ToolCallStatus) Number() protoreflect.EnumNumber {
@@ -264,7 +209,7 @@ func (x ToolCallStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ToolCallStatus.Descriptor instead.
 func (ToolCallStatus) EnumDescriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{3}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{2}
 }
 
 type PlanStepStatus int32
@@ -312,11 +257,11 @@ func (x PlanStepStatus) String() string {
 }
 
 func (PlanStepStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_conversation_plan_proto_enumTypes[4].Descriptor()
+	return file_conversation_plan_proto_enumTypes[3].Descriptor()
 }
 
 func (PlanStepStatus) Type() protoreflect.EnumType {
-	return &file_conversation_plan_proto_enumTypes[4]
+	return &file_conversation_plan_proto_enumTypes[3]
 }
 
 func (x PlanStepStatus) Number() protoreflect.EnumNumber {
@@ -325,7 +270,7 @@ func (x PlanStepStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PlanStepStatus.Descriptor instead.
 func (PlanStepStatus) EnumDescriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{4}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{3}
 }
 
 type PlanStatus int32
@@ -373,11 +318,11 @@ func (x PlanStatus) String() string {
 }
 
 func (PlanStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_conversation_plan_proto_enumTypes[5].Descriptor()
+	return file_conversation_plan_proto_enumTypes[4].Descriptor()
 }
 
 func (PlanStatus) Type() protoreflect.EnumType {
-	return &file_conversation_plan_proto_enumTypes[5]
+	return &file_conversation_plan_proto_enumTypes[4]
 }
 
 func (x PlanStatus) Number() protoreflect.EnumNumber {
@@ -386,7 +331,7 @@ func (x PlanStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PlanStatus.Descriptor instead.
 func (PlanStatus) EnumDescriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{5}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{4}
 }
 
 type ToolDeliverableAcquiredSandbox struct {
@@ -573,17 +518,111 @@ func (x *ToolDeliverable) GetAcquiredSandbox() *ToolDeliverableAcquiredSandbox {
 	return nil
 }
 
+type TaskRuntimeExecutionInfo struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Lifecycle stage of a single task run: plan | workspace | sandbox | execute | upload | release.
+	CurrentStage          string `protobuf:"bytes,1,opt,name=current_stage,json=currentStage,proto3" json:"currentStage,omitempty"`                               
+	SandboxId             string `protobuf:"bytes,2,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandboxId,omitempty"`                                        
+	SandboxType           string `protobuf:"bytes,3,opt,name=sandbox_type,json=sandboxType,proto3" json:"sandboxType,omitempty"`                                  
+	SandboxEndpoint       string `protobuf:"bytes,4,opt,name=sandbox_endpoint,json=sandboxEndpoint,proto3" json:"sandboxEndpoint,omitempty"`                      
+	Attempt               int32  `protobuf:"varint,5,opt,name=attempt,proto3" json:"attempt,omitempty"`                                                            
+	MaxAttempts           int32  `protobuf:"varint,6,opt,name=max_attempts,json=maxAttempts,proto3" json:"maxAttempts,omitempty"`                                 
+	LatestProgressMessage string `protobuf:"bytes,7,opt,name=latest_progress_message,json=latestProgressMessage,proto3" json:"latestProgressMessage,omitempty"`  
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *TaskRuntimeExecutionInfo) Reset() {
+	*x = TaskRuntimeExecutionInfo{}
+	mi := &file_conversation_plan_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskRuntimeExecutionInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskRuntimeExecutionInfo) ProtoMessage() {}
+
+func (x *TaskRuntimeExecutionInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_plan_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskRuntimeExecutionInfo.ProtoReflect.Descriptor instead.
+func (*TaskRuntimeExecutionInfo) Descriptor() ([]byte, []int) {
+	return file_conversation_plan_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TaskRuntimeExecutionInfo) GetCurrentStage() string {
+	if x != nil {
+		return x.CurrentStage
+	}
+	return ""
+}
+
+func (x *TaskRuntimeExecutionInfo) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *TaskRuntimeExecutionInfo) GetSandboxType() string {
+	if x != nil {
+		return x.SandboxType
+	}
+	return ""
+}
+
+func (x *TaskRuntimeExecutionInfo) GetSandboxEndpoint() string {
+	if x != nil {
+		return x.SandboxEndpoint
+	}
+	return ""
+}
+
+func (x *TaskRuntimeExecutionInfo) GetAttempt() int32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *TaskRuntimeExecutionInfo) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
+func (x *TaskRuntimeExecutionInfo) GetLatestProgressMessage() string {
+	if x != nil {
+		return x.LatestProgressMessage
+	}
+	return ""
+}
+
 type ToolExecutionInfo struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ToolType        ToolType               `protobuf:"varint,1,opt,name=tool_type,json=toolType,proto3,enum=plan.ToolType" json:"toolType,omitempty"`     
-	BuiltinToolName string                 `protobuf:"bytes,6,opt,name=builtin_tool_name,json=builtinToolName,proto3" json:"builtinToolName,omitempty"`  
+	state           protoimpl.MessageState    `protogen:"open.v1"`
+	ToolType        ToolType                  `protobuf:"varint,1,opt,name=tool_type,json=toolType,proto3,enum=plan.ToolType" json:"toolType,omitempty"`     
+	BuiltinToolName string                    `protobuf:"bytes,6,opt,name=builtin_tool_name,json=builtinToolName,proto3" json:"builtinToolName,omitempty"`  
+	TaskRuntime     *TaskRuntimeExecutionInfo `protobuf:"bytes,7,opt,name=task_runtime,json=taskRuntime,proto3" json:"taskRuntime,omitempty"`                
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ToolExecutionInfo) Reset() {
 	*x = ToolExecutionInfo{}
-	mi := &file_conversation_plan_proto_msgTypes[2]
+	mi := &file_conversation_plan_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -595,7 +634,7 @@ func (x *ToolExecutionInfo) String() string {
 func (*ToolExecutionInfo) ProtoMessage() {}
 
 func (x *ToolExecutionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[2]
+	mi := &file_conversation_plan_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -608,7 +647,7 @@ func (x *ToolExecutionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolExecutionInfo.ProtoReflect.Descriptor instead.
 func (*ToolExecutionInfo) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{2}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ToolExecutionInfo) GetToolType() ToolType {
@@ -625,70 +664,31 @@ func (x *ToolExecutionInfo) GetBuiltinToolName() string {
 	return ""
 }
 
-type ToolCallRunningListItem struct {
-	state         protoimpl.MessageState        `protogen:"open.v1"`
-	Name          string                        `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`                                               
-	Status        ToolCallRunningListItemStatus `protobuf:"varint,2,opt,name=status,proto3,enum=plan.ToolCallRunningListItemStatus" json:"status"`  
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ToolCallRunningListItem) Reset() {
-	*x = ToolCallRunningListItem{}
-	mi := &file_conversation_plan_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ToolCallRunningListItem) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ToolCallRunningListItem) ProtoMessage() {}
-
-func (x *ToolCallRunningListItem) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[3]
+func (x *ToolExecutionInfo) GetTaskRuntime() *TaskRuntimeExecutionInfo {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
+		return x.TaskRuntime
 	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ToolCallRunningListItem.ProtoReflect.Descriptor instead.
-func (*ToolCallRunningListItem) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *ToolCallRunningListItem) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *ToolCallRunningListItem) GetStatus() ToolCallRunningListItemStatus {
-	if x != nil {
-		return x.Status
-	}
-	return ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN
+	return nil
 }
 
 type ToolCall struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	ToolName string                 `protobuf:"bytes,1,opt,name=tool_name,json=toolName,proto3" json:"toolName,omitempty"`  
 	// message is for frontend display
-	Message        string                     `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`                                                                  
-	RunningList    []*ToolCallRunningListItem `protobuf:"bytes,6,rep,name=running_list,json=runningList,proto3" json:"runningList,omitempty"`                                       
-	ExecutionInfo  *ToolExecutionInfo         `protobuf:"bytes,3,opt,name=execution_info,json=executionInfo,proto3" json:"executionInfo,omitempty"`                                 
-	Deliverables   []*ToolDeliverable         `protobuf:"bytes,4,rep,name=deliverables,proto3" json:"deliverables,omitempty"`                                                        
-	ToolCallId     int64                      `protobuf:"varint,5,opt,name=tool_call_id,json=toolCallId,proto3" json:"toolCallId,omitempty"`                                       
-	BatchCalls     []*ToolCall                `protobuf:"bytes,7,rep,name=batch_calls,json=batchCalls,proto3" json:"batchCalls,omitempty"`                                          
-	BatchItemIndex int64                      `protobuf:"varint,8,opt,name=batch_item_index,json=batchItemIndex,proto3" json:"batchItemIndex,omitempty"`                           
-	ToolCallStatus ToolCallStatus             `protobuf:"varint,9,opt,name=tool_call_status,json=toolCallStatus,proto3,enum=plan.ToolCallStatus" json:"toolCallStatus,omitempty"`  
+	Message       string             `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`                                   
+	ExecutionInfo *ToolExecutionInfo `protobuf:"bytes,3,opt,name=execution_info,json=executionInfo,proto3" json:"executionInfo,omitempty"`  
+	Deliverables  []*ToolDeliverable `protobuf:"bytes,4,rep,name=deliverables,proto3" json:"deliverables,omitempty"`                         
+	ToolCallId    int64              `protobuf:"varint,5,opt,name=tool_call_id,json=toolCallId,proto3" json:"toolCallId,omitempty"`        
+	SubCalls      []*ToolCall        `protobuf:"bytes,7,rep,name=sub_calls,json=subCalls,proto3" json:"subCalls,omitempty"`                 
+	SubCallIndex  int64              `protobuf:"varint,8,opt,name=sub_call_index,json=subCallIndex,proto3" json:"subCallIndex,omitempty"`  
+	// Structured display labels (task_label, sandbox_label, sandbox_label_plural,
+	// sandbox_ready_label, sandbox_releasing_label, sandbox_release_label,
+	// environment_label, runner_label, batch_subject_singular,
+	// batch_subject_plural, ...) sourced from the capability card. The frontend
+	// should read these directly instead of pattern-matching `message`.
+	Display        map[string]string `protobuf:"bytes,9,rep,name=display,proto3" json:"display,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`  
+	ToolCallStatus ToolCallStatus    `protobuf:"varint,10,opt,name=tool_call_status,json=toolCallStatus,proto3,enum=plan.ToolCallStatus" json:"toolCallStatus,omitempty"`           
+	UpdatedAt      int64             `protobuf:"varint,11,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt,omitempty"`                                                     
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -737,13 +737,6 @@ func (x *ToolCall) GetMessage() string {
 	return ""
 }
 
-func (x *ToolCall) GetRunningList() []*ToolCallRunningListItem {
-	if x != nil {
-		return x.RunningList
-	}
-	return nil
-}
-
 func (x *ToolCall) GetExecutionInfo() *ToolExecutionInfo {
 	if x != nil {
 		return x.ExecutionInfo
@@ -765,18 +758,25 @@ func (x *ToolCall) GetToolCallId() int64 {
 	return 0
 }
 
-func (x *ToolCall) GetBatchCalls() []*ToolCall {
+func (x *ToolCall) GetSubCalls() []*ToolCall {
 	if x != nil {
-		return x.BatchCalls
+		return x.SubCalls
 	}
 	return nil
 }
 
-func (x *ToolCall) GetBatchItemIndex() int64 {
+func (x *ToolCall) GetSubCallIndex() int64 {
 	if x != nil {
-		return x.BatchItemIndex
+		return x.SubCallIndex
 	}
 	return 0
+}
+
+func (x *ToolCall) GetDisplay() map[string]string {
+	if x != nil {
+		return x.Display
+	}
+	return nil
 }
 
 func (x *ToolCall) GetToolCallStatus() ToolCallStatus {
@@ -786,11 +786,19 @@ func (x *ToolCall) GetToolCallStatus() ToolCallStatus {
 	return ToolCallStatus_TOOL_CALL_STATUS_UNKNOWN
 }
 
+func (x *ToolCall) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
 type PlanStep struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Title         string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`                              
 	ToolCalls     []*ToolCall            `protobuf:"bytes,2,rep,name=tool_calls,json=toolCalls,proto3" json:"toolCalls,omitempty"`     
 	Status        PlanStepStatus         `protobuf:"varint,3,opt,name=status,proto3,enum=plan.PlanStepStatus" json:"status,omitempty"`  
+	UpdatedAt     int64                  `protobuf:"varint,4,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt,omitempty"`    
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -844,6 +852,13 @@ func (x *PlanStep) GetStatus() PlanStepStatus {
 		return x.Status
 	}
 	return PlanStepStatus_PLAN_STEP_STATUS_UNKNOWN
+}
+
+func (x *PlanStep) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
 }
 
 type PlanExtra struct {
@@ -1019,30 +1034,44 @@ const file_conversation_plan_proto_rawDesc = "" +
 	"\bfile_url\x18\x03 \x01(\tR\afileUrl\x12\x1b\n" +
 	"\tfile_name\x18\x04 \x01(\tR\bfileName\x12-\n" +
 	"\x13web_preview_sas_url\x18\x06 \x01(\tR\x10webPreviewSasUrl\x12O\n" +
-	"\x10acquired_sandbox\x18\a \x01(\v2$.plan.ToolDeliverableAcquiredSandboxR\x0facquiredSandbox\"l\n" +
+	"\x10acquired_sandbox\x18\a \x01(\v2$.plan.ToolDeliverableAcquiredSandboxR\x0facquiredSandbox\"\xa1\x02\n" +
+	"\x18TaskRuntimeExecutionInfo\x12#\n" +
+	"\rcurrent_stage\x18\x01 \x01(\tR\fcurrentStage\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x02 \x01(\tR\tsandboxId\x12!\n" +
+	"\fsandbox_type\x18\x03 \x01(\tR\vsandboxType\x12)\n" +
+	"\x10sandbox_endpoint\x18\x04 \x01(\tR\x0fsandboxEndpoint\x12\x18\n" +
+	"\aattempt\x18\x05 \x01(\x05R\aattempt\x12!\n" +
+	"\fmax_attempts\x18\x06 \x01(\x05R\vmaxAttempts\x126\n" +
+	"\x17latest_progress_message\x18\a \x01(\tR\x15latestProgressMessage\"\xaf\x01\n" +
 	"\x11ToolExecutionInfo\x12+\n" +
 	"\ttool_type\x18\x01 \x01(\x0e2\x0e.plan.ToolTypeR\btoolType\x12*\n" +
-	"\x11builtin_tool_name\x18\x06 \x01(\tR\x0fbuiltinToolName\"j\n" +
-	"\x17ToolCallRunningListItem\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12;\n" +
-	"\x06status\x18\x02 \x01(\x0e2#.plan.ToolCallRunningListItemStatusR\x06status\"\xbb\x03\n" +
+	"\x11builtin_tool_name\x18\x06 \x01(\tR\x0fbuiltinToolName\x12A\n" +
+	"\ftask_runtime\x18\a \x01(\v2\x1e.plan.TaskRuntimeExecutionInfoR\vtaskRuntime\"\x83\x04\n" +
 	"\bToolCall\x12\x1b\n" +
 	"\ttool_name\x18\x01 \x01(\tR\btoolName\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\x12@\n" +
-	"\frunning_list\x18\x06 \x03(\v2\x1d.plan.ToolCallRunningListItemR\vrunningList\x12>\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12>\n" +
 	"\x0eexecution_info\x18\x03 \x01(\v2\x17.plan.ToolExecutionInfoR\rexecutionInfo\x129\n" +
 	"\fdeliverables\x18\x04 \x03(\v2\x15.plan.ToolDeliverableR\fdeliverables\x12 \n" +
 	"\ftool_call_id\x18\x05 \x01(\x03R\n" +
-	"toolCallId\x12/\n" +
-	"\vbatch_calls\x18\a \x03(\v2\x0e.plan.ToolCallR\n" +
-	"batchCalls\x12(\n" +
-	"\x10batch_item_index\x18\b \x01(\x03R\x0ebatchItemIndex\x12>\n" +
-	"\x10tool_call_status\x18\t \x01(\x0e2\x14.plan.ToolCallStatusR\x0etoolCallStatus\"}\n" +
+	"toolCallId\x12+\n" +
+	"\tsub_calls\x18\a \x03(\v2\x0e.plan.ToolCallR\bsubCalls\x12$\n" +
+	"\x0esub_call_index\x18\b \x01(\x03R\fsubCallIndex\x125\n" +
+	"\adisplay\x18\t \x03(\v2\x1b.plan.ToolCall.DisplayEntryR\adisplay\x12>\n" +
+	"\x10tool_call_status\x18\n" +
+	" \x01(\x0e2\x14.plan.ToolCallStatusR\x0etoolCallStatus\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\v \x01(\x03R\tupdatedAt\x1a:\n" +
+	"\fDisplayEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9c\x01\n" +
 	"\bPlanStep\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12-\n" +
 	"\n" +
 	"tool_calls\x18\x02 \x03(\v2\x0e.plan.ToolCallR\ttoolCalls\x12,\n" +
-	"\x06status\x18\x03 \x01(\x0e2\x14.plan.PlanStepStatusR\x06status\"\xee\x01\n" +
+	"\x06status\x18\x03 \x01(\x0e2\x14.plan.PlanStepStatusR\x06status\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x04 \x01(\x03R\tupdatedAt\"\xee\x01\n" +
 	"\tPlanExtra\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12*\n" +
 	"\x11agent_instance_id\x18\x02 \x01(\x03R\x0fagentInstanceId\x12\x19\n" +
@@ -1065,14 +1094,7 @@ const file_conversation_plan_proto_rawDesc = "" +
 	"\x1eTOOL_DELIVERABLE_TYPE_MARKDOWN\x10\x01\x12\x1e\n" +
 	"\x1aTOOL_DELIVERABLE_TYPE_FILE\x10\x02\x12)\n" +
 	"%TOOL_DELIVERABLE_TYPE_WEB_PREVIEW_URL\x10\x03\x12*\n" +
-	"&TOOL_DELIVERABLE_TYPE_ACQUIRED_SANDBOX\x10\x05*\xbd\x02\n" +
-	"\x1dToolCallRunningListItemStatus\x12.\n" +
-	"*TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN\x10\x00\x12.\n" +
-	"*TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING\x10\x01\x12.\n" +
-	"*TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING\x10\x02\x12+\n" +
-	"'TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE\x10\x03\x12-\n" +
-	")TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED\x10\x04\x120\n" +
-	",TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED\x10\x05*\xc5\x02\n" +
+	"&TOOL_DELIVERABLE_TYPE_ACQUIRED_SANDBOX\x10\x05*\xe3\x02\n" +
 	"\x0eToolCallStatus\x12\x1c\n" +
 	"\x18TOOL_CALL_STATUS_UNKNOWN\x10\x00\x12\x1c\n" +
 	"\x18TOOL_CALL_STATUS_RUNNING\x10\x01\x12\x1b\n" +
@@ -1082,7 +1104,8 @@ const file_conversation_plan_proto_rawDesc = "" +
 	" TOOL_CALL_STATUS_FAILED_ANALYZED\x10\x05\x12\"\n" +
 	"\x1eTOOL_CALL_STATUS_RETRY_RUNNING\x10\x06\x12%\n" +
 	"!TOOL_CALL_STATUS_RETRY_SUCCESSFUL\x10\a\x12!\n" +
-	"\x1dTOOL_CALL_STATUS_RETRY_FAILED\x10\b*\xf5\x01\n" +
+	"\x1dTOOL_CALL_STATUS_RETRY_FAILED\x10\b\x12\x1c\n" +
+	"\x18TOOL_CALL_STATUS_PENDING\x10\t*\xf5\x01\n" +
 	"\x0ePlanStepStatus\x12\x1c\n" +
 	"\x18PLAN_STEP_STATUS_UNKNOWN\x10\x00\x12\x1c\n" +
 	"\x18PLAN_STEP_STATUS_PENDING\x10\x01\x12 \n" +
@@ -1113,38 +1136,38 @@ func file_conversation_plan_proto_rawDescGZIP() []byte {
 	return file_conversation_plan_proto_rawDescData
 }
 
-var file_conversation_plan_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_conversation_plan_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_conversation_plan_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_conversation_plan_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_conversation_plan_proto_goTypes = []any{
 	(ToolType)(0),                          // 0: plan.ToolType
 	(ToolDeliverableType)(0),               // 1: plan.ToolDeliverableType
-	(ToolCallRunningListItemStatus)(0),     // 2: plan.ToolCallRunningListItemStatus
-	(ToolCallStatus)(0),                    // 3: plan.ToolCallStatus
-	(PlanStepStatus)(0),                    // 4: plan.PlanStepStatus
-	(PlanStatus)(0),                        // 5: plan.PlanStatus
-	(*ToolDeliverableAcquiredSandbox)(nil), // 6: plan.ToolDeliverableAcquiredSandbox
-	(*ToolDeliverable)(nil),                // 7: plan.ToolDeliverable
+	(ToolCallStatus)(0),                    // 2: plan.ToolCallStatus
+	(PlanStepStatus)(0),                    // 3: plan.PlanStepStatus
+	(PlanStatus)(0),                        // 4: plan.PlanStatus
+	(*ToolDeliverableAcquiredSandbox)(nil), // 5: plan.ToolDeliverableAcquiredSandbox
+	(*ToolDeliverable)(nil),                // 6: plan.ToolDeliverable
+	(*TaskRuntimeExecutionInfo)(nil),       // 7: plan.TaskRuntimeExecutionInfo
 	(*ToolExecutionInfo)(nil),              // 8: plan.ToolExecutionInfo
-	(*ToolCallRunningListItem)(nil),        // 9: plan.ToolCallRunningListItem
-	(*ToolCall)(nil),                       // 10: plan.ToolCall
-	(*PlanStep)(nil),                       // 11: plan.PlanStep
-	(*PlanExtra)(nil),                      // 12: plan.PlanExtra
-	(*Plan)(nil),                           // 13: plan.Plan
+	(*ToolCall)(nil),                       // 9: plan.ToolCall
+	(*PlanStep)(nil),                       // 10: plan.PlanStep
+	(*PlanExtra)(nil),                      // 11: plan.PlanExtra
+	(*Plan)(nil),                           // 12: plan.Plan
+	nil,                                    // 13: plan.ToolCall.DisplayEntry
 }
 var file_conversation_plan_proto_depIdxs = []int32{
 	1,  // 0: plan.ToolDeliverable.type:type_name -> plan.ToolDeliverableType
-	6,  // 1: plan.ToolDeliverable.acquired_sandbox:type_name -> plan.ToolDeliverableAcquiredSandbox
+	5,  // 1: plan.ToolDeliverable.acquired_sandbox:type_name -> plan.ToolDeliverableAcquiredSandbox
 	0,  // 2: plan.ToolExecutionInfo.tool_type:type_name -> plan.ToolType
-	2,  // 3: plan.ToolCallRunningListItem.status:type_name -> plan.ToolCallRunningListItemStatus
-	9,  // 4: plan.ToolCall.running_list:type_name -> plan.ToolCallRunningListItem
-	8,  // 5: plan.ToolCall.execution_info:type_name -> plan.ToolExecutionInfo
-	7,  // 6: plan.ToolCall.deliverables:type_name -> plan.ToolDeliverable
-	10, // 7: plan.ToolCall.batch_calls:type_name -> plan.ToolCall
-	3,  // 8: plan.ToolCall.tool_call_status:type_name -> plan.ToolCallStatus
-	10, // 9: plan.PlanStep.tool_calls:type_name -> plan.ToolCall
-	4,  // 10: plan.PlanStep.status:type_name -> plan.PlanStepStatus
-	11, // 11: plan.Plan.steps:type_name -> plan.PlanStep
-	12, // 12: plan.Plan.extra:type_name -> plan.PlanExtra
+	7,  // 3: plan.ToolExecutionInfo.task_runtime:type_name -> plan.TaskRuntimeExecutionInfo
+	8,  // 4: plan.ToolCall.execution_info:type_name -> plan.ToolExecutionInfo
+	6,  // 5: plan.ToolCall.deliverables:type_name -> plan.ToolDeliverable
+	9,  // 6: plan.ToolCall.sub_calls:type_name -> plan.ToolCall
+	13, // 7: plan.ToolCall.display:type_name -> plan.ToolCall.DisplayEntry
+	2,  // 8: plan.ToolCall.tool_call_status:type_name -> plan.ToolCallStatus
+	9,  // 9: plan.PlanStep.tool_calls:type_name -> plan.ToolCall
+	3,  // 10: plan.PlanStep.status:type_name -> plan.PlanStepStatus
+	10, // 11: plan.Plan.steps:type_name -> plan.PlanStep
+	11, // 12: plan.Plan.extra:type_name -> plan.PlanExtra
 	13, // [13:13] is the sub-list for method output_type
 	13, // [13:13] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
@@ -1162,8 +1185,8 @@ func file_conversation_plan_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conversation_plan_proto_rawDesc), len(file_conversation_plan_proto_rawDesc)),
-			NumEnums:      6,
-			NumMessages:   8,
+			NumEnums:      5,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

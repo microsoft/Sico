@@ -66,38 +66,42 @@ func NewService(pool *Pool, instanceRepo agentrepo.SingleAgentInstanceRepository
 
 // ==================== New Simplified APIs ====================
 
-// ApplySandbox picks an available (InUse=false) sandbox of the requested type
-// from the pool pre-assigned to this instance, marks it InUse=true, and returns it.
+// ApplySandbox picks an available (InUse=false) sandbox supplying the requested
+// OS from the pool pre-assigned to this instance, marks it InUse=true, and
+// returns it.
 // If all assigned sandboxes are in use or none are assigned, returns an informational response.
-func (s *Service) ApplySandbox(ctx context.Context, instanceID, sandboxType string) (map[string]interface{}, error) {
-	if instanceID == "" || sandboxType == "" {
-		return nil, apperr.New(errcode.CommonInvalidParam, "instanceID and sandboxType are required")
+func (s *Service) ApplySandbox(ctx context.Context, instanceID, sandboxOS string) (map[string]interface{}, error) {
+	if instanceID == "" || sandboxOS == "" {
+		return nil, apperr.New(errcode.CommonInvalidParam, "instanceID and sandbox os are required")
 	}
 
-	appliableResourcesByID, snapshotAge, err := s.listAppliableResources(ctx, sandboxType)
-	if err != nil {
-		return nil, err
-	}
-	logger.CtxInfo(
-		ctx,
-		"ApplySandbox: using shared sandbox snapshot for type=%s age=%s",
-		sandboxType, snapshotAge.Round(time.Millisecond),
-	)
-
-	lease, err := s.Pool.AcquireAvailableLeaseFromResources(
-		ctx, instanceID, sandboxType, appliableResourcesByID,
-	)
+	os, err := resolveSandboxOS(sandboxOS)
 	if err != nil {
 		return nil, err
 	}
 
+	// Selection is OS-only: gather every available resource that can supply the
+	// OS, across all enabled providers, in scheduling-priority order (managed
+	// pools before a person's physical machine).
+	candidateIDs, resourcesByID, snapshotAge, err := s.appliableResourcesForOS(ctx, os)
+	if err != nil {
+		return nil, err
+	}
+	if len(candidateIDs) == 0 {
+		logger.CtxInfo(ctx, "No available sandbox for os %s and instance %s (all in use or none assigned)",
+			os, instanceID)
+		return nil, nil
+	}
+	logger.CtxInfo(ctx, "ApplySandbox: os=%s candidates=%d age=%s",
+		os, len(candidateIDs), snapshotAge.Round(time.Millisecond))
+
+	lease, err := s.Pool.AcquireAssignedLease(ctx, instanceID, candidateIDs)
+	if err != nil {
+		return nil, err
+	}
 	if lease == nil {
-		// No available sandbox found - return empty result (not an error)
-		logger.CtxInfo(
-			ctx,
-			"No available sandbox of type %s for instance %s (all in use or none assigned)",
-			sandboxType, instanceID,
-		)
+		logger.CtxInfo(ctx, "No available sandbox for os %s and instance %s (all in use or none assigned)",
+			os, instanceID)
 		return nil, nil
 	}
 	if strings.TrimSpace(lease.User) != instanceID {
@@ -109,7 +113,7 @@ func (s *Service) ApplySandbox(ctx context.Context, instanceID, sandboxType stri
 		return nil, apperr.New(errcode.CommonConflict, "sandbox assignment owner changed, please retry")
 	}
 
-	if resource := appliableResourcesByID[lease.ResourceID]; resource != nil {
+	if resource := resourcesByID[lease.SandboxID]; resource != nil {
 		s.mergeLeaseMetadata(ctx, lease, resource.Metadata)
 	}
 
@@ -131,14 +135,14 @@ func (s *Service) ApplySandbox(ctx context.Context, instanceID, sandboxType stri
 	}
 
 	logger.CtxInfo(ctx, "Sandbox applied for instance %s: sandbox_id=%s, type=%s, endpoint=%s",
-		instanceID, lease.SandboxID, sandboxType, endpoint)
+		instanceID, lease.SandboxID, lease.Type, endpoint)
 
 	return result, nil
 }
 
-// ReleaseSandbox resets the sandbox first while the lease is still in-use,
-// then marks it as no longer in use with a cooldown period.
-// If reset fails, the lease stays in-use so the dirty sandbox cannot be reused.
+// ReleaseSandbox marks a sandbox as no longer in use with a cooldown period.
+// The task runtime resets sandboxes on acquire, so release intentionally avoids
+// provider reset work to prevent back-to-back release/acquire reset throttling.
 func (s *Service) ReleaseSandbox(ctx context.Context, instanceID, sandboxID string) error {
 	if instanceID == "" || sandboxID == "" {
 		return apperr.New(errcode.CommonInvalidParam, "instanceID and sandboxID are required")
@@ -161,18 +165,6 @@ func (s *Service) ReleaseSandbox(ctx context.Context, instanceID, sandboxID stri
 			lease.SandboxID, instanceID, lease.Type,
 		)
 		return nil
-	}
-
-	prov, ok := s.Pool.GetProvider(lease.Type)
-	if !ok || prov == nil {
-		return apperr.New(
-			errcode.SandboxProviderUnavailable,
-			fmt.Sprintf("sandbox provider unavailable for type %s", lease.Type),
-		)
-	}
-	if resetErr := prov.ResetResource(ctx, lease.ResourceID); resetErr != nil {
-		logger.CtxWarn(ctx, "Sandbox reset failed during release: sandbox_id=%s, err=%v", sandboxID, resetErr)
-		return apperr.New(errcode.SandboxResetFailed, fmt.Sprintf("failed to reset sandbox %s: %v", sandboxID, resetErr))
 	}
 
 	lease, err = s.Pool.ReleaseLease(ctx, instanceID, sandboxID)
@@ -241,13 +233,6 @@ func resourcesByIDWithStatus(resources []*Resource, status ResourceStatus) map[s
 	return filtered
 }
 
-// appliableResources returns resources that an existing owner may use.
-// During the missing-resource grace period we still allow apply against a
-// resource that remains logically assigned to the same instance.
-func appliableResources(resources []*Resource) map[string]*Resource {
-	return resourcesByIDWithStatus(resources, ResourceStatusAvailable)
-}
-
 // allocatableResources returns resources eligible for new assignment.
 // Resources in the grace period (MissingSinceAt != nil) are excluded even
 // when their snapshot status is still available — they are kept visible in
@@ -292,15 +277,6 @@ func (s *Service) listSnapshotResources(
 	}
 
 	return resources, age, nil
-}
-
-func (s *Service) listAppliableResources(ctx context.Context, sandboxType string) (map[string]*Resource, time.Duration, error) {
-	resources, age, err := s.listSnapshotResources(ctx, sandboxType)
-	if err != nil {
-		return nil, age, err
-	}
-
-	return appliableResources(resources), age, nil
 }
 
 func (s *Service) listAllocatableResources(ctx context.Context, sandboxType string) (map[string]*Resource, time.Duration, error) {
@@ -1307,18 +1283,26 @@ func (s *Service) unassignRetryAfterRaceRelease(
 }
 
 // GetInstanceSandboxesWithStatus returns all sandboxes for an instance with type, status, and endpoints.
-// If typeFilter is non-empty, only sandboxes of that type are returned.
+// osFilter, when non-empty, is an OS selector (e.g. "windows"): only leases whose
+// resolved OS matches are returned. Selection is OS-only — concrete sandbox types
+// are an internal detail and never a filter here.
 func (s *Service) GetInstanceSandboxesWithStatus(
-	ctx context.Context, instanceID, typeFilter string,
+	ctx context.Context, instanceID, osFilter string,
 ) ([]map[string]interface{}, error) {
 	instanceID = strings.TrimSpace(instanceID)
 	if instanceID == "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "instanceID is required")
 	}
 
-	typeFilter = strings.TrimSpace(typeFilter)
-	if typeFilter != "" && !enum.IsValidSandboxType(typeFilter) {
-		return nil, apperr.New(errcode.CommonInvalidParam, "invalid sandbox type: "+typeFilter)
+	osFilter = strings.TrimSpace(osFilter)
+	var os enum.SandboxOS
+	hasFilter := false
+	if osFilter != "" {
+		parsed, err := resolveSandboxOS(osFilter)
+		if err != nil {
+			return nil, err
+		}
+		os, hasFilter = parsed, true
 	}
 
 	allLeases, err := s.loadAssignedLeasesStrict(ctx, instanceID)
@@ -1326,9 +1310,17 @@ func (s *Service) GetInstanceSandboxesWithStatus(
 		return nil, err
 	}
 
+	// An OS filter matches physical leases on their metadata["os"], so refresh
+	// from the live snapshot before filtering — otherwise a lease whose stored
+	// metadata is stale could be wrongly excluded, diverging from what
+	// ApplySandbox (which always reads the fresh snapshot) would select.
+	if hasFilter {
+		s.refreshLeaseMetadata(ctx, allLeases...)
+	}
+
 	filteredLeases := make([]*Lease, 0, len(allLeases))
 	for _, lease := range allLeases {
-		if typeFilter != "" && lease.Type != typeFilter {
+		if hasFilter && !leaseMatchesOS(lease, os) {
 			continue
 		}
 		filteredLeases = append(filteredLeases, lease)
@@ -1337,7 +1329,11 @@ func (s *Service) GetInstanceSandboxesWithStatus(
 		return []map[string]interface{}{}, nil
 	}
 
-	s.refreshLeaseMetadata(ctx, filteredLeases...)
+	// With a filter we already refreshed every lease above; otherwise refresh the
+	// surviving subset here.
+	if !hasFilter {
+		s.refreshLeaseMetadata(ctx, filteredLeases...)
+	}
 
 	resourceStatusByID, displayNames, err := s.loadResourceStatusAndNames(ctx, instanceID)
 	if err != nil {

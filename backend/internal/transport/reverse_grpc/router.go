@@ -26,9 +26,11 @@ import (
 	"sico-backend/internal/biz/conversation"
 	"sico-backend/internal/biz/knowledge"
 	"sico-backend/internal/biz/sandbox"
+	"sico-backend/internal/biz/taskruntime"
 	conversationRgrpc "sico-backend/internal/transport/reverse_grpc/pb/conversation"
 	knowledgeRgrpc "sico-backend/internal/transport/reverse_grpc/pb/knowledge"
 	sandboxRgrpc "sico-backend/internal/transport/reverse_grpc/pb/sandbox"
+	taskruntimeRgrpc "sico-backend/internal/transport/reverse_grpc/pb/taskruntime"
 )
 
 func RegisterReverseGRPCServer(grpcServer *grpc.Server) {
@@ -43,4 +45,8 @@ func RegisterReverseGRPCServer(grpcServer *grpc.Server) {
 	// sandbox
 	sandboxSvc := sandbox.Default()
 	sandboxRgrpc.RegisterReverseSandboxRPCServer(grpcServer, sandboxSvc)
+
+	// task runtime
+	taskRuntimeSvc := taskruntime.Default()
+	taskruntimeRgrpc.RegisterReverseTaskRuntimeRPCServer(grpcServer, taskRuntimeSvc)
 }

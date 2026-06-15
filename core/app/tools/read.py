@@ -36,6 +36,12 @@ _MAX_LINES = 200
 _MAX_RESPONSE_BYTES = 20 * 1024  # 20 KB
 _TRUNCATED_MARKER = "\n...TRUNCATED..."
 
+
+def _display_file_name(file_path: str) -> str:
+    normalized = file_path.replace("\\", "/").rstrip("/")
+    return normalized.rsplit("/", 1)[-1] or file_path
+
+
 class ReadInput(BaseModel):
     file_path: str = Field(description="Relative file path within the workspace directory.")
     offset: int = Field(default=0, description="0-based line offset to start reading from. Defaults to 0 (beginning of file).")
@@ -53,19 +59,24 @@ async def _read_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -
 
     if not file_path:
         return {"error_message": "file_path is required", "content": ""}
+    display_file_name = _display_file_name(file_path)
 
     _LOGGER.info(
         "Read tool start agent_instance_id=%s file_path=%s offset=%s lines=%s",
-        ctx.agent_instance_id, file_path, offset, lines,
+        ctx.agent_instance_id,
+        file_path,
+        offset,
+        lines,
     )
 
     plan_editor = ctx.plan_editor
     tool_call_id = await plan_editor.create_tool_call(
-        "Read", f"Reading file {file_path}",
+        "Read",
+        f"Reading file {display_file_name}",
         ToolExecutionInfo(
             tool_type=ToolType.BUILTIN,
             builtin_tool_name="read",
-        )
+        ),
     )
 
     def _impl() -> dict[str, Any]:
@@ -93,22 +104,16 @@ async def _read_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -
 
     try:
         result = await asyncio.to_thread(_impl)
-
         offset = result.get("offset", offset)
         lines_returned = result.get("lines_returned", len(result.get("content", "").splitlines()))
-        message = f"Read file {file_path}, line {offset} to {offset + lines_returned}."
+        message = f"Read file {display_file_name}, line {offset} to {offset + lines_returned}."
         await plan_editor.update_tool_call_message(tool_call_id, message)
 
-        return {
-            "error_message": "",
-            "tool_call_id": tool_call_id,
-            "message": message,
-            **result
-        }
+        return {"error_message": "", "tool_call_id": tool_call_id, "message": message, "warning": "", **result}
     except Exception as exc:  # pragma: no cover - defensive guard for unexpected filesystem errors
         _LOGGER.error("Read tool failed file_path=%s error=%s", file_path, exc)
 
-        message = f"Failed to read file {file_path}"
+        message = f"Failed to read file {display_file_name}"
         await plan_editor.update_tool_call_message(tool_call_id, message)
 
         return {

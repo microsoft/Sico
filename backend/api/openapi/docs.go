@@ -641,6 +641,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/sico/conversation/batch_summaries": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Conversation"
+                ],
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "conversationId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "turnId",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ListBatchSummariesResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/sico/conversation/chat": {
             "post": {
                 "security": [
@@ -870,6 +921,11 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "name": "agentInstanceId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "conversationId",
                         "in": "query"
                     },
                     {
@@ -3067,7 +3123,7 @@ const docTemplate = `{
         },
         "/api/sico/sandbox/apply": {
             "post": {
-                "description": "Apply for a sandbox of the specified type. One instanceID can have multiple sandboxes.",
+                "description": "Apply for a sandbox supplying the requested OS. One instanceID can have multiple sandboxes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3115,7 +3171,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Sandbox type to apply",
+                        "description": "Sandbox OS to apply",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -3649,37 +3705,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.DeleteSkillResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/sico/skills/details": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "skills"
-                ],
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.GetSkillDetailsResponse"
                         }
                     }
                 }
@@ -4224,6 +4249,9 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "creatorUsername": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -4428,10 +4456,48 @@ const docTemplate = `{
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_conversation.BatchSummaryItem": {
+            "type": "object",
+            "properties": {
+                "batchId": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "endedAt": {
+                    "type": "integer"
+                },
+                "parentConversationId": {
+                    "type": "integer"
+                },
+                "parentTurnId": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "summaryUri": {
+                    "type": "string"
+                },
+                "totalCount": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_conversation.CancelPlanRequest": {
             "type": "object",
             "properties": {
                 "agentInstanceId": {
+                    "type": "integer"
+                },
+                "conversationId": {
                     "type": "integer"
                 },
                 "turnId": {
@@ -4499,6 +4565,9 @@ const docTemplate = `{
             "properties": {
                 "content": {
                     "type": "string"
+                },
+                "conversationId": {
+                    "type": "integer"
                 },
                 "functionContext": {
                     "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.FunctionContext"
@@ -4703,6 +4772,34 @@ const docTemplate = `{
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_conversation.ListBatchSummariesData": {
+            "type": "object",
+            "properties": {
+                "hasMore": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.BatchSummaryItem"
+                    }
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_conversation.ListBatchSummariesResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ListBatchSummariesData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_conversation.ListConversationData": {
             "type": "object",
             "properties": {
@@ -4795,6 +4892,9 @@ const docTemplate = `{
                 },
                 "content": {
                     "type": "string"
+                },
+                "conversationId": {
+                    "type": "integer"
                 },
                 "createdAt": {
                     "type": "integer"
@@ -4901,6 +5001,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCall"
                     }
+                },
+                "updatedAt": {
+                    "type": "integer"
                 }
             }
         },
@@ -4968,22 +5071,47 @@ const docTemplate = `{
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_conversation.TaskRuntimeExecutionInfo": {
+            "type": "object",
+            "properties": {
+                "attempt": {
+                    "type": "integer"
+                },
+                "currentStage": {
+                    "description": "Lifecycle stage of a single task run: plan | workspace | sandbox | execute | upload | release.",
+                    "type": "string"
+                },
+                "latestProgressMessage": {
+                    "type": "string"
+                },
+                "maxAttempts": {
+                    "type": "integer"
+                },
+                "sandboxEndpoint": {
+                    "type": "string"
+                },
+                "sandboxId": {
+                    "type": "string"
+                },
+                "sandboxType": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_conversation.ToolCall": {
             "type": "object",
             "properties": {
-                "batchCalls": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCall"
-                    }
-                },
-                "batchItemIndex": {
-                    "type": "integer"
-                },
                 "deliverables": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolDeliverable"
+                    }
+                },
+                "display": {
+                    "description": "Structured display labels (task_label, sandbox_label, sandbox_label_plural,\nsandbox_ready_label, sandbox_releasing_label, sandbox_release_label,\nenvironment_label, runner_label, batch_subject_singular,\nbatch_subject_plural, ...) sourced from the capability card. The frontend\nshould read these directly instead of pattern-matching ` + "`" + `message` + "`" + `.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
                     }
                 },
                 "executionInfo": {
@@ -4993,10 +5121,13 @@ const docTemplate = `{
                     "description": "message is for frontend display",
                     "type": "string"
                 },
-                "runningList": {
+                "subCallIndex": {
+                    "type": "integer"
+                },
+                "subCalls": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCallRunningListItem"
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCall"
                     }
                 },
                 "toolCallId": {
@@ -5007,39 +5138,11 @@ const docTemplate = `{
                 },
                 "toolName": {
                     "type": "string"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_conversation.ToolCallRunningListItem": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
                 },
-                "status": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolCallRunningListItemStatus"
+                "updatedAt": {
+                    "type": "integer"
                 }
             }
-        },
-        "sico-backend_internal_transport_http_dto_conversation.ToolCallRunningListItemStatus": {
-            "type": "integer",
-            "format": "int32",
-            "enum": [
-                0,
-                1,
-                2,
-                3,
-                4,
-                5
-            ],
-            "x-enum-varnames": [
-                "ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_UNKNOWN",
-                "ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_PENDING",
-                "ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_RUNNING",
-                "ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_DONE",
-                "ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_FAILED",
-                "ToolCallRunningListItemStatus_TOOL_CALL_RUNNING_LIST_ITEM_STATUS_CANCELLED"
-            ]
         },
         "sico-backend_internal_transport_http_dto_conversation.ToolCallStatus": {
             "type": "integer",
@@ -5053,7 +5156,8 @@ const docTemplate = `{
                 5,
                 6,
                 7,
-                8
+                8,
+                9
             ],
             "x-enum-varnames": [
                 "ToolCallStatus_TOOL_CALL_STATUS_UNKNOWN",
@@ -5064,7 +5168,8 @@ const docTemplate = `{
                 "ToolCallStatus_TOOL_CALL_STATUS_FAILED_ANALYZED",
                 "ToolCallStatus_TOOL_CALL_STATUS_RETRY_RUNNING",
                 "ToolCallStatus_TOOL_CALL_STATUS_RETRY_SUCCESSFUL",
-                "ToolCallStatus_TOOL_CALL_STATUS_RETRY_FAILED"
+                "ToolCallStatus_TOOL_CALL_STATUS_RETRY_FAILED",
+                "ToolCallStatus_TOOL_CALL_STATUS_PENDING"
             ]
         },
         "sico-backend_internal_transport_http_dto_conversation.ToolDeliverable": {
@@ -5152,6 +5257,9 @@ const docTemplate = `{
             "properties": {
                 "builtinToolName": {
                     "type": "string"
+                },
+                "taskRuntime": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.TaskRuntimeExecutionInfo"
                 },
                 "toolType": {
                     "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolType"
@@ -7761,31 +7869,12 @@ const docTemplate = `{
             "properties": {
                 "skill": {
                     "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.Skill"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_skill.GetSkillDetailsData": {
-            "type": "object",
-            "properties": {
-                "files": {
+                },
+                "versions": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.SkillFile"
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.SkillVersion"
                     }
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_skill.GetSkillDetailsResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.GetSkillDetailsData"
-                },
-                "msg": {
-                    "type": "string"
                 }
             }
         },
@@ -7840,19 +7929,10 @@ const docTemplate = `{
                 "agentId": {
                     "type": "string"
                 },
-                "assetId": {
-                    "type": "integer"
-                },
                 "createdAt": {
                     "type": "integer"
                 },
-                "creatorUsername": {
-                    "type": "string"
-                },
                 "description": {
-                    "type": "string"
-                },
-                "failReason": {
                     "type": "string"
                 },
                 "id": {
@@ -7864,11 +7944,25 @@ const docTemplate = `{
                 "projectId": {
                     "type": "integer"
                 },
-                "status": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.SkillStatus"
-                },
                 "updatedAt": {
                     "type": "integer"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_skill.SkillAction": {
+            "type": "object",
+            "properties": {
+                "advancedSettings": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -7911,23 +8005,94 @@ const docTemplate = `{
                 "SkillStatus_SKILL_STATUS_FAILED"
             ]
         },
+        "sico-backend_internal_transport_http_dto_skill.SkillVersion": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.SkillAction"
+                    }
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "creatorUsername": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "failReason": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "skillId": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.SkillStatus"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_skill.UpdateSkillData": {
             "type": "object",
             "properties": {
-                "skill": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.Skill"
+                "assetId": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "skillId": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "string"
                 }
             }
         },
         "sico-backend_internal_transport_http_dto_skill.UpdateSkillRequest": {
             "type": "object",
             "required": [
-                "assetId",
+                "currentVersion",
                 "id"
             ],
             "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.SkillAction"
+                    }
+                },
                 "assetId": {
                     "type": "integer"
+                },
+                "currentVersion": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_skill.SkillFile"
+                    }
                 },
                 "id": {
                     "type": "integer"

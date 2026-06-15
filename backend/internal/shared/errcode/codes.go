@@ -97,11 +97,6 @@ const (
 )
 
 const (
-	// Notification (105000-105999)
-	NotificationInvalidReceiver int32 = 105001
-)
-
-const (
 	// LLM (110000-110999)
 	LLMGenerateFailed int32 = 110001
 

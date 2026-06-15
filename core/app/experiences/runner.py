@@ -76,7 +76,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from .llm import HubLLMClient, LLMClient
+from app.llmhubs.structured import HubLLMClient, LLMClient
 from .playbook import Playbook
 from .prompts import PromptManager
 from .roles import Curator, GeneratorOutput, Reflector, extract_cited_bullet_ids

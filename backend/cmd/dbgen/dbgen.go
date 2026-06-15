@@ -75,6 +75,12 @@ type jsonColumn struct {
 type tableSpec struct {
 	name        string
 	jsonColumns []jsonColumn
+	// datatypesJSONColumns lists JSON columns whose Go type must be the
+	// self-serializing gorm datatypes.JSON ([]byte). Unlike jsonColumns these
+	// must NOT receive a `serializer:json` tag: datatypes.JSON already
+	// implements driver.Valuer / sql.Scanner, so layering the JSON serializer on
+	// top would re-encode the raw bytes (base64) and corrupt the column.
+	datatypesJSONColumns []string
 }
 
 // storeSpec groups the tables that belong to one generated query package.
@@ -153,6 +159,21 @@ var stores = []storeSpec{
 		outDir: "internal/store/skill/internal/dal/query",
 		tables: []tableSpec{
 			{name: "t_skill"},
+			{name: "t_skill_version"},
+		},
+	},
+	{
+		outDir:        "internal/store/taskruntime/internal/dal/query",
+		fieldNullable: true,
+		tables: []tableSpec{
+			{
+				name:                 "t_task_runtime_batch",
+				datatypesJSONColumns: []string{"counts_json", "batch_json"},
+			},
+			{
+				name:                 "t_task_runtime_run",
+				datatypesJSONColumns: []string{"run_json", "result_json"},
+			},
 		},
 	},
 }
@@ -191,7 +212,9 @@ func applyMigrations() error {
 	if err != nil {
 		return err
 	}
+
 	log.Printf("migrations applied, version=%d", version)
+
 	return nil
 }
 
@@ -201,6 +224,7 @@ func closeDB(db *gorm.DB) {
 		log.Printf("resolve underlying sql.DB failed: %v", err)
 		return
 	}
+
 	if err := sqlDB.Close(); err != nil {
 		log.Printf("close sql.DB failed: %v", err)
 	}
@@ -215,6 +239,11 @@ func generateStore(db *gorm.DB, root string, s storeSpec) error {
 	})
 	g.UseDB(db)
 	g.WithOpts(gen.FieldType("deleted_at", "gorm.DeletedAt"))
+	if storeUsesDatatypesJSON(s) {
+		// Ensure the generated model package imports gorm.io/datatypes for the
+		// columns retyped as datatypes.JSON below.
+		g.WithImportPkgPath("gorm.io/datatypes")
+	}
 
 	// Derive the import path of the models package that the generator will
 	// emit. Types declared inside that package must be rendered unqualified
@@ -243,20 +272,63 @@ func generateStore(db *gorm.DB, root string, s storeSpec) error {
 				missing = append(missing, fmt.Sprintf("%s.%s", t.name, c.name))
 			}
 		}
+		for _, c := range t.datatypesJSONColumns {
+			if !applied[t.name][c] {
+				missing = append(missing, fmt.Sprintf("%s.%s", t.name, c))
+			}
+		}
 	}
+
 	if len(missing) > 0 {
 		return fmt.Errorf("json column overrides did not match any generated field: %s", strings.Join(missing, ", "))
 	}
 	return nil
 }
 
+// storeUsesDatatypesJSON reports whether any table in s declares a column that
+// must be retyped as datatypes.JSON.
+func storeUsesDatatypesJSON(s storeSpec) bool {
+	for _, t := range s.tables {
+		if len(t.datatypesJSONColumns) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func modelOptions(t tableSpec, modelPkgPath string, hits map[string]bool) []gen.ModelOpt {
-	opts := make([]gen.ModelOpt, 0, len(t.jsonColumns)+1)
+	opts := make([]gen.ModelOpt, 0, len(t.jsonColumns)+2)
 	for _, c := range t.jsonColumns {
 		opts = append(opts, gen.FieldModify(jsonColumnModifier(c, modelPkgPath, hits)))
 	}
+
+	if len(t.datatypesJSONColumns) > 0 {
+		opts = append(opts, gen.FieldModify(datatypesJSONModifier(t.datatypesJSONColumns, hits)))
+	}
 	opts = append(opts, gen.FieldModify(timestampModifier))
+
 	return opts
+}
+
+// datatypesJSONModifier retypes the named columns to the self-serializing
+// gorm datatypes.JSON. It records each applied column in hits so the caller can
+// detect stale configuration, and deliberately leaves the gorm tag untouched
+// (no `serializer:json`) so datatypes.JSON handles its own Scan/Value.
+func datatypesJSONModifier(columns []string, hits map[string]bool) func(gen.Field) gen.Field {
+	want := make(map[string]bool, len(columns))
+	for _, c := range columns {
+		want[c] = true
+	}
+
+	return func(f gen.Field) gen.Field {
+		if !want[f.ColumnName] {
+			return f
+		}
+		hits[f.ColumnName] = true
+		f.Type = "datatypes.JSON"
+		return f
+	}
 }
 
 // jsonColumnModifier retypes a column to match the Go type of c.sample and
@@ -285,6 +357,7 @@ func timestampModifier(f gen.Field) gen.Field {
 	case "updated_at":
 		f.GORMTag.Set("autoUpdateTime", "milli")
 	}
+
 	return f
 }
 
@@ -310,5 +383,6 @@ func renderGoType(t reflect.Type, byValue bool, modelPkgPath string) string {
 	if byValue {
 		return name
 	}
+
 	return "*" + name
 }

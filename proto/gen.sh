@@ -32,6 +32,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Optional extra include path(s) for protoc, e.g. when google/protobuf well-known
+# protos live outside protoc's default search path (Winget Windows install).
+# Multiple paths can be passed via colon-separated string.
+EXTRA_PROTOC_INCLUDE="${EXTRA_PROTOC_INCLUDE:-}"
+_protoc_extra_args=()
+if [[ -n "${EXTRA_PROTOC_INCLUDE}" ]]; then
+  IFS=':' read -ra _extra_paths <<<"${EXTRA_PROTOC_INCLUDE}"
+  for _p in "${_extra_paths[@]}"; do
+    [[ -n "$_p" ]] && _protoc_extra_args+=("-I" "$_p")
+  done
+fi
+
 # ---------------------------------------------------------------------------
 # backend-grpc
 # ---------------------------------------------------------------------------
@@ -64,6 +76,7 @@ run_backend_reverse() {
     "knowledge|knowledge|reverse_rpc"
     "sandbox|sandbox|reverse_rpc"
     "conversation|conversation|reverse_rpc"
+    "taskruntime|taskruntime|reverse_rpc"
   )
 
   _gen_go_grpc "$out_abs" "${targets[@]}"
@@ -86,6 +99,7 @@ _gen_go_grpc() {
       echo "Processing $proto_path -> $full_out_dir"
       protoc \
         -I. \
+        "${_protoc_extra_args[@]}" \
         --go_out=. --go_opt=paths=source_relative \
         --go-grpc_out=. --go-grpc_opt=paths=source_relative \
         "$proto_path"
@@ -164,6 +178,7 @@ _http_process_subdir() {
     echo "Processing ${proto_path}"
     protoc \
       -I . \
+      "${_protoc_extra_args[@]}" \
       --go_out=. --go_opt=paths=source_relative \
       "$proto_path"
     mv -f "${proto_subdir}/${file}.pb.go" "${full_go_out_dir}/${file}.pb.go"
@@ -190,6 +205,7 @@ _http_process_subdir_gen() {
     echo "Processing ${proto_path}"
     protoc \
       -I . \
+      "${_protoc_extra_args[@]}" \
       --go_out=. --go_opt=paths=source_relative \
       "$proto_path"
     mv -f "${proto_subdir}/${file}.pb.go" "${full_move_dir}/${file}.pb.go"
@@ -202,7 +218,7 @@ _http_process_subdir_gen() {
 # ---------------------------------------------------------------------------
 run_core() {
   local python_bin
-  python_bin="$(command -v python || command -v python3 || true)"
+  python_bin="${PYTHON_BIN:-$(command -v python || command -v python3 || true)}"
   if [[ -z "$python_bin" ]]; then
     echo "python or python3 is required to run this script" >&2
     exit 1
@@ -223,6 +239,7 @@ run_core() {
     "knowledge|knowledge|knowledge rpc reverse_rpc"
     "skill|skill|skill rpc"
     "sandbox|sandbox|reverse_rpc"
+    "taskruntime|taskruntime|reverse_rpc"
   )
 
   local target subdir out_subdir files extra_opts full_out_dir file opts

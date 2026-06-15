@@ -46,8 +46,8 @@ Workflow:
                                       verify, close, report).
     3. For tool-calling scenarios, fetch the resulting plan via
        ``GET /api/sico/conversation/plan`` and assert that the expected
-       built-in tools (e.g. ``webfetch``, ``report``, ``sandbox_acquire``,
-       ``run_command``, ``sandbox_release``) were invoked.
+       built-in tools (e.g. ``webfetch``, ``report``, ``run_command``)
+       were invoked.
 
 A non-zero exit status indicates that one of the assertions failed,
 meaning the deployment is not healthy.
@@ -98,7 +98,7 @@ class Health:
             subprocess.run(["bash", "--version"], check=True, capture_output=True)
             self.bash = "bash"
             return
-        except Exception as e:
+        except Exception:
             pass
 
         # where bash
@@ -108,7 +108,7 @@ class Health:
                 raise RuntimeError(f"bash not found at path returned by where: {bash_path}")
             self.bash = bash_path
             return
-        except Exception as e:
+        except Exception:
             pass
 
         raise RuntimeError("bash not found on system")
@@ -275,7 +275,7 @@ class Health:
 
                             elif message_type == 9:
                                 # content = data.set("content", "null")
-                                append_result(f" [plan] ")
+                                append_result(" [plan] ")
                                 # try:
                                 #     content = json.loads(content)
                                 #     append_result(f" [plan:\n{json.dumps(content, indent=2)}] ")
@@ -287,7 +287,7 @@ class Health:
 
                         except json.JSONDecodeError:
                             append_result(" [JSONDecodeError] ")
-                        except Exception as e:
+                        except Exception:
                             append_result(" [error] ")
                     elif event == "keepalive":
                         append_result(" [keepalive] ")
@@ -338,12 +338,8 @@ class Health:
                 raise RuntimeError("Did not receive expected android Edge test result from chat")
         plan = self.get_plan(2, result.turn_id)
         expected = [
-            ("builtinToolName", "sandbox_preview"),
-            ("builtinToolName", "sandbox_acquire"),
             ("builtinToolName", "run_command"),
-            ("builtinToolName", "sandbox_reset"),
             ("builtinToolName", "report"),
-            ("builtinToolName", "sandbox_release"),
         ]
         for key, value in expected:
             if not has_key_value_pair(plan, key, value):

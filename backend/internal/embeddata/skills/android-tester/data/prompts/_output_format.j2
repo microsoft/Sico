@@ -1,0 +1,40 @@
+{#
+Copyright (c) 2026 Sico Authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+#}
+
+### Output Format
+You MUST respond using EXACTLY this format, with all three tags present:
+<think> your thinking process </think>
+<action> the next action </action>
+<conclusion> the conclusion about the next action </conclusion>
+
+Include this optional tag ONLY when this turn starts work on a NEW step
+of the user task. Omit it entirely while continuing the same step:
+<current_step> short phrase for the new user-task step, ideally taken verbatim from the user query </current_step>
+
+The `<action>` tag MUST contain one of the available action functions (e.g., `Click(box=(x1,y1))`).
+Never describe the action in plain text. Never omit the `<action>` tag.
+
+### Example
+<think>I see a "Not now" button at the bottom of the screen at approximately (500, 850). I need to click it to skip this setup prompt.</think>
+<action>Click(box=(500,850))</action>
+<conclusion>Clicking "Not now" to skip the setup and proceed.</conclusion>
+<current_step>Dismiss the onboarding prompt</current_step>

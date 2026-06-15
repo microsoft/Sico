@@ -40,13 +40,20 @@ _MAX_MATCHES = 100
 _MAX_LINE_LENGTH = 2000
 
 
-
 class GrepInput(BaseModel):
     pattern: str = Field(description="The regex pattern to search for in workspace files.")
+    files: list[str] = Field(
+        default_factory=list,
+        description="Optional workspace-relative files or folders to search within. Omit to search the whole workspace.",
+    )
 
 
 async def _grep_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -> dict[str, Any]:
     pattern = str(kwargs.get("pattern", "")).strip()
+    try:
+        files = _normalize_files_arg(kwargs.get("files"))
+    except ValueError as exc:
+        return {"error_message": str(exc), "matches": 0, "output": ""}
     if not pattern:
         _LOGGER.info("Grep tool called with empty pattern")
         return {"error_message": "pattern is required", "matches": 0, "output": ""}
@@ -55,20 +62,21 @@ async def _grep_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -
     if ctx is None:
         return {"error_message": "missing tool context", "matches": 0, "output": ""}
 
-    _LOGGER.info("Grep tool start pattern=%s agent_instance_id=%s", pattern, ctx.agent_instance_id)
+    _LOGGER.info("Grep tool start pattern=%s files=%s agent_instance_id=%s", pattern, files, ctx.agent_instance_id)
 
     plan_editor = ctx.plan_editor
     tool_call_id = await plan_editor.create_tool_call(
-        "Grep", f"Searching for pattern: {pattern}",
+        "Grep",
+        f"Searching for pattern: {pattern}",
         ToolExecutionInfo(
             tool_type=ToolType.BUILTIN,
             builtin_tool_name="grep",
-        )
+        ),
     )
 
     try:
-        result = await asyncio.to_thread(_run_grep, ctx, pattern)
-        await plan_editor.update_tool_call_message(tool_call_id, f"Found {result['matches']} matches.")
+        result = await asyncio.to_thread(_run_grep, ctx, pattern, files)
+        await plan_editor.update_tool_call_message(tool_call_id, f"Searched {pattern}. Found {result['matches']} matches.")
         return {"error_message": "", **result}
     except Exception as exc:
         _LOGGER.error("Grep tool failed pattern=%s error=%s", pattern, exc)
@@ -76,7 +84,7 @@ async def _grep_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -
         return {"error_message": str(exc), "matches": 0, "output": ""}
 
 
-def _run_ripgrep(workspace: Path, pattern: str) -> tuple[int, str, str] | dict[str, Any]:
+def _run_ripgrep(pattern: str, search_targets: list[Path]) -> tuple[int, str, str] | dict[str, Any]:
     args = [
         _RIPGREP_PATH,
         "-nH",
@@ -84,7 +92,7 @@ def _run_ripgrep(workspace: Path, pattern: str) -> tuple[int, str, str] | dict[s
         "--field-match-separator=|",
         "--regexp",
         pattern,
-        str(workspace),
+        *[str(target) for target in search_targets],
     ]
     try:
         result = subprocess.run(args, capture_output=True, text=True, timeout=30, encoding="utf-8")
@@ -144,20 +152,24 @@ def _format_grep_output(
     return "\n".join(output_lines)
 
 
-def _run_grep(ctx: ToolContext, pattern: str) -> dict[str, Any]:
+def _run_grep(ctx: ToolContext, pattern: str, files: list[str] | None = None) -> dict[str, Any]:
     workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id, ctx.username)
     if not workspace.exists():
         return {"matches": 0, "output": "Workspace is empty"}
 
-    rg_result = _run_ripgrep(workspace, pattern)
+    try:
+        search_targets = _resolve_search_targets(workspace, files or [])
+    except ValueError as exc:
+        return {"matches": 0, "output": str(exc)}
+
+    rg_result = _run_ripgrep(pattern, search_targets)
     if isinstance(rg_result, dict):
         return rg_result
     returncode, stdout, stderr = rg_result
 
-    if returncode == 1 or (returncode == 2 and not stdout.strip()):
-        return {"matches": 0, "output": "No matches found"}
-    if returncode not in (0, 2):
-        return {"matches": 0, "output": f"ripgrep error: {stderr.strip()}"}
+    failure = _ripgrep_failure_response(returncode, stdout, stderr)
+    if failure is not None:
+        return failure
 
     has_errors = returncode == 2
     matches = _parse_ripgrep_matches(stdout, workspace)
@@ -180,12 +192,72 @@ def _run_grep(ctx: ToolContext, pattern: str) -> dict[str, Any]:
     return {"matches": len(final_matches), "truncated": truncated, "output": output}
 
 
+def _ripgrep_failure_response(returncode: int, stdout: str, stderr: str) -> dict[str, Any] | None:
+    if returncode == 1 or (returncode == 2 and not stdout.strip()):
+        return {"matches": 0, "output": "No matches found"}
+    if returncode not in (0, 2):
+        return {"matches": 0, "output": f"ripgrep error: {stderr.strip()}"}
+    return None
+
+
+def _normalize_files_arg(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        item = value.strip()
+        return [item] if item else []
+    if not isinstance(value, list):
+        raise ValueError("files must be a list of workspace-relative files or folders")
+
+    files: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError("files must contain only strings")
+        normalized = item.strip()
+        if normalized:
+            files.append(normalized)
+    return files
+
+
+def _resolve_search_targets(workspace: Path, files: list[str]) -> list[Path]:
+    if not files:
+        return [workspace]
+
+    workspace_resolved = workspace.resolve()
+    targets: list[Path] = []
+    seen: set[Path] = set()
+    for file in files:
+        normalized = file.replace("\\", "/").strip()
+        path = Path(normalized)
+        if (
+            not normalized
+            or normalized == "."
+            or normalized.startswith("/")
+            or "//" in normalized
+            or path.is_absolute()
+            or any(part in ("", ".", "..") for part in path.parts)
+        ):
+            raise ValueError(f"files must be workspace-relative paths without traversal: {file}")
+
+        target = (workspace / path).resolve()
+        try:
+            target.relative_to(workspace_resolved)
+        except ValueError as exc:
+            raise ValueError(f"files must stay within the workspace: {file}") from exc
+        if not target.exists():
+            raise ValueError(f"search target not found: {file}")
+        if target not in seen:
+            targets.append(target)
+            seen.add(target)
+    return targets
+
+
 GREP_TOOL = FunctionTool(
     name="grep",
     description=(
-        "Search for a regex pattern across all files in the workspace directory. "
+        "Search for a regex pattern across workspace files, optionally scoped to specific files or folders. "
         "Returns matching lines with file paths and line numbers. "
-        "Use this to find relevant content before reading specific files."
+        "Use files=[...] to avoid broad workspace searches when you know where to look."
     ),
     input_model=GrepInput,
     func=_grep_func,

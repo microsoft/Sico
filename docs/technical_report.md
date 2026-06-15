@@ -1,4 +1,4 @@
-# Sico Technical Report (v0.1)
+# Sico Technical Report (v0.2)
 
 ## Table of Contents
 
@@ -18,11 +18,13 @@
 4. [Core Execution Loop](#4-core-execution-loop)
    - [End-to-End Flow](#41-end-to-end-flow)
    - [Workspace Initialization](#42-workspace-initialization)
-   - [Agent Execution Loop](#43-agent-execution-loop)
-   - [Planning](#44-planning)
-   - [Tool Execution](#45-tool-execution)
-   - [Sandbox: Observable Execution Environments](#46-sandbox-observable-execution-environments)
-   - [Communication Mechanisms](#47-communication-mechanisms)
+   - [Route Classification (Intent Check)](#43-route-classification-intent-check)
+   - [Agent Execution Loop](#44-agent-execution-loop)
+   - [Planning](#45-planning)
+   - [Tool Execution](#46-tool-execution)
+   - [Delegated Task Runtime](#47-delegated-task-runtime)
+   - [Sandbox: Observable Execution Environments](#48-sandbox-observable-execution-environments)
+   - [Communication Mechanisms](#49-communication-mechanisms)
 5. [Evolution Loop](#5-evolution-loop)
    - [Action & Memory/Sense Evolution (Training-Free)](#51-action--memorysense-evolution-training-free)
      - [Data Flow](#511-data-flow)
@@ -82,7 +84,7 @@ A Digital Worker's capabilities improve along **two complementary tracks**, both
      │  <── improved capability ───────────────────│
 ```
 
-Each task execution generates signals about effective strategies, failed steps, and environment responses. Sico routes these signals into **two feedback loops**: a fast, training-free loop that distills them into reusable experience the Digital Worker can retrieve and apply in future executions ([§5.1](#51-action--memorysense-evolution-training-free)), and a slower, training-based loop that converts them into high-quality training data for improving the base model through SFT/RL ([§5.2](#52-cortex-evolution-training-based)). Together, these loops reduce repeated errors in the short term while raising baseline competence over the long term.
+Each task execution generates signals about effective strategies, failed steps, and environment responses. Sico routes these signals into **two feedback loops**: a training-free loop that distills them into reusable experience the Digital Worker can retrieve and apply in future executions ([§5.1](#51-action--memorysense-evolution-training-free)), and a training-based loop that converts them into high-quality training data for improving the base model through SFT/RL ([§5.2](#52-cortex-evolution-training-based)). Together, these loops reduce repeated errors in the short term while raising baseline competence over the long term.
 
 As execution quality improves, the need for repetitive Operator intervention is expected to decrease. Prior human corrections are incorporated into both the worker's strategy selection process and the model improvement pipeline. Over time, Operator judgment continuously shapes worker behavior, while Digital Workers become increasingly capable of handling routine execution with less supervision.
 
@@ -92,48 +94,35 @@ As execution quality improves, the need for repetitive Operator intervention is 
 ## 2. System Architecture
 
 ### 2.1 Service Topology
-Sico separates AI orchestration from data persistence with a protobuf-driven gRPC layer:
+Sico separates user-facing serving, Core orchestration, and delegated execution into clear ownership boundaries. The **Backend** owns HTTP/SSE ingress, authentication, and primary persistence. **Core** owns turn orchestration, workspace state, LLM/tool coordination, and Task Runtime execution. Sandboxes are leased per run only when isolated execution is needed. The static topology diagram shows deployed service boundaries; the runtime topology below simplifies the chat execution path.
 
-![alt text](images/architecture.png)
+![Sico service topology](images/architecture.png)
 
+At runtime, the frontend sends the chat request and receives the SSE stream over HTTP. Deployments may proxy this traffic before Backend, but the simplified diagram treats it as a Frontend-Backend link. Backend invokes Core's `StreamChat` gRPC endpoint to start the turn, while user-visible streaming is decoupled through Kafka and SSE. Core writes platform-owned state through reverse gRPC; [§4.9](#49-communication-mechanisms) expands the exact services. Inside Core, `ChatService` initializes the workspace, routes the request, and runs `ChatAgent`; delegated work enters Task Runtime and may call the LLM Hub or leased sandbox APIs. The detailed per-turn sequence is expanded in [§4.1](#41-end-to-end-flow).
 
-```
-           ┌───────────────┐
-           │   Frontend    │
-           └──────┬────────┘
-                  │ HTTP / SSE
-                  ▼
-           ┌───────────────┐
-           │     Nginx     │    reverse proxy on :8080
-           └──────┬────────┘
-                  │ HTTP
-                  ▼
-           ┌───────────────────┐     gRPC (:50053)      ┌──────────────┐
-           │     Backend       │ ─────────────────────> │     Core     │
-           │   Go / Gin        │                        │   Python     │
-           │   HTTP API, Auth, │  reverse gRPC (:50054) │   asyncio    │
-           │   Persistence     │ <───────────────────── │              │
-           └───────┬───────────┘                        └──────┬───────┘
-                   │                                           │
-     ┌─────────────┼──────────────┐                            │
-     ▼             ▼              ▼                            ▼
-   MySQL        Redis        SeaweedFS                   LLM Providers
-   (GORM)   (cache, lock,   (blob store)            (OpenAI, Anthropic,
-            sandbox pool)                            Gemini, Azure, ...)
-                   │                                          │
-                   ▼                                          │
-                 Kafka <────────  event bus  ─────────────────┘
+```mermaid
+flowchart TB
+Frontend["Frontend"] <-->|"HTTP/SSE"| Backend["Backend"]
+
+subgraph Core["Core"]
+   direction TB
+   ChatService["ChatService"] -->|"init"| Workspace["Workspace"]
+   ChatService -->|"build / run"| ChatAgent["ChatAgent"]
+   ChatAgent -->|"read / write"| Workspace
+   ChatAgent -->|"delegate"| TaskRuntime["Task Runtime"]
+   ChatAgent -->|"LLM"| LLMHub["LLM Hub"]
+   TaskRuntime -->|"LLM"| LLMHub
+end
+
+Backend -->|"gRPC StreamChat"| ChatService
+ChatService -->|"reverse gRPC writes"| Backend
+ChatService -->|"publish"| Kafka["Kafka"]
+Kafka -->|"consume"| Backend
+TaskRuntime -->|"sandbox APIs"| Sandbox["Sandbox"]
+LLMHub -->|"provider APIs"| LLMProviders["LLM Providers"]
 ```
 
-| Service | Language | Framework | Responsibility |
-|---------|----------|-----------|---------------|
-| **Backend** | Go | Gin | HTTP API gateway, JWT/Casbin auth for operator-facing APIs, sandbox-client HMAC auth, data persistence, reverse gRPC server |
-| **Core** | Python | asyncio | Agent orchestration, LLM invocation, tool execution, Experience Learning; no direct MySQL access, with runtime state in workspace files and memory/vector stores |
-| **Frontend** | TypeScript | React / Vite | Operator-facing web client for human users; source code is not currently published in this repository and is distributed separately as a packaged archive |
-
-Sico uses two services because AI orchestration and platform responsibilities evolve at different speeds and benefit from different runtimes. The Backend service is implemented in Go for high-throughput HTTP handling. The Core service is implemented in Python to support rapid iteration across the AI/LLM ecosystem. This separation decouples deployment cycles and allows each service to optimize for its primary workload.
-
-The services communicate through bidirectional gRPC. Backend invokes Core on :50053 to dispatch AI tasks, while Core calls Backend on :50054 through a **reverse gRPC** channel for platform-owned persistence such as conversation messages and knowledge/playbook metadata. Routing primary business writes back through Backend centralizes primary persistence and business validation in one service. Core holds no MySQL credentials and runs no SQL migrations; it remains decoupled from the primary relational data layer while still maintaining execution-time state in local workspaces, plan/conversation files, playbooks, and memory/vector stores.
+The `Workspace` provides shared execution state for a turn. Initialization materializes skills, knowledge, playbooks, and attachments before routing ([§4.2](#42-workspace-initialization)); `ChatAgent` writes plans and intermediate artifacts during reasoning; delegated batches publish outputs under `results/` for later steps to consume. This keeps cross-component coordination file-based and auditable, while platform persistence remains centralized behind Backend reverse gRPC services.
 
 ### 2.2 Protobuf-Driven Development
 
@@ -194,7 +183,7 @@ A Digital Worker is not a single prompt or a model wrapper. It is a structured c
 All LLM traffic flows through the **LLM Hub** (`core/app/llmhubs/`), a unified runtime with adapters for multiple providers:
 
 - **Model resolution**: built-in models are loaded from Core YAML configs; for DB-sourced custom models, Backend resolves the model per request and passes a `RuntimeModelDefinition` (including decrypted secrets) alongside the gRPC call, so the current main path does not require Backend DB models to be globally registered in Core
-- **Adapter pattern**: selects the right adapter based on `provider_template_type` (Azure OpenAI, OpenAI-compatible, Anthropic, Gemini)
+- **Adapter pattern**: selects the right adapter based on `provider_template_type` from six implementations. Four target specific vendor protocols (Azure OpenAI, OpenAI-compatible, Anthropic, Gemini); two are generic, config-driven adapters (HTTP-JSON, HTTP-binary) that let an operator wire an arbitrary HTTP model endpoint into the hub purely through field mapping and JSONPath extraction, with HTTP-binary streaming returned artifacts (images, audio) to blob storage.
 - **ChatClient**: bridges the Microsoft Agent Framework's `BaseChatClient` interface to LLMHub, handling tool calls, image input, streaming, and reasoning effort control
 
 The agent execution loop (`ChatAgent.run_stream()`) builds on top of ChatClient: `ChatClient` handles LLM communication, while `ChatAgent` orchestrates the full execution cycle (workspace setup, tool binding, streaming, and cleanup). ChatAgent leverages the Agent Framework's `FunctionInvocationLayer` for automatic tool call orchestration: the LLM outputs a function call -> the Framework executes it -> the result is injected back -> the LLM continues. This enables multi-step reasoning with tool use in a single streaming pass.
@@ -205,7 +194,7 @@ The agent execution loop (`ChatAgent.run_stream()`) builds on top of ChatClient:
 
 #### Built-in Tools
 
-Core registers a fixed set of 16 built-in tools shared across agents. Role-level differentiation comes from skills, knowledge, playbooks, and runtime context (workspace, plan, sandbox session) rather than from selectively trimming the built-in tool set:
+Core defines a set of 16 built-in tools. Rather than handing the whole set to every turn, the chat agent receives a **route-scoped** subset (`fast` / `inspect` / `task`); role-level differentiation comes from skills, knowledge, playbooks, and runtime context (workspace, plan, sandbox session) on top of that shared definition (the route is decided by the intent check in [§4.3](#43-route-classification-intent-check), and route gating lives in `core/app/biz/chat/router.py`; see [§4.6](#46-tool-execution)):
 
 | Category | Tools |
 |----------|-------|
@@ -213,22 +202,38 @@ Core registers a fixed set of 16 built-in tools shared across agents. Role-level
 | **File I/O** | `read`, `write_file`, `edit`, `grep`, `remove` |
 | **HTTP & web** | `webfetch`, `curl`, `download` |
 | **Document parsing** | `parse_document` |
-| **Compute** | `run_command` |
 | **Planning** | `plan_read`, `plan_write`, `plan_tool_call_message_update` |
 | **Memory** | `search_memory` |
 | **Reporting** | `report` |
+| **Task inspection** | `get_task_detail` |
 
-`curl` is dual-purpose: the agent uses it for arbitrary HTTP fetches and also to drive Sandbox HTTP APIs ([§4.6](#46-sandbox-observable-execution-environments)).
+Durable "real work" (running commands, driving sandboxes, executing skills) is intentionally **not** a built-in tool. It is funneled through a single `delegate` tool added to the `task` route, which hands the work to the Delegated Task Runtime ([§4.7](#47-delegated-task-runtime)). `curl` is dual-purpose: the agent uses it for arbitrary HTTP fetches, while sandbox HTTP APIs are driven by the task runtime, not by the chat agent directly.
 
 #### Skills
 
-A **Skill** is a packaged capability - prompt templates, workflow descriptions, and tool configurations - defined by a `SKILL.md` file with YAML frontmatter. Skills can be scoped to a project (shared by all agents) or to a specific agent.
+A **Skill** is a packaged capability defined by a `SKILL.md` file (YAML frontmatter + Markdown) plus optional runtime scripts and config. Skills can be scoped to a project (shared by all agents) or to a specific agent.
 
-At the start of each chat, workspace initialization copies all relevant skills into the agent's working directory and generates an `index.json`. The skill list is appended to the user message, and the LLM autonomously decides which skills to read and follow based on the task.
+Sico compiles skills **ahead of time** rather than re-interpreting `SKILL.md` at runtime. When a skill is uploaded or updated, the backend calls Core to run the **Skill Resolver** ([§3.2 → Skill Resolver](#skill-resolver-build-time-compilation)), an LLM pass that compiles the human-written skill into two artifacts:
+
+- `resolved/cortex/` : the agent-facing reference files (the `SKILL.md` and any docs/schemas it points to), copied into the workspace for the LLM to read.
+- `resolved/actions.json` : a deterministic, executable action manifest (argv steps with typed parameters and placeholders) that the task runtime executes with **zero LLM calls** at run time.
+
+At the start of each chat, workspace initialization copies the resolved cortex files for all relevant skills into the agent's working directory and generates an `index.json`. The skill list is appended to the user message, and the LLM autonomously decides which skills to read and, when execution is needed, dispatches them through `delegate`.
+
+#### Skill Resolver (build-time compilation)
+
+The Skill Resolver (`core/app/biz/skill/resolver.py`) is what makes skills cheap and reproducible at run time: a skill author writes a normal `SKILL.md`, and the resolver compiles it **once, at upload time**, into the `actions.json` manifest described above. The design has four notable properties:
+
+- **Zero-LLM runtime.** The expensive interpretation (what to run, in what order, with which parameters) happens once during the build-time LLM pass. At run time the task runtime only reads `actions.json` and executes argv steps, so skill execution is deterministic, fast, and auditable.
+- **Structured, validated output.** The resolver emits a Pydantic-validated `ResolvedSkillOutput` (`cortex` + `actions`), where each action carries `infra_requirements` (e.g. `sandbox.android`, `sandbox.windows`), typed `parameters`, and `steps` (`argv` with built-in placeholders like `{workspace_dir}`, `{result_dir}` and sandbox placeholders such as `{sandbox.android}`). Invalid output is retried with the error fed back into the prompt, up to 3 attempts (`_MAX_RESOLVER_ATTEMPTS`); on persistent failure it falls back to a cortex-only skill with no actions.
+- **Incremental re-resolution.** On re-upload the resolver diffs the previous and current skill files (budgeted to `_MAX_TOTAL_DIFF_BYTES`) and passes the diff plus the previous `actions.json` into the prompt, so unchanged skills reuse prior output and changed skills are adapted incrementally instead of recompiled from scratch.
+- **Versioned persistence.** The backend `skill` domain stores each resolution as a new `SkillVersionModel` row, so skill definitions are versioned and a current version is always resolvable.
+
+At run time, `SkillLoader` (`core/app/biz/task_runtime/skill_loader.py`) projects each resolved action into a **CapabilityCard** (name, parameters, infra requirements, visibility). These cards are the shared catalogue that every skill consumer chooses from when turning an instruction into a concrete skill dispatch — whether an LLM planner (e.g. the `general` adapter, the sub-agent loop in [§4.7](#47-delegated-task-runtime)) or a deterministic adapter that matches cards by rule (e.g. the `workbook` adapter).
 
 #### Sandbox Environments
 
-Sandbox capabilities are exposed as HTTP APIs. For the current Android emulator sandbox, `sandbox_acquire` returns `http_api_base_url`; the agent uses the built-in `curl` tool against that URL, so the sandbox runtime only needs to ship its HTTP server, not per-endpoint agent-side wrappers. See [§4.6](#46-sandbox-observable-execution-environments) for details.
+Sandbox capabilities are exposed as HTTP APIs on each sandbox instance. The chat agent never acquires or drives a sandbox directly; instead, when a delegated task declares a `required_sandbox`, the task runtime's `SandboxCoordinator` leases one sandbox for that run and drives its HTTP API (tap, install, reset, …), so the sandbox runtime only needs to ship its HTTP server, not per-endpoint agent-side wrappers. See [§4.7](#47-delegated-task-runtime) and [§4.8](#48-sandbox-observable-execution-environments) for details.
 
 ### 3.3 Memory & Sense: Experience & Contextual Awareness
 
@@ -257,7 +262,7 @@ A Digital Worker needs different kinds of memory at very different time scales. 
                           keyed by (user, agent)
 
    per-task setup   ───►  workspace skills/knowledge ◄──   workspace_init + LLM read
-                          + playbook ([§5.1](#51-action--memorysense-evolution-training-free))
+                          + playbook (§5.1)
 
 ```
 
@@ -267,7 +272,7 @@ Long-term memory is the only memory layer backed by a vector database. It uses [
 
 ```
 chat turn ends
-  └─► _enqueue_memories(user_text, assistant_text)
+  └─► _enqueue_memories(user_message, assistant_message)
         └─► AsyncJobRunner (background worker pool, non-blocking)
               └─► Mem0.add(messages, user_id, agent_id)
                     ├─ extraction LLM: distill atomic facts
@@ -297,6 +302,10 @@ These two are easy to confuse but have **disjoint responsibilities**:
 
 Memory remembers **who the user is and what was said**; the Playbook remembers **how to do this kind of work**.
 
+#### Document parsing: feeding heterogeneous sources into the workspace
+
+Both the **project knowledge** layer and the `parse_document` built-in tool ([§4.6](#46-tool-execution)) share one ingestion path: a `DocExtractor` (`core/app/document/`). The abstract interface (`base.py`) exposes `extract(file_path)` and `extract_from_url(url)`, each returning a `(full_text, summary)` pair; the default `extract_from_url` downloads a SAS/HTTP source to a temp file and delegates to `extract`. The shipped implementation (`MarkitdownDocExtractor`, `markitdown.py`) uses the open-source **MarkItDown** library to convert heterogeneous formats (PDF, Word, Excel, etc.) into Markdown, then runs a single capped LLM call (input truncated to 50K chars, summary ≤1024 tokens) to produce the summary, degrading to an empty summary if that call fails. This is what turns uploaded knowledge bases and ad-hoc attachments into the plain-text workspace files the agent can `read`.
+
 ### 3.4 Three Loops at the Heart of Sico
 
 Cortex, Action, and Memory are the static anatomy of a Digital Worker. What makes the worker *alive* is the way these three layers are wired into **three running loops** - and these loops are the actual core of Sico.
@@ -314,7 +323,7 @@ Cortex, Action, and Memory are the static anatomy of a Digital Worker. What make
 
 The three loops are exactly the operational form of the vision in [§1](#1-vision-symbiotic-intelligence-for-co-evolution):
 
-- **Execution Loop** represents the runtime layer where Digital Workers perform tasks. The Operator specifies the goal, and the Cortex-Action-Memory stack executes the task inside observable Sandboxes. This loop generates structured execution traces, including actions, intermediate states, tool outputs, and environmental feedback.
+- **Execution Loop** represents the runtime layer where Digital Workers perform tasks. The Operator specifies the goal, and the Cortex-Action-Memory stack executes with workspace tools, delegated task-runtime runs, and, when a run declares `required_sandbox`, an observable Sandbox. This loop generates structured execution traces, including actions, intermediate states, tool outputs, and environmental feedback.
 - **Evolution Loop** converts execution traces into reusable capability. Successful strategies and recurring failure patterns are extracted from prior runs and incorporated into the worker's future prompt context. In this way, capability accumulation happens at the platform layer, rather than relying only on model-weight updates.
 - **Evaluation Loop** provides the governance and improvement mechanism. Failure attribution classifies errors into categories such as Task Instruction Issue, Digital Worker (DW) Capability Issue, and Environment Issue. These structured signals help the Operator determine the appropriate correction and provide targeted input for the Evolution Loops.
 
@@ -328,41 +337,97 @@ Chat is where Operator intent meets Digital Worker execution. It coordinates fou
 
 ### 4.1 End-to-End Flow
 
-```
-┌──────────┐  HTTP SSE  ┌──────────┐   gRPC    ┌──────────┐
-│ Frontend │<───────────│ Backend  │──────────>│   Core   │──────> LLM Provider
-│ (React)  │            │ (Go/Gin) │           │ (Python) │
-└──────────┘            └──────────┘           └──────────┘
-     ▲                       ▲                      │
-     │                       │    reverse gRPC      │ (persist messages)
-     │                       │◄─────────────────────│
-     │                       │                      │
-     │                       │      Kafka           │ (push chat responses)
-     │        SSE events     │◄─────────────────────│
-     │◄──────────────────────│
+```mermaid
+sequenceDiagram
+   autonumber
+   actor FE as Frontend
+   participant BE as Backend
+   box Core · Chat Orchestration
+      participant CS as ChatService
+      participant RT as router.py<br/>hard_guard_route · llm_intent_check
+      participant WS as init_workspace
+      participant CA as ChatAgent
+   end
+   box Core · Task Runtime
+      participant TM as TaskManager
+      participant SUB as Submitter
+      participant SCH as BatchScheduler
+      participant RC as RunCoordinator
+      participant SC as SandboxCoordinator
+      participant EX as Executors<br/>Tool/Skill/SubAgent
+   end
+   participant SBX as Sandbox
+   participant LLM as LLM Hub
+   participant KAFKA as Kafka
+
+   FE->>BE: HTTP chat request + SSE
+   BE->>CS: gRPC StreamChat
+
+   CS->>WS: init_workspace<br/>(skills · knowledge · playbooks)
+   CS->>RT: route turn
+   opt hard_guard_route = UNSPECIFIED
+      RT->>LLM: llm_intent_check
+      LLM-->>RT: FAST / INSPECT / TASK
+   end
+   RT-->>CS: route + tools_for_route
+   CS->>CA: run_stream
+
+   loop reasoning · tool calls
+      CA->>LLM: chat completions (stream)
+      LLM-->>CA: text/tool-call chunks
+      CA->>WS: read/write plan.json · files
+      CA->>KAFKA: publish chunks
+      KAFKA-->>BE: consume chunks
+      BE-->>FE: SSE events
+   end
+
+   opt durable work (delegate)
+      CA->>TM: submit_prepared(batch)
+      TM->>SUB: submit
+      SUB->>SCH: run
+      SCH->>RC: execute(run)
+      opt required_sandbox
+         RC->>SC: acquire
+         SC->>SBX: lease · reset (stores SandboxLeaseRef)
+      end
+      RC->>EX: dispatch (DispatchRouter)
+      EX->>WS: read inputs · write results/
+      opt required_sandbox
+         EX->>SBX: drive sandbox HTTP API using leased endpoint
+      end
+      opt sub_agent
+         EX->>LLM: bounded structured calls
+      end
+      EX-->>RC: TaskResult
+      opt sandbox leased
+         SC->>SBX: release
+      end
+      RC-->>SCH: terminal state
+      SCH-->>SUB: results
+      SUB-->>TM: BatchResult
+      TM-->>CA: BatchResult
+   end
+
+   CS->>KAFKA: publish END event
+   KAFKA-->>BE: consume final event
+   BE-->>FE: SSE final event
 ```
 
-```
-1. Frontend sends a chat request to Backend via HTTP.
-2. Backend opens an SSE stream and forwards the request to Core via gRPC.
-3. Core assembles the execution context (workspace initialization):
-   - Skills, knowledge bases, recent history, learned strategies (Playbook), and attachments
-     are materialized into a local workspace so the agent can reference them during execution.
-4. Core composes the system prompt and user message, then builds a ChatAgent with the
-   appropriate tools and LLM client.
-5. The agent enters its execution loop: reasoning, calling tools, and streaming incremental
-   results back through Kafka → Backend → SSE → Frontend.
-   - Assistant text and plan updates are persisted to Backend via reverse gRPC. Tool calls
-     and tool results are recorded in structured logs and in the turn's `conversation.json`
-     workspace file, rather than as separate persisted messages.
-   - A periodic keepalive prevents connection timeouts during long tool executions.
-6. On completion, the agent cleans up resources (sandboxes, compute pods, plan state)
-   and triggers the Experience Learning pipeline asynchronously.
-```
+1. Frontend sends the chat request to Backend over HTTP and keeps an SSE stream open for user-visible updates.
+2. Backend forwards the turn to Core through `StreamChat`; the response stream itself remains decoupled through Kafka and SSE.
+3. `ChatService` initializes the workspace before routing, materializing skills, knowledge, Playbook snapshots, and attachments so every route starts with the same execution context.
+4. `ChatService` asks the router to classify the turn. `hard_guard_route` handles obvious cases; otherwise `llm_intent_check` calls the LLM Hub and returns `FAST`, `INSPECT`, or `TASK` plus the route-scoped tool set.
+5. `ChatService` starts `ChatAgent.run_stream()`. During the main reasoning loop, `ChatAgent` streams through the LLM Hub, reads and writes workspace files such as `plan.json`, and publishes chunks to Kafka for Backend to deliver as SSE events.
+6. If the agent calls `delegate`, durable work enters Task Runtime. `TaskManager`, `Submitter`, `BatchScheduler`, and `RunCoordinator` claim and execute each run; `SandboxCoordinator` leases and releases a sandbox when required; executors read inputs and write outputs under `results/`.
+7. When execution reaches a terminal state, Core publishes the final event through Kafka for SSE delivery, persists platform-owned state through reverse gRPC, then performs non-blocking cleanup and background work such as sandbox release, plan cleanup, Mem0 memory write, and Experience Learning ingestion.
 
 ### 4.2 Workspace Initialization
 
-Before the agent begins reasoning, `init_workspace()` assembles the full execution context on the filesystem:
+`init_workspace()` runs at the **start of every turn** (before routing and before the agent
+reasons) and refreshes a workspace keyed by `(agent_instance_id, user_id)`, not by turn. Each
+turn it clears and re-materializes reusable context (skills, knowledge, playbooks), clears the
+workspace `history/` scratch directory, and retains attachments plus prior delegated outputs
+across turns:
 
 ```
 agent_instance/{agent_instance_id}/user/{user_id}/
@@ -370,35 +435,66 @@ agent_instance/{agent_instance_id}/user/{user_id}/
     {turn_id}/
       plan.json              # Plan state (created during execution)
       conversation.json      # Full turn transcript (written after execution)
-  workspace/
-    attachments/
+  workspace/                 # keyed by (agent_instance_id, user_id); refreshed each turn
+    attachments/             # retained across turns
       {file_name}            # Downloaded from SAS URLs
       {file_name}_url.txt    # Original URL reference
-    history/
-      {turn_id}/             # Last 3 turns (plan.json + conversation.json)
-    knowledge/
+      index.json             # [{name, path, source_turn_id}, ...]
+    knowledge/               # cleared + re-copied each turn
       {doc_id}/ or {link_id}/
       index.json
-    output/                  # Agent-generated reports and artifacts
-    playbooks/
+    playbooks/               # cleared + re-copied each turn (if Experience Learning enabled)
       {section_name}.md      # Rendered from Playbook bullets
-    skills/
+    skills/                  # cleared + re-copied each turn
       {skill_id}/SKILL.md    # Copied from project + agent skill stores
-      index.json             # [{id, name, description}, ...]
+      index.json             # [{id, name, description, actions}, ...]
+    results/                 # retained across turns; outputs of the `delegate` task tool
+      {batch_id}/            # run records (status, payloads)
+        artifacts/           # files produced by the runs
+    case_sources/            # retained across turns
+      parsed_documents/      # archived workbook / parsed-document manifests (*.json + *.jsonl)
 ```
 
-**Skills injection**: The skill index is appended to the user message so the LLM sees what capabilities are available. The LLM autonomously decides which skills to read (via the `read` tool) and follow.
+**Skills injection**: The skills section, capability cards rendered from each skill's resolved
+actions and backed by `skills/index.json`, is appended to the user message so the LLM sees what
+capabilities are available. The LLM autonomously decides which skills to read (via the `read`
+tool) and follow.
 
-**Playbook injection**: If Experience Learning is enabled, previously learned strategies are rendered as `.md` files in the workspace ([§5.1.3](#513-dual-feedback-paths)).
+**Playbook injection**: If Experience Learning is enabled, previously learned strategies are
+rendered as `.md` files in the workspace ([§5.1.3](#513-dual-feedback-paths)).
 
-### 4.3 Agent Execution Loop
+**Recent conversation history**: The last 3 turns of text are *not* read from `workspace/history/`
+by the agent. `init_workspace()` clears that directory in the current implementation; prompt
+history is loaded directly from the persisted turn store at prompt-build time
+(`_load_recent_history` → `CHAT_FS.read_conversation`) and prepended to the prompt.
+
+### 4.3 Route Classification (Intent Check)
+
+After the workspace is assembled but before the `ChatAgent` is built, Core decides **which route** the turn takes. The route determines the tool surface the agent is given (`fast` / `inspect` / `task`; see [§4.6](#46-tool-execution)), so misrouting either starves a real task of the `delegate` tool or hands a simple greeting an oversized toolset. Routing is two-stage and lives in `core/app/biz/chat/router.py`:
+
+**Stage 1: hard guard (cheap heuristic).** `hard_guard_route(user_prompt, has_attachments)` is a pure keyword + attachment check that runs first and costs no LLM call:
+
+| Signal | Route |
+|--------|-------|
+| Empty prompt with no attachments | `FAST` (nothing to act on) |
+| Task keywords (`execute`, `run all`, `batch`, …) | `TASK` |
+| Short greeting / thanks (`hello`, `hi`, `hey`, `thanks`; ≤24 chars, no attachments) | `FAST` |
+| Anything else (including an empty prompt with attachments) | `UNSPECIFIED` (defer to stage 2) |
+
+A confident hard-guard hit (`FAST` or `TASK`) is used directly with `confidence = 1.0` and **skips the LLM intent check entirely**, keeping common cases (a greeting, an obvious batch request) off the critical path.
+
+**Stage 2: LLM intent check.** Only when the hard guard returns `UNSPECIFIED` does Core call `llm_intent_check`, a single-round LLM classifier with **structured output** (`ChatIntentCheckerOutput { route, confidence, reason }`). It is fed rich context so the decision reflects what the turn can actually do: the user prompt and attachments, the available task adapters and direct tools, the workspace skills section, prior conversation, and prior rerun / parsed-workbook sources.
+
+**Defensive default.** Routing must never block a turn. Any failure in the LLM path (non-zero invocation, empty response, JSON parse error, or schema-validation failure) falls back to `route = TASK, confidence = 0.0`. The bias is deliberate: when unsure, expose the **fuller** `task` toolset rather than risk withholding `delegate` from genuine work. The chosen route is logged as `chat_route_decided` (with confidence and reason) for observability.
+
+### 4.4 Agent Execution Loop
 
 The agent loop is built on the **Microsoft Agent Framework**. Two key abstractions divide responsibility:
 
 | Component | Role |
 |-----------|------|
 | **ChatClient** | LLM communication layer to bridge Agent Framework's `BaseChatClient` to LLMHub, and to handle tool call/result serialization, image input, streaming, reasoning effort control. |
-| **ChatAgent** | Execution orchestrator to prepare messages, run the streaming loop, and manage text buffering, sandbox lifecycle, plan finalization, and cleanup. |
+| **ChatAgent** | Execution orchestrator to prepare messages, run the streaming loop, and manage text buffering, plan finalization, and cleanup. |
 
 `ChatAgent.run_stream()` drives the main loop:
 
@@ -406,7 +502,7 @@ The agent loop is built on the **Microsoft Agent Framework**. Two key abstractio
 prepared_messages = system_prompt + last_3_turns_history + user_message
 
 async for update in client.get_response(prepared_messages, stream=True, options={
-    tools:                    BUILTIN_TOOLS + SANDBOX_LIFECYCLE_TOOLS,
+    tools:                    route_tools,   # per-route built-ins + delegate_* adapter tools
     tool_choice:              "auto",
     allow_multiple_tool_calls: True,     # parallel tool execution
     reasoning.effort:         "high",    # extended thinking
@@ -414,7 +510,7 @@ async for update in client.get_response(prepared_messages, stream=True, options=
     ├── Check plan cancellation (every 2 seconds via marker file)
     ├── If text update -> buffer (flush at 32 chars or before non-text content)
     ├── If tool call / tool result -> log + flush buffered text (not forwarded to client)
-    └── Text / plan / error updates -> response_queue -> Kafka + Redis + reverse gRPC
+   └── Text / plan / error updates -> response_queue -> reverse gRPC + Redis cache + Kafka
 ```
 
 The Agent Framework's `FunctionInvocationLayer` automates the tool call cycle: when the LLM emits a `function_call`, the Framework executes the corresponding tool, injects the `function_result` back into the conversation, and lets the LLM continue. This loop repeats until the LLM produces a final text response or hits `max_iterations`.
@@ -423,7 +519,7 @@ The Agent Framework's `FunctionInvocationLayer` automates the tool call cycle: w
 
 **Retry**: The agent retries once on failure (`max_attempts = 2`).
 
-### 4.4 Planning
+### 4.5 Planning
 
 Planning is implemented through **autonomous LLM tool calls**, not hard-coded workflows. The LLM decides when to create, read, and update plans during execution.
 
@@ -461,54 +557,137 @@ The LLM-facing `plan_write` schema only accepts the first five statuses (`pendin
 
 **Frontend interaction**: Each plan update flows through `PlanEditor.notify_plan_updated()` -> `ChatService` -> PLAN-type `ChatResponse` -> Kafka -> SSE -> Frontend renders progress. Frontend can also poll Backend's `GetPlan` HTTP API (which proxies to Core via gRPC) for the full plan state.
 
-### 4.5 Tool Execution
+### 4.6 Tool Execution
 
-Tools are organized into three categories and injected into the agent at startup:
+Tools are organized into three categories. The built-in set is **route-scoped**: `tools_for_route` (`core/app/biz/chat/router.py`) gives the `fast` route no tools, the `inspect` route a read-only subset, and the `task` route the full set plus the `delegate` tool:
 
 | Category | Tools | Registration |
 |----------|-------|-------------|
-| **Built-in** | `context`, `plan_read`, `plan_write`, `plan_tool_call_message_update`, `read`, `grep`, `write_file`, `edit`, `remove`, `report`, `webfetch`, `curl`, `run_command`, `parse_document`, `download`, `search_memory` | `BUILTIN_TOOLS` list |
-| **Sandbox lifecycle** | `sandbox_preview`, `sandbox_acquire`, `sandbox_release`, `sandbox_reset` | `SANDBOX_LIFECYCLE_TOOLS` list |
-| **Sandbox actions** | Driven by the built-in `curl` tool against the sandbox's HTTP API (e.g. `apps/install-url`, `input/tap`) | No per-endpoint registration: the agent invokes `curl` with `http_api_base_url` |
+| **Built-in** | `context`, `plan_read`, `plan_write`, `plan_tool_call_message_update`, `read`, `grep`, `write_file`, `edit`, `remove`, `report`, `webfetch`, `curl`, `parse_document`, `download`, `search_memory`, `get_task_detail` | `BUILTIN_TOOLS` list, exposed per route by `tools_for_route` |
+| **Task delegation** | `delegate` (the `kind` argument selects the adapter, e.g. `general`, `workbook`) | `build_adapter_tools(adapters)` (TASK route only) |
+| **Sandbox actions** | Performed per task run inside the task runtime, not by agent-side tools | Owned by `SandboxCoordinator` (see [§4.7](#47-delegated-task-runtime)) |
 
-Every tool receives a `ToolContext` via `function_invocation_kwargs`, providing access to the current user, agent instance, plan editor, and sandbox session state.
+Every tool receives a `ToolContext` via `function_invocation_kwargs`, providing access to the current user, agent instance, and plan editor.
 
-**Sandbox session tracking**: `SandboxSessionState` wraps the acquire/release tools, tracks which Sandboxes the agent has leased, and ensures all are released in the `finally` block - even if the agent crashes or is cancelled.
+**Sandbox leasing**: sandbox reserve / acquire / reset / release is owned by the task runtime's `SandboxCoordinator`, which leases one sandbox per task run that declares a `required_sandbox`, publishes the `ACQUIRED_SANDBOX` deliverable card, and releases the lease when the run finishes - even if it fails or is cancelled ([§4.7](#47-delegated-task-runtime)).
 
-### 4.6 Sandbox: Observable Execution Environments
+### 4.7 Delegated Task Runtime
+
+The built-in tools in [§4.6](#46-tool-execution) let the chat agent read, edit, and report on its workspace, but they deliberately stop short of durable side-effecting work: running commands, executing skills, and driving sandboxes. That work is delegated to a separate **Task Runtime**, reached through a single `delegate` tool on the `task` route. This keeps the chat agent's tool surface small and observable while giving "real work" its own scheduled, retried, crash-recoverable execution layer.
+
+#### Delegation Flow
+
+```
+chat agent (task route)
+   │  delegate(kind, options_json)
+   ▼
+Adapter  (general | workbook)            core/app/biz/chat/adapters/
+   │  build_tasks() → PreparedTaskBatch (one or more TaskSpec)
+   ▼
+TaskManager.submit_prepared()            core/app/biz/task_runtime/manager.py
+   │  Submitter: plan sandboxes, create batch + per-run records
+   ▼
+Scheduler → RunCoordinator (per run)
+   │  claim (fencing token) → acquire sandbox → execute → write result → release
+   ▼
+DispatchRouter → executor by kind:
+   ├── tool       (echo, file_convert, run_command via a command backend)
+   ├── skill      (execute resolved actions.json, zero LLM)
+   └── sub_agent  (bounded LLM loop over an allow-listed capability set)
+   │
+   ▼  BatchResult (per-run statuses + summaries) returned synchronously to delegate
+```
+
+The chat coroutine **awaits** the `delegate` call: it suspends until every run in the batch reaches a terminal state, then receives the aggregated payload as the tool result. The task runs themselves execute as separate asyncio tasks, with progress streamed back onto the plan while the chat agent waits.
+
+#### Adapters
+
+`delegate` exposes one tool whose `kind` argument is a closed `Literal` over the registered adapters (`build_default_adapters` currently registers `general` and `workbook`); the `options_json` argument is a JSON **string** that decodes to that adapter's Pydantic options schema. Each adapter turns intent into a concrete `PreparedTaskBatch`:
+
+- **`general`**: takes natural-language `instructions` and runs a single planner LLM call that maps each instruction to a dispatch (`tool`, `skill`, or `sub_agent`), choosing from the CapabilityCards exposed by resolved skills ([§3.2 → Skill Resolver](#skill-resolver-build-time-compilation)).
+- **`workbook`**: extracts rows from a workbook (xlsx/csv/JSONL) and expands each case into a `TaskSpec` stamped with a concrete skill dispatch, used for structured batch execution such as Android test suites.
+
+#### Sub-Agent Execution
+
+The `sub_agent` dispatch is a **bounded, sandboxed LLM loop** (`core/app/biz/task_runtime/executors/sub_agent.py`). Each step makes one structured-output LLM call that either calls a capability or returns a final answer; the loop is capped by `max_steps` (default `DEFAULT_MAX_STEPS = 12`) and may only call capabilities on its dispatch's allow-list. This gives a delegated task its own constrained reasoning agent without exposing arbitrary tools or unbounded iteration.
+
+#### Execution Backends
+
+The task runtime separates **what** is being executed from **where** command-like work runs:
+
+| Axis | Choices | Meaning |
+|------|---------|---------|
+| **Dispatch kind** | `tool`, `skill`, `sub_agent` | The semantic unit of work selected by an adapter or sub-agent planner. |
+| **Command backend** | `local`, `docker`, `k8s` | The physical execution environment for command-like work. |
+
+This matters because `run_command` is **not** exposed as a chat built-in tool. It is a task-runtime tool selected only through delegated planning and executed by `ToolExecutor` through the configured `CommandBackend`. The runtime tool catalog currently includes:
+
+| Runtime tool | Behavior |
+|--------------|----------|
+| `run_command` | Executes an exact shell command from `args.command` through the configured command backend. |
+| `file_convert` | Converts workspace-relative Excel `.xlsx` / `.xlsm` files to CSV artifacts. |
+| `echo` | Emits a literal message, mainly for smoke tests and placeholder runs. |
+
+Only `run_command` is lowered to a `CommandSpec` and sent through the `CommandBackend`; `echo` and `file_convert` run in process inside `ToolExecutor`.
+
+Skill execution uses the same backend axis: a resolved skill action is lowered to argv steps from `resolved/actions.json`, then `SkillExecutor` runs those steps through the configured `CommandBackend`. A `sub_agent` does not get arbitrary shell access; it can only call capabilities on its allow-list, and capability calls are bridged back to the same tool / skill executors.
+
+`CommandBackend` selection is deployment-driven:
+
+| Backend | How it runs | Isolation and storage notes |
+|---------|-------------|-----------------------------|
+| `local` | Runs commands as child processes on the Core host. | No process/container isolation; the workspace is the host directory. This is the zero-config default for direct local development. |
+| `docker` | Runs each command in a throwaway `docker run --rm` container with bind mounts. | Docker is opt-in via `TASK_RUNTIME_BACKEND=docker`; it is never auto-selected just because Docker is installed. |
+| `k8s` | Runs commands in a per-run Kubernetes sandbox pod (`ensure -> exec -> delete`). | Auto-selected when Core is running in-cluster unless `TASK_RUNTIME_BACKEND` overrides it. |
+
+For container-style backends (`docker` / `k8s`), the shared workspace is mounted read-only for command execution, and durable outputs should be written under `$SICO_RESULT_DIR`; the runtime then collects and publishes those files as artifacts. This command backend mechanism is distinct from Android emulator sandbox leasing: Android / GUI sandboxes are acquired only for runs that declare a `required_sandbox`, while command backends decide where shell commands and resolved skill steps execute.
+
+#### Durability: State Machine, Fencing, and Recovery
+
+Runs are not fire-and-forget coroutines; they are persisted records governed by an explicit state machine (`core/app/biz/task_runtime/state_machine.py`):
+
+- **States**: runs move `QUEUED → RUNNING →` a terminal state (`COMPLETED`, `FAILED`, `CANCELLED`, `TIMED_OUT`, `BLOCKED`); a batch can settle as `PARTIAL` when runs have mixed outcomes. Only retryable-terminal runs may reopen to `QUEUED`, guarded by compare-and-set.
+- **Fencing tokens**: `claim_run` returns a token that `write_result` must present, so a stale worker cannot overwrite a run that was reclaimed after a crash or timeout.
+- **Idempotency**: batch/run creation is keyed by an idempotency key, so a retried submission does not duplicate work.
+- **Recovery**: a `StaleReconciler` reopens or fails runs orphaned by a crashed worker.
+
+#### Persistence and Sandbox Leasing
+
+The task runtime owns no MySQL connection of its own. It persists batch/run state, claims, results, and progress through a dedicated **reverse gRPC** service, `ReverseTaskRuntimeService` ([§4.9](#49-communication-mechanisms)), backed in production by `DbRunStore` (with `FileRunStore` for tests). Sandbox leasing follows the same pattern: `SandboxCoordinator` reserves, acquires, resets, and releases sandboxes per run via the backend's reverse sandbox service, and guarantees release on every terminal outcome ([§4.8](#48-sandbox-observable-execution-environments)).
+
+### 4.8 Sandbox: Observable Execution Environments
 
 A Sandbox is an isolated, observable environment where Digital Workers execute real operations - mobile app testing, Windows automation, or general compute tasks.
 
 #### Sandbox Types
 
-Currently Sico ships the **Android emulator** sandbox (MuMu Player-based, ADB + HTTP API) for mobile app automation. The sandbox subsystem is designed to be extensible - additional runtime types can be added by implementing a provider adapter and exposing an HTTP control API; the agent reaches the current Android emulator sandbox through the same `curl` + `http_api_base_url` convention without new agent-side tool code.
+Currently Sico ships the **Android emulator** sandbox (MuMu Player-based, ADB + HTTP API) for mobile app automation. The sandbox subsystem is designed to be extensible - additional runtime types can be added by implementing a provider adapter and exposing an HTTP control API; the task runtime reaches each sandbox through its `http_api_base_url` without new agent-side tool code.
 
 #### Lifecycle
 
 ```
-  Assign (Web Client)          Preview (Agent)          Acquire (Agent)
-  ─────────────────          ─────────────────         ─────────────────
-  Admin assigns sandbox       Agent inspects            Agent leases sandbox
-  instances to an agent       available sandboxes       for actual use
-  instance via Redis          without occupying them    (marks as in-use)
-  lease pool
+  Assign (Web Client)          Reserve + Acquire            Reset
+  ─────────────────          ──────────────────           ──────────
+  Admin assigns sandbox       Task runtime leases one      Soft-reset the
+  instances to an agent       sandbox per task run that    environment before
+  instance via a Redis        declares required_sandbox    the run executes
+  lease pool                  (SandboxCoordinator)
 
-  Use (Agent)                  Reset (Agent)            Release (Agent)
-  ──────────                   ──────────               ──────────────
-  Drive via `curl` against     Soft-reset environment   Return to pool
-  the sandbox HTTP API         (preserves lease)        (marks as available)
-  (tap, swipe, install, ...)
+  Use                          Release
+  ──────────                   ──────────────
+  The run drives the sandbox   Lease returned to the pool
+  HTTP API (tap, install, …)   when the run finishes
 ```
 
-**Automatic cleanup**: The `finally` block of `ChatAgent.run_stream()` ensures all sandboxes are released whether the agent exits normally or abnormally.
+**Automatic cleanup**: `SandboxCoordinator` releases each run's lease when the run reaches a terminal state - with retries (`release`), cross-instance fallback (`release_stale`), and bulk cleanup (`release_many`) - so sandboxes are never leaked even on failure or cancellation.
 
-#### Driving Sandboxes from the Agent
+#### Driving Sandboxes
 
-Sandbox capabilities are exposed as HTTP endpoints on each sandbox instance, not as a per-endpoint set of agent-side `FunctionTool`s. The flow is:
+Sandbox capabilities are exposed as HTTP endpoints on each sandbox instance, not as a per-endpoint set of agent-side `FunctionTool`s. The flow is owned end-to-end by the task runtime ([§4.7](#47-delegated-task-runtime)):
 
-1. `sandbox_acquire` returns an `http_api_base_url` for the leased sandbox.
-2. The agent calls the built-in `curl` tool against that base URL (e.g. `POST /input/tap`, `POST /apps/install-url`) to perform actions.
-3. Long-running or large-payload calls share the same retry / proxy infrastructure used by lifecycle tools (`HttpToolClient`, AIO reverse-gRPC proxy).
+1. The chat agent delegates a task (the `delegate` tool with `kind="general"` or `kind="workbook"`) whose spec declares a `required_sandbox`.
+2. `SandboxCoordinator` reserves, acquires, and resets one sandbox for that run and exposes its `http_api_base_url`.
+3. The run drives the sandbox HTTP API (e.g. `POST /input/tap`, `POST /apps/install-url`) and the coordinator releases the lease when the run completes.
 
 This keeps the agent-facing tool surface small and uniform across sandbox types: adding a new sandbox runtime requires implementing its HTTP API, not generating a new family of tool wrappers. A typed, per-endpoint generator (OpenAPI → `FunctionTool`) is on the roadmap but not part of the current release.
 
@@ -520,19 +699,19 @@ Sandboxes provide operator-facing observability during execution:
 - **Optional screenshots at key nodes**: actions can attach visual state when screenshot capture is enabled and available
 - **Structured operation traces**: tool calls, tool results, plan state, and available observations are recorded for audit and learning
 
-### 4.7 Communication Mechanisms
+### 4.9 Communication Mechanisms
 
 Four mechanisms work in concert during a single chat turn:
 
 **gRPC (Backend -> Core, :50053)**: `StreamChat` accepts the `ChatRequest` and returns immediately with an empty `ChatDirectResponse`. This is intentionally **not** a server-streaming RPC - the actual response stream is decoupled via Kafka.
 
-**Reverse gRPC (Core -> Backend, :50054)**: Core persists conversation messages, plan updates, and other platform-owned writes by calling reverse services such as `ReverseConversationService.create_message()`. Tool-call and tool-result events are not pushed through this channel; they live in structured logs and the turn's `conversation.json` workspace file. The reverse services (`ReverseConversationService`, `ReverseKnowledgeService`, `ReverseLLMHubService`, `ReverseSandboxService`) are singletons; each is bound at Core startup to a `grpc.insecure_channel` opened against `REVERSE_GRPC_ADDRESS`.
+**Reverse gRPC (Core -> Backend, :50054)**: Core persists conversation messages, plan updates, task-runtime batch/run state, and other platform-owned writes by calling reverse services such as `ReverseConversationService.create_message()`. Tool-call and tool-result events are not pushed through this channel; they live in structured logs and the turn's `conversation.json` workspace file. The Backend's reverse gRPC server registers four services (`ReverseConversationRPC`, `ReverseKnowledgeRPC`, `ReverseSandboxRPC`, `ReverseTaskRuntimeRPC`); on the Core side these are exposed as singletons, each bound at startup to a `grpc.insecure_channel` opened against `REVERSE_GRPC_ADDRESS`. (A `ReverseLLMHubService` client stub also exists but is not yet wired into the Backend server.)
 
 **Kafka event bus (Core -> Backend)**: Each response chunk is wrapped in a `TopicMessage` with a sequence number and published to the `core-backend` Kafka topic. Backend subscribes, buffers messages by `(conversationId, turnId)`, and flushes in sequence order (tolerating gaps up to `GAP_MAX = 5` before force-flushing). Internal messages (`is_internal`) are filtered out - only user-visible content reaches the frontend.
 
 **SSE (Backend -> Frontend)**: Backend maintains a `ChatConnection` per active chat turn, holding an ordered buffer and a `sender`. On each Kafka flush, messages are serialized as `ChatStreamResponse` JSON and pushed via SSE. A keepalive (sent by Core every 5 seconds) prevents connection timeout during long tool executions.
 
-**Reconnection recovery**: In-progress responses are cached in Redis (`ongoing-chat:conversation:{id}:turn:{turnId}`, TTL 3 days). If a client disconnects and reconnects, the Backend replays cached messages before resuming the live stream.
+**Reconnection recovery**: Core caches each in-progress response in Redis (`ongoing-chat:conversation:{id}:turn:{turnId}`, TTL 3 days) before publishing it to Kafka. If a client disconnects and reconnects while the turn is still active, the Backend replays cached messages before resuming the live stream. On normal completion, Core deletes the ongoing-chat cache keys.
 
 ---
 
@@ -707,7 +886,7 @@ Sico's architecture is designed around a single principle: **capability should c
 │                      ├─ Tools + Skills (curated Action)       │
 │                      ├─ Knowledge + Memory & Sense            │
 │                      ├─ Library enrichment <───────────────┐  │
-│                      ├─ Execute in Sandboxes (observable)  │  │
+│                      ├─ Execute with Sandboxes when needed │  │
 │                      ├─ On failure -> real-time exp <───┐  │  │
 │                      ├─ Stream results via Kafka -> SSE │  │  │
 │                      ├─ Persist via reverse gRPC        │  │  │
@@ -722,7 +901,7 @@ Every component serves this loop:
 - **Reverse gRPC** keeps Core decoupled from primary relational persistence, so execution can scale without Core owning MySQL credentials or schema migrations.
 - **LLM Hub** makes the Cortex provider-agnostic, so the best model for each task can be selected without code changes.
 - **Skills, Knowledge, Playbooks, and runtime context** differentiate roles on top of a shared built-in tool set, so Digital Workers are specialized without fragmenting the core action surface.
-- **Sandboxes** provide isolated, observable execution, so work is reproducible and auditable.
+- **Sandboxes** provide isolated, observable execution for runs that require external environments such as Android emulators, so those parts of the work are reproducible and auditable.
 - **Experience Learning** closes the loop, turning every execution into a learning opportunity that improves the next run.
 
 The result is a platform where Digital Workers don't just run tasks - they get better at them, guided by the humans who work alongside them. And the Operator's role evolves from performing repetitive work to **steering the evolution of a digital workforce**.

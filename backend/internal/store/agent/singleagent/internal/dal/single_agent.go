@@ -134,13 +134,14 @@ func (sa *SingleAgentDAO) ListInfos(ctx context.Context) ([]*single_agent.Single
 	sam := sa.dbQuery.TSingleAgent
 
 	var results []struct {
-		AgentID string
-		Role    string
-		Name    string
+		AgentID         string
+		Role            string
+		Name            string
+		CreatorUsername string
 	}
 
 	err := sam.WithContext(ctx).
-		Select(sam.AgentID, sam.Role, sam.Name).
+		Select(sam.AgentID, sam.Role, sam.Name, sam.CreatorUsername).
 		Where(sam.Role.IsNotNull()).
 		Where(sam.Role.Neq("")).
 		Scan(&results)
@@ -153,9 +154,10 @@ func (sa *SingleAgentDAO) ListInfos(ctx context.Context) ([]*single_agent.Single
 	agentInfos := make([]*single_agent.SingleAgentInfo, len(results))
 	for i, result := range results {
 		agentInfos[i] = &single_agent.SingleAgentInfo{
-			AgentId: result.AgentID,
-			Role:    result.Role,
-			Name:    result.Name,
+			AgentId:         result.AgentID,
+			Role:            result.Role,
+			Name:            result.Name,
+			CreatorUsername: result.CreatorUsername,
 		}
 	}
 

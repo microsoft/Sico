@@ -24,6 +24,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -41,7 +44,12 @@ import (
 	"sico-backend/pkg/logger"
 )
 
-const extractSkillTimeout = 30 * time.Second
+// 180s average for one try; 3 retries with backoff should be sufficient for most cases.
+const extractSkillTimeout = 180 * time.Second
+
+const getSkillVersionLimit = 5
+
+type skillDownloadURLBuilder func(ctx context.Context, assetID int64) (string, error)
 
 type Components struct {
 	SkillRepo   repository.SkillRepository
@@ -51,11 +59,13 @@ type Components struct {
 
 type Service struct {
 	*Components
-	grpcClient skillgrpc.SkillServiceClient
+	grpcClient           skillgrpc.SkillServiceClient
+	buildDownloadURLFunc skillDownloadURLBuilder
 }
 
 func NewService(c *Components) *Service {
 	svc := &Service{Components: c}
+	svc.buildDownloadURLFunc = svc.buildDownloadURL
 	if c != nil && c.CoreGRPC != nil {
 		svc.grpcClient = skillgrpc.NewSkillServiceClient(c.CoreGRPC)
 	}
@@ -85,11 +95,8 @@ func (s *Service) CreateSkill(ctx context.Context, req *skill.CreateSkillRequest
 	creator := middleware.MustGetUsernameFromCtx(ctx)
 
 	rec := &repository.SkillModel{
-		ProjectID:       req.ProjectId,
-		AgentID:         req.AgentId,
-		AssetID:         req.AssetId,
-		Status:          statusToDB(skill.SkillStatus_SKILL_STATUS_UPLOADING),
-		CreatorUsername: creator,
+		ProjectID: req.ProjectId,
+		AgentID:   req.AgentId,
 	}
 
 	id, err := s.SkillRepo.Create(ctx, rec)
@@ -98,9 +105,14 @@ func (s *Service) CreateSkill(ctx context.Context, req *skill.CreateSkillRequest
 	}
 
 	rec.ID = id
-	s.extractAndUpdateSkill(ctx, rec)
+	version, err := s.extractAndCreateVersion(ctx, rec, req.AssetId, creator)
+	if err != nil {
+		return nil, err
+	}
 
-	// Re-read to get updated status/name/description
+	if err := s.updateSkillDisplay(ctx, rec.ID, version.Name, version.Description); err != nil {
+		return nil, err
+	}
 	rec, _ = s.SkillRepo.GetByID(ctx, id)
 
 	return appresp.Success(&skill.CreateSkillResponse{
@@ -119,7 +131,8 @@ func (s *Service) GetSkill(ctx context.Context, req *skill.GetSkillRequest) (*sk
 
 	return appresp.Success(&skill.GetSkillResponse{
 		Data: &skill.GetSkillData{
-			Skill: skillModelToDTO(rec),
+			Skill:    skillModelToDTO(rec),
+			Versions: s.skillVersionDTOs(ctx, rec),
 		},
 	}), nil
 }
@@ -133,20 +146,47 @@ func (s *Service) UpdateSkill(ctx context.Context, req *skill.UpdateSkillRequest
 		return nil, err
 	}
 
-	rec.AssetID = req.AssetId
-	rec.Status = statusToDB(skill.SkillStatus_SKILL_STATUS_UPLOADING)
-	rec.FailReason = ""
-
-	if err := s.SkillRepo.Update(ctx, rec); err != nil {
+	creator := middleware.MustGetUsernameFromCtx(ctx)
+	sourceVersion, err := s.validateCurrentVersion(ctx, rec.ID, req.GetCurrentVersion())
+	if err != nil {
 		return nil, err
 	}
 
-	s.extractAndUpdateSkill(ctx, rec)
-	rec, _ = s.SkillRepo.GetByID(ctx, req.Id)
+	version, err := s.writeManualVersion(ctx, rec, sourceVersion, req.GetAssetId(), req.GetFiles(), req.GetActions(), creator)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.updateSkillDisplay(ctx, rec.ID, version.Name, version.Description); err != nil {
+		return nil, err
+	}
 
 	return appresp.Success(&skill.UpdateSkillResponse{
-		Data: &skill.UpdateSkillData{Skill: skillModelToDTO(rec)},
+		Data: &skill.UpdateSkillData{
+			SkillId:     rec.ID,
+			Version:     version.Version,
+			Name:        version.Name,
+			Description: version.Description,
+			AssetId:     version.AssetID,
+		},
 	}), nil
+}
+
+func (s *Service) validateCurrentVersion(
+	ctx context.Context, skillID int64, currentVersion string,
+) (*repository.SkillVersionModel, error) {
+	currentVersion = strings.TrimSpace(currentVersion)
+	if currentVersion == "" {
+		return nil, apperr.New(errcode.CommonInvalidParam, "currentVersion is required")
+	}
+
+	version, err := s.SkillRepo.GetVersion(ctx, skillID, currentVersion)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperr.New(errcode.CommonConflict, "currentVersion does not exist")
+		}
+		return nil, err
+	}
+	return version, nil
 }
 
 func (s *Service) DeleteSkill(ctx context.Context, req *skill.DeleteSkillRequest) (*skill.DeleteSkillResponse, error) {
@@ -159,6 +199,9 @@ func (s *Service) DeleteSkill(ctx context.Context, req *skill.DeleteSkillRequest
 	}
 
 	if err := s.SkillRepo.Delete(ctx, req.Id); err != nil {
+		return nil, err
+	}
+	if err := s.SkillRepo.DeleteVersions(ctx, req.Id); err != nil {
 		return nil, err
 	}
 
@@ -196,6 +239,7 @@ func (s *Service) ListSkills(ctx context.Context, req *skill.ListSkillRequest) (
 	for _, rec := range records {
 		result = append(result, skillModelToDTO(rec))
 	}
+	s.setLatestVersions(ctx, result)
 
 	return appresp.Success(&skill.ListSkillResponse{
 		Data: &skill.ListSkillData{
@@ -206,133 +250,229 @@ func (s *Service) ListSkills(ctx context.Context, req *skill.ListSkillRequest) (
 	}), nil
 }
 
-func (s *Service) GetSkillDetails(
-	ctx context.Context, req *skill.GetSkillDetailsRequest,
-) (*skill.GetSkillDetailsResponse, error) {
-	rec, err := s.SkillRepo.GetByID(ctx, req.Id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, apperr.New(errcode.CommonNotFound, "skill not found")
-		}
-		return nil, err
-	}
+// ---------- Extraction ----------
 
+func (s *Service) extractAndCreateVersion(
+	ctx context.Context,
+	rec *repository.SkillModel,
+	assetID int64,
+	creator string,
+) (*repository.SkillVersionModel, error) {
+	if rec == nil || rec.ID == 0 {
+		return nil, apperr.New(errcode.CommonInvalidParam, "skill is required")
+	}
 	if s.grpcClient == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "core gRPC client not initialized")
 	}
 
-	if rec.Status != statusToDB(skill.SkillStatus_SKILL_STATUS_UPLOADED) {
-		return nil, apperr.New(errcode.CommonInvalidParam, "skill not yet uploaded")
-	}
-
-	grpcReq := &skillgrpc.GetSkillDetailsGrpcRequest{
-		SkillId:   rec.ID,
-		ProjectId: rec.ProjectID,
-		AgentId:   rec.AgentID,
-	}
-
-	resp, err := s.grpcClient.GetSkillDetails(ctx, grpcReq)
-	if err != nil {
-		return nil, err
-	}
-	if resp == nil {
-		return nil, apperr.New(errcode.CommonInternalError, "empty response from core skill service")
-	}
-	if resp.Code != 0 {
-		msg := resp.Msg
-		if msg == "" {
-			msg = "failed to fetch skill details"
-		}
-		return nil, apperr.New(errcode.CommonInternalError, msg)
-	}
-
-	files := make([]*skill.SkillFile, 0, len(resp.Files))
-	for _, f := range resp.Files {
-		files = append(files, &skill.SkillFile{
-			Path:    f.Path,
-			Content: f.Content,
-		})
-	}
-
-	return appresp.Success(&skill.GetSkillDetailsResponse{
-		Data: &skill.GetSkillDetailsData{Files: files},
-	}), nil
-}
-
-// ---------- Extraction ----------
-
-func (s *Service) extractAndUpdateSkill(ctx context.Context, rec *repository.SkillModel) {
-	if rec == nil || rec.ID == 0 || s.grpcClient == nil {
-		return
-	}
-
-	downloadURL, err := s.buildDownloadURL(ctx, rec)
+	downloadURL, err := s.skillDownloadURL(ctx, assetID)
 	if err != nil || downloadURL == "" {
 		logger.CtxWarn(ctx, "skill: failed to build download URL: id=%d err=%v", rec.ID, err)
-		s.updateSkillRecord(ctx, rec.ID, skill.SkillStatus_SKILL_STATUS_FAILED, "failed to build download URL", "", "")
-		return
+		return nil, apperr.New(errcode.CommonInvalidParam, "failed to build download URL")
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, extractSkillTimeout)
 	defer cancel()
-
+	versionString := newSkillVersionString()
 	req := &skillgrpc.ExtractSkillRequest{
 		SkillId:     rec.ID,
 		ProjectId:   rec.ProjectID,
 		AgentId:     rec.AgentID,
 		DownloadUrl: downloadURL,
+		Version:     versionString,
 	}
 	resp, err := s.grpcClient.ExtractSkill(reqCtx, req)
 	if err != nil {
-		failReason := err.Error()
 		logger.CtxWarn(ctx, "skill: gRPC extract skill failed: id=%d err=%v", rec.ID, err)
-		s.updateSkillRecord(ctx, rec.ID, skill.SkillStatus_SKILL_STATUS_FAILED, failReason, "", "")
-		return
+		return nil, err
 	}
-
 	if resp == nil || resp.Code != 0 {
 		failReason := "skill extraction failed"
 		if resp != nil && resp.Message != "" {
 			failReason = resp.Message
 		}
-		s.updateSkillRecord(ctx, rec.ID, skill.SkillStatus_SKILL_STATUS_FAILED, failReason, "", "")
-		return
+		return nil, apperr.New(errcode.CommonInternalError, failReason)
 	}
 
-	s.updateSkillRecord(ctx, rec.ID, skill.SkillStatus_SKILL_STATUS_UPLOADED, "", resp.Name, resp.Description)
-}
-
-func (s *Service) updateSkillRecord(
-	ctx context.Context,
-	skillID int64, status skill.SkillStatus,
-	failReason string, name string, description string,
-) {
-	if s.SkillRepo == nil {
-		return
+	version := &repository.SkillVersionModel{
+		SkillID:         rec.ID,
+		Version:         versionString,
+		AssetID:         assetID,
+		Name:            resp.Name,
+		Description:     resp.Description,
+		CreatorUsername: creator,
+		Status:          statusToDB(skill.SkillStatus_SKILL_STATUS_UPLOADED),
 	}
-	rec, err := s.SkillRepo.GetByID(ctx, skillID)
+	versionID, err := s.SkillRepo.CreateVersion(ctx, version)
 	if err != nil {
-		return
+		return nil, err
 	}
-	rec.Status = statusToDB(status)
-	rec.FailReason = failReason
-	if name != "" {
-		rec.Name = name
-	}
-	if description != "" {
-		rec.Description = description
-	}
-	if err := s.SkillRepo.Update(ctx, rec); err != nil {
-		logger.CtxWarn(ctx, "skill: failed to update status: id=%d err=%v", skillID, err)
-	}
+	version.ID = versionID
+	return version, nil
 }
 
-func (s *Service) buildDownloadURL(ctx context.Context, rec *repository.SkillModel) (string, error) {
-	if rec.AssetID == 0 || s.ProjectRepo == nil {
+func (s *Service) writeManualVersion(
+	ctx context.Context,
+	rec *repository.SkillModel,
+	sourceVersion *repository.SkillVersionModel,
+	assetID int64,
+	files []*skill.SkillFile,
+	actions []*skill.SkillAction,
+	creator string,
+) (*repository.SkillVersionModel, error) {
+	if err := s.validateManualVersionRequest(sourceVersion, assetID, files, actions); err != nil {
+		return nil, err
+	}
+	name, description, err := skillVersionMetadata(sourceVersion, files)
+	if err != nil {
+		return nil, err
+	}
+
+	if assetID == 0 && len(files) == 0 {
+		assetID = sourceVersion.AssetID
+	}
+	downloadURL, err := s.manualVersionDownloadURL(ctx, rec, sourceVersion, assetID, files, actions)
+	if err != nil {
+		return nil, err
+	}
+
+	versionString := newSkillVersionString()
+	reqCtx, cancel := context.WithTimeout(ctx, extractSkillTimeout)
+	defer cancel()
+	resp, err := s.grpcClient.WriteSkillVersion(reqCtx, &skillgrpc.WriteSkillVersionRequest{
+		SkillId:       rec.ID,
+		ProjectId:     rec.ProjectID,
+		AgentId:       rec.AgentID,
+		Version:       versionString,
+		Files:         files,
+		Actions:       actions,
+		DownloadUrl:   downloadURL,
+		SourceVersion: sourceVersion.Version,
+		AssetId:       assetID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil || resp.Code != 0 {
+		msg := "failed to write skill version"
+		if resp != nil && resp.Msg != "" {
+			msg = resp.Msg
+		}
+		return nil, apperr.New(errcode.CommonInternalError, msg)
+	}
+	if resp.GetName() != "" {
+		name = resp.GetName()
+	}
+	if resp.GetDescription() != "" {
+		description = resp.GetDescription()
+	}
+	if resp.GetAssetId() != 0 {
+		assetID = resp.GetAssetId()
+	}
+	version := &repository.SkillVersionModel{
+		SkillID:         rec.ID,
+		Version:         versionString,
+		AssetID:         assetID,
+		Name:            name,
+		Description:     description,
+		CreatorUsername: creator,
+		Status:          statusToDB(skill.SkillStatus_SKILL_STATUS_UPLOADED),
+	}
+	versionID, err := s.SkillRepo.CreateVersion(ctx, version)
+	if err != nil {
+		return nil, err
+	}
+	version.ID = versionID
+	return version, nil
+}
+
+func (s *Service) validateManualVersionRequest(
+	sourceVersion *repository.SkillVersionModel,
+	assetID int64,
+	files []*skill.SkillFile,
+	actions []*skill.SkillAction,
+) error {
+	if s.grpcClient == nil {
+		return apperr.New(errcode.CommonUnavailable, "core gRPC client not initialized")
+	}
+	if sourceVersion == nil {
+		return apperr.New(errcode.CommonInvalidParam, "sourceVersion is required")
+	}
+	if assetID == 0 && len(files) == 0 && len(actions) == 0 {
+		return apperr.New(errcode.CommonInvalidParam, "assetId, files, or actions are required")
+	}
+	return nil
+}
+
+func skillVersionMetadata(
+	sourceVersion *repository.SkillVersionModel,
+	files []*skill.SkillFile,
+) (string, string, error) {
+	if len(files) == 0 {
+		return sourceVersion.Name, sourceVersion.Description, nil
+	}
+
+	name, description, found, err := skillMetadataFromFiles(files)
+	if err != nil {
+		return "", "", err
+	}
+	if !found {
+		return sourceVersion.Name, sourceVersion.Description, nil
+	}
+	return name, description, nil
+}
+
+func (s *Service) manualVersionDownloadURL(
+	ctx context.Context,
+	rec *repository.SkillModel,
+	sourceVersion *repository.SkillVersionModel,
+	assetID int64,
+	files []*skill.SkillFile,
+	actions []*skill.SkillAction,
+) (string, error) {
+	if assetID == sourceVersion.AssetID && len(files) == 0 && len(actions) == 0 {
+		logger.CtxInfo(
+			ctx,
+			"skill: update requested with unchanged asset id: id=%d version=%s asset=%d",
+			rec.ID, sourceVersion.Version, assetID,
+		)
+	}
+	if assetID == 0 || len(files) > 0 || len(actions) > 0 {
 		return "", nil
 	}
 
-	asset, err := s.ProjectRepo.GetProjectAsset(ctx, rec.AssetID)
+	downloadURL, err := s.skillDownloadURL(ctx, assetID)
+	if err != nil || downloadURL == "" {
+		logger.CtxWarn(ctx, "skill: failed to build download URL: id=%d err=%v", rec.ID, err)
+		return "", apperr.New(errcode.CommonInvalidParam, "failed to build download URL")
+	}
+	return downloadURL, nil
+}
+
+func (s *Service) updateSkillDisplay(ctx context.Context, skillID int64, name, description string) error {
+	rec, err := s.SkillRepo.GetByID(ctx, skillID)
+	if err != nil {
+		return err
+	}
+	rec.Name = name
+	rec.Description = description
+	return s.SkillRepo.Update(ctx, rec)
+}
+
+func (s *Service) skillDownloadURL(ctx context.Context, assetID int64) (string, error) {
+	if s.buildDownloadURLFunc != nil {
+		return s.buildDownloadURLFunc(ctx, assetID)
+	}
+
+	return s.buildDownloadURL(ctx, assetID)
+}
+
+func (s *Service) buildDownloadURL(ctx context.Context, assetID int64) (string, error) {
+	if assetID == 0 || s.ProjectRepo == nil {
+		return "", nil
+	}
+
+	asset, err := s.ProjectRepo.GetProjectAsset(ctx, assetID)
 	if err != nil {
 		return "", err
 	}
@@ -349,17 +489,214 @@ func skillModelToDTO(rec *repository.SkillModel) *skill.Skill {
 	if rec == nil {
 		return nil
 	}
+
 	return &skill.Skill{
+		Id:          rec.ID,
+		ProjectId:   rec.ProjectID,
+		AgentId:     rec.AgentID,
+		Name:        rec.Name,
+		Description: rec.Description,
+		CreatedAt:   rec.CreatedAt,
+		UpdatedAt:   rec.UpdatedAt,
+	}
+}
+
+func (s *Service) setLatestVersions(ctx context.Context, skills []*skill.Skill) {
+	skillIDs := make([]int64, 0, len(skills))
+	for _, item := range skills {
+		if item != nil && item.Id != 0 {
+			skillIDs = append(skillIDs, item.Id)
+		}
+	}
+	latestVersions, err := s.SkillRepo.ListLatestVersionsBySkillIDs(ctx, skillIDs)
+	if err != nil {
+		logger.CtxWarn(ctx, "skill: failed to load latest versions for list: err=%v", err)
+		return
+	}
+	for _, item := range skills {
+		if item == nil {
+			continue
+		}
+		if latest := latestVersions[item.Id]; latest != nil {
+			item.Version = latest.Version
+		}
+	}
+}
+
+func (s *Service) skillVersionDetails(
+	ctx context.Context, rec *repository.SkillModel, requestedVersions []string,
+) map[string]*skill.SkillVersion {
+	if s.grpcClient == nil || len(requestedVersions) == 0 {
+		return nil
+	}
+	resp, err := s.grpcClient.GetSkillDetails(ctx, &skillgrpc.GetSkillDetailsGrpcRequest{
+		SkillId:   rec.ID,
+		ProjectId: rec.ProjectID,
+		AgentId:   rec.AgentID,
+		Versions:  requestedVersions,
+	})
+	if err != nil || resp == nil || resp.Code != 0 {
+		if err != nil {
+			logger.CtxWarn(ctx, "skill: failed to load skill details: id=%d err=%v", rec.ID, err)
+		}
+		return nil
+	}
+	details := make(map[string]*skill.SkillVersion, len(resp.Versions)+1)
+	for _, version := range resp.Versions {
+		if version != nil && version.Version != "" {
+			details[version.Version] = version
+		}
+	}
+	if resp.Version != nil && resp.Version.Version != "" {
+		details[resp.Version.Version] = resp.Version
+	}
+	return details
+}
+
+func (s *Service) skillVersionDTOs(ctx context.Context, rec *repository.SkillModel) []*skill.SkillVersion {
+	versions, err := s.SkillRepo.ListLatestVersions(ctx, rec.ID, getSkillVersionLimit)
+	if err != nil {
+		logger.CtxWarn(ctx, "skill: failed to list versions: id=%d err=%v", rec.ID, err)
+		return nil
+	}
+	items := make([]*skill.SkillVersion, 0, len(versions))
+	for _, version := range versions {
+		items = append(items, s.skillVersionModelToDTO(ctx, version))
+	}
+
+	details := s.skillVersionDetails(ctx, rec, uploadedVersionStrings(versions))
+	if len(details) == 0 {
+		return items
+	}
+	for _, item := range items {
+		if detail := details[item.Version]; detail != nil {
+			mergeSkillVersionDTO(item, detail)
+		}
+	}
+	return items
+}
+
+func uploadedVersionStrings(versions []*repository.SkillVersionModel) []string {
+	values := make([]string, 0, len(versions))
+	for _, version := range versions {
+		if version == nil || version.Status != statusToDB(skill.SkillStatus_SKILL_STATUS_UPLOADED) {
+			continue
+		}
+		if strings.TrimSpace(version.Version) == "" {
+			continue
+		}
+		values = append(values, version.Version)
+	}
+	return values
+}
+
+func (s *Service) skillVersionModelToDTO(ctx context.Context, rec *repository.SkillVersionModel) *skill.SkillVersion {
+	if rec == nil {
+		return nil
+	}
+	url := ""
+	if rec.AssetID != 0 {
+		var err error
+		url, err = s.skillDownloadURL(ctx, rec.AssetID)
+		if err != nil {
+			logger.CtxWarn(ctx,
+				"skill: failed to build version download URL: id=%d version=%s asset=%d err=%v",
+				rec.SkillID, rec.Version, rec.AssetID, err)
+		}
+		url = publicSkillDownloadURL(url)
+	}
+	return &skill.SkillVersion{
 		Id:              rec.ID,
-		ProjectId:       rec.ProjectID,
-		AgentId:         rec.AgentID,
+		SkillId:         rec.SkillID,
+		Version:         rec.Version,
+		Url:             url,
 		Name:            rec.Name,
 		Description:     rec.Description,
-		AssetId:         rec.AssetID,
 		CreatorUsername: rec.CreatorUsername,
 		Status:          statusFromDB(rec.Status),
 		FailReason:      rec.FailReason,
 		CreatedAt:       rec.CreatedAt,
 		UpdatedAt:       rec.UpdatedAt,
 	}
+}
+
+func publicSkillDownloadURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return rawURL
+	}
+	publicEndpoint := strings.TrimRight(os.Getenv("SICO_PUBLIC_ENDPOINT"), "/")
+	if publicEndpoint == "" {
+		return rawURL
+	}
+	if parsed, err := url.Parse(rawURL); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		path := "/" + strings.TrimLeft(parsed.Path, "/")
+		if strings.HasPrefix(path, "/storage/") {
+			return publicEndpoint + path
+		}
+		return publicEndpoint + "/storage" + path
+	}
+	if strings.HasPrefix(rawURL, "/") {
+		return publicEndpoint + rawURL
+	}
+	return publicEndpoint + "/" + strings.TrimLeft(rawURL, "/")
+}
+
+func mergeSkillVersionDTO(base, detail *skill.SkillVersion) *skill.SkillVersion {
+	if detail == nil {
+		return base
+	}
+	if base == nil {
+		return detail
+	}
+	base.Actions = detail.Actions
+	return base
+}
+
+func newSkillVersionString() string {
+	return fmt.Sprintf("%d", time.Now().UnixMilli())
+}
+
+func skillMetadataFromFiles(files []*skill.SkillFile) (string, string, bool, error) {
+	for _, file := range files {
+		if file == nil || normalizedSkillFilePath(file.GetPath()) != "SKILL.md" {
+			continue
+		}
+		metadata := parseFrontmatter(file.GetContent())
+		name := strings.TrimSpace(metadata["name"])
+		description := strings.TrimSpace(metadata["description"])
+		if name == "" || description == "" {
+			return "", "", true, apperr.New(
+				errcode.CommonInvalidParam, "SKILL.md must contain non-empty name and description",
+			)
+		}
+		return name, description, true, nil
+	}
+	return "", "", false, nil
+}
+
+func normalizedSkillFilePath(path string) string {
+	path = strings.TrimSpace(strings.ReplaceAll(path, "\\", "/"))
+	path = strings.TrimPrefix(path, "original/")
+	return path
+}
+
+func parseFrontmatter(content string) map[string]string {
+	lines := strings.Split(content, "\n")
+	result := map[string]string{}
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return result
+	}
+	for _, line := range lines[1:] {
+		line = strings.TrimSpace(line)
+		if line == "---" {
+			break
+		}
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		result[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), "\"'")
+	}
+	return result
 }

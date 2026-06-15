@@ -39,7 +39,8 @@ func (dao *MessageDAO) Create(ctx context.Context, msg *entity.Message) (*entity
 	if err != nil {
 		return nil, err
 	}
-	if err := dao.query.TMessage.WithContext(ctx).Debug().Create(po); err != nil {
+	m := dao.query.TMessage
+	if err := m.WithContext(ctx).Debug().Omit(m.TaskRuntimeRecoveryKey).Create(po); err != nil {
 		return nil, err
 	}
 	return dao.messagePO2DO(po), nil

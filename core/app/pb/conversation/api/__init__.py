@@ -98,6 +98,11 @@ class CancelPlanRequest(betterproto2.Message):
     @gotag: json:"turnId,omitempty" form:"turnId"
     """
 
+    conversation_id: "int" = betterproto2.field(4, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"conversationId,omitempty" form:"conversationId"
+    """
+
 
 default_message_pool.register_message("api", "CancelPlanRequest", CancelPlanRequest)
 
@@ -404,6 +409,11 @@ class GetPlanRequest(betterproto2.Message):
     turn_id: "int" = betterproto2.field(3, betterproto2.TYPE_INT64)
     """
     @gotag: json:"turnId,omitempty" form:"turnId"
+    """
+
+    conversation_id: "int" = betterproto2.field(4, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"conversationId,omitempty" form:"conversationId"
     """
 
 

@@ -139,6 +139,7 @@ func registerConversationRoutes(r *gin.RouterGroup) {
 	conversation.POST("/chat/reconnect", handler.Reconnect)
 	conversation.GET("/messages", handler.ListMessagesByUserAndAgent)
 	conversation.GET("/messages/user/turn", handler.GetUserMessageByUserAgentTurnID)
+	conversation.GET("/batch_summaries", handler.ListBatchSummaries)
 	conversation.GET("/list", handler.ListConversations)
 	conversation.GET("/plan", handler.GetPlan)
 	conversation.POST("/plan/cancel", handler.CancelPlan)
@@ -233,5 +234,4 @@ func registerSkillsRoutes(r *gin.RouterGroup) {
 	skillsApi.PUT("", handler.UpdateSkill)
 	skillsApi.DELETE("", handler.DeleteSkill)
 	skillsApi.GET("/list", handler.ListSkills)
-	skillsApi.GET("/details", handler.GetSkillDetails)
 }

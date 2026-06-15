@@ -36,6 +36,7 @@ class CreateMessageResult(BaseModel):
             id=pb_resp.data.id,
         )
 
+
 # Singleton
 class ReverseConversationService:
     _instance: "ReverseConversationService" = None
@@ -56,9 +57,9 @@ class ReverseConversationService:
         you can just set them to default values.
         The returned CreateMessageResult contains the ID of the created message.
         '''
-        resp = self.stub.rpc_create_message(pb.CreateMessageRequest(
-            message=message.to_pb()
-        ))
+        resp = self.stub.rpc_create_message(
+            pb.CreateMessageRequest(message=message.to_pb()),
+        )
         if resp.code != 0:
             raise Exception(f"ReverseConversationService.create_message failed: {resp.msg}")
         return CreateMessageResult.from_pb(resp)

@@ -164,14 +164,12 @@ func TestDeleteSingleAgentInstanceDoesNotDeleteWhenSandboxCleanupFails(t *testin
 	pool := sandboximpl.NewPool(nil, rds)
 	sandboxbiz.InitService(sandboximpl.NewService(pool, nil, nil))
 
-	lease := &sandboximpl.Lease{
-		SandboxID:  "emulator:http://74.179.80.110:8000|3",
-		Type:       "emulator",
-		ResourceID: "http://74.179.80.110:8000|3",
-		User:       "123",
-		InUse:      true,
-	}
-	seedAssignedSandbox(t, ctx, rds, lease)
+	sandboxID := "emulator:http://74.179.80.110:8000|3"
+	// Seed the assignment hash so HasAssignedSandboxesStrict finds a binding,
+	// but store corrupt JSON in the resource key so the strict lease read
+	// returns an unmarshal error — simulating a cleanup failure.
+	require.NoError(t, rds.HSet(ctx, "sandbox:assign:123", sandboxID, "emulator").Err())
+	require.NoError(t, rds.Set(ctx, "sandbox:resource:"+sandboxID, "corrupt", 0).Err())
 
 	repo := &fakeSingleAgentInstanceRepo{}
 	svc := &Service{Components: &Components{SingleAgentInstanceRepo: repo}}
@@ -180,11 +178,11 @@ func TestDeleteSingleAgentInstanceDoesNotDeleteWhenSandboxCleanupFails(t *testin
 	require.Error(t, err)
 	require.Empty(t, repo.deleteCalls)
 
-	storedLease, getErr := rds.Get(ctx, "sandbox:resource:"+lease.SandboxID).Result()
+	storedLease, getErr := rds.Get(ctx, "sandbox:resource:"+sandboxID).Result()
 	require.NoError(t, getErr)
 	require.NotEmpty(t, storedLease)
 	assignments, err := rds.HGetAll(ctx, "sandbox:assign:123").Result()
 	require.NoError(t, err)
-	require.Contains(t, assignments, lease.SandboxID)
+	require.Contains(t, assignments, sandboxID)
 	require.False(t, errors.Is(err, redis.Nil))
 }
