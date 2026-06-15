@@ -558,7 +558,7 @@ class _FileBaseline:
     async def _sync_root(self, root: str, tarball: str) -> None:
         """Restore *root* to its snapshot without crossing mount points.
 
-        Computes which files were created during the run, deletes just those, 
+        Computes which files were created during the run, deletes just those,
         then extracts the archive to bring back modified or deleted files.
         """
         archived = await self._read_archived_files(root, tarball)
@@ -592,8 +592,8 @@ class _FileBaseline:
         return {line for line in result.stdout.splitlines() if line}
 
     async def _delete_files(
-        self, 
-        paths: list[str], 
+        self,
+        paths: list[str],
         batch_size: int = 200,
     ) -> None:
         """Delete *paths* in batches small enough for one shell command."""

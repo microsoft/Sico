@@ -242,6 +242,18 @@ def _read_csv_rows(path: Path) -> list[list[str]] | None:
             continue
         except OSError:
             return None
+    # Last resort: re-read as UTF-8 replacing unencodable bytes so that
+    # files with a handful of stray non-UTF-8 characters (e.g. Windows-1252
+    # punctuation like × 0xD7) are still usable rather than rejected.
+    try:
+        with path.open("r", encoding="utf-8", errors="replace", newline="") as fp:
+            sample = fp.read(_CSV_SNIFF_SAMPLE_BYTES)
+            fp.seek(0)
+            dialect = _sniff_csv_dialect(sample)
+            reader = csv.reader(fp, dialect)
+            return [list(row) for row in reader]
+    except OSError:
+        pass
     return None
 
 
@@ -649,7 +661,10 @@ def _first_case_id_value(values: dict[str, str]) -> str:
 
 
 def _normalize_header(header: str) -> str:
-    return re.sub(r"\s+", " ", header.strip().lower().replace("_", " "))
+    # Strip leading/trailing non-alphanumeric characters (e.g. stray '?' from
+    # corrupted BOM or export artefacts) before normalizing.
+    cleaned = re.sub(r"^[^\w]+|[^\w]+$", "", header.strip(), flags=re.UNICODE)
+    return re.sub(r"\s+", " ", cleaned.lower().replace("_", " "))
 
 
 def _normalize_sheet_name(name: str) -> str:

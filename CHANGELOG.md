@@ -20,6 +20,21 @@ Guidelines for editors:
   add the compare link at the bottom.
 -->
 
+## [Unreleased]
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+
 ## [0.2.0] - 2026-06-11
 
 ### Added
@@ -50,20 +65,6 @@ Guidelines for editors:
 
 - Bumped vulnerable dependencies.
 - Tightened Content Security Policy (CSP) in frontend.
-
-## [Unreleased]
-
-### Added
-
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 <!--
 Example release entry:

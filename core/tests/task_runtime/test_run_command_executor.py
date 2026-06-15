@@ -34,6 +34,7 @@ import time
 from pathlib import Path
 
 import pytest
+from openpyxl import Workbook
 
 from app.biz.task_runtime.artifact_store import FileArtifactStore
 from app.biz.task_runtime.executors.tool_executor import ToolExecutor
@@ -164,6 +165,16 @@ def _command_run(command, *, timeout_seconds: int = 600, **args) -> TaskRun:
     return _run(spec, timeout_seconds=timeout_seconds)
 
 
+def _file_convert_run(**args) -> TaskRun:
+    spec = TaskSpec(
+        task_id="t-convert",
+        title="Convert workbook",
+        dispatch=ToolDispatch(tool_name="file_convert"),
+        args=args,
+    )
+    return _run(spec)
+
+
 def _tool_executor(tmp_path: Path, backend: _FakeBackend | LocalBackend) -> ToolExecutor:
     return ToolExecutor(
         artifact_store=FileArtifactStore(tmp_path / "artifacts"),
@@ -178,6 +189,29 @@ def test_tool_executor_requires_dependencies(tmp_path: Path) -> None:
         ToolExecutor(artifact_store=None, sandbox_backend=backend)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="sandbox_backend is required"):
         ToolExecutor(artifact_store=artifact_store, sandbox_backend=None)  # type: ignore[arg-type]
+
+
+def test_file_convert_converts_xlsx_to_csv(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    attachments = workspace / "attachments"
+    attachments.mkdir(parents=True)
+    workbook_path = attachments / "cases.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Cases"
+    sheet.append(["ID", "Title"])
+    sheet.append(["TC-1", "Open settings"])
+    workbook.save(workbook_path)
+
+    executor = _tool_executor(tmp_path, _FakeBackend(CommandResult(return_code=0)))
+    result = executor._run_file_convert_tool(_file_convert_run(input_paths=["attachments/cases.xlsx"], sheet="Cases"))
+
+    assert result.status == TaskStatus.COMPLETED
+    assert "Converted 1 Excel file" in result.summary
+    assert result.primary_artifact is not None
+    assert result.primary_artifact.filepath.endswith("output/csv/cases.csv")
+    csv_path = workspace / "results" / "batch-1" / "run-cmd" / "result" / "output" / "csv" / "cases.csv"
+    assert csv_path.read_text(encoding="utf-8").splitlines() == ["ID,Title", "TC-1,Open settings"]
 
 
 @pytest.mark.asyncio

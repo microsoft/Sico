@@ -210,7 +210,6 @@ sico/
 ├── core/                 # Python agent orchestration service (asyncio, grpclib)
 ├── proto/                # Protobuf definitions shared by all services
 ├── sandbox/              # Sandbox runtimes (Android emulator, ...)
-├── skills/               # Packaged Digital Worker skills
 ├── examples/             # Runnable workflow examples (auth, LLM Hub, conversation, sandbox, ...)
 ├── deploy/
 │   ├── docker/           # docker-compose stack

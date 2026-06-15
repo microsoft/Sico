@@ -222,7 +222,7 @@ Sico does not constrain which models, tools, or workflows must be used. Instead,
 | Term | Definition |
 | --- | --- |
 | **Project** | A scoped workspace that carries knowledge, members, skills, and conversation history. |
-| **Skill** | A packaged capability (prompts + workflows + tools) that a Digital Worker can use. See `skills/`. |
+| **Skill** | A packaged capability (prompts + workflows + tools) that a Digital Worker can use. See `backend/internal/embeddata/skills/`. |
 | **Conversation** | A chat-style interaction binding an Operator, a Digital Worker, and a task. Streamed to clients via SSE. |
 | **Knowledge** | Durable, retrievable project documents (ingested via the Knowledge service). |
 | **Sandbox lease** | A time-bounded allocation of a sandbox instance to a task. |
