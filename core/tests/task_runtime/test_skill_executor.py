@@ -37,6 +37,7 @@ from pathlib import Path
 
 import pytest
 
+from app.biz.task_runtime.executors import skill_executor as skill_executor_module
 from app.biz.task_runtime.executors.base import DispatchRouter
 from app.biz.task_runtime.executors.command_backend import (
     CommandResult,
@@ -183,11 +184,17 @@ def _write_skill(workspace: Path, *, skill_id: int = 100, name: str, steps: list
     )
 
 
-def _skill_run(workspace: Path, *, args: dict | None = None, timeout_seconds: int = 600) -> TaskRun:
+def _skill_run(
+    workspace: Path,
+    *,
+    args: dict | None = None,
+    timeout_seconds: int = 600,
+    skill_name: str = "android-test",
+) -> TaskRun:
     spec = TaskSpec(
         task_id="t-skill",
         title="Run a skill",
-        dispatch=SkillDispatch(skill_name="android-test", action_name="run"),
+        dispatch=SkillDispatch(skill_name=skill_name, action_name="run"),
         args={"greeting": "hello", **(args or {})},
     )
     return TaskRun(
@@ -340,6 +347,20 @@ async def test_skill_timeout_maps_to_timed_out(tmp_path) -> None:
 
     assert result.status == TaskStatus.TIMED_OUT
     assert result.error_class == ErrorClass.TIMEOUT
+
+
+@pytest.mark.asyncio
+async def test_android_tester_exit_code_two_maps_to_blocked(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(workspace, name="android-tester", steps=[{"argv": ["android-tester", "{greeting}"]}])
+    backend = _FakeBackend(CommandResult(return_code=2, stdout='{"event":"task_result","status":"blocked"}\n'))
+    executor = SkillExecutor(SkillLoader(workspace), artifact_store=_artifact_store(tmp_path), sandbox_backend=backend)
+
+    result = await executor.run(_skill_run(workspace, skill_name="android-tester"), _FakeStore())
+
+    assert result.status == TaskStatus.BLOCKED
+    assert result.error_class == ErrorClass.SKILL_RUNTIME
+    assert "android-tester.run blocked" in result.summary
 
 
 @pytest.mark.asyncio
@@ -624,6 +645,22 @@ def test_normalize_invocation_parameters_fills_android_context() -> None:
         "instructions": "Open Edge and visit Baidu.",
         "task_name": "Open Edge, visit Baidu, and quit on Android",
     }
+
+
+def test_normalize_invocation_parameters_replaces_unknown_llmhub_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(skill_executor_module, "_available_llmhub_model_keys", lambda: frozenset({"gpt5.4"}))
+    action = _android_action("device_id", "instructions", "llmhub_model")
+
+    parameters = _normalize_invocation_parameters(
+        action,
+        {
+            "sandbox.android": "127.0.0.1:16416",
+            "instructions": "Open https://bing.com.",
+            "llmhub_model": "gpt-4o",
+        },
+    )
+
+    assert parameters["llmhub_model"] == "gpt5.4"
 
 
 def test_prepare_parameters_injects_lease_and_normalizes_context() -> None:
