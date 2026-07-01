@@ -325,6 +325,7 @@ Useful environment overrides: `BASE_URL`, `SICO_EMAIL`, `SICO_PASSWORD`, `PROJEC
 | Symptom | Likely cause |
 | --- | --- |
 | `make compose-up` fails on first run | `.env` is missing or has a bad variable; run `cp .env.example .env` |
+| A service stays unhealthy after an upgrade (e.g. `container sico-backend is unhealthy`) | Local Docker volumes hold stale state from a previous version. Reset them and rebuild: `make compose-down-volumes` (⚠️ wipes local MySQL/SeaweedFS/Kafka/Qdrant data), then `make compose-up`. |
 | Frontend loads but API calls 401 | No user created yet; register through the UI or call the RBAC API |
 | Core cannot reach an LLM provider | Secrets not configured in the Model Registry for that `model_key` |
 | Sandbox endpoints return 401 with valid HMAC | Clock skew, missing nonce, or `SANDBOX_CLIENT_SECRET_*` mismatch |

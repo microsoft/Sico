@@ -1084,7 +1084,7 @@ ensure_macos_default_avd() {
         return 0
     fi
 
-    warn "Failed to create AVD '$avd_name'. Run './setup.sh install' to install the required SDK image and retry."
+    warn "Failed to create AVD '$avd_name'. Run 'make emulator-setup' to install the required SDK image and retry."
     return 1
 }
 
@@ -1393,8 +1393,8 @@ validate_runtime_prereqs() {
             configure_macos_java_env
             java -version >/dev/null 2>&1 \
                 || fatal "Java is required before using Android SDK tools." \
-                    "Run ./setup.sh install first, or make emulator-setup from the repo root."
-            [[ -n "$CONFIGURED_ANDROID_HOME" ]] || fatal "ANDROID_HOME is not configured. Run ./setup.sh install first."
+                    "Run 'make emulator-setup' from the repo root first."
+            [[ -n "$CONFIGURED_ANDROID_HOME" ]] || fatal "ANDROID_HOME is not configured. Run 'make emulator-setup' first."
             [[ -x "$CONFIGURED_ADB_PATH" ]] || fatal "Android SDK adb is required before start/restart. Expected path: ${CONFIGURED_ADB_PATH:-<unknown>}"
             [[ -x "$EMULATOR_BIN" ]] || fatal "Android emulator binary is required before start/restart. Expected path: ${EMULATOR_BIN:-<unknown>}"
             [[ -x "$AVDMANAGER" ]] || fatal "Android avdmanager is required before start/restart. Expected path: ${AVDMANAGER:-<unknown>}"
@@ -1620,7 +1620,7 @@ print_install_banner() {
         echo ""
         if [[ "$BOOTSTRAP_DEVICE" == false ]]; then
             echo "  To start/create the default emulator device:"
-            echo "    ./setup.sh bootstrap"
+            echo "    make emulator-bootstrap"
         fi
     else
         echo ""
@@ -1629,9 +1629,9 @@ print_install_banner() {
         echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
         echo ""
         echo "  To start the service:"
-        echo "    ./setup.sh start"
+        echo "    make emulator-start"
         echo "  To start/create the default emulator device after that:"
-        echo "    ./setup.sh bootstrap"
+        echo "    make emulator-bootstrap"
     fi
 }
 
@@ -1688,7 +1688,7 @@ done
 [[ -z "$COMMAND" ]] && COMMAND="install"
 
 if [[ "$BOOTSTRAP_DEVICE" == true && "$NO_START" == true ]]; then
-    fatal "--bootstrap cannot be used with --no-start. Run './setup.sh bootstrap' after starting the service."
+    fatal "--bootstrap cannot be used with --no-start. Run 'make emulator-bootstrap' after starting the service."
 fi
 
 if [[ "$BOOTSTRAP_DEVICE" == true && "$FOREGROUND" == true ]]; then
@@ -1700,7 +1700,7 @@ if [[ "$FOREGROUND" == true && ( "$COMMAND" == "bootstrap" || "$COMMAND" == "dev
 fi
 
 if [[ "$BOOTSTRAP_DEVICE" == true && "$COMMAND" != "install" && "$COMMAND" != "start" && "$COMMAND" != "restart" ]]; then
-    fatal "--bootstrap is only supported with install, start, or restart. Use './setup.sh bootstrap' for a standalone device bootstrap."
+    fatal "--bootstrap is only supported with install, start, or restart. Use 'make emulator-bootstrap' for a standalone device bootstrap."
 fi
 
 # ========================= OS / Arch Detection ==============
@@ -1777,8 +1777,8 @@ do_start() {
         local running_port="${SERVICE_STATE_PORT:-$SERVICE_PORT}"
         warn "Emulator service is already running (PID: $pid)"
         echo "  API docs:       $(service_docs_url "$(service_probe_host "$running_host")" "$running_port")"
-        echo "  Stop it first:  ./setup.sh stop"
-        echo "  Or restart:     ./setup.sh restart"
+        echo "  Stop it first:  make emulator-stop"
+        echo "  Or restart:     make emulator-restart"
         return 0
     fi
 
@@ -1818,9 +1818,9 @@ do_start() {
             echo -e "  ${BOLD}PID:${RESET}       $new_pid"
             echo -e "  ${BOLD}Log file:${RESET}  $LOG_FILE"
             echo ""
-            echo "  Bootstrap default device: ./setup.sh bootstrap"
-            echo "  View logs:    ./setup.sh logs"
-            echo "  Stop service: ./setup.sh stop"
+            echo "  Bootstrap default device: make emulator-bootstrap"
+            echo "  View logs:    make emulator-logs"
+            echo "  Stop service: make emulator-stop"
         else
             if kill -0 "$new_pid" 2>/dev/null; then
                 warn "Service process did not become ready. Stopping residual process (PID: $new_pid)..."
@@ -1842,8 +1842,8 @@ do_bootstrap() {
         info "Using emulator service (PID: $pid) at $(service_url "$(service_probe_host "$SERVICE_HOST")" "$SERVICE_PORT")"
     else
         error "Emulator service is not running."
-        echo "  Start it first: ./setup.sh start"
-        echo "  Or run:         ./setup.sh start --bootstrap"
+        echo "  Start it first: make emulator-start"
+        echo "  Then bootstrap: make emulator-bootstrap"
         return 1
     fi
 
@@ -1898,7 +1898,7 @@ do_logs() {
         tail -f "$LOG_FILE"
     else
         warn "No log file found at $LOG_FILE"
-        echo "  Start the service first: ./setup.sh start"
+        echo "  Start the service first: make emulator-start"
     fi
 }
 
