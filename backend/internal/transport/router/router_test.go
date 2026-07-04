@@ -42,6 +42,7 @@ func TestSandboxRoutesAreNotPublicByDefault(t *testing.T) {
 		http.MethodPost + " /api/sico/sandbox/apply":   true,
 		http.MethodPost + " /api/sico/sandbox/release": true,
 	}
+	discoveredSandboxRoutes := map[string]struct{}{}
 
 	for _, route := range engine.Routes() {
 		if !strings.HasPrefix(route.Path, "/api/sico/sandbox") {
@@ -50,18 +51,25 @@ func TestSandboxRoutesAreNotPublicByDefault(t *testing.T) {
 
 		path := concreteSandboxRoute(route.Path)
 		key := route.Method + " " + path
+		discoveredSandboxRoutes[key] = struct{}{}
 
-		w := httptest.NewRecorder()
-		ctx, _ := gin.CreateTestContext(w)
-		ctx.Request = httptest.NewRequest(route.Method, path, nil)
+		assert.Equalf(
+			t,
+			publicSandboxRoutes[key],
+			isSandboxRouteAuthExcluded(route.Method, path),
+			"unexpected auth-exclusion for sandbox route %s",
+			key,
+		)
+	}
 
-		isPublic := middleware.IsAuthExcluded(ctx)
-		if publicSandboxRoutes[key] {
-			assert.True(t, isPublic, "sandbox route %s should remain public", key)
-			continue
-		}
-
-		assert.False(t, isPublic, "sandbox route %s should be auth-protected", key)
+	for expectedRoute := range publicSandboxRoutes {
+		assert.Containsf(
+			t,
+			discoveredSandboxRoutes,
+			expectedRoute,
+			"expected whitelisted sandbox route %s to stay registered",
+			expectedRoute,
+		)
 	}
 }
 
@@ -73,4 +81,11 @@ func concreteSandboxRoute(path string) string {
 		}
 	}
 	return strings.Join(parts, "/")
+}
+
+func isSandboxRouteAuthExcluded(method, path string) bool {
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = httptest.NewRequest(method, path, nil)
+	return middleware.IsAuthExcluded(ctx)
 }
