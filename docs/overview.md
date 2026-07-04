@@ -87,7 +87,7 @@ Operator responsibilities include:
 
 By making execution transparent and supervisable, Digital Workers can operate within real production responsibility structures rather than functioning as isolated AI tools.
 
-> For a deeper discussion of the co-evolution model, see [Agentic Evolution](agentic-evolution.pdf).
+> For a deeper discussion of the co-evolution model, see [Agentic Evolution](https://github.com/agentic-evolution/awesome-agentic-evolution/blob/main/Agentic_Evolution__From_Self_Improving_Agents_to_Co_Evolving_Human__AI_Systems.pdf).
 
 ### 3. Evolution through real execution
 
