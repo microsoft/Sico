@@ -4,6 +4,7 @@
 
 **Sico: an infrastructure for symbiotic intelligence, where humans and Digital Workers co-evolve.**
 
+[![Follow Sico on X](https://img.shields.io/badge/Follow-Sico-000000?logo=x&logoColor=white&style=flat-square)](https://x.com/sico_evol)
 [![Discord](https://img.shields.io/badge/Discord-Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/F3tVCBHmE6)
 [![Microsoft Teams](https://img.shields.io/badge/Teams-Community-6264A7)](https://teams.microsoft.com/l/team/19%3AtgoS3iJHg6-s2vhO9W5PhUtsnhqNog7yiTdcEi6sNZQ1%40thread.tacv2/conversations?groupId=720e2630-e290-40c7-9c3e-55f5ab643f32&tenantId=72f988bf-86f1-41af-91ab-2d7cd011db47)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -17,7 +18,7 @@
 
 ## What is Sico?
 
-Sico — Symbiotic Intelligence for CO-evolution — is an open-source platform for building, managing, and evolving **Digital Workers**: structured AI labor units that co-evolve with human operators through real production work, particularly in BPO (Business Process Outsourcing) scenarios.
+[Sico — Symbiotic Intelligence for CO-evolution](https://www.microsoft.com/en-us/research/project/sico/) — is an open-source platform for building, managing, and evolving **Digital Workers**: structured AI labor units that co-evolve with human operators through real production work, particularly in BPO (Business Process Outsourcing) scenarios.
 
 The idea behind Sico emerged from large-scale operational challenges observed in Microsoft’s internal environments, especially across BPO-style workflows such as [black-box testing](https://en.wikipedia.org/wiki/Black-box_testing).
 
@@ -42,7 +43,7 @@ Human operators supervise execution quality, intervene when necessary, and guide
  
 This creates a practical **Co-Evolution** loop where humans and Digital Workers continuously improve together through real work. 
 
-For a comprehensive survey of this direction, refer to [**Agentic Evolution: From Self-Improving Agents to Co-Evolving Human–AI Systems** ](docs/agentic-evolution.pdf)
+For a comprehensive survey of this direction, refer to [**Agentic Evolution: From Self-Improving Agents to Co-Evolving Human–AI Systems** ](https://github.com/agentic-evolution/awesome-agentic-evolution/blob/main/Agentic_Evolution__From_Self_Improving_Agents_to_Co_Evolving_Human__AI_Systems.pdf)
 
 > Learn more: [What is Sico](docs/overview.md).
 
