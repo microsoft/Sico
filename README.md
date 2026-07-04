@@ -11,7 +11,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB.svg)](core/pyproject.toml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Overview](docs/overview.md) · [Quick Start](docs/quickstart.md) · [Technical Report](docs/technical_report.md) · [Agentic Evolution](docs/agentic-evolution.pdf) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/roadmap.md)
+[Overview](docs/overview.md) · [Quick Start](docs/quickstart.md) · [Technical Report](docs/technical_report.md) · [Agentic Evolution](https://github.com/agentic-evolution/awesome-agentic-evolution) · [Development](docs/development.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/roadmap.md)
 
 </div>
 
@@ -105,7 +105,7 @@ Frontend (React) ──HTTP/SSE──▶ Nginx ──▶ Backend (Go / Gin)
 On top of this runtime, Sico organizes work into **three loops** that together form the co-evolution cycle between Operators and Digital Workers:
 
 - **Execution Loop**: turns an Operator goal into a traced agent run. The Cortex–Action–Memory stack executes inside an observable Sandbox and emits structured trajectories: actions, intermediate states, tool outputs, and environmental feedback.
-- **Evolution Loop**: converts those trajectories into reusable capability. A Reflector → Curator pipeline distills successful strategies and recurring failure patterns into a per-(project, agent) **Playbook** that is injected into the next run's workspace (training-free), while the same signals can also be fed back into base-model training (training-based).
+- **Evolution Loop**: converts those trajectories into reusable capability. A Reflector → Curator pipeline distills successful strategies and recurring failure patterns into a per-(project, agent) **Playbook** that is injected into the next run's workspace (training-free), while the same signals can also be fed back into base-model training (training-based). Beyond any single model, Sico provides a general-purpose model evolution pipeline that turns real execution traces into round-after-round improvement for any agent. Our first open release, [Sico-Evolution GUI agent](https://huggingface.co/microsoft/GELab-Zero-4B-preview-Sico-Evolution), applies this pipeline to a GUI agent and already reaches 82.9% task success, competitive with leading proprietary models, with more evolved models to follow.
 - **Evaluation Loop** *(planned)*: analyzes failed task trajectories and attributes the root cause using an L1–L4 failure taxonomy, from high-level ownership to concrete failure mode. The results help the Operator provide targeted corrections and feed failure insights back into Experience Learning and future training.
 
 ## Features
