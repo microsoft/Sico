@@ -43,7 +43,7 @@ Human operators supervise execution quality, intervene when necessary, and guide
  
 This creates a practical **Co-Evolution** loop where humans and Digital Workers continuously improve together through real work. 
 
-For a comprehensive survey of this direction, refer to [**Agentic Evolution: From Self-Improving Agents to Co-Evolving Human–AI Systems** ](https://github.com/agentic-evolution/awesome-agentic-evolution/blob/main/Agentic_Evolution__From_Self_Improving_Agents_to_Co_Evolving_Human__AI_Systems.pdf)
+For a comprehensive survey of this direction, refer to [**Agentic Evolution: From Self-Improving Agents to Co-Evolving Human–AI Systems** ](https://www.microsoft.com/en-us/research/publication/agentic-evolution-from-self-improving-agents-to-co-evolving-human-ai-systems/)
 
 > Learn more: [What is Sico](docs/overview.md).
 
