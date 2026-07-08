@@ -526,9 +526,27 @@ func (s *Service) Reconnect(ctx context.Context, sender sse.SSESender, req *conv
 	// ensure agent ID is set for downstream usage, in case only agentInstanceId is provided.
 	agentID := singleAgent.GetAgentId()
 
-	conversation, err := s.ensureConversation(ctx, agentID, req.AgentInstanceID, username)
+	// Reconnect resumes an in-progress turn, so the conversation must already
+	// exist. Look it up read-only rather than get-or-create: a missing
+	// conversation cannot have an ongoing turn to resume, and creating one here
+	// would leave a stray empty conversation as a side effect of a reconnect.
+	conversation, err := s.conversationRepo.Get(ctx, username, agentID, req.AgentInstanceID)
 	if err != nil {
+		logger.CtxError(ctx, "chat_reconnect_conversation_lookup_failed username=%s agentId=%s agentInstanceId=%d err=%v",
+			username, agentID, req.AgentInstanceID, err)
 		return err
+	}
+
+	// No conversation means there is nothing to resume; end the stream without
+	// creating a conversation or touching the ongoing-turn cache.
+	if conversation == nil {
+		logger.CtxInfo(ctx, "chat_reconnect_no_conversation agentInstanceId=%d username=%s",
+			req.AgentInstanceID, username)
+		if sendErr := sender.Send(ctx, buildDoneEvent()); sendErr != nil {
+			logger.CtxWarn(ctx, "chat_reconnect_done_send_failed err=%v", sendErr)
+		}
+		sender.NotifyClosed()
+		return nil
 	}
 
 	sendDoneResponse := func() {
