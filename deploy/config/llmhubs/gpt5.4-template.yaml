@@ -30,6 +30,9 @@ provider_template_type: azure_openai
 config:
   deployment_name: gpt-5.4
   endpoint: https://YOUR-RESOURCE.cognitiveservices.azure.com/
+  # Auth: set AZURE_OPENAI_API_KEY for key-based auth. Leave the env var unset
+  # to fall back to Azure managed identity (DefaultAzureCredential).
+  api_key: ${AZURE_OPENAI_API_KEY:-}
   api_version: preview
   timeout_ms: 60000
   max_tokens: 128000
