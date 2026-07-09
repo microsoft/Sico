@@ -24,6 +24,11 @@ Guidelines for editors:
 
 ### Added
 
+- Gemini adapter now supports function/tool calling and JSON-schema structured
+  output, including schema sanitization for Gemini's OpenAPI-subset (inlining
+  `$ref`/`$defs`, dropping `additionalProperties`, and mapping Optional
+  `anyOf` to `nullable`).
+
 ### Changed
 
 ### Deprecated

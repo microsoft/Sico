@@ -25,11 +25,13 @@ Supports the Gemini generateContent REST API.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from app.llmhubs.adapters.base import BaseAdapter, detect_media_type
 from app.llmhubs.types import (
+    InputContent,
     ModelRegistryEntry,
     OutputItem,
     Request,
@@ -41,26 +43,269 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com"
 
+# OpenAI-style ``tool_choice`` string → Gemini functionCallingConfig.mode.
+_TOOL_CHOICE_MODE_MAP = {"auto": "AUTO", "none": "NONE", "required": "ANY"}
+
+# JSON-Schema keywords Gemini's OpenAPI-subset schema rejects outright.
+_GEMINI_UNSUPPORTED_SCHEMA_KEYS = frozenset({"$schema", "$defs", "$ref", "additionalProperties"})
+
+
+def _resolve_ref(ref: str, defs: dict[str, Any]) -> dict[str, Any] | None:
+    """Resolve a ``#/$defs/Name`` reference against the collected definitions."""
+    prefix = "#/$defs/"
+    if ref.startswith(prefix):
+        target = defs.get(ref[len(prefix):])
+        if isinstance(target, dict):
+            return target
+    return None
+
+
+def _normalize_optional(schema: dict[str, Any]) -> dict[str, Any] | None:
+    """Rewrite a Pydantic ``Optional`` (``anyOf`` with a null branch) via ``nullable``.
+
+    Returns the rewritten schema, or ``None`` if *schema* is not this pattern.
+    """
+    any_of = schema.get("anyOf")
+    if not isinstance(any_of, list):
+        return None
+    non_null = [s for s in any_of if not (isinstance(s, dict) and s.get("type") == "null")]
+    if len(non_null) == len(any_of):
+        return None
+    rest = {k: v for k, v in schema.items() if k != "anyOf"}
+    if len(non_null) == 1 and isinstance(non_null[0], dict):
+        return {**non_null[0], **rest, "nullable": True}
+    if non_null:
+        return {**rest, "anyOf": non_null, "nullable": True}
+    return {**rest, "nullable": True}
+
+
+def _sanitize_schema(
+    schema: Any,
+    defs: dict[str, Any] | None = None,
+    seen: frozenset[str] = frozenset(),
+) -> Any:
+    """Rewrite a JSON Schema into Gemini's supported subset.
+
+    Pydantic-generated tool schemas use ``$ref``/``$defs`` references,
+    ``additionalProperties``, and ``anyOf`` null branches, which Gemini's
+    function-declaration schema rejects. This inlines references, flattens
+    single-element ``allOf`` wrappers, converts Optional to ``nullable``, and
+    drops unsupported keywords.
+    """
+    if defs is None:
+        defs = schema.get("$defs", {}) if isinstance(schema, dict) else {}
+
+    if isinstance(schema, list):
+        return [_sanitize_schema(item, defs, seen) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+
+    # Inline ``$ref`` (merging any sibling keys over the referenced schema).
+    ref = schema.get("$ref")
+    if isinstance(ref, str):
+        siblings = {k: v for k, v in schema.items() if k != "$ref"}
+        target = _resolve_ref(ref, defs)
+        if target is None or ref in seen:
+            # Unresolvable or recursive reference -> generic object fallback.
+            merged, next_seen = {"type": "object", **siblings}, seen
+        else:
+            merged, next_seen = {**target, **siblings}, seen | {ref}
+        return _sanitize_schema(merged, defs, next_seen)
+
+    # Flatten a single-element ``allOf`` wrapper (common Pydantic pattern).
+    all_of = schema.get("allOf")
+    if isinstance(all_of, list) and len(all_of) == 1 and isinstance(all_of[0], dict):
+        merged = {**all_of[0], **{k: v for k, v in schema.items() if k != "allOf"}}
+        return _sanitize_schema(merged, defs, seen)
+
+    # Convert Pydantic's Optional pattern (``anyOf`` with a null branch) to ``nullable``.
+    optional = _normalize_optional(schema)
+    if optional is not None:
+        return _sanitize_schema(optional, defs, seen)
+
+    return {
+        key: _sanitize_schema(value, defs, seen)
+        for key, value in schema.items()
+        if key not in _GEMINI_UNSUPPORTED_SCHEMA_KEYS
+    }
+
+
+def _extract_json_schema(response_format: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the JSON Schema from an OpenAI-style ``json_schema`` response_format."""
+    json_schema = response_format.get("json_schema")
+    if isinstance(json_schema, dict) and isinstance(json_schema.get("schema"), dict):
+        return json_schema["schema"]
+    schema = response_format.get("schema")
+    if isinstance(schema, dict):
+        return schema
+    return None
+
+
+def _build_function_declarations(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert OpenAI-style function tools → Gemini ``functionDeclarations``."""
+    declarations: list[dict[str, Any]] = []
+    for tool in tools:
+        if not isinstance(tool, dict) or tool.get("type") != "function":
+            continue
+        function = tool.get("function")
+        if not isinstance(function, dict):
+            continue
+        name = function.get("name")
+        if not name:
+            continue
+        declaration: dict[str, Any] = {"name": name}
+        description = function.get("description")
+        if description:
+            declaration["description"] = description
+        parameters = function.get("parameters")
+        if isinstance(parameters, dict) and parameters:
+            declaration["parameters"] = _sanitize_schema(parameters)
+        declarations.append(declaration)
+    return declarations
+
+
+def _build_tool_config(tool_choice: Any) -> dict[str, Any] | None:
+    """Convert OpenAI-style ``tool_choice`` → Gemini ``toolConfig``."""
+    if tool_choice is None:
+        return None
+    mode: str | None = None
+    allowed_names: list[str] | None = None
+    if isinstance(tool_choice, str):
+        mode = _TOOL_CHOICE_MODE_MAP.get(tool_choice.strip().lower())
+    elif isinstance(tool_choice, dict):
+        function = tool_choice.get("function")
+        if isinstance(function, dict) and function.get("name"):
+            mode = "ANY"
+            allowed_names = [function["name"]]
+    if mode is None:
+        return None
+    config: dict[str, Any] = {"mode": mode}
+    if allowed_names:
+        config["allowedFunctionNames"] = allowed_names
+    return {"functionCallingConfig": config}
+
+
+def _apply_tools(body: dict[str, Any], request: Request) -> None:
+    """Attach Gemini ``tools``/``toolConfig`` to *body* from the request."""
+    if not request.tools:
+        return
+    declarations = _build_function_declarations(request.tools)
+    if not declarations:
+        return
+    body["tools"] = [{"functionDeclarations": declarations}]
+    tool_config = _build_tool_config(request.options.get("tool_choice"))
+    if tool_config is not None:
+        body["toolConfig"] = tool_config
+
+
+def _coerce_args(arguments: str | dict[str, Any] | None) -> dict[str, Any]:
+    """Return a JSON object for a Gemini ``functionCall.args`` field.
+
+    Internal ``arguments`` follow the OpenAI convention (a JSON string), while
+    Gemini expects a JSON object.
+    """
+    if isinstance(arguments, dict):
+        return arguments
+    if isinstance(arguments, str) and arguments.strip():
+        try:
+            parsed = json.loads(arguments)
+        except (ValueError, TypeError):
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _coerce_response(result: Any) -> dict[str, Any]:
+    """Return a JSON object for a Gemini ``functionResponse.response`` field."""
+    if isinstance(result, dict):
+        return result
+    if isinstance(result, str) and result.strip():
+        try:
+            parsed = json.loads(result)
+        except (ValueError, TypeError):
+            return {"result": result}
+        if isinstance(parsed, dict):
+            return parsed
+        return {"result": parsed}
+    return {"result": result}
+
+
+def _map_role(role: str) -> str:
+    """Map internal roles to Gemini's ``user``/``model`` role set."""
+    if role == "assistant":
+        return "model"
+    if role == "tool":
+        return "user"
+    return role
+
+
+def _build_call_id_name_map(request: Request) -> dict[str, str]:
+    """Map ``call_id`` → function name from prior function_call items.
+
+    Gemini correlates a ``functionResponse`` by function name, but internal
+    ``function_result`` items may only carry the ``call_id``; this recovers the
+    name from the matching ``function_call``.
+    """
+    mapping: dict[str, str] = {}
+    for inp in request.inputs:
+        for c in inp.content:
+            if c.type == "function_call" and c.call_id and c.name:
+                mapping[c.call_id] = c.name
+    return mapping
+
+
+def _content_to_part(c: InputContent, call_id_to_name: dict[str, str]) -> dict[str, Any] | None:
+    """Convert a single ``InputContent`` to a Gemini content part."""
+    if c.type in ("input_text", "text") and c.text:
+        return {"text": c.text}
+    if c.type in ("input_image", "image") and c.image_base64:
+        return {
+            "inlineData": {
+                "mimeType": c.media_type or detect_media_type(base64_data=c.image_base64),
+                "data": c.image_base64,
+            },
+        }
+    if c.type in ("input_file", "file") and c.file_url:
+        return {
+            "fileData": {
+                "fileUri": c.file_url,
+                "mimeType": c.media_type or "application/octet-stream",
+            },
+        }
+    if c.type == "function_call":
+        return {"functionCall": {"name": c.name, "args": _coerce_args(c.arguments)}}
+    if c.type == "function_result":
+        name = c.name or call_id_to_name.get(c.call_id, "")
+        return {"functionResponse": {"name": name, "response": _coerce_response(c.result)}}
+    return None
+
+
+def _synthesize_call_id(name: str, index: int) -> str:
+    """Gemini responses omit a call id; synthesize a stable one for correlation."""
+    return f"gemini-{name or 'function'}-{index}"
+
 
 class GeminiAdapter(BaseAdapter):
     """Built-in adapter for Google Gemini generateContent API.
 
     Limitations:
     - Streaming not yet implemented (falls back to single response).
-    - Tool calls not yet supported.
     """
 
     @staticmethod
     def _validate_request(request: Request) -> None:
-        if request.tools:
-            raise ValueError("Gemini adapter does not support tools")
         if request.previous_response_id:
             raise ValueError("Gemini adapter does not support previous_response_id")
 
         response_format = request.options.get("response_format")
         if response_format is not None:
-            if not (isinstance(response_format, dict) and response_format.get("type") == "json_object"):
-                raise ValueError("Gemini adapter only supports response_format.type=json_object")
+            if not isinstance(response_format, dict):
+                raise ValueError("Gemini adapter response_format must be an object")
+            if response_format.get("type") not in ("json_object", "json_schema", "text"):
+                raise ValueError(
+                    "Gemini adapter supports response_format.type of json_object, json_schema, or text"
+                )
 
         for inp in request.inputs:
             for c in inp.content:
@@ -69,6 +314,8 @@ class GeminiAdapter(BaseAdapter):
                 if c.type in ("input_image", "image") and c.image_base64:
                     continue
                 if c.type in ("input_file", "file") and c.file_url:
+                    continue
+                if c.type in ("function_call", "function_result"):
                     continue
                 if c.type in ("input_image", "image") and c.image_url:
                     raise ValueError("Gemini adapter does not support remote image URLs")
@@ -122,13 +369,20 @@ class GeminiAdapter(BaseAdapter):
             generation_config["logprobs"] = top_logprobs
         if request.options.get("stop") is not None:
             generation_config["stopSequences"] = request.options["stop"]
-        if request.options.get("response_format") is not None:
-            resp_fmt = request.options["response_format"]
-            if isinstance(resp_fmt, dict) and resp_fmt.get("type") == "json_object":
+        response_format = request.options.get("response_format")
+        if isinstance(response_format, dict):
+            fmt_type = response_format.get("type")
+            if fmt_type in ("json_object", "json_schema"):
                 generation_config["responseMimeType"] = "application/json"
+            if fmt_type == "json_schema":
+                schema = _extract_json_schema(response_format)
+                if schema:
+                    generation_config["responseSchema"] = _sanitize_schema(schema)
 
         if generation_config:
             body["generationConfig"] = generation_config
+
+        _apply_tools(body, request)
 
         headers = {"Content-Type": "application/json"}
         headers.update(self._build_auth_headers(entry))
@@ -151,32 +405,19 @@ class GeminiAdapter(BaseAdapter):
     # ------------------------------------------------------------------
 
     def _build_contents(self, request: Request) -> list[dict[str, Any]]:
+        call_id_to_name = _build_call_id_name_map(request)
         contents: list[dict[str, Any]] = []
 
         for inp in request.inputs:
             parts: list[dict[str, Any]] = []
             for c in inp.content:
-                if c.type in ("input_text", "text") and c.text:
-                    parts.append({"text": c.text})
-                elif c.type in ("input_image", "image") and c.image_base64:
-                    parts.append({
-                        "inlineData": {
-                            "mimeType": c.media_type or detect_media_type(base64_data=c.image_base64),
-                            "data": c.image_base64,
-                        },
-                    })
-                elif c.type in ("input_file", "file") and c.file_url:
-                    parts.append({
-                        "fileData": {
-                            "fileUri": c.file_url,
-                            "mimeType": c.media_type or "application/octet-stream",
-                        },
-                    })
+                part = _content_to_part(c, call_id_to_name)
+                if part is not None:
+                    parts.append(part)
 
             if parts:
-                # Gemini uses "user"/"model" roles (not "assistant")
-                role = "model" if inp.role == "assistant" else inp.role
-                contents.append({"role": role, "parts": parts})
+                # Gemini uses "user"/"model" roles (not "assistant"/"tool").
+                contents.append({"role": _map_role(inp.role), "parts": parts})
 
         return contents
 
@@ -186,8 +427,21 @@ class GeminiAdapter(BaseAdapter):
         candidates = data.get("candidates", [])
         if candidates:
             content = candidates[0].get("content", {})
-            for part in content.get("parts", []):
-                if "text" in part:
+            for index, part in enumerate(content.get("parts", [])):
+                function_call = part.get("functionCall")
+                if function_call:
+                    name = function_call.get("name", "")
+                    args = function_call.get("args", {})
+                    arguments = json.dumps(args, ensure_ascii=False) if isinstance(args, dict) else str(args or "")
+                    outputs.append(
+                        OutputItem(
+                            type="function_call",
+                            call_id=_synthesize_call_id(name, index),
+                            name=name,
+                            arguments=arguments,
+                        )
+                    )
+                elif "text" in part:
                     outputs.append(OutputItem(type="text", text=part["text"]))
 
         usage_data = data.get("usageMetadata", {})

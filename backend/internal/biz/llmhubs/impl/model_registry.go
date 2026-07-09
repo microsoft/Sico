@@ -31,8 +31,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"gorm.io/gorm"
 
-	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/errcode"
+	"sico-backend/internal/shared/apperr"
 	agentrepo "sico-backend/internal/store/agent/singleagent/repository"
 	registryrepo "sico-backend/internal/store/llmhubs/repository"
 	dto "sico-backend/internal/transport/http/dto/llmhubs"
@@ -333,9 +333,10 @@ func normalizeStructValue(value any) any {
 	}
 }
 
-func providerSupportsTools(t int32) bool              { return t == 1 || t == 2 }
+// Gemini (7) supports function calling and structured output via the Core GeminiAdapter.
+func providerSupportsTools(t int32) bool              { return t == 1 || t == 2 || t == 7 }
 func providerSupportsPreviousResponseID(t int32) bool { return t == 1 || t == 2 }
-func providerSupportsStructuredOutput(t int32) bool   { return t == 1 || t == 2 }
+func providerSupportsStructuredOutput(t int32) bool   { return t == 1 || t == 2 || t == 7 }
 
 // validateConfig checks that required config fields are present for each provider type.
 func validateConfig(m *registryrepo.ModelRegistryModel) error {

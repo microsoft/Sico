@@ -248,9 +248,10 @@ def _normalize_provider_template_type(value: Any) -> int:
 
 
 def _default_io_profile(model_type: int, provider_template_type: int) -> dict[str, Any]:
-    supports_tools = provider_template_type in (1, 2)
+    # Gemini (7) supports function calling and structured output via the GeminiAdapter.
+    supports_tools = provider_template_type in (1, 2, 7)
     supports_previous_response_id = provider_template_type in (1, 2)
-    supports_structured_output = provider_template_type in (1, 2)
+    supports_structured_output = provider_template_type in (1, 2, 7)
 
     if model_type == 2:
         return {
