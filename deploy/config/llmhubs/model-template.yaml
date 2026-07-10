@@ -40,6 +40,7 @@ io_profile:
 #   config:
 #     endpoint: https://example.cognitiveservices.azure.com/
 #     deployment_name: gpt-5.4
+#     api_key: ${AZURE_OPENAI_API_KEY:-}  # key auth; leave env unset for managed identity
 #     api_version: preview              # v1 API — no api-version in URL
 #     unsupported_request_options: []   # Optional: drop request options the model rejects
 #     timeout_ms: 60000
@@ -51,6 +52,7 @@ io_profile:
 #   config:
 #     endpoint: https://example.services.ai.azure.com/openai/v1
 #     deployment_name: DeepSeek-V3.2
+#     api_key: ${AZURE_OPENAI_API_KEY:-}  # key auth; leave env unset for managed identity
 #     api_version: preview
 #     use_chat_completions: true         # stay on Chat Completions
 #     unsupported_request_options: []    # Optional: drop request options the model rejects
@@ -63,6 +65,7 @@ io_profile:
 #     base_url: https://api.deepseek.com
 #     path: /chat/completions
 #     upstream_model_name: deepseek-reasoner
+#     bearer_token: ${DEEPSEEK_API_KEY}   # sent as Authorization: Bearer <token>
 #     use_chat_completions: true        # Optional: force Chat Completions for this model
 #     use_responses_api: true           # Optional: force Responses API when request shape is supported
 #     passthrough_options: []            # Optional: allow specific request.options keys for all request types
@@ -81,6 +84,7 @@ io_profile:
 #   config:
 #     base_url: https://openrouter.ai/api/v1
 #     upstream_model_name: anthropic/claude-sonnet-4
+#     bearer_token: ${OPENROUTER_API_KEY}  # sent as Authorization: Bearer <token>
 #     use_responses_api: true           # Optional: enable /responses for OpenRouter
 #     site_url: https://example.com  # Optional: sent as HTTP-Referer unless default_headers already sets it
 #     app_name: Sico                      # Optional: sent as X-OpenRouter-Title unless default_headers already sets it
@@ -91,6 +95,7 @@ io_profile:
 #   config:
 #     base_url: https://api.anthropic.com
 #     upstream_model_name: claude-sonnet-4-20250514
+#     api_key_value: ${ANTHROPIC_API_KEY}  # sent as x-api-key header
 #     timeout_ms: 60000
 #     max_tokens: 4096
 #
@@ -98,6 +103,7 @@ io_profile:
 #   config:
 #     base_url: https://generativelanguage.googleapis.com
 #     upstream_model_name: gemini-2.5-flash
+#     api_key_value: ${GEMINI_API_KEY}   # API key for Gemini
 #     timeout_ms: 60000
 #     max_tokens: 4096
 #
@@ -132,6 +138,9 @@ io_profile:
 config:
   deployment_name: your-deployment-name
   endpoint: https://example.openai.azure.com/
+  # Auth: set AZURE_OPENAI_API_KEY for key-based auth. Leave the env var unset
+  # to fall back to Azure managed identity (DefaultAzureCredential).
+  api_key: ${AZURE_OPENAI_API_KEY:-}
   api_version: preview
   timeout_ms: 60000
   max_tokens: 4096
