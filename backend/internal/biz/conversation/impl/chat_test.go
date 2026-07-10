@@ -196,3 +196,36 @@ func hasWaitForReadyOption(opts []grpc.CallOption) bool {
 	}
 	return false
 }
+
+func TestReconnect(t *testing.T) {
+	service := newTestConversationService()
+	service.agentSvc = &mockAgentService{}
+	// chatClient only needs to be non-nil to pass the guard; the no-conversation
+	// path never issues a StreamChat call.
+	service.chatClient = &mockChatClient{}
+
+	t.Run("no conversation does not create one and sends done", func(t *testing.T) {
+		ctx := ctxWithUser("alice")
+		sseSender := sse.NewMockSSESender()
+		req := &conversationdto.ReconnectRequest{AgentInstanceID: 1}
+
+		err := service.Reconnect(ctx, sseSender, req)
+		require.NoError(t, err)
+
+		// Reconnecting to a non-existent conversation must not create one as a
+		// side effect; it should stay absent.
+		conv, err := service.conversationRepo.Get(ctx, "alice", "agent-123", 1)
+		require.NoError(t, err)
+		require.Nil(t, conv)
+
+		// Only a terminal done event is emitted; there is nothing to resume.
+		sentEvents := make([]*sse.Event, 0)
+		for _, event := range sseSender.Sent {
+			if event.Event != "keepalive" {
+				sentEvents = append(sentEvents, event)
+			}
+		}
+		require.Len(t, sentEvents, 1)
+		require.Equal(t, "done", sentEvents[0].Event)
+	})
+}
