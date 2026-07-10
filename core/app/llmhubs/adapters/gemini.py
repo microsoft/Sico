@@ -255,7 +255,54 @@ def _build_call_id_name_map(request: Request) -> dict[str, str]:
     return mapping
 
 
-def _content_to_part(c: InputContent, call_id_to_name: dict[str, str]) -> dict[str, Any] | None:
+def _gemini_original_part(c: InputContent) -> dict[str, Any] | None:
+    """Return the original Gemini ``Part`` stashed in ``provider_metadata``, if any."""
+    provider_metadata = c.provider_metadata
+    if not isinstance(provider_metadata, dict):
+        return None
+    gemini = provider_metadata.get("gemini")
+    if not isinstance(gemini, dict):
+        return None
+    part = gemini.get("part")
+    return part if isinstance(part, dict) else None
+
+
+def _build_call_id_realid_map(request: Request) -> dict[str, str]:
+    """Map ``call_id`` → the real Gemini ``functionCall.id`` captured on the way in.
+
+    Only calls where Gemini actually issued an id are included; synthesized ids
+    are omitted so a fabricated id is never echoed back in a ``functionResponse``.
+    """
+    mapping: dict[str, str] = {}
+    for inp in request.inputs:
+        for c in inp.content:
+            if c.type != "function_call" or not c.call_id:
+                continue
+            part = _gemini_original_part(c)
+            real_id = part.get("functionCall", {}).get("id") if part else None
+            if real_id:
+                mapping[c.call_id] = real_id
+    return mapping
+
+
+def _function_call_part(c: InputContent) -> dict[str, Any]:
+    """Build a Gemini ``functionCall`` part.
+
+    Replays Gemini's original Part verbatim when it was captured (so its opaque
+    id / thoughtSignature survive the round trip); otherwise reconstructs from
+    the neutral fields (legacy / non-Gemini history).
+    """
+    original = _gemini_original_part(c)
+    if original is not None and "functionCall" in original:
+        return original
+    return {"functionCall": {"name": c.name, "args": _coerce_args(c.arguments)}}
+
+
+def _content_to_part(
+    c: InputContent,
+    call_id_to_name: dict[str, str],
+    call_id_to_real_id: dict[str, str],
+) -> dict[str, Any] | None:
     """Convert a single ``InputContent`` to a Gemini content part."""
     if c.type in ("input_text", "text") and c.text:
         return {"text": c.text}
@@ -274,10 +321,16 @@ def _content_to_part(c: InputContent, call_id_to_name: dict[str, str]) -> dict[s
             },
         }
     if c.type == "function_call":
-        return {"functionCall": {"name": c.name, "args": _coerce_args(c.arguments)}}
+        return _function_call_part(c)
     if c.type == "function_result":
         name = c.name or call_id_to_name.get(c.call_id, "")
-        return {"functionResponse": {"name": name, "response": _coerce_response(c.result)}}
+        response_part: dict[str, Any] = {"name": name, "response": _coerce_response(c.result)}
+        real_id = call_id_to_real_id.get(c.call_id)
+        if real_id:
+            # Echo the id Gemini issued so it can match this response to the
+            # correct call (disambiguates parallel calls to the same function).
+            response_part["id"] = real_id
+        return {"functionResponse": response_part}
     return None
 
 
@@ -406,12 +459,13 @@ class GeminiAdapter(BaseAdapter):
 
     def _build_contents(self, request: Request) -> list[dict[str, Any]]:
         call_id_to_name = _build_call_id_name_map(request)
+        call_id_to_real_id = _build_call_id_realid_map(request)
         contents: list[dict[str, Any]] = []
 
         for inp in request.inputs:
             parts: list[dict[str, Any]] = []
             for c in inp.content:
-                part = _content_to_part(c, call_id_to_name)
+                part = _content_to_part(c, call_id_to_name, call_id_to_real_id)
                 if part is not None:
                     parts.append(part)
 
@@ -436,9 +490,14 @@ class GeminiAdapter(BaseAdapter):
                     outputs.append(
                         OutputItem(
                             type="function_call",
-                            call_id=_synthesize_call_id(name, index),
+                            # Prefer the id Gemini issued; synthesize only as a
+                            # legacy fallback for models that omit it.
+                            call_id=function_call.get("id") or _synthesize_call_id(name, index),
                             name=name,
                             arguments=arguments,
+                            # Stash the original Part so its opaque id /
+                            # thoughtSignature can be replayed verbatim next turn.
+                            provider_metadata={"gemini": {"part": part}},
                         )
                     )
                 elif "text" in part:

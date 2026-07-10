@@ -190,6 +190,16 @@ def _build_text_input(c: Any) -> InputContent | None:
     return InputContent(type="text", text=str(c.text))
 
 
+def _extract_provider_metadata(c: Any) -> dict[str, Any] | None:
+    """Pull an adapter's opaque ``provider_metadata`` back off a Content, if present."""
+    additional_properties = getattr(c, "additional_properties", None)
+    if isinstance(additional_properties, dict):
+        provider_metadata = additional_properties.get("provider_metadata")
+        if isinstance(provider_metadata, dict):
+            return provider_metadata
+    return None
+
+
 def _build_function_call_input(c: Any) -> InputContent:
     if c.name == "computer":
         actions: list[dict[str, Any]] | None = None
@@ -213,6 +223,7 @@ def _build_function_call_input(c: Any) -> InputContent:
         call_id=c.call_id,
         name=c.name,
         arguments=c.arguments,
+        provider_metadata=_extract_provider_metadata(c),
     )
 
 
@@ -434,10 +445,14 @@ def _output_refusal_to_content(output: OutputItem) -> Content | None:
 
 
 def _output_function_call_to_content(output: OutputItem) -> Content | None:
+    additional_properties = (
+        {"provider_metadata": output.provider_metadata} if output.provider_metadata else None
+    )
     return Content.from_function_call(
         call_id=output.call_id,
         name=output.name,
         arguments=output.arguments or "",
+        additional_properties=additional_properties,
     )
 
 

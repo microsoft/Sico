@@ -22,10 +22,13 @@ import json
 
 from app.llmhubs.adapters.gemini import (
     GeminiAdapter,
+    _build_call_id_name_map,
+    _build_call_id_realid_map,
     _build_function_declarations,
+    _content_to_part,
     _sanitize_schema,
 )
-from app.llmhubs.types import Input, InputContent, ModelRegistryEntry, Request
+from app.llmhubs.types import Input, InputContent, ModelRegistryEntry, OutputItem, Request
 
 
 def _has_key(node: object, key: str) -> bool:
@@ -409,3 +412,185 @@ def test_sanitize_schema_union_without_null_is_unchanged() -> None:
 
     assert out == {"anyOf": [{"type": "string"}, {"type": "integer"}]}
     assert "nullable" not in out
+
+
+# ---------------------------------------------------------------------------
+# Function-call id + thoughtSignature round trip (provider_metadata passthrough)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_response_preserves_real_call_id_and_part() -> None:
+    data = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "id": "call_abc",
+                                "name": "get_weather",
+                                "args": {"city": "Tokyo"},
+                            },
+                            "thoughtSignature": "SIGNATURE==",
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    resp = GeminiAdapter._parse_response(data)
+
+    assert len(resp.outputs) == 1
+    out = resp.outputs[0]
+    assert out.type == "function_call"
+    assert out.call_id == "call_abc"  # comment 1: real id preserved, not synthesized
+    assert out.name == "get_weather"
+    part = out.provider_metadata["gemini"]["part"]
+    assert part["functionCall"]["id"] == "call_abc"
+    assert part["thoughtSignature"] == "SIGNATURE=="  # comment 3: signature preserved
+
+
+def test_parse_response_synthesizes_call_id_when_missing() -> None:
+    data = {
+        "candidates": [
+            {"content": {"parts": [{"functionCall": {"name": "get_weather", "args": {"city": "Paris"}}}]}}
+        ]
+    }
+
+    resp = GeminiAdapter._parse_response(data)
+
+    out = resp.outputs[0]
+    assert out.call_id == "gemini-get_weather-0"  # legacy fallback
+    assert "id" not in out.provider_metadata["gemini"]["part"]["functionCall"]
+
+
+def test_content_to_part_replays_original_part_verbatim() -> None:
+    original = {
+        "functionCall": {"id": "call_abc", "name": "get_weather", "args": {"city": "Tokyo"}},
+        "thoughtSignature": "SIGNATURE==",
+    }
+    c = InputContent(
+        type="function_call",
+        call_id="call_abc",
+        name="get_weather",
+        arguments='{"city": "Tokyo"}',
+        provider_metadata={"gemini": {"part": original}},
+    )
+
+    part = _content_to_part(c, {}, {})
+
+    # comments 2/3: the original Part (id + thoughtSignature) is replayed unchanged.
+    assert part == original
+
+
+def test_content_to_part_reconstructs_when_no_provider_metadata() -> None:
+    c = InputContent(type="function_call", call_id="x", name="get_weather", arguments='{"city": "Tokyo"}')
+
+    part = _content_to_part(c, {}, {})
+
+    assert part == {"functionCall": {"name": "get_weather", "args": {"city": "Tokyo"}}}
+    assert "id" not in part["functionCall"]
+
+
+def test_function_response_echoes_real_id() -> None:
+    c = InputContent(type="function_result", call_id="call_abc", name="get_weather", result={"tempC": 20})
+
+    part = _content_to_part(c, {"call_abc": "get_weather"}, {"call_abc": "call_abc"})
+
+    assert part["functionResponse"]["name"] == "get_weather"
+    assert part["functionResponse"]["id"] == "call_abc"
+
+
+def test_function_response_omits_synthetic_id() -> None:
+    c = InputContent(type="function_result", call_id="gemini-get_weather-0", name="get_weather", result={"tempC": 20})
+
+    # No real-id mapping → this call had a synthesized id which must NOT be echoed.
+    part = _content_to_part(c, {}, {})
+
+    assert "id" not in part["functionResponse"]
+
+
+def test_build_call_id_realid_map_only_keeps_real_ids() -> None:
+    request = Request(
+        inputs=[
+            Input(
+                role="assistant",
+                content=[
+                    InputContent(
+                        type="function_call",
+                        call_id="call_abc",
+                        name="f",
+                        provider_metadata={"gemini": {"part": {"functionCall": {"id": "call_abc", "name": "f"}}}},
+                    ),
+                    InputContent(type="function_call", call_id="gemini-g-1", name="g"),  # synthesized, no part
+                ],
+            )
+        ]
+    )
+
+    assert _build_call_id_realid_map(request) == {"call_abc": "call_abc"}
+
+
+def test_parallel_same_function_calls_stay_distinct() -> None:
+    part_a = {"functionCall": {"id": "call_A", "name": "search", "args": {"q": "a"}}, "thoughtSignature": "SA"}
+    part_b = {"functionCall": {"id": "call_B", "name": "search", "args": {"q": "b"}}, "thoughtSignature": "SB"}
+    request = Request(
+        inputs=[
+            Input(
+                role="assistant",
+                content=[
+                    InputContent(
+                        type="function_call", call_id="call_A", name="search",
+                        arguments='{"q": "a"}', provider_metadata={"gemini": {"part": part_a}},
+                    ),
+                    InputContent(
+                        type="function_call", call_id="call_B", name="search",
+                        arguments='{"q": "b"}', provider_metadata={"gemini": {"part": part_b}},
+                    ),
+                ],
+            ),
+            Input(
+                role="tool",
+                content=[
+                    InputContent(type="function_result", call_id="call_A", name="search", result={"r": "a"}),
+                    InputContent(type="function_result", call_id="call_B", name="search", result={"r": "b"}),
+                ],
+            ),
+        ]
+    )
+    name_map = _build_call_id_name_map(request)
+    real_id_map = _build_call_id_realid_map(request)
+
+    # Assistant calls replay verbatim with their distinct ids + signatures.
+    assert _content_to_part(request.inputs[0].content[0], name_map, real_id_map) == part_a
+    assert _content_to_part(request.inputs[0].content[1], name_map, real_id_map) == part_b
+    # Each tool response carries the matching real id.
+    fr_a = _content_to_part(request.inputs[1].content[0], name_map, real_id_map)
+    fr_b = _content_to_part(request.inputs[1].content[1], name_map, real_id_map)
+    assert fr_a["functionResponse"]["id"] == "call_A"
+    assert fr_b["functionResponse"]["id"] == "call_B"
+
+
+def test_chat_client_round_trips_provider_metadata() -> None:
+    # End-to-end plumbing: OutputItem → agent_framework Content → InputContent.
+    # Also verifies agent_framework preserves Content.additional_properties.
+    from app.llmhubs.chat_client import _build_function_call_input, _output_function_call_to_content
+
+    pm = {
+        "gemini": {
+            "part": {
+                "functionCall": {"id": "call_abc", "name": "f", "args": {}},
+                "thoughtSignature": "SIG",
+            }
+        }
+    }
+    out = OutputItem(type="function_call", call_id="call_abc", name="f", arguments="{}", provider_metadata=pm)
+
+    content = _output_function_call_to_content(out)
+    assert content.additional_properties["provider_metadata"] == pm
+
+    back = _build_function_call_input(content)
+    assert back.type == "function_call"
+    assert back.call_id == "call_abc"
+    assert back.provider_metadata == pm
