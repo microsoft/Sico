@@ -594,3 +594,179 @@ def test_chat_client_round_trips_provider_metadata() -> None:
     assert back.type == "function_call"
     assert back.call_id == "call_abc"
     assert back.provider_metadata == pm
+
+
+# ---------------------------------------------------------------------------
+# Schema sanitizer: allowlist + const/format handling (Comment 1)
+# ---------------------------------------------------------------------------
+
+
+def test_sanitize_schema_const_becomes_enum() -> None:
+    # Literal["fixed"] -> {"const": "fixed"}; Gemini has no const, so use enum.
+    assert _sanitize_schema({"const": "fixed"}) == {"enum": ["fixed"], "type": "string"}
+
+
+def test_sanitize_schema_const_infers_numeric_type() -> None:
+    assert _sanitize_schema({"const": 3}) == {"enum": [3], "type": "integer"}
+
+
+def test_sanitize_schema_drops_exclusive_bounds() -> None:
+    # Field(gt=0, lt=10) -> exclusiveMinimum/Maximum, which Gemini cannot represent.
+    out = _sanitize_schema({"type": "integer", "exclusiveMinimum": 0, "exclusiveMaximum": 10})
+    assert out == {"type": "integer"}
+
+
+def test_sanitize_schema_drops_unsupported_string_format() -> None:
+    # EmailStr -> {"type": "string", "format": "email"}; drop format, keep string.
+    out = _sanitize_schema({"type": "string", "format": "email"})
+    assert out == {"type": "string"}
+
+
+def test_sanitize_schema_keeps_supported_format() -> None:
+    assert _sanitize_schema({"type": "integer", "format": "int64"}) == {"type": "integer", "format": "int64"}
+    assert _sanitize_schema({"type": "string", "format": "date-time"}) == {"type": "string", "format": "date-time"}
+
+
+def test_sanitize_schema_drops_unrepresentable_keywords() -> None:
+    out = _sanitize_schema(
+        {
+            "type": "array",
+            "items": {"type": "number", "multipleOf": 2},
+            "uniqueItems": True,
+        }
+    )
+    assert out == {"type": "array", "items": {"type": "number"}}
+    assert not _has_key(out, "uniqueItems")
+    assert not _has_key(out, "multipleOf")
+
+
+def test_sanitize_schema_const_inside_properties_keeps_field_names() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "kind": {"const": "user"},
+            "name": {"type": "string"},
+        },
+        "required": ["kind"],
+    }
+
+    out = _sanitize_schema(schema)
+
+    # Field names under ``properties`` must survive the allowlist.
+    assert out["properties"]["kind"] == {"enum": ["user"], "type": "string"}
+    assert out["properties"]["name"] == {"type": "string"}
+    assert out["required"] == ["kind"]
+
+
+# ---------------------------------------------------------------------------
+# Signed text Part preserved + replayed (Comment 2)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_response_preserves_signed_text_part() -> None:
+    data = {"candidates": [{"content": {"parts": [{"text": "Let me think.", "thoughtSignature": "TSIG"}]}}]}
+
+    out = GeminiAdapter._parse_response(data).outputs[0]
+
+    assert out.type == "text"
+    assert out.text == "Let me think."
+    assert out.provider_metadata["gemini"]["part"]["thoughtSignature"] == "TSIG"
+
+
+def test_parse_response_unsigned_text_has_no_provider_metadata() -> None:
+    data = {"candidates": [{"content": {"parts": [{"text": "hello"}]}}]}
+
+    out = GeminiAdapter._parse_response(data).outputs[0]
+
+    assert out.type == "text"
+    assert out.provider_metadata is None
+
+
+def test_content_to_part_replays_signed_text_part() -> None:
+    original = {"text": "Let me think.", "thoughtSignature": "TSIG"}
+    c = InputContent(type="text", text="Let me think.", provider_metadata={"gemini": {"part": original}})
+
+    assert _content_to_part(c, {}, {}) == original
+
+
+def test_two_turn_signed_text_plus_function_call() -> None:
+    # Gemini 3 turn: a signed thinking-text Part followed by a signed functionCall.
+    data = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {"text": "I'll read the file.", "thoughtSignature": "T_TEXT"},
+                        {
+                            "functionCall": {"id": "call_1", "name": "read", "args": {"path": "a.txt"}},
+                            "thoughtSignature": "T_CALL",
+                        },
+                    ]
+                }
+            }
+        ]
+    }
+    outputs = GeminiAdapter._parse_response(data).outputs
+    assert [o.type for o in outputs] == ["text", "function_call"]
+
+    # Next-turn request: feed both model parts back plus a tool result.
+    request = Request(
+        inputs=[
+            Input(
+                role="assistant",
+                content=[
+                    InputContent(type="text", text=outputs[0].text, provider_metadata=outputs[0].provider_metadata),
+                    InputContent(
+                        type="function_call",
+                        call_id=outputs[1].call_id,
+                        name=outputs[1].name,
+                        arguments=outputs[1].arguments,
+                        provider_metadata=outputs[1].provider_metadata,
+                    ),
+                ],
+            ),
+            Input(
+                role="tool",
+                content=[InputContent(type="function_result", call_id="call_1", name="read", result={"ok": True})],
+            ),
+        ]
+    )
+
+    contents = GeminiAdapter()._build_contents(request)
+
+    model_parts = contents[0]["parts"]
+    # Both signed Parts replayed verbatim, as two distinct parts (not merged).
+    assert len(model_parts) == 2
+    assert model_parts[0] == {"text": "I'll read the file.", "thoughtSignature": "T_TEXT"}
+    assert model_parts[1]["functionCall"]["id"] == "call_1"
+    assert model_parts[1]["thoughtSignature"] == "T_CALL"
+    # Tool response echoes the real id.
+    assert contents[1]["parts"][0]["functionResponse"]["id"] == "call_1"
+
+
+def test_chat_client_round_trips_text_provider_metadata() -> None:
+    from app.llmhubs.chat_client import _build_text_input, _output_text_to_content
+
+    pm = {"gemini": {"part": {"text": "thinking", "thoughtSignature": "SIG"}}}
+    out = OutputItem(type="text", text="thinking", provider_metadata=pm)
+
+    content = _output_text_to_content(out)
+    assert content.additional_properties["provider_metadata"] == pm
+
+    back = _build_text_input(content)
+    assert back.type == "text"
+    assert back.provider_metadata == pm
+
+
+def test_content_to_part_replay_is_defensive_copy() -> None:
+    original = {"functionCall": {"id": "call_1", "name": "f", "args": {"x": 1}}, "thoughtSignature": "S"}
+    pm = {"gemini": {"part": original}}
+    c = InputContent(type="function_call", call_id="call_1", name="f", provider_metadata=pm)
+
+    part = _content_to_part(c, {}, {})
+    part["thoughtSignature"] = "MUTATED"
+    part["functionCall"]["args"]["x"] = 999
+
+    # Mutating the emitted part must not corrupt the stored provider_metadata.
+    assert pm["gemini"]["part"]["thoughtSignature"] == "S"
+    assert pm["gemini"]["part"]["functionCall"]["args"]["x"] == 1

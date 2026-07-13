@@ -25,6 +25,7 @@ Supports the Gemini generateContent REST API.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from typing import Any
@@ -46,8 +47,20 @@ _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com"
 # OpenAI-style ``tool_choice`` string → Gemini functionCallingConfig.mode.
 _TOOL_CHOICE_MODE_MAP = {"auto": "AUTO", "none": "NONE", "required": "ANY"}
 
-# JSON-Schema keywords Gemini's OpenAPI-subset schema rejects outright.
-_GEMINI_UNSUPPORTED_SCHEMA_KEYS = frozenset({"$schema", "$defs", "$ref", "additionalProperties"})
+# Fields Gemini's OpenAPI-subset ``Schema`` accepts (google-genai ``types.Schema``).
+# Anything else is dropped rather than forwarded, because Gemini rejects the whole
+# request when it sees an unknown field.
+_GEMINI_SCHEMA_ALLOWED_KEYS = frozenset(
+    {
+        "type", "format", "title", "description", "nullable", "default", "enum",
+        "items", "minItems", "maxItems",
+        "properties", "required", "propertyOrdering", "minProperties", "maxProperties",
+        "minimum", "maximum", "minLength", "maxLength", "pattern", "anyOf", "example",
+    }
+)
+# ``format`` values Gemini accepts; unsupported ones (email/uri/uuid/date/binary/...)
+# are dropped while the base ``type`` is kept.
+_GEMINI_ALLOWED_FORMATS = frozenset({"date-time", "int32", "int64", "float", "double"})
 
 
 def _resolve_ref(ref: str, defs: dict[str, Any]) -> dict[str, Any] | None:
@@ -79,6 +92,37 @@ def _normalize_optional(schema: dict[str, Any]) -> dict[str, Any] | None:
     return {**rest, "nullable": True}
 
 
+def _json_type_of(value: Any) -> str:
+    """Best-effort JSON-Schema ``type`` for a literal ``const`` value."""
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    return "string"
+
+
+def _reduce_to_gemini_fields(schema: dict[str, Any]) -> dict[str, Any]:
+    """Reduce one schema node to the fields Gemini's ``Schema`` accepts.
+
+    Converts a single-value ``const`` to ``enum`` (adding ``type`` when absent),
+    drops ``format`` values Gemini rejects while keeping the base ``type``, and
+    filters remaining keys against an explicit allowlist. Constraints Gemini
+    cannot represent (``exclusiveMinimum``/``exclusiveMaximum``, ``multipleOf``,
+    ``uniqueItems``, ...) fall outside the allowlist and are dropped.
+    """
+    reduced = dict(schema)
+    if "const" in reduced:
+        const_value = reduced.pop("const")
+        reduced.setdefault("enum", [const_value])
+        reduced.setdefault("type", _json_type_of(const_value))
+    fmt = reduced.get("format")
+    if isinstance(fmt, str) and fmt not in _GEMINI_ALLOWED_FORMATS:
+        reduced.pop("format")
+    return {key: value for key, value in reduced.items() if key in _GEMINI_SCHEMA_ALLOWED_KEYS}
+
+
 def _sanitize_schema(
     schema: Any,
     defs: dict[str, Any] | None = None,
@@ -86,11 +130,12 @@ def _sanitize_schema(
 ) -> Any:
     """Rewrite a JSON Schema into Gemini's supported subset.
 
-    Pydantic-generated tool schemas use ``$ref``/``$defs`` references,
-    ``additionalProperties``, and ``anyOf`` null branches, which Gemini's
-    function-declaration schema rejects. This inlines references, flattens
-    single-element ``allOf`` wrappers, converts Optional to ``nullable``, and
-    drops unsupported keywords.
+    Pydantic-generated schemas use ``$ref``/``$defs`` references, ``allOf``
+    wrappers, ``anyOf`` null branches, and keywords (``const``,
+    ``exclusiveMinimum``, unsupported ``format`` values, ...) that Gemini's
+    ``Schema`` rejects. This inlines references, flattens single-element
+    ``allOf`` wrappers, converts Optional to ``nullable`` and ``const`` to
+    ``enum``, and keeps only Gemini-supported fields (allowlist).
     """
     if defs is None:
         defs = schema.get("$defs", {}) if isinstance(schema, dict) else {}
@@ -123,11 +168,16 @@ def _sanitize_schema(
     if optional is not None:
         return _sanitize_schema(optional, defs, seen)
 
-    return {
-        key: _sanitize_schema(value, defs, seen)
-        for key, value in schema.items()
-        if key not in _GEMINI_UNSUPPORTED_SCHEMA_KEYS
-    }
+    reduced = _reduce_to_gemini_fields(schema)
+    result: dict[str, Any] = {}
+    for key, value in reduced.items():
+        # ``properties`` is a map of field-name -> schema; recurse into each
+        # sub-schema but keep the field names (they are not schema keywords).
+        if key == "properties" and isinstance(value, dict):
+            result[key] = {name: _sanitize_schema(sub, defs, seen) for name, sub in value.items()}
+        else:
+            result[key] = _sanitize_schema(value, defs, seen)
+    return result
 
 
 def _extract_json_schema(response_format: dict[str, Any]) -> dict[str, Any] | None:
@@ -294,8 +344,20 @@ def _function_call_part(c: InputContent) -> dict[str, Any]:
     """
     original = _gemini_original_part(c)
     if original is not None and "functionCall" in original:
-        return original
+        return copy.deepcopy(original)
     return {"functionCall": {"name": c.name, "args": _coerce_args(c.arguments)}}
+
+
+def _text_part(c: InputContent) -> dict[str, Any]:
+    """Build a Gemini text part.
+
+    Replays Gemini's original signed text Part verbatim (keeping its
+    ``thoughtSignature``) when captured; otherwise emits a plain text part.
+    """
+    original = _gemini_original_part(c)
+    if original is not None and "text" in original:
+        return copy.deepcopy(original)
+    return {"text": c.text}
 
 
 def _content_to_part(
@@ -305,7 +367,7 @@ def _content_to_part(
 ) -> dict[str, Any] | None:
     """Convert a single ``InputContent`` to a Gemini content part."""
     if c.type in ("input_text", "text") and c.text:
-        return {"text": c.text}
+        return _text_part(c)
     if c.type in ("input_image", "image") and c.image_base64:
         return {
             "inlineData": {
@@ -501,7 +563,10 @@ class GeminiAdapter(BaseAdapter):
                         )
                     )
                 elif "text" in part:
-                    outputs.append(OutputItem(type="text", text=part["text"]))
+                    # Preserve a signed thinking-text Part so its thoughtSignature
+                    # can be replayed verbatim (Gemini 3 requires it echoed back).
+                    provider_metadata = {"gemini": {"part": part}} if "thoughtSignature" in part else None
+                    outputs.append(OutputItem(type="text", text=part["text"], provider_metadata=provider_metadata))
 
         usage_data = data.get("usageMetadata", {})
         usage = Usage(

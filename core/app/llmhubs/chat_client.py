@@ -187,7 +187,7 @@ def _scan_computer_call_ids(messages: MutableSequence[Message]) -> set[str]:
 def _build_text_input(c: Any) -> InputContent | None:
     if not c.text:
         return None
-    return InputContent(type="text", text=str(c.text))
+    return InputContent(type="text", text=str(c.text), provider_metadata=_extract_provider_metadata(c))
 
 
 def _extract_provider_metadata(c: Any) -> dict[str, Any] | None:
@@ -432,10 +432,12 @@ def _output_text_to_content(output: OutputItem) -> Content | None:
     if not (output.text or output.annotations):
         return None
     annotations = _parse_url_citations(output.annotations) if output.annotations else None
-    return Content.from_text(
-        text=output.text,
-        **({"annotations": annotations} if annotations else {}),
-    )
+    kwargs: dict[str, Any] = {}
+    if annotations:
+        kwargs["annotations"] = annotations
+    if output.provider_metadata:
+        kwargs["additional_properties"] = {"provider_metadata": output.provider_metadata}
+    return Content.from_text(text=output.text, **kwargs)
 
 
 def _output_refusal_to_content(output: OutputItem) -> Content | None:
