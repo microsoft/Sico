@@ -89,10 +89,11 @@ func getDefaultConfig() *AuthConfig {
 				{Path: "/api/sico/project/asset", Method: http.MethodPost},
 				{Path: "/api/sico/project/sas_asset", Method: http.MethodGet},
 				{Path: "/api/sico/project/asset", Method: http.MethodDelete},
+				{Path: "/api/sico/sandbox/apply", Method: http.MethodPost},
+				{Path: "/api/sico/sandbox/release", Method: http.MethodPost},
 			},
 			ExcludedPrefixes: []string{
 				"/api/sico/docs/",
-				"/api/sico/sandbox",
 			},
 			JWTAuth: jwtx.New(jwtx.NewStoreWithCache(newCacheFromEnv())),
 		}
