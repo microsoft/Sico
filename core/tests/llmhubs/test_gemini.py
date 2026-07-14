@@ -606,8 +606,68 @@ def test_sanitize_schema_const_becomes_enum() -> None:
     assert _sanitize_schema({"const": "fixed"}) == {"enum": ["fixed"], "type": "string"}
 
 
-def test_sanitize_schema_const_infers_numeric_type() -> None:
-    assert _sanitize_schema({"const": 3}) == {"enum": [3], "type": "integer"}
+def test_sanitize_schema_numeric_const_drops_enum() -> None:
+    # Gemini's enum accepts strings only, so a numeric literal keeps its type
+    # but drops the (unrepresentable) enum constraint.
+    assert _sanitize_schema({"const": 3}) == {"type": "integer"}
+
+
+def test_sanitize_schema_bool_const_drops_enum() -> None:
+    assert _sanitize_schema({"const": True}) == {"type": "boolean"}
+
+
+def test_sanitize_schema_null_const_dropped() -> None:
+    # Literal[None] cannot be represented (no NULL type, no null enum); drop to an
+    # unconstrained schema rather than emit something Gemini rejects.
+    assert _sanitize_schema({"const": None}) == {}
+
+
+def test_sanitize_schema_null_type_dropped() -> None:
+    # A null-only type (scalar "null" or ["null"]) has no Gemini Type member.
+    assert _sanitize_schema({"type": "null"}) == {}
+    assert _sanitize_schema({"type": ["null"]}) == {}
+
+
+def test_sanitize_schema_all_null_anyof_dropped() -> None:
+    # An anyOf whose only branch is null is unrepresentable; drop to unconstrained
+    # rather than emit a bare {"nullable": true} with no base type.
+    assert _sanitize_schema({"anyOf": [{"type": "null"}]}) == {}
+
+
+def test_sanitize_schema_data_keys_preserved() -> None:
+    # default/example hold literal data, not sub-schemas; their (non-keyword)
+    # keys must survive rather than being stripped by the field allowlist.
+    schema = {"type": "object", "default": {"mode": "fast"}, "example": {"k": 1}}
+    assert _sanitize_schema(schema) == {
+        "type": "object",
+        "default": {"mode": "fast"},
+        "example": {"k": 1},
+    }
+
+
+def test_sanitize_schema_int_enum_drops_enum() -> None:
+    # IntEnum -> integer-valued enum, which Gemini's string-only enum rejects.
+    assert _sanitize_schema({"type": "integer", "enum": [1, 2, 3]}) == {"type": "integer"}
+
+
+def test_sanitize_schema_string_enum_kept() -> None:
+    assert _sanitize_schema({"type": "string", "enum": ["a", "b"]}) == {"type": "string", "enum": ["a", "b"]}
+
+
+def test_sanitize_schema_nullable_type_array() -> None:
+    assert _sanitize_schema({"type": ["string", "null"]}) == {"type": "string", "nullable": True}
+
+
+def test_sanitize_schema_multi_type_array_becomes_anyof() -> None:
+    assert _sanitize_schema({"type": ["string", "integer"]}) == {
+        "anyOf": [{"type": "string"}, {"type": "integer"}]
+    }
+
+
+def test_sanitize_schema_oneof_becomes_anyof() -> None:
+    assert _sanitize_schema({"oneOf": [{"type": "string"}, {"type": "integer"}]}) == {
+        "anyOf": [{"type": "string"}, {"type": "integer"}]
+    }
 
 
 def test_sanitize_schema_drops_exclusive_bounds() -> None:

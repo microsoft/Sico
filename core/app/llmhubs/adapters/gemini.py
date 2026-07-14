@@ -62,6 +62,11 @@ _GEMINI_SCHEMA_ALLOWED_KEYS = frozenset(
 # are dropped while the base ``type`` is kept.
 _GEMINI_ALLOWED_FORMATS = frozenset({"date-time", "int32", "int64", "float", "double"})
 
+# Schema keys whose values are literal data, not sub-schemas. They must be passed
+# through verbatim -- recursing would let the field allowlist strip non-keyword
+# data keys (e.g. an object-valued ``default`` would be reduced to ``{}``).
+_GEMINI_SCHEMA_DATA_KEYS = frozenset({"default", "example"})
+
 
 def _resolve_ref(ref: str, defs: dict[str, Any]) -> dict[str, Any] | None:
     """Resolve a ``#/$defs/Name`` reference against the collected definitions."""
@@ -89,10 +94,12 @@ def _normalize_optional(schema: dict[str, Any]) -> dict[str, Any] | None:
         return {**non_null[0], **rest, "nullable": True}
     if non_null:
         return {**rest, "anyOf": non_null, "nullable": True}
-    return {**rest, "nullable": True}
+    # Only null branches: unrepresentable (Gemini has no NULL type). Drop the
+    # ``anyOf`` to an unconstrained schema, matching ``Literal[None]`` -> ``{}``.
+    return rest
 
 
-def _json_type_of(value: Any) -> str:
+def _json_type_of(value: Any) -> str | None:
     """Best-effort JSON-Schema ``type`` for a literal ``const`` value."""
     if isinstance(value, bool):
         return "boolean"
@@ -100,23 +107,72 @@ def _json_type_of(value: Any) -> str:
         return "integer"
     if isinstance(value, float):
         return "number"
-    return "string"
+    if isinstance(value, str):
+        return "string"
+    return None
 
 
-def _reduce_to_gemini_fields(schema: dict[str, Any]) -> dict[str, Any]:
-    """Reduce one schema node to the fields Gemini's ``Schema`` accepts.
+def _normalize_const_and_enum(reduced: dict[str, Any]) -> None:
+    """Normalize ``const``/``enum`` to Gemini's string-only ``enum`` contract.
 
-    Converts a single-value ``const`` to ``enum`` (adding ``type`` when absent),
-    drops ``format`` values Gemini rejects while keeping the base ``type``, and
-    filters remaining keys against an explicit allowlist. Constraints Gemini
-    cannot represent (``exclusiveMinimum``/``exclusiveMaximum``, ``multipleOf``,
-    ``uniqueItems``, ...) fall outside the allowlist and are dropped.
+    ``const`` becomes a single-value ``enum`` (inferring ``type``). Gemini's
+    ``Schema.enum`` accepts strings only, so a non-string enum (``Literal[3]``,
+    ``IntEnum``, ``Literal[True]``, ``Literal[None]``) cannot be represented and
+    is dropped, keeping whatever base ``type`` was inferable.
     """
-    reduced = dict(schema)
     if "const" in reduced:
         const_value = reduced.pop("const")
         reduced.setdefault("enum", [const_value])
-        reduced.setdefault("type", _json_type_of(const_value))
+        inferred = _json_type_of(const_value)
+        if inferred is not None:
+            reduced.setdefault("type", inferred)
+    enum = reduced.get("enum")
+    if isinstance(enum, list) and not all(isinstance(entry, str) for entry in enum):
+        reduced.pop("enum", None)
+
+
+def _normalize_type(reduced: dict[str, Any]) -> None:
+    """Collapse a JSON-Schema ``type`` into Gemini's single-valued ``type``.
+
+    ``["string", "null"]`` becomes ``type: string`` + ``nullable: true``; a wider
+    union becomes ``anyOf``. A null-only ``type`` (scalar ``"null"`` or
+    ``["null"]``) is dropped, since Gemini's ``Schema.type`` has no NULL member.
+    """
+    type_value = reduced.get("type")
+    if type_value == "null":
+        types = ["null"]
+    elif isinstance(type_value, list):
+        types = type_value
+    else:
+        return
+    non_null = [entry for entry in types if entry != "null"]
+    if len(non_null) == 1:
+        reduced["type"] = non_null[0]
+    elif len(non_null) > 1:
+        reduced.pop("type", None)
+        reduced.setdefault("anyOf", [{"type": entry} for entry in non_null])
+    else:
+        reduced.pop("type", None)
+    if non_null and "null" in types:
+        reduced["nullable"] = True
+
+
+def _reduce_to_gemini_fields(schema: dict[str, Any]) -> dict[str, Any]:
+    """Reduce one schema node to the fields and value shapes Gemini's ``Schema`` accepts.
+
+    Converts ``oneOf`` to ``anyOf`` (Gemini has no ``oneOf``), normalizes
+    ``const``/``enum`` and ``type`` value shapes, drops ``format`` values Gemini
+    rejects while keeping the base ``type``, and filters remaining keys against an
+    explicit allowlist. Constraints Gemini cannot represent
+    (``exclusiveMinimum``/``exclusiveMaximum``, ``multipleOf``, ``uniqueItems``,
+    ...) fall outside the allowlist and are dropped.
+    """
+    reduced = dict(schema)
+    one_of = reduced.get("oneOf")
+    if isinstance(one_of, list) and "anyOf" not in reduced:
+        reduced["anyOf"] = one_of
+    _normalize_const_and_enum(reduced)
+    _normalize_type(reduced)
     fmt = reduced.get("format")
     if isinstance(fmt, str) and fmt not in _GEMINI_ALLOWED_FORMATS:
         reduced.pop("format")
@@ -171,9 +227,14 @@ def _sanitize_schema(
     reduced = _reduce_to_gemini_fields(schema)
     result: dict[str, Any] = {}
     for key, value in reduced.items():
-        # ``properties`` is a map of field-name -> schema; recurse into each
-        # sub-schema but keep the field names (they are not schema keywords).
-        if key == "properties" and isinstance(value, dict):
+        if key in _GEMINI_SCHEMA_DATA_KEYS:
+            # ``default``/``example`` hold literal data, not sub-schemas; pass
+            # them through verbatim (recursing would let the allowlist strip
+            # non-keyword data keys, e.g. reduce an object default to ``{}``).
+            result[key] = value
+        elif key == "properties" and isinstance(value, dict):
+            # ``properties`` is a map of field-name -> schema; recurse into each
+            # sub-schema but keep the field names (they are not schema keywords).
             result[key] = {name: _sanitize_schema(sub, defs, seen) for name, sub in value.items()}
         else:
             result[key] = _sanitize_schema(value, defs, seen)
