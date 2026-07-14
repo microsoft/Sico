@@ -616,22 +616,30 @@ def test_sanitize_schema_bool_const_drops_enum() -> None:
     assert _sanitize_schema({"const": True}) == {"type": "boolean"}
 
 
-def test_sanitize_schema_null_const_dropped() -> None:
-    # Literal[None] cannot be represented (no NULL type, no null enum); drop to an
-    # unconstrained schema rather than emit something Gemini rejects.
-    assert _sanitize_schema({"const": None}) == {}
+def test_sanitize_schema_null_const_becomes_null_type() -> None:
+    # Literal[None] -> {"const": None}. Gemini's Type enum includes NULL, so keep
+    # the null requirement as {"type": "null"} instead of dropping it.
+    assert _sanitize_schema({"const": None}) == {"type": "null"}
 
 
-def test_sanitize_schema_null_type_dropped() -> None:
-    # A null-only type (scalar "null" or ["null"]) has no Gemini Type member.
-    assert _sanitize_schema({"type": "null"}) == {}
-    assert _sanitize_schema({"type": ["null"]}) == {}
+def test_sanitize_schema_null_type_preserved() -> None:
+    # A null-only type (scalar "null" or ["null"]) is a valid Gemini Type.
+    assert _sanitize_schema({"type": "null"}) == {"type": "null"}
+    assert _sanitize_schema({"type": ["null"]}) == {"type": "null"}
 
 
-def test_sanitize_schema_all_null_anyof_dropped() -> None:
-    # An anyOf whose only branch is null is unrepresentable; drop to unconstrained
-    # rather than emit a bare {"nullable": true} with no base type.
-    assert _sanitize_schema({"anyOf": [{"type": "null"}]}) == {}
+def test_sanitize_schema_all_null_anyof_becomes_null_type() -> None:
+    # An anyOf whose only branch is null keeps the null requirement as type: null.
+    assert _sanitize_schema({"anyOf": [{"type": "null"}]}) == {"type": "null"}
+
+
+def test_sanitize_schema_nullable_oneof_becomes_nullable() -> None:
+    # oneOf is rewritten to anyOf; a string|null union collapses to a scalar type
+    # plus nullable, retaining the null option (not an unconstrained {} branch).
+    assert _sanitize_schema({"oneOf": [{"type": "string"}, {"type": "null"}]}) == {
+        "type": "string",
+        "nullable": True,
+    }
 
 
 def test_sanitize_schema_data_keys_preserved() -> None:

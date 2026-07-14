@@ -94,13 +94,15 @@ def _normalize_optional(schema: dict[str, Any]) -> dict[str, Any] | None:
         return {**non_null[0], **rest, "nullable": True}
     if non_null:
         return {**rest, "anyOf": non_null, "nullable": True}
-    # Only null branches: unrepresentable (Gemini has no NULL type). Drop the
-    # ``anyOf`` to an unconstrained schema, matching ``Literal[None]`` -> ``{}``.
-    return rest
+    # Only null branches: Gemini's ``Type`` enum includes ``NULL``, so preserve
+    # it as ``type: null`` instead of dropping the null requirement.
+    return {**rest, "type": "null"}
 
 
 def _json_type_of(value: Any) -> str | None:
     """Best-effort JSON-Schema ``type`` for a literal ``const`` value."""
+    if value is None:
+        return "null"
     if isinstance(value, bool):
         return "boolean"
     if isinstance(value, int):
@@ -132,45 +134,39 @@ def _normalize_const_and_enum(reduced: dict[str, Any]) -> None:
 
 
 def _normalize_type(reduced: dict[str, Any]) -> None:
-    """Collapse a JSON-Schema ``type`` into Gemini's single-valued ``type``.
+    """Collapse a JSON-Schema ``type`` array into Gemini's single-valued ``type``.
 
     ``["string", "null"]`` becomes ``type: string`` + ``nullable: true``; a wider
-    union becomes ``anyOf``. A null-only ``type`` (scalar ``"null"`` or
-    ``["null"]``) is dropped, since Gemini's ``Schema.type`` has no NULL member.
+    union becomes ``anyOf`` + ``nullable``. A null-only ``type`` (scalar ``"null"``
+    or ``["null"]``) is kept as ``type: null`` -- Gemini's ``Type`` enum includes
+    ``NULL``. A scalar ``type`` is already single-valued and is left untouched.
     """
     type_value = reduced.get("type")
-    if type_value == "null":
-        types = ["null"]
-    elif isinstance(type_value, list):
-        types = type_value
-    else:
+    if not isinstance(type_value, list):
         return
-    non_null = [entry for entry in types if entry != "null"]
+    non_null = [entry for entry in type_value if entry != "null"]
     if len(non_null) == 1:
         reduced["type"] = non_null[0]
     elif len(non_null) > 1:
         reduced.pop("type", None)
         reduced.setdefault("anyOf", [{"type": entry} for entry in non_null])
     else:
-        reduced.pop("type", None)
-    if non_null and "null" in types:
+        reduced["type"] = "null"
+    if non_null and "null" in type_value:
         reduced["nullable"] = True
 
 
 def _reduce_to_gemini_fields(schema: dict[str, Any]) -> dict[str, Any]:
     """Reduce one schema node to the fields and value shapes Gemini's ``Schema`` accepts.
 
-    Converts ``oneOf`` to ``anyOf`` (Gemini has no ``oneOf``), normalizes
-    ``const``/``enum`` and ``type`` value shapes, drops ``format`` values Gemini
-    rejects while keeping the base ``type``, and filters remaining keys against an
-    explicit allowlist. Constraints Gemini cannot represent
+    Normalizes ``const``/``enum`` and ``type`` value shapes, drops ``format``
+    values Gemini rejects while keeping the base ``type``, and filters remaining
+    keys against an explicit allowlist. Constraints Gemini cannot represent
     (``exclusiveMinimum``/``exclusiveMaximum``, ``multipleOf``, ``uniqueItems``,
-    ...) fall outside the allowlist and are dropped.
+    ...) fall outside the allowlist and are dropped. (``oneOf`` is rewritten to
+    ``anyOf`` earlier, in ``_sanitize_schema``.)
     """
     reduced = dict(schema)
-    one_of = reduced.get("oneOf")
-    if isinstance(one_of, list) and "anyOf" not in reduced:
-        reduced["anyOf"] = one_of
     _normalize_const_and_enum(reduced)
     _normalize_type(reduced)
     fmt = reduced.get("format")
@@ -218,6 +214,12 @@ def _sanitize_schema(
     if isinstance(all_of, list) and len(all_of) == 1 and isinstance(all_of[0], dict):
         merged = {**all_of[0], **{k: v for k, v in schema.items() if k != "allOf"}}
         return _sanitize_schema(merged, defs, seen)
+
+    # Gemini's ``Schema`` has no ``oneOf``; rewrite it as ``anyOf`` before the
+    # optional/null handling below so a nullable union collapses uniformly.
+    one_of = schema.get("oneOf")
+    if isinstance(one_of, list) and "anyOf" not in schema:
+        schema = {**{k: v for k, v in schema.items() if k != "oneOf"}, "anyOf": one_of}
 
     # Convert Pydantic's Optional pattern (``anyOf`` with a null branch) to ``nullable``.
     optional = _normalize_optional(schema)
