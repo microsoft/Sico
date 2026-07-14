@@ -41,10 +41,14 @@ coordinator so the dispatch *kind* axis (skill) and the *where* axis
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from app.llmhubs.hub import DEFAULT_MODEL_KEY
 
 from ..artifact_store import ArtifactStore
 from ..models import ArtifactRef, ErrorClass, SandboxLeaseRef, TaskResult, TaskRun, TaskStatus
@@ -70,6 +74,11 @@ _RESULT_MOUNT_NAME = "skill-result"
 _RESULT_DIR_NAME = "skill-results"
 _STDOUT_HEAD = 1000
 _STDERR_HEAD = 500
+_LLMHUB_MODEL_PARAMETER_NAME = "llmhub_model"
+_ANDROID_TESTER_SKILL_NAME = "android-tester"
+_ANDROID_TESTER_BLOCKED_EXIT_CODE = 2
+
+_LOGGER = logging.getLogger(__name__)
 
 _ANDROID_SANDBOX_PARAMETER_ALIASES = ("device_id", "android_device_id", "adb_endpoint")
 _TASK_CONTEXT_PARAMETER_NAMES = frozenset(
@@ -188,6 +197,8 @@ class SkillExecutor:
         timed_out = outcome.return_code == -1 and "timed out" in outcome.system_error.lower()
         if timed_out:
             status = TaskStatus.TIMED_OUT
+        elif _is_android_tester_blocked_exit(run, outcome):
+            status = TaskStatus.BLOCKED
         elif outcome.system_error or outcome.return_code != 0:
             status = TaskStatus.FAILED
         else:
@@ -201,6 +212,9 @@ class SkillExecutor:
         elif status == TaskStatus.FAILED:
             error_class = ErrorClass.TRANSIENT if outcome.system_error else ErrorClass.SKILL_RUNTIME
             error_message = outcome.system_error or stderr or f"{label} exited with {outcome.return_code}"
+        elif status == TaskStatus.BLOCKED:
+            error_class = ErrorClass.SKILL_RUNTIME
+            error_message = stderr or f"{label} exited blocked"
 
         artifacts = self._collect_artifacts(run.run_id, result_root, _workspace_dir(run))
         summary = self._build_summary(label, status, stdout, stderr)
@@ -225,7 +239,8 @@ class SkillExecutor:
     def _build_summary(label: str, status: TaskStatus, stdout: str, stderr: str) -> str:
         # Fold the action's output into the summary so the caller sees it via the
         # batch digest (which only carries ``summary``), not just a status label.
-        lines = [f"{label} {'finished' if status == TaskStatus.COMPLETED else 'failed'}"]
+        outcome = "finished" if status == TaskStatus.COMPLETED else status.value
+        lines = [f"{label} {outcome}"]
         trimmed_stdout = truncate_stream(stdout, _STDOUT_HEAD)
         if trimmed_stdout:
             lines.append(f"stdout:\n{trimmed_stdout}")
@@ -246,6 +261,10 @@ class SkillExecutor:
         artifact = self.artifact_store.put(run_id, path.name, path, artifact_type="file", role="primary")
         artifact.filepath = filepath
         return artifact
+
+
+def _is_android_tester_blocked_exit(run: TaskRun, outcome: CommandResult) -> bool:
+    return run.spec.skill_name == _ANDROID_TESTER_SKILL_NAME and outcome.return_code == _ANDROID_TESTER_BLOCKED_EXIT_CODE
 
 
 def _prepare_parameters(action: ResolvedAction, run: TaskRun) -> dict[str, Any]:
@@ -323,12 +342,50 @@ def _normalize_invocation_parameters(
         for alias in _ANDROID_SANDBOX_PARAMETER_ALIASES:
             if alias in parameter_names:
                 _setdefault_nonempty(normalized, alias, endpoint)
+    _normalize_llmhub_model_parameter(normalized, parameter_names)
     if filter_task_context:
         known = parameter_names | set(action.infra_requirements)
         for name in list(normalized):
             if name in _TASK_CONTEXT_PARAMETER_NAMES and name not in known:
                 normalized.pop(name, None)
     return normalized
+
+
+def _normalize_llmhub_model_parameter(parameters: dict[str, Any], parameter_names: set[str]) -> None:
+    if _LLMHUB_MODEL_PARAMETER_NAME not in parameter_names:
+        return
+    value = parameters.get(_LLMHUB_MODEL_PARAMETER_NAME)
+    if not isinstance(value, str) or not value.strip():
+        return
+    model_key = value.strip().lower()
+    available_model_keys = _available_llmhub_model_keys()
+    if model_key not in available_model_keys:
+        fallback = _default_llmhub_model_key()
+        _LOGGER.info(
+            "normalizing skill llmhub_model from=%s to=%s available=%s",
+            model_key,
+            fallback,
+            sorted(available_model_keys),
+        )
+        parameters[_LLMHUB_MODEL_PARAMETER_NAME] = fallback
+
+
+@cache
+def _available_llmhub_model_keys() -> frozenset[str]:
+    try:
+        from app.llmhubs.config_loader import ModelConfigLoader
+
+        definitions = ModelConfigLoader().load()
+    except Exception:
+        _LOGGER.warning("failed to load llmhub model keys for skill parameter normalization", exc_info=True)
+        return frozenset({_default_llmhub_model_key()})
+    keys = {key.strip().lower() for key in definitions if key.strip()}
+    keys.add(_default_llmhub_model_key())
+    return frozenset(keys)
+
+
+def _default_llmhub_model_key() -> str:
+    return (os.getenv("CORE_DEFAULT_MODEL_KEY") or os.getenv("CORE_DEFAULT_LLM_MODEL") or DEFAULT_MODEL_KEY).strip().lower()
 
 
 def _setdefault_nonempty(parameters: dict[str, Any], name: str, value: Any) -> None:

@@ -59,6 +59,21 @@ _DEFAULT_DISPLAY_DPI = 320
 _DEFAULT_MUMU_RESOLUTION_MODE = "phone"
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 _DOWNLOAD_TIMEOUT_SECONDS = 60
+_CHROME_PACKAGE = "com.android.chrome"
+
+_ANDROID_RESET_PREFLIGHT_COMMANDS = (
+    ("settings", "put", "global", "captive_portal_mode", "0"),
+    ("settings", "put", "global", "captive_portal_detection_enabled", "0"),
+    ("settings", "put", "global", "private_dns_mode", "off"),
+    ("svc", "wifi", "disable"),
+    ("svc", "wifi", "enable"),
+    ("am", "force-stop", _CHROME_PACKAGE),
+)
+
+_ANDROID_FREEZE_TIME_COMMANDS = (
+    ("settings", "put", "global", "auto_time", "0"),
+    ("settings", "put", "global", "auto_time_zone", "0"),
+)
 
 router = APIRouter(prefix="/emulators", tags=["emulators"])
 
@@ -828,6 +843,8 @@ def _soft_reset_and_collect(mumu, device_map, index: int) -> dict:
 
     closed_packages: list[str] = []
     errors: list[str] = []
+    preflight = _run_android_reset_preflight(mumu, serial)
+    errors.extend(preflight["errors"])
 
     code, out, _err = mumu._run_adb(
         ["-s", serial, "shell", "pm", "list", "packages", "-3"]
@@ -851,8 +868,40 @@ def _soft_reset_and_collect(mumu, device_map, index: int) -> dict:
 
     return {
         "closed_packages": closed_packages,
+        "preflight": preflight,
         "errors": errors if errors else None,
     }
+
+
+def _run_android_reset_preflight(mumu, serial: str) -> dict[str, list[str]]:
+    applied: list[str] = []
+    errors: list[str] = []
+    for command in _ANDROID_RESET_PREFLIGHT_COMMANDS:
+        _run_best_effort_shell(mumu, serial, command, applied, errors)
+    if _run_best_effort_shell(mumu, serial, ("su", "0", "date", _android_date_arg()), applied, errors):
+        for command in _ANDROID_FREEZE_TIME_COMMANDS:
+            _run_best_effort_shell(mumu, serial, command, applied, errors)
+    return {"applied": applied, "errors": errors}
+
+
+def _run_best_effort_shell(
+    mumu,
+    serial: str,
+    command: tuple[str, ...],
+    applied: list[str],
+    errors: list[str],
+) -> bool:
+    rc, out, err = mumu._run_adb(["-s", serial, "shell", *command])
+    command_text = " ".join(command)
+    if rc == 0:
+        applied.append(command_text)
+        return True
+    errors.append(f"{command_text}: {err or out or f'exited {rc}'}")
+    return False
+
+
+def _android_date_arg(timestamp: float | None = None) -> str:
+    return time.strftime("%m%d%H%M%Y.%S", time.localtime(time.time() if timestamp is None else timestamp))
 
 
 @router.post("/{index}/restart")
