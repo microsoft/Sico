@@ -187,7 +187,17 @@ def _scan_computer_call_ids(messages: MutableSequence[Message]) -> set[str]:
 def _build_text_input(c: Any) -> InputContent | None:
     if not c.text:
         return None
-    return InputContent(type="text", text=str(c.text))
+    return InputContent(type="text", text=str(c.text), provider_metadata=_extract_provider_metadata(c))
+
+
+def _extract_provider_metadata(c: Any) -> dict[str, Any] | None:
+    """Pull an adapter's opaque ``provider_metadata`` back off a Content, if present."""
+    additional_properties = getattr(c, "additional_properties", None)
+    if isinstance(additional_properties, dict):
+        provider_metadata = additional_properties.get("provider_metadata")
+        if isinstance(provider_metadata, dict):
+            return provider_metadata
+    return None
 
 
 def _build_function_call_input(c: Any) -> InputContent:
@@ -213,6 +223,7 @@ def _build_function_call_input(c: Any) -> InputContent:
         call_id=c.call_id,
         name=c.name,
         arguments=c.arguments,
+        provider_metadata=_extract_provider_metadata(c),
     )
 
 
@@ -421,10 +432,12 @@ def _output_text_to_content(output: OutputItem) -> Content | None:
     if not (output.text or output.annotations):
         return None
     annotations = _parse_url_citations(output.annotations) if output.annotations else None
-    return Content.from_text(
-        text=output.text,
-        **({"annotations": annotations} if annotations else {}),
-    )
+    kwargs: dict[str, Any] = {}
+    if annotations:
+        kwargs["annotations"] = annotations
+    if output.provider_metadata:
+        kwargs["additional_properties"] = {"provider_metadata": output.provider_metadata}
+    return Content.from_text(text=output.text, **kwargs)
 
 
 def _output_refusal_to_content(output: OutputItem) -> Content | None:
@@ -434,10 +447,14 @@ def _output_refusal_to_content(output: OutputItem) -> Content | None:
 
 
 def _output_function_call_to_content(output: OutputItem) -> Content | None:
+    additional_properties = (
+        {"provider_metadata": output.provider_metadata} if output.provider_metadata else None
+    )
     return Content.from_function_call(
         call_id=output.call_id,
         name=output.name,
         arguments=output.arguments or "",
+        additional_properties=additional_properties,
     )
 
 

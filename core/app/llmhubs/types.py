@@ -42,6 +42,9 @@ class InputContent:
     result: Any | None = None
     output: dict[str, Any] | None = None  # computer_call_output nested data
     actions: list[dict[str, Any]] | None = None  # computer_call actions
+    # Opaque per-provider passthrough (e.g. the original Gemini ``Part``); shared
+    # layers only transport it, only the owning adapter interprets it.
+    provider_metadata: dict[str, Any] | None = None
 
 
 @dataclass
@@ -72,6 +75,9 @@ class OutputItem:
     actions: list[dict[str, Any]] | None = None  # computer_call actions
     annotations: list[dict[str, Any]] | None = None  # url_citation annotations
     action: dict[str, Any] | None = None  # web_search_call action metadata
+    # Opaque per-provider passthrough (e.g. the original Gemini ``Part``); shared
+    # layers only transport it, only the owning adapter interprets it.
+    provider_metadata: dict[str, Any] | None = None
 
 
 @dataclass
