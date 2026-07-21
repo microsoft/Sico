@@ -123,7 +123,7 @@ make compose-logs     # tail logs from all services
 make compose-down     # stop and remove containers
 ```
 
-The compose stack exposes nginx, backend, core, and the supporting infrastructure services they depend on. Frontend source code is not currently published in this repository; this checkout does not include `frontend/package.json`, and the UI is provided separately as a packaged archive.
+The compose stack builds and runs nginx, backend, core, the frontend SPA (built from source in `frontend/`), and the supporting infrastructure services they depend on.
 
 ### Minimal sandbox example path
 
@@ -173,10 +173,15 @@ make kind-down
 
 ## 3. Run the frontend (optional)
 
-The Docker Compose and Kind stacks expose nginx, backend, core, and supporting
-infrastructure. Frontend source code is currently distributed separately as a
-packaged archive, so this public checkout does not contain a runnable frontend
-source package or `frontend/package.json`.
+The Docker Compose and Kind stacks already build and serve the frontend SPA from
+source (`frontend/`), so the UI works with no extra step. To iterate on the
+frontend with hot-reload against a running backend:
+
+```bash
+cd frontend
+pnpm install --frozen-lockfile
+pnpm dev            # vite dev server; proxies /api/sico and /storage to :8080
+```
 
 For API service lifecycle management (`make emulator-start` / `make emulator-status` /
 `make emulator-logs`) and explicit device bootstrap (`make emulator-bootstrap`), see

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="140" viewBox="0 0 200 140" fill="none">
+  <title>No assets</title>
+  <defs>
+    <linearGradient id="assets-empty-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <linearGradient id="assets-empty-ghost" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F2F0FE"/>
+      <stop offset="100%" stop-color="#FEFDFF"/>
+    </linearGradient>
+    <linearGradient id="assets-empty-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7A75A8"/>
+      <stop offset="100%" stop-color="#615C8C"/>
+    </linearGradient>
+    <mask id="assets-empty-ghost-fade" maskUnits="userSpaceOnUse" x="0" y="0" width="58" height="82">
+      <linearGradient id="assets-empty-ghost-fade-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#fff" stop-opacity="0.95"/>
+      </linearGradient>
+      <rect width="58" height="82" rx="6" fill="url(#assets-empty-ghost-fade-grad)"/>
+    </mask>
+    <clipPath id="assets-empty-card-clip">
+      <rect width="128" height="84" rx="8"/>
+    </clipPath>
+  </defs>
+
+  <!-- Ghost lined-card peeking behind, tilted left -->
+  <g transform="translate(14 38) rotate(-16)" mask="url(#assets-empty-ghost-fade)">
+    <rect width="58" height="82" rx="6" fill="url(#assets-empty-ghost)" stroke="#E9E8FF" stroke-width="0.5"/>
+    <rect x="8" y="14" width="42" height="6" rx="3" fill="#F5F3FF"/>
+    <rect x="8" y="34" width="42" height="6" rx="3" fill="#F5F3FF"/>
+    <rect x="8" y="54" width="42" height="6" rx="3" fill="#F5F3FF"/>
+  </g>
+
+  <!-- Foreground card -->
+  <g transform="translate(36 24)" filter="drop-shadow(0 2px 16px rgba(17,24,39,0.06)) drop-shadow(0 0 3px rgba(17,24,39,0.04))">
+    <rect width="128" height="84" rx="8" fill="url(#assets-empty-card)" stroke="#0E10141A" stroke-width="0.5"/>
+    <g clip-path="url(#assets-empty-card-clip)">
+      <rect x="13" y="42" width="121" height="73" rx="6" fill="#F5F5FA"/>
+    </g>
+    <rect x="16" y="16" width="96" height="8" rx="4" fill="#DDDBFF"/>
+    <rect x="16" y="30" width="53" height="8" rx="4" fill="#F5F3FF"/>
+  </g>
+
+  <!-- Database tile, tilted right, overlapping the card's lower-right corner -->
+  <g transform="translate(130 74) rotate(8)" filter="drop-shadow(2px 2px 12px rgba(17,24,39,0.18))">
+    <rect width="40" height="40" rx="8" fill="url(#assets-empty-tile)"/>
+    <g transform="translate(11 10)" fill="#fff">
+      <ellipse cx="9" cy="2.6" rx="9" ry="2.6"/>
+      <path d="M0 2.6 v14.8 a9 2.6 0 0 0 18 0 V2.6 a9 2.6 0 0 1 -18 0 z"/>
+    </g>
+    <path d="M11 19.8 a9 2.6 0 0 0 18 0" stroke="#CFCCE6" stroke-width="0.8" fill="none"/>
+  </g>
+</svg>

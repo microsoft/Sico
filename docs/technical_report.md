@@ -818,7 +818,7 @@ This framework draws on recent work on evolving agent contexts, including ACE (Z
 
 The experience learning system is not limited to Sico's built-in chat agent. Any agentic system can use it through the integration pattern:
 
-1. **Inject**: Format the Playbook as context for the external agent using `wrap_playbook_for_external_agent()`.
+1. **Inject**: Format the Playbook as context for the external agent using `wrap_experience_for_agent()`.
 2. **Execute**: The external agent runs its task normally.
 3. **Learn**: Convert the execution results into a `TrajectoryData` and call `ExperienceRunner.learn_from_trajectory()`.
 

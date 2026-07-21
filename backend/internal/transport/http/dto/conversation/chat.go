@@ -31,12 +31,14 @@ type ChatAttachment = commondto.Attachment
 type ChatRequestHttp struct {
 	Message         string            `json:"message" binding:"required"`
 	AgentInstanceID int64             `json:"agentInstanceId" binding:"required"`
+	ConversationID  int64             `json:"conversationId"`
 	Attachments     []*ChatAttachment `json:"attachments"`
 }
 
 // ReconnectRequest represents the HTTP payload for the /conversation/chat/reconnect endpoint.
 type ReconnectRequest struct {
 	AgentInstanceID int64 `json:"agentInstanceId" binding:"required"`
+	ConversationID  int64 `json:"conversationId"`
 }
 
 // ChatStreamResponse mirrors the payload emitted per SSE message.

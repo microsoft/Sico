@@ -1,0 +1,217 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as AvatarStories from "./avatar.stories";
+
+<Meta of={AvatarStories} />
+
+# Avatar
+
+User-image shell built on Base UI `@base-ui/react/avatar`. Drop an
+`<AvatarImage>` for the picture and an `<AvatarFallback>` for the
+initials/icon backup — Base UI swaps between them automatically based
+on image loading status. Stack avatars with `<AvatarGroup>` +
+`<AvatarGroupCount>`, overlay a status dot with `<AvatarBadge>`. 1:1
+port from shadcn `base-nova/avatar` — `size` extended with `xs` /
+`2xl` for SICO use cases.
+
+Composition contract (no Context, shadcn convention):
+
+- `<Avatar>` is the shell: rounded square, `data-size`, `after:*`
+  outline.
+- `<AvatarImage>` renders the picture. Base UI handles load /
+  error swap.
+- `<AvatarFallback>` renders the initials / icon when the image is
+  missing or failed.
+- `<AvatarBadge>` is positioned absolute bottom-right; sized via
+  `group-data-[size=*]/avatar:*` from the parent.
+- `<AvatarGroup>` stacks avatars and applies a 2px ring in
+  `--color-surface-basic` to every child for visual separation.
+
+> **Fallback contract.** Every `<Avatar>` **must** contain an
+> `<AvatarFallback>` child. Without it the shell collapses to an
+> empty rounded box during image loading / error. Two patterns:
+>
+> - Real users → text initials: `<AvatarFallback>JD</AvatarFallback>`
+> - Digital Workers → default SVG:
+>   `<AvatarFallback><img src={DW_DEFAULT_AVATAR_URL} alt="" /></AvatarFallback>`
+>
+> Enforced at lint via `local-rules/require-avatar-fallback`.
+
+## Examples
+
+### Default
+
+<Description of={AvatarStories.Default} />
+<Canvas of={AvatarStories.Default} />
+
+### Sizes
+
+The cva exposes five sizes. `default` / `sm` / `lg` come from upstream;
+`xs` and `2xl` are SICO-only — see § Upstream Audit.
+
+<Description of={AvatarStories.ExtraSmall} />
+<Canvas of={AvatarStories.ExtraSmall} />
+
+<Description of={AvatarStories.Small} />
+<Canvas of={AvatarStories.Small} />
+
+<Description of={AvatarStories.DefaultSize} />
+<Canvas of={AvatarStories.DefaultSize} />
+
+<Description of={AvatarStories.Large} />
+<Canvas of={AvatarStories.Large} />
+
+<Description of={AvatarStories.TwoXLarge} />
+<Canvas of={AvatarStories.TwoXLarge} />
+
+### Fallback
+
+`<AvatarFallback>` renders whenever no `<AvatarImage>` is provided or
+the image fails to load. The fallback owns its own background +
+typography tokens.
+
+<Description of={AvatarStories.FallbackInitials} />
+<Canvas of={AvatarStories.FallbackInitials} />
+
+<Description of={AvatarStories.BrokenImage} />
+<Canvas of={AvatarStories.BrokenImage} />
+
+<Description of={AvatarStories.DwDefaultFallback} />
+<Canvas of={AvatarStories.DwDefaultFallback} />
+
+### Badge
+
+<Description of={AvatarStories.WithBadge} />
+<Canvas of={AvatarStories.WithBadge} />
+
+### Group
+
+<Description of={AvatarStories.Group} />
+<Canvas of={AvatarStories.Group} />
+
+<Description of={AvatarStories.GroupWithCount} />
+<Canvas of={AvatarStories.GroupWithCount} />
+
+<Description of={AvatarStories.GroupAllSizes} />
+<Canvas of={AvatarStories.GroupAllSizes} />
+
+<Description of={AvatarStories.GroupWithCountAllSizes} />
+<Canvas of={AvatarStories.GroupWithCountAllSizes} />
+
+## API
+
+<Controls of={AvatarStories.Default} />
+
+---
+
+## Token Audit
+
+Avatar owns a small token surface: shell outline, fallback / group
+count surface, badge fill, and the separator ring used in groups.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Shell outline"
+    subtitle="`after:border-divider` ring drawn 1px inside the shell"
+    colors={{
+      "Border · divider": "var(--color-divider)",
+    }}
+  />
+  <ColorItem
+    title="Fallback / GroupCount surface"
+    subtitle="`bg-surface-sunken` background of `<AvatarFallback>` and `<AvatarGroupCount>`"
+    colors={{
+      "Fill · neutral-75": "var(--color-surface-sunken)",
+    }}
+  />
+  <ColorItem
+    title="Fallback / GroupCount text"
+    subtitle="`text-foreground-tertiary` for initials and `+N` count"
+    colors={{
+      "Text · neutral-500": "var(--color-foreground-tertiary)",
+    }}
+  />
+  <ColorItem
+    title="Badge fill"
+    subtitle="`bg-surface-inverted` — status dot bottom-right"
+    colors={{
+      "Fill · neutral-800": "var(--color-surface-inverted)",
+    }}
+  />
+  <ColorItem
+    title="Badge text"
+    subtitle="`text-foreground-on-inverted` — used when the badge wraps an icon"
+    colors={{
+      "Text · neutral-0": "var(--color-foreground-on-inverted)",
+    }}
+  />
+  <ColorItem
+    title="Separator ring"
+    subtitle="2px ring on group children and badge — cuts each shape out of the surface behind it"
+    colors={{
+      "Ring · neutral-0": "var(--color-surface-basic)",
+    }}
+  />
+</ColorPalette>
+
+### Sizing
+
+| Size      | Class    | Pixels |
+| --------- | -------- | ------ |
+| `xs`      | `size-5` | 20px   |
+| `sm`      | `size-6` | 24px   |
+| `default` | `size-8` | 32px   |
+| `lg`      | `size-10`| 40px   |
+| `2xl`     | `size-12`| 48px   |
+
+### Badge sizing (driven by parent `data-size`)
+
+| Parent size | Badge class | Inner SVG  |
+| ----------- | ----------- | ---------- |
+| `xs`        | `size-1.5`  | hidden     |
+| `sm`        | `size-2`    | hidden     |
+| `default`   | `size-2.5`  | `size-2`   |
+| `lg`        | `size-3`    | `size-2`   |
+| `2xl`       | `size-3.5`  | `size-2.5` |
+
+### Group count sizing (driven by group `data-size`)
+
+| Group size | Count class | Inner SVG |
+| ---------- | ----------- | --------- |
+| `xs`       | `size-5`    | `size-2.5`|
+| `sm`       | `size-6`    | `size-3`  |
+| `default`  | `size-8`    | `size-4`  |
+| `lg`       | `size-10`   | `size-5`  |
+| `2xl`      | `size-12`   | `size-6`  |
+
+### Deleted from upstream
+
+| Deleted                                            | Reason                                                                  |
+| -------------------------------------------------- | ----------------------------------------------------------------------- |
+| `bg-muted` on fallback / group-count               | Re-mapped to SICO `bg-surface-sunken`                                   |
+| `text-muted-foreground`                            | Re-mapped to SICO `text-foreground-tertiary`                                    |
+| `bg-primary` / `text-primary-foreground` on badge  | Re-mapped to SICO `bg-surface-inverted` / `text-foreground-on-inverted` |
+| `ring-background`                                  | Re-mapped to SICO `ring-surface-basic`                                  |
+| `border-border` on shell outline                   | Re-mapped to SICO `border-divider` (lint whitelist requires semantic alias) |
+
+---
+
+## Upstream Audit
+
+Shadcn restyle of `base-nova/avatar` (no upstream drift):
+
+- **Styles only** — every shadcn token swapped to SICO semantic
+  equivalents (see "Deleted from upstream" table). JSX, cva structure,
+  composition, accessibility kept verbatim.
+- **`size` extended with `xs` and `2xl`** — SICO product surfaces
+  (dense mention lists at 20px, hero profile cards at 48px). Upstream
+  ships `default` / `sm` / `lg` only. `AvatarBadge` was extended to
+  cover the new sizes with a linear-interpolated scale (`xs:size-1.5`,
+  `2xl:size-3.5`); `AvatarGroupCount` mirrors the Avatar shell scale
+  (`xs:size-5`, `2xl:size-12`) so stacked groups stay symmetric.
+- **No prop API changes** — every other prop matches upstream verbatim.
+- **No JSX changes** — `<AvatarFallback>` transparently passes
+  `children` through; no default icon injected.
+- **No behavior changes** — image loading swap is owned by Base UI.

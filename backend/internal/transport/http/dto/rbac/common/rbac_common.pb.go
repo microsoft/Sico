@@ -103,7 +103,7 @@ type User struct {
 	RawIconUri    string                 `protobuf:"bytes,9,opt,name=raw_icon_uri,json=rawIconUri,proto3" json:"rawIconUri"`  
 	Status        UserStatus             `protobuf:"varint,10,opt,name=status,proto3,enum=common.UserStatus" json:"status"`     
 	Description   string                 `protobuf:"bytes,11,opt,name=description,proto3" json:"description"`                   
-	Roles         []string               `protobuf:"bytes,12,rep,name=roles,proto3" json:"roles"`                               
+	Roles         []*UserRoleInfo        `protobuf:"bytes,12,rep,name=roles,proto3" json:"roles"`                               
 	CreatedAt     int64                  `protobuf:"varint,13,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`     
 	UpdatedAt     int64                  `protobuf:"varint,14,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`     
 	unknownFields protoimpl.UnknownFields
@@ -217,7 +217,7 @@ func (x *User) GetDescription() string {
 	return ""
 }
 
-func (x *User) GetRoles() []string {
+func (x *User) GetRoles() []*UserRoleInfo {
 	if x != nil {
 		return x.Roles
 	}
@@ -238,11 +238,79 @@ func (x *User) GetUpdatedAt() int64 {
 	return 0
 }
 
+type UserRoleInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                
+	RoleCode      string                 `protobuf:"bytes,2,opt,name=role_code,json=roleCode,proto3" json:"roleCode"`     
+	ScopeType     string                 `protobuf:"bytes,3,opt,name=scope_type,json=scopeType,proto3" json:"scopeType"`  
+	ScopeId       int64                  `protobuf:"varint,4,opt,name=scope_id,json=scopeId,proto3" json:"scopeId"`       
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserRoleInfo) Reset() {
+	*x = UserRoleInfo{}
+	mi := &file_rbac_rbac_common_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserRoleInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserRoleInfo) ProtoMessage() {}
+
+func (x *UserRoleInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_rbac_rbac_common_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserRoleInfo.ProtoReflect.Descriptor instead.
+func (*UserRoleInfo) Descriptor() ([]byte, []int) {
+	return file_rbac_rbac_common_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *UserRoleInfo) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UserRoleInfo) GetRoleCode() string {
+	if x != nil {
+		return x.RoleCode
+	}
+	return ""
+}
+
+func (x *UserRoleInfo) GetScopeType() string {
+	if x != nil {
+		return x.ScopeType
+	}
+	return ""
+}
+
+func (x *UserRoleInfo) GetScopeId() int64 {
+	if x != nil {
+		return x.ScopeId
+	}
+	return 0
+}
+
 var File_rbac_rbac_common_proto protoreflect.FileDescriptor
 
 const file_rbac_rbac_common_proto_rawDesc = "" +
 	"\n" +
-	"\x16rbac/rbac_common.proto\x12\x06common\"\x87\x03\n" +
+	"\x16rbac/rbac_common.proto\x12\x06common\"\x9d\x03\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
 	"\x05alias\x18\x02 \x01(\tR\x05alias\x12\x1a\n" +
@@ -256,12 +324,18 @@ const file_rbac_rbac_common_proto_rawDesc = "" +
 	"rawIconUri\x12*\n" +
 	"\x06status\x18\n" +
 	" \x01(\x0e2\x12.common.UserStatusR\x06status\x12 \n" +
-	"\vdescription\x18\v \x01(\tR\vdescription\x12\x14\n" +
-	"\x05roles\x18\f \x03(\tR\x05roles\x12\x1d\n" +
+	"\vdescription\x18\v \x01(\tR\vdescription\x12*\n" +
+	"\x05roles\x18\f \x03(\v2\x14.common.UserRoleInfoR\x05roles\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\r \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x0e \x01(\x03R\tupdatedAt*V\n" +
+	"updated_at\x18\x0e \x01(\x03R\tupdatedAt\"u\n" +
+	"\fUserRoleInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1b\n" +
+	"\trole_code\x18\x02 \x01(\tR\broleCode\x12\x1d\n" +
+	"\n" +
+	"scope_type\x18\x03 \x01(\tR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\x04 \x01(\x03R\ascopeId*V\n" +
 	"\n" +
 	"UserStatus\x12\x18\n" +
 	"\x14USER_STATUS_INACTIVE\x10\x00\x12\x16\n" +
@@ -281,18 +355,20 @@ func file_rbac_rbac_common_proto_rawDescGZIP() []byte {
 }
 
 var file_rbac_rbac_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_rbac_rbac_common_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_rbac_rbac_common_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_rbac_rbac_common_proto_goTypes = []any{
-	(UserStatus)(0), // 0: common.UserStatus
-	(*User)(nil),    // 1: common.User
+	(UserStatus)(0),      // 0: common.UserStatus
+	(*User)(nil),         // 1: common.User
+	(*UserRoleInfo)(nil), // 2: common.UserRoleInfo
 }
 var file_rbac_rbac_common_proto_depIdxs = []int32{
 	0, // 0: common.User.status:type_name -> common.UserStatus
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 1: common.User.roles:type_name -> common.UserRoleInfo
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_rbac_rbac_common_proto_init() }
@@ -306,7 +382,7 @@ func file_rbac_rbac_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_rbac_rbac_common_proto_rawDesc), len(file_rbac_rbac_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

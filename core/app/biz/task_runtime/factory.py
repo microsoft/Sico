@@ -1,4 +1,4 @@
-﻿# Copyright (c) 2026 Sico Authors
+# Copyright (c) 2026 Sico Authors
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -78,7 +78,7 @@ def default_task_manager(ctx: TurnContext) -> "TaskManager":
     from .sub_agent_llm import HubSubAgentLLM
 
     layout = workspace_layout()
-    workspace_root = layout.workspace_path(ctx.agent_instance_id, ctx.username)
+    workspace_root = layout.workspace_path(ctx.agent_instance_id, ctx.username, conversation_id=ctx.conversation_id)
     # Keep this in sync with the cancel-reconcile fallback in
     # ``manager.cancel_turn_task_runtime_once`` (also ``workspace_root / "results"``).
     # Sidechain data lives under the per-user workspace so that read/context tools

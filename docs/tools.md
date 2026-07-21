@@ -97,11 +97,11 @@ A good end-to-end Android test-case turn usually looks like this:
 
 4. Read the delegated result.
 
-   The `delegate` tool returns the task-runtime payload directly, including `status`, `run_id`, `failure_reason`, and `execution_summary_url`. Summarize it from the returned digest.
+  The `delegate` tool returns the task-runtime payload directly, including `status`, `run_id`, `failure_reason`, and any `report_url` / `report_urls` fields. Summarize it from the returned digest.
 
 5. Summarize for the user.
 
-   Include the execution summary URL exactly when present. If the run generated per-case reports, mention that they are available inside the execution summary unless listing each report URL is practical.
+  Include run report URLs exactly when present. If the run generated per-case reports, mention them from `report_urls` when listing each report URL is practical.
 
 ## Practical Selection Rules
 

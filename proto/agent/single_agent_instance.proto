@@ -26,7 +26,18 @@ option go_package = "sico-backend/internal/transport/http/dto/agent/single_agent
 
 import "common/common.proto";
 import "project/project.proto";
-import "sandbox/restful.proto";
+
+// SingleAgentInstance status enum
+enum SingleAgentInstanceStatus {
+  INSTANCE_UNKNOWN = 0;
+  INSTANCE_ONBOARDING = 1;
+  INSTANCE_NEW = 2;
+  INSTANCE_ACTIVE = 3;
+  INSTANCE_INACTIVE = 4;
+  INSTANCE_ABORTED = 5;
+  INSTANCE_DELETED = 6;
+  INSTANCE_ONBOARDING_SAVED = 7;
+}
 
 // SingleAgentInstance message
 message SingleAgentInstance {
@@ -45,23 +56,25 @@ message SingleAgentInstance {
   string permission = 17;  // @gotag: json:"permission"
   repeated common.Attachment attachments = 18;  // @gotag: json:"attachments"
   reserved 19;
+  SingleAgentInstanceStatus status = 21;  // @gotag: json:"status"
   int64 created_at = 23;  // @gotag: json:"createdAt"
   int64 updated_at = 24;  // @gotag: json:"updatedAt"
   project.Project project = 26;    // @gotag: json:"project"
-  repeated sandbox.InstanceSandboxStatusInfo sandboxes = 27; // @gotag: json:"sandboxes"
+  repeated common.SandboxDigest sandboxes = 27; // @gotag: json:"sandboxes"
 }
 
 // Request to create a single agent instance
 message CreateSingleAgentInstanceRequest {
-  string agent_id = 1;      // @gotag: form:"agentId" json:"agentId"
-  string employer_username = 2;   // @gotag: form:"employerUsername" binding:"required" json:"employerUsername"
-  string name = 3;          // @gotag: form:"name" binding:"required" json:"name"
-  string desc = 4;          // @gotag: form:"desc" json:"desc"
-  string role = 5;          // @gotag: form:"role" json:"role"
-  string icon_uri = 6;      // @gotag: form:"iconUri" json:"iconUri"
-  string employer_icon_uri = 7;                   // @gotag: json:"employerIconUri"
+  string agent_id = 1;      // @gotag: json:"agentId"
+  string employer_username = 2;   // @gotag: json:"employerUsername"
+  string name = 3;          // @gotag: json:"name" binding:"required"
+  string desc = 4;          // @gotag: json:"desc"
+  string role = 5;          // @gotag: json:"role"
+  string icon_uri = 6;      // @gotag: json:"iconUri"
+  string employer_icon_uri = 7;   // @gotag: json:"employerIconUri"
   repeated common.Attachment attachments = 12;       // @gotag: json:"attachments"
-  reserved 13;
+  int64 project_id = 14;    // @gotag: json:"projectId" binding:"required"
+  string operator_username = 15;  // @gotag: json:"-"
 }
 
 // Response for creating a single agent instance
@@ -111,6 +124,42 @@ message UpdateSingleAgentInstanceResponse {
   string msg = 254;                 // @gotag: json:"msg"
 }
 
+// Request to update a single agent instance status
+message UpdateSingleAgentInstanceStatusRequest {
+  int64 id = 1;              // @gotag: json:"id" binding:"required"
+  SingleAgentInstanceStatus status = 2;           // @gotag: json:"status"
+  string operator_username = 3;    // @gotag: form:"operatorUsername" json:"-"
+}
+
+// Response for updating a single agent instance status
+message UpdateSingleAgentInstanceStatusResponse {
+  int32 code = 253;                 // @gotag: json:"code"
+  string msg = 254;                 // @gotag: json:"msg"
+}
+
+// Request to dismiss (deactivate) a single agent instance
+message DismissSingleAgentInstanceRequest {
+  int64 id = 1;  // @gotag: json:"id" binding:"required"
+}
+
+// Response for dismissing a single agent instance
+message DismissSingleAgentInstanceResponse {
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+// Request to reassign a single agent instance to a new operator
+message ReassignSingleAgentInstanceRequest {
+  int64 id = 1;                      // @gotag: json:"id" binding:"required"
+  string new_operator_username = 2;  // @gotag: json:"newOperatorUsername" binding:"required"
+}
+
+// Response for reassigning a single agent instance
+message ReassignSingleAgentInstanceResponse {
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
 // Request to delete a single agent instance
 message DeleteSingleAgentInstanceRequest {
   int64 id = 1;       // @gotag: form:"id" binding:"required" json:"id"
@@ -123,12 +172,25 @@ message DeleteSingleAgentInstanceResponse {
   string msg = 254;                 // @gotag: json:"msg"
 }
 
-// Request to list single agent instances
-message ListSingleAgentInstancesRequest {
-  string username = 1;    // @gotag: form:"username" json:"-"
-  int32 page = 4;           // @gotag: form:"page" binding:"required,min=1"
-  int32 page_size = 5;      // @gotag: form:"pageSize" binding:"required,min=1,max=50"
-  bool is_employer = 6;               // @gotag: form:"isEmployer"
+// Filter for listing single agent instances (query params for GET /single_agent_instances)
+message ListSingleAgentInstancesFilter {
+  string status_list = 2;                             // @gotag: form:"statusList"
+  repeated SingleAgentInstanceStatus status_arr = 3;  // @gotag: json:"-"
+  int32 page = 4;                                     // @gotag: form:"page" binding:"required,min=1"
+  int32 page_size = 5;                                // @gotag: form:"pageSize" binding:"required,min=1,max=50"
+  optional string employer_username = 6;              // @gotag: form:"employerUsername"
+  SingleAgentInstanceOrderBy order_by = 7;            // @gotag: form:"orderBy"
+  common.SortOrder sort_order = 8;                    // @gotag: form:"sortOrder"
+  optional int64 project_id = 9;                      // @gotag: form:"projectId"
+  optional string operator_username = 10;             // @gotag: form:"operatorUsername"
+}
+
+// SingleAgentInstanceOrderBy specifies which field to sort by when listing agent instances.
+enum SingleAgentInstanceOrderBy {
+  SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED = 0;        // Default: ID
+  SINGLE_AGENT_INSTANCE_ORDER_BY_ID = 1;
+  SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT = 2;
+  SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT = 3;  // ORDER BY status, updated_at
 }
 
 // Response for listing single agent instances
@@ -147,6 +209,11 @@ message ListSingleAgentInstancesData {
 message ListSingleAgentInstanceFilter {
   optional string employer_username = 1;             // @gotag: json:"employerUsername"
   optional string operator_username = 2;             // @gotag: json:"operatorUsername"
+  bool filter_by_status = 3;                         // @gotag: json:"filterByStatus"
+  repeated SingleAgentInstanceStatus status_arr = 4; // @gotag: json:"-"
   optional string role = 5;                          // @gotag: json:"role"
   optional int64 project_id = 6;                     // @gotag: json:"projectId"
+  optional string agent_id = 7;                      // @gotag: json:"agentId"
+  SingleAgentInstanceOrderBy order_by = 8;           // @gotag: json:"orderBy"
+  common.SortOrder sort_order = 9;                   // @gotag: json:"sortOrder"
 }

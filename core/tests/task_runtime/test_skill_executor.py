@@ -1,4 +1,4 @@
-﻿# Copyright (c) 2026 Sico Authors
+# Copyright (c) 2026 Sico Authors
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -120,10 +120,10 @@ class _FakeWorkspaceLayout:
     def __init__(self, workspace_root: Path) -> None:
         self._workspace_root = workspace_root
 
-    def turn_path(self, agent_instance_id: int, username: str, turn_id: int) -> Path:
+    def turn_path(self, agent_instance_id: int, username: str, turn_id: int, *, conversation_id: int = 0) -> Path:
         return self._workspace_root.parent / "turn" / str(turn_id)
 
-    def workspace_path(self, agent_instance_id: int, username: str) -> Path:
+    def workspace_path(self, agent_instance_id: int, username: str, *, conversation_id: int = 0) -> Path:
         return self._workspace_root
 
     @property

@@ -18,28 +18,48 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Frontend container — serves pre-built static assets from frontend-dist.zip.
-# The zip is produced by the private sico-frontend-old repo and committed to
-# this directory (frontend/frontend-dist.zip), so the build context is just
-# `frontend/` — no extra build contexts required.
+# Frontend container — builds the React/Vite SPA from source (this monorepo) and
+# serves the static output with nginx. Build context is `frontend/`, so all COPY
+# paths below are relative to the frontend workspace root.
 
+# ---- Stage 1: build the SPA from source ---------------------------------------
+FROM node:24.13.0-slim AS build
+
+# Corepack ships with Node 24 and activates the pnpm version pinned by the root
+# package.json ("packageManager": "pnpm@10.12.1"). Disable the download prompt so
+# the build is non-interactive; disable lefthook's git-hook install (no .git in
+# the build context) so `pnpm install` stays hermetic.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    LEFTHOOK=0
+RUN corepack enable
+
+WORKDIR /app
+
+# 1) Copy only what dependency resolution needs, so the (slow) install layer is
+#    cached until the lockfile or a package manifest changes.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages/app/package.json    packages/app/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/ui/package.json     packages/ui/package.json
+COPY packages/config/package.json packages/config/package.json
+
+# Deterministic install from the committed lockfile.
+RUN pnpm install --frozen-lockfile
+
+# 2) Copy the rest of the workspace and build. node_modules and dist are excluded
+#    via .dockerignore, so the install layer above is preserved.
+COPY . .
+RUN pnpm build
+
+# ---- Stage 2: serve the built assets with nginx -------------------------------
 FROM nginx:stable-alpine
 
-# Install unzip to extract the pre-built frontend bundle.
-RUN apk add --no-cache unzip
-
-# Copy the SPA nginx config (same as the original frontend/nginx.conf).
+# SPA nginx config (try_files fallback to /index.html for client-side routes).
 COPY deployments/docker/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Drop the default placeholder content.
+# Replace the default placeholder site with the built SPA.
 RUN rm -rf /usr/share/nginx/html/*
-
-# Unzip pre-built frontend assets into the nginx document root.
-COPY frontend-dist.zip /tmp/frontend-dist.zip
-RUN mkdir -p /tmp/frontend-dist \
-    && unzip -q /tmp/frontend-dist.zip -d /tmp/frontend-dist \
-    && cp -a /tmp/frontend-dist/. /usr/share/nginx/html/ \
-    && rm -rf /tmp/frontend-dist /tmp/frontend-dist.zip
+COPY --from=build /app/packages/app/dist/ /usr/share/nginx/html/
 
 EXPOSE 80
 

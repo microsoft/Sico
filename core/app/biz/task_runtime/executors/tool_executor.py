@@ -302,7 +302,11 @@ def _run_dir(run: TaskRun) -> Path:
 
 
 def _workspace_dir(run: TaskRun) -> Path:
-    return workspace_layout().workspace_path(run.agent_instance_id, run.username)
+    return workspace_layout().workspace_path(
+        run.agent_instance_id,
+        run.username,
+        conversation_id=run.parent_conversation_id,
+    )
 
 
 def _workspace_relative_path(path: Path, workspace: Path) -> str:

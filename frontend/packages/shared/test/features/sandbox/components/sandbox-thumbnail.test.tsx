@@ -1,0 +1,57 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { SandboxThumbnail } from "@/features/sandbox/components/sandbox-thumbnail";
+import type { Sandbox } from "@/features/sandbox/schemas/sandbox";
+
+function device(overrides: Partial<Sandbox> = {}): Sandbox {
+  return {
+    sandboxId: "sb-1",
+    displayName: "Pixel 7",
+    type: "emulator",
+    status: "in_use",
+    vncUrl: "https://vnc.example/sb-1",
+    ...overrides,
+  };
+}
+
+describe("SandboxThumbnail", () => {
+  it("renders the VNC frame view-only (no pointer events, not focusable)", () => {
+    render(<SandboxThumbnail sandbox={device()} />);
+    const frame = screen.getByTitle("Pixel 7 preview");
+    expect(frame).toHaveAttribute("src", "https://vnc.example/sb-1");
+    expect(frame).toHaveAttribute("tabindex", "-1");
+    expect(frame).toHaveClass("pointer-events-none");
+  });
+
+  it("fades the frame in only once it has loaded", () => {
+    render(<SandboxThumbnail sandbox={device()} />);
+    const frame = screen.getByTitle("Pixel 7 preview");
+    // Hidden until it paints, so the card shows its placeholder, not a flash.
+    expect(frame).toHaveClass("opacity-0");
+    fireEvent.load(frame);
+    expect(frame).toHaveClass("opacity-100");
+  });
+
+  it("re-hides the frame when the device url changes (no stale fade-in)", () => {
+    const { rerender } = render(<SandboxThumbnail sandbox={device()} />);
+    fireEvent.load(screen.getByTitle("Pixel 7 preview"));
+    expect(screen.getByTitle("Pixel 7 preview")).toHaveClass("opacity-100");
+    // A poll swaps this card's url — the frame must spin (opacity-0) again, not
+    // flash the prior device's last paint.
+    rerender(
+      <SandboxThumbnail
+        sandbox={device({ vncUrl: "https://vnc.example/v2" })}
+      />,
+    );
+    expect(screen.getByTitle("Pixel 7 preview")).toHaveClass("opacity-0");
+  });
+
+  it("renders nothing for a non-https url (blocked by the gate)", () => {
+    const scheme = "javascript";
+    render(
+      <SandboxThumbnail sandbox={device({ vncUrl: `${scheme}:alert(1)` })} />,
+    );
+    expect(screen.queryByTitle("Pixel 7 preview")).not.toBeInTheDocument();
+  });
+});

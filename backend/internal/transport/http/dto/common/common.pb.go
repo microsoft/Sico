@@ -160,6 +160,56 @@ func (FileType) EnumDescriptor() ([]byte, []int) {
 	return file_common_common_proto_rawDescGZIP(), []int{1}
 }
 
+// SortOrder specifies the sort direction for list queries.
+type SortOrder int32
+
+const (
+	SortOrder_SORT_ORDER_UNSPECIFIED SortOrder = 0 // Default: DESC
+	SortOrder_SORT_ORDER_ASC         SortOrder = 1
+	SortOrder_SORT_ORDER_DESC        SortOrder = 2
+)
+
+// Enum value maps for SortOrder.
+var (
+	SortOrder_name = map[int32]string{
+		0: "SORT_ORDER_UNSPECIFIED",
+		1: "SORT_ORDER_ASC",
+		2: "SORT_ORDER_DESC",
+	}
+	SortOrder_value = map[string]int32{
+		"SORT_ORDER_UNSPECIFIED": 0,
+		"SORT_ORDER_ASC":         1,
+		"SORT_ORDER_DESC":        2,
+	}
+)
+
+func (x SortOrder) Enum() *SortOrder {
+	p := new(SortOrder)
+	*p = x
+	return p
+}
+
+func (x SortOrder) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SortOrder) Descriptor() protoreflect.EnumDescriptor {
+	return file_common_common_proto_enumTypes[2].Descriptor()
+}
+
+func (SortOrder) Type() protoreflect.EnumType {
+	return &file_common_common_proto_enumTypes[2]
+}
+
+func (x SortOrder) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SortOrder.Descriptor instead.
+func (SortOrder) EnumDescriptor() ([]byte, []int) {
+	return file_common_common_proto_rawDescGZIP(), []int{2}
+}
+
 type Attachment struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name"`                    
@@ -532,6 +582,269 @@ func (x *NamedTypeInfo) GetType() *TypeInfo {
 	return nil
 }
 
+// AgentInstanceDigest holds display information about an agent instance.
+type AgentInstanceDigest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	AgentName        string                 `protobuf:"bytes,1,opt,name=agent_name,json=agentName,proto3" json:"agentName"`                       
+	AgentIconUrl     string                 `protobuf:"bytes,2,opt,name=agent_icon_url,json=agentIconUrl,proto3" json:"agentIconUrl"`            
+	OperatorUsername string                 `protobuf:"bytes,3,opt,name=operator_username,json=operatorUsername,proto3" json:"operatorUsername"`  
+	Id               int64                  `protobuf:"varint,4,opt,name=id,proto3" json:"id"`                                                     
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AgentInstanceDigest) Reset() {
+	*x = AgentInstanceDigest{}
+	mi := &file_common_common_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentInstanceDigest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentInstanceDigest) ProtoMessage() {}
+
+func (x *AgentInstanceDigest) ProtoReflect() protoreflect.Message {
+	mi := &file_common_common_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentInstanceDigest.ProtoReflect.Descriptor instead.
+func (*AgentInstanceDigest) Descriptor() ([]byte, []int) {
+	return file_common_common_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *AgentInstanceDigest) GetAgentName() string {
+	if x != nil {
+		return x.AgentName
+	}
+	return ""
+}
+
+func (x *AgentInstanceDigest) GetAgentIconUrl() string {
+	if x != nil {
+		return x.AgentIconUrl
+	}
+	return ""
+}
+
+func (x *AgentInstanceDigest) GetOperatorUsername() string {
+	if x != nil {
+		return x.OperatorUsername
+	}
+	return ""
+}
+
+func (x *AgentInstanceDigest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+// UserDigest holds summary information about a user.
+type UserDigest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                          
+	Alias         string                 `protobuf:"bytes,2,opt,name=alias,proto3" json:"alias"`                     
+	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username"`               
+	Email         string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email"`                     
+	IconUrl       string                 `protobuf:"bytes,5,opt,name=icon_url,json=iconUrl,proto3" json:"iconUrl"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserDigest) Reset() {
+	*x = UserDigest{}
+	mi := &file_common_common_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserDigest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserDigest) ProtoMessage() {}
+
+func (x *UserDigest) ProtoReflect() protoreflect.Message {
+	mi := &file_common_common_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserDigest.ProtoReflect.Descriptor instead.
+func (*UserDigest) Descriptor() ([]byte, []int) {
+	return file_common_common_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UserDigest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UserDigest) GetAlias() string {
+	if x != nil {
+		return x.Alias
+	}
+	return ""
+}
+
+func (x *UserDigest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *UserDigest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *UserDigest) GetIconUrl() string {
+	if x != nil {
+		return x.IconUrl
+	}
+	return ""
+}
+
+// SandboxDigest holds summary information about a sandbox.
+type SandboxDigest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SandboxId      string                 `protobuf:"bytes,1,opt,name=sandbox_id,json=sandboxId,proto3" json:"sandboxId"`                   
+	Type           string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type"`                                              
+	Status         string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status"`                                          
+	Endpoint       string                 `protobuf:"bytes,4,opt,name=endpoint,proto3" json:"endpoint"`                                      
+	VncUrl         string                 `protobuf:"bytes,5,opt,name=vnc_url,json=vncUrl,proto3" json:"vncUrl"`                            
+	DocsUrl        string                 `protobuf:"bytes,6,opt,name=docs_url,json=docsUrl,proto3" json:"docsUrl"`                         
+	DisplayName    string                 `protobuf:"bytes,7,opt,name=display_name,json=displayName,proto3" json:"displayName"`             
+	InstanceId     int64                  `protobuf:"varint,8,opt,name=instance_id,json=instanceId,proto3" json:"instanceId"`               
+	ProjectId      int64                  `protobuf:"varint,9,opt,name=project_id,json=projectId,proto3" json:"projectId"`                  
+	OrganizationId int64                  `protobuf:"varint,10,opt,name=organization_id,json=organizationId,proto3" json:"organizationId"`  
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SandboxDigest) Reset() {
+	*x = SandboxDigest{}
+	mi := &file_common_common_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SandboxDigest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SandboxDigest) ProtoMessage() {}
+
+func (x *SandboxDigest) ProtoReflect() protoreflect.Message {
+	mi := &file_common_common_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SandboxDigest.ProtoReflect.Descriptor instead.
+func (*SandboxDigest) Descriptor() ([]byte, []int) {
+	return file_common_common_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SandboxDigest) GetSandboxId() string {
+	if x != nil {
+		return x.SandboxId
+	}
+	return ""
+}
+
+func (x *SandboxDigest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *SandboxDigest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SandboxDigest) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *SandboxDigest) GetVncUrl() string {
+	if x != nil {
+		return x.VncUrl
+	}
+	return ""
+}
+
+func (x *SandboxDigest) GetDocsUrl() string {
+	if x != nil {
+		return x.DocsUrl
+	}
+	return ""
+}
+
+func (x *SandboxDigest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *SandboxDigest) GetInstanceId() int64 {
+	if x != nil {
+		return x.InstanceId
+	}
+	return 0
+}
+
+func (x *SandboxDigest) GetProjectId() int64 {
+	if x != nil {
+		return x.ProjectId
+	}
+	return 0
+}
+
+func (x *SandboxDigest) GetOrganizationId() int64 {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return 0
+}
+
 var File_common_common_proto protoreflect.FileDescriptor
 
 const file_common_common_proto_rawDesc = "" +
@@ -581,7 +894,35 @@ const file_common_common_proto_rawDesc = "" +
 	"\x0e_file_sub_type\"I\n" +
 	"\rNamedTypeInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12$\n" +
-	"\x04type\x18\x02 \x01(\v2\x10.common.TypeInfoR\x04type*\xb0\x01\n" +
+	"\x04type\x18\x02 \x01(\v2\x10.common.TypeInfoR\x04type\"\x97\x01\n" +
+	"\x13AgentInstanceDigest\x12\x1d\n" +
+	"\n" +
+	"agent_name\x18\x01 \x01(\tR\tagentName\x12$\n" +
+	"\x0eagent_icon_url\x18\x02 \x01(\tR\fagentIconUrl\x12+\n" +
+	"\x11operator_username\x18\x03 \x01(\tR\x10operatorUsername\x12\x0e\n" +
+	"\x02id\x18\x04 \x01(\x03R\x02id\"\x7f\n" +
+	"\n" +
+	"UserDigest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
+	"\x05alias\x18\x02 \x01(\tR\x05alias\x12\x1a\n" +
+	"\busername\x18\x03 \x01(\tR\busername\x12\x14\n" +
+	"\x05email\x18\x04 \x01(\tR\x05email\x12\x19\n" +
+	"\bicon_url\x18\x05 \x01(\tR\aiconUrl\"\xb6\x02\n" +
+	"\rSandboxDigest\x12\x1d\n" +
+	"\n" +
+	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1a\n" +
+	"\bendpoint\x18\x04 \x01(\tR\bendpoint\x12\x17\n" +
+	"\avnc_url\x18\x05 \x01(\tR\x06vncUrl\x12\x19\n" +
+	"\bdocs_url\x18\x06 \x01(\tR\adocsUrl\x12!\n" +
+	"\fdisplay_name\x18\a \x01(\tR\vdisplayName\x12\x1f\n" +
+	"\vinstance_id\x18\b \x01(\x03R\n" +
+	"instanceId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\t \x01(\x03R\tprojectId\x12'\n" +
+	"\x0forganization_id\x18\n" +
+	" \x01(\x03R\x0eorganizationId*\xb0\x01\n" +
 	"\n" +
 	"ColumnType\x12\x17\n" +
 	"\x13COLUMN_TYPE_UNKNOWN\x10\x00\x12\x14\n" +
@@ -597,7 +938,11 @@ const file_common_common_proto_rawDesc = "" +
 	"\x14FILE_TYPE_TYPE_VIDEO\x10\x02\x12\x18\n" +
 	"\x14FILE_TYPE_TYPE_AUDIO\x10\x03\x12\x17\n" +
 	"\x13FILE_TYPE_TYPE_FILE\x10\x04\x12\x1a\n" +
-	"\x16FILE_TYPE_TYPE_ARCHIVE\x10\x05B1Z/sico-backend/internal/transport/http/dto/commonb\x06proto3"
+	"\x16FILE_TYPE_TYPE_ARCHIVE\x10\x05*P\n" +
+	"\tSortOrder\x12\x1a\n" +
+	"\x16SORT_ORDER_UNSPECIFIED\x10\x00\x12\x12\n" +
+	"\x0eSORT_ORDER_ASC\x10\x01\x12\x13\n" +
+	"\x0fSORT_ORDER_DESC\x10\x02B1Z/sico-backend/internal/transport/http/dto/commonb\x06proto3"
 
 var (
 	file_common_common_proto_rawDescOnce sync.Once
@@ -611,29 +956,33 @@ func file_common_common_proto_rawDescGZIP() []byte {
 	return file_common_common_proto_rawDescData
 }
 
-var file_common_common_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_common_common_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_common_common_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_common_common_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_common_common_proto_goTypes = []any{
-	(ColumnType)(0),        // 0: common.ColumnType
-	(FileType)(0),          // 1: common.FileType
-	(*Attachment)(nil),     // 2: common.Attachment
-	(*DocTableSheet)(nil),  // 3: common.DocTableSheet
-	(*DocTableColumn)(nil), // 4: common.DocTableColumn
-	(*TypeInfo)(nil),       // 5: common.TypeInfo
-	(*NamedTypeInfo)(nil),  // 6: common.NamedTypeInfo
-	nil,                    // 7: common.TypeInfo.PropertiesEntry
+	(ColumnType)(0),             // 0: common.ColumnType
+	(FileType)(0),               // 1: common.FileType
+	(SortOrder)(0),              // 2: common.SortOrder
+	(*Attachment)(nil),          // 3: common.Attachment
+	(*DocTableSheet)(nil),       // 4: common.DocTableSheet
+	(*DocTableColumn)(nil),      // 5: common.DocTableColumn
+	(*TypeInfo)(nil),            // 6: common.TypeInfo
+	(*NamedTypeInfo)(nil),       // 7: common.NamedTypeInfo
+	(*AgentInstanceDigest)(nil), // 8: common.AgentInstanceDigest
+	(*UserDigest)(nil),          // 9: common.UserDigest
+	(*SandboxDigest)(nil),       // 10: common.SandboxDigest
+	nil,                         // 11: common.TypeInfo.PropertiesEntry
 }
 var file_common_common_proto_depIdxs = []int32{
-	0, // 0: common.DocTableColumn.column_type:type_name -> common.ColumnType
-	5, // 1: common.TypeInfo.elem_type:type_name -> common.TypeInfo
-	7, // 2: common.TypeInfo.properties:type_name -> common.TypeInfo.PropertiesEntry
-	5, // 3: common.NamedTypeInfo.type:type_name -> common.TypeInfo
-	5, // 4: common.TypeInfo.PropertiesEntry.value:type_name -> common.TypeInfo
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	0,  // 0: common.DocTableColumn.column_type:type_name -> common.ColumnType
+	6,  // 1: common.TypeInfo.elem_type:type_name -> common.TypeInfo
+	11, // 2: common.TypeInfo.properties:type_name -> common.TypeInfo.PropertiesEntry
+	6,  // 3: common.NamedTypeInfo.type:type_name -> common.TypeInfo
+	6,  // 4: common.TypeInfo.PropertiesEntry.value:type_name -> common.TypeInfo
+	5,  // [5:5] is the sub-list for method output_type
+	5,  // [5:5] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_common_common_proto_init() }
@@ -648,8 +997,8 @@ func file_common_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_common_common_proto_rawDesc), len(file_common_common_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   6,
+			NumEnums:      3,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

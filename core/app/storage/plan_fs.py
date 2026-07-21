@@ -24,9 +24,9 @@ Split out of :mod:`app.storage.fs` so the plan read/write/cancel concerns —
 including the Redis-backed exclusive lock used to serialize concurrent
 writers across processes — live in one focused module.
 
-``PlanFS`` is constructed with a callable resolving the user directory path, so
-it stays decoupled from :class:`app.storage.fs.ChatFS` while storing plan files
-next to the turn's ``conversation.json``.
+``PlanFS`` is constructed with a callable resolving the conversation directory
+path, so it stays decoupled from :class:`app.storage.fs.ChatFS` while storing
+plan files next to the turn's ``conversation.json``.
 """
 
 from __future__ import annotations
@@ -38,44 +38,43 @@ from pathlib import Path
 
 from app.utils.cache import Cache
 
-UserPathResolver = Callable[[int, str], Path]
+ConversationPathResolver = Callable[[int, str, int], Path]
 
 
 class PlanFS:
     """Filesystem + lock helpers for the per-turn ``plan.json`` and cancel marker.
 
-    Methods accept ``conversation_id`` for call-site compatibility, but storage
-    remains turn-scoped under ``user/<user>/turn/<turn_id>/`` so ``plan.json``
-    lives beside ``conversation.json``. Method names omit the ``plan`` prefix
-    because the class itself is plan-scoped — call sites read as
+    Methods require ``conversation_id`` so storage is isolated under
+    ``user/<user>/conversation/<conversation_id>/turn/<turn_id>/``. Method
+    names omit the ``plan`` prefix because the class itself is plan-scoped — call sites read as
     ``CHAT_FS.plan.read(...)``, ``CHAT_FS.plan.write_lock(...)`` etc.
     """
 
-    def __init__(self, get_user_path: UserPathResolver) -> None:
-        self._get_user_path = get_user_path
+    def __init__(self, get_conversation_path: ConversationPathResolver) -> None:
+        self._get_conversation_path = get_conversation_path
 
     # ---- paths --------------------------------------------------------- #
 
-    def _get_dir(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int = 0) -> Path:
-        user_path = self._get_user_path(agent_instance_id, user_id)
-        return user_path / "turn" / str(turn_id)
+    def _get_dir(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int) -> Path:
+        conversation_path = self._get_conversation_path(agent_instance_id, user_id, conversation_id)
+        return conversation_path / "turn" / str(turn_id)
 
-    def _get_path(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int = 0) -> Path:
+    def _get_path(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int) -> Path:
         return self._get_dir(agent_instance_id, user_id, turn_id, conversation_id) / "plan.json"
 
-    def _get_cancel_marker_path(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int = 0) -> Path:
+    def _get_cancel_marker_path(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int) -> Path:
         return self._get_dir(agent_instance_id, user_id, turn_id, conversation_id) / "plan_cancelled"
 
-    def _get_lock_name(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int = 0) -> str:
+    def _get_lock_name(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int) -> str:
         """Stable Redis lock key for the plan file of a given turn.
 
         The actual Redis key used by ``Cache.lock`` is ``lock:<this name>``.
         """
-        return f"plan:{agent_instance_id}:{user_id}:{turn_id}"
+        return f"plan:{agent_instance_id}:{user_id}:{conversation_id}:{turn_id}"
 
     # ---- locks --------------------------------------------------------- #
 
-    def read_lock(self, agent_instance_id: int, user_id: str, turn_id: int, *, timeout: int, conversation_id: int = 0):
+    def read_lock(self, agent_instance_id: int, user_id: str, turn_id: int, *, timeout: int, conversation_id: int):
         """Context manager acquiring an exclusive lock on the plan for reading.
 
         Backed by Redis (``Cache.lock``) so it serializes across processes within a pod
@@ -87,7 +86,7 @@ class PlanFS:
             timeout=timeout,
         )
 
-    def write_lock(self, agent_instance_id: int, user_id: str, turn_id: int, *, timeout: int, conversation_id: int = 0):
+    def write_lock(self, agent_instance_id: int, user_id: str, turn_id: int, *, timeout: int, conversation_id: int):
         """Context manager acquiring an exclusive lock on the plan for writing.
 
         See :meth:`read_lock` for details — same lock, same key.
@@ -106,7 +105,7 @@ class PlanFS:
         turn_id: int,
         *,
         encoding: str = "utf-8",
-        conversation_id: int = 0,
+        conversation_id: int,
     ) -> str:
         path = self._get_path(agent_instance_id, user_id, turn_id, conversation_id)
         return path.read_text(encoding=encoding)
@@ -119,7 +118,7 @@ class PlanFS:
         content: str,
         *,
         encoding: str = "utf-8",
-        conversation_id: int = 0,
+        conversation_id: int,
     ) -> Path:
         path = self._get_path(agent_instance_id, user_id, turn_id, conversation_id)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,18 +142,18 @@ class PlanFS:
             raise
         return path
 
-    def exists(self, agent_instance_id: int, user_id: str, turn_id: int, *, conversation_id: int = 0) -> bool:
+    def exists(self, agent_instance_id: int, user_id: str, turn_id: int, *, conversation_id: int) -> bool:
         return self._get_path(agent_instance_id, user_id, turn_id, conversation_id).exists()
 
     # ---- cancel marker ------------------------------------------------- #
 
-    def write_cancelled_marker(self, agent_instance_id: int, user_id: str, turn_id: int, *, conversation_id: int = 0) -> Path:
+    def write_cancelled_marker(self, agent_instance_id: int, user_id: str, turn_id: int, *, conversation_id: int) -> Path:
         """Write an empty ``plan_cancelled`` marker file for the given turn."""
         path = self._get_cancel_marker_path(agent_instance_id, user_id, turn_id, conversation_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.touch()
         return path
 
-    def is_cancelled(self, agent_instance_id: int, user_id: str, turn_id: int, *, conversation_id: int = 0) -> bool:
+    def is_cancelled(self, agent_instance_id: int, user_id: str, turn_id: int, *, conversation_id: int) -> bool:
         """Check whether the ``plan_cancelled`` marker exists for the given turn."""
         return self._get_cancel_marker_path(agent_instance_id, user_id, turn_id, conversation_id).exists()

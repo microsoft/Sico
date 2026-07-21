@@ -140,13 +140,17 @@ run_backend_http() {
     skill
 
   _http_process_subdir "project" "project" \
-    project
+    project \
+    deliverable
 
   _http_process_subdir "common" "common" \
     common
 
   _http_process_subdir "sandbox" "sandbox" \
     restful
+
+  _http_process_subdir "organization" "organization" \
+    organization
 
   _http_process_subdir "conversation" "conversation" \
     conversation \
@@ -157,7 +161,6 @@ run_backend_http() {
 
   _http_process_subdir_gen "rbac" "rbac" \
     rbac_common:common \
-    role:role \
     user:user \
     user_role:user_role \
     token:token \
@@ -237,6 +240,7 @@ run_core() {
     "common|common|common"
     "health|health|rpc"
     "knowledge|knowledge|knowledge rpc reverse_rpc"
+    "project|project|project deliverable"
     "skill|skill|skill rpc"
     "sandbox|sandbox|reverse_rpc"
     "taskruntime|taskruntime|reverse_rpc"

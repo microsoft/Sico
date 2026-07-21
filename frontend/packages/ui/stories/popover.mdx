@@ -1,0 +1,146 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as PopoverStories from "./popover.stories";
+
+<Meta of={PopoverStories} />
+
+# Popover
+
+Floating panel that appears next to a trigger element. Built on Base UI Popover
+primitive with SICO design tokens. Shadcn restyle of `base-nova/popover` — every
+divergence from upstream (token swaps plus spacing / motion drift) is enumerated
+in § Upstream Audit.
+
+## Examples
+
+### Default
+
+<Description of={PopoverStories.Default} />
+<Canvas of={PopoverStories.Default} />
+
+### Alignment
+
+<Description of={PopoverStories.AlignmentStart} />
+<Canvas of={PopoverStories.AlignmentStart} />
+
+### With description (a11y)
+
+<Description of={PopoverStories.WithDescription} />
+<Canvas of={PopoverStories.WithDescription} />
+
+## API
+
+<Controls of={PopoverStories.Default} />
+
+---
+
+## Token Audit
+
+All design tokens consumed by Popover. Shadcn bridge tokens replaced with SICO semantic tokens.
+
+### Surface
+
+<ColorPalette>
+  <ColorItem
+    title="Background"
+    subtitle="Popover surface (was bg-popover)"
+    colors={{
+      "surface · surface-basic": "var(--color-surface-basic)",
+    }}
+  />
+  <ColorItem
+    title="Ring"
+    subtitle="1px decorative ring around the popup (was ring-foreground/10)"
+    colors={{
+      "stroke · stroke-subtle-card-rest": "var(--color-stroke-subtle-card-rest)",
+    }}
+  />
+</ColorPalette>
+
+### Text
+
+<ColorPalette>
+  <ColorItem
+    title="Text"
+    subtitle="Content text (was text-popover-foreground)"
+    colors={{
+      "primary · foreground-primary": "var(--color-foreground-primary)",
+    }}
+  />
+  <ColorItem
+    title="Description"
+    subtitle="PopoverDescription muted text (was text-muted-foreground)"
+    colors={{
+      "tertiary · foreground-tertiary": "var(--color-foreground-tertiary)",
+    }}
+  />
+</ColorPalette>
+
+### Shadow
+
+| Token       | Replaces    | Notes                           |
+| ----------- | ----------- | ------------------------------- |
+| `shadow-l`  | `shadow-md` | "Modals, popovers" elevation    |
+
+### Sizing
+
+| Property              | Class        | Value |
+| --------------------- | ------------ | ----- |
+| Width                 | `w-72`       | 288px |
+| Border radius         | `rounded-lg` | 8px   |
+| Content padding       | `p-3`        | 12px  |
+| Content gap           | `gap-2`      | 8px   |
+
+---
+
+## Upstream Audit
+
+This component is a shadcn restyle of `base-nova/popover`. Run
+`npx shadcn@latest diff popover` to re-verify the live diff. SICO
+divergences fall into two categories:
+
+### Token swaps
+
+shadcn's bridge aliases (`bg-popover`, `text-popover-foreground`,
+`text-muted-foreground`) resolve to these same values, but `@sico/ui`'s
+lint whitelist only admits the semantic token classes — every other
+component in the package consumes the semantic layer directly, so Popover
+follows suit rather than leaving bridge aliases as the lone outlier.
+
+| Upstream class              | SICO token                       |
+| --------------------------- | -------------------------------- |
+| `bg-popover`                | `bg-surface-basic`               |
+| `text-popover-foreground`   | `text-foreground-primary`        |
+| `ring-foreground/10`        | `ring-stroke-subtle-card-rest`   |
+| `shadow-md`                 | `shadow-l`                       |
+| `text-muted-foreground`     | `text-foreground-tertiary`       |
+
+### Spacing / motion drift (design-driven, not token swaps)
+
+| Slot              | Upstream                                  | SICO                          | Reason                              |
+| ----------------- | ----------------------------------------- | ----------------------------- | ----------------------------------- |
+| `PopoverContent`  | `p-2.5 gap-2.5`                           | `p-3 gap-2`                   | Tighter row gap, looser outer pad   |
+| `PopoverContent`  | `duration-100`                            | `duration-150`                | Slightly softer open transition     |
+| `PopoverContent`  | (no easing)                               | `ease-out`                    | Decelerated open feels less abrupt than the browser default |
+| `PopoverContent`  | `data-open:zoom-in-95 data-closed:zoom-out-95` | (removed)              | No scale animation per design       |
+| `PopoverContent`  | `slide-in-from-*-2`                       | `slide-in-from-*-1`           | Shorter slide distance              |
+| `PopoverHeader`   | `flex flex-col gap-0.5 text-sm`           | `flex flex-col`               | Header types/spacing owned by caller (uses `PopoverTitle` / arbitrary children) |
+
+### API contract
+
+Prop surface of `Popover`, `PopoverTrigger`, `PopoverContent`,
+`PopoverTitle`, `PopoverDescription`, and `PopoverHeader` matches
+upstream — same shadcn/Base UI types, no added/removed props.
+
+### Deleted from upstream
+
+None — every shadcn-exported component is preserved (`Popover`,
+`PopoverTrigger`, `PopoverContent`, `PopoverHeader`, `PopoverTitle`,
+`PopoverDescription`).
+
+### Added by SICO (not in upstream)
+
+None — the prop and component surface matches upstream exactly. Action
+rows and content regions are composed at the call site with plain layout
+utilities (e.g. `<div className="flex justify-end gap-1.5 pt-2">`), so no
+bespoke `PopoverBody` / `PopoverFooter` slots are shipped.

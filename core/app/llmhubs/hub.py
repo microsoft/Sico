@@ -251,6 +251,20 @@ class LLMHub:
     def list_builtin_models(self) -> list[ModelRegistryEntry]:
         return list(self._builtin.values())
 
+    def get_context_length(self, model_key: str | None = None) -> int | None:
+        """Return the context window size (in tokens) for a model, or None if not configured."""
+        key = model_key or self._default_model_key
+        entry = self._resolve(key)
+        if entry is None:
+            return None
+        value = entry.config.get("context_length")
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     def register_dynamic(self, entries: list[ModelRegistryEntry]) -> None:
         """Replace the dynamic (DB-sourced) registry."""
         new_dynamic: dict[str, ModelRegistryEntry] = {}

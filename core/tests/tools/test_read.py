@@ -62,7 +62,7 @@ def _ctx(raw_user_message: str = "") -> ToolContext:
 async def test_read_returns_skill_source_for_normal_execution(monkeypatch) -> None:
     ctx = _ctx("帮我执行这个 Android 测试")
     invocation_ctx = SimpleNamespace(kwargs={"tool_context": ctx})
-    monkeypatch.setattr("app.tools.read.CHAT_FS.read_file", lambda *_args: "skill source content\n")
+    monkeypatch.setattr("app.tools.read.CHAT_FS.read_file", lambda *_args, **_kwargs: "skill source content\n")
 
     result = await _read_func(invocation_ctx, file_path="skills/1/SKILL.md")
 
@@ -76,7 +76,7 @@ async def test_read_returns_skill_source_for_normal_execution(monkeypatch) -> No
 async def test_read_returns_playbook_source_for_normal_execution(monkeypatch) -> None:
     ctx = _ctx("执行测试")
     invocation_ctx = SimpleNamespace(kwargs={"tool_context": ctx})
-    monkeypatch.setattr("app.tools.read.CHAT_FS.read_file", lambda *_args: "playbook content\n")
+    monkeypatch.setattr("app.tools.read.CHAT_FS.read_file", lambda *_args, **_kwargs: "playbook content\n")
 
     result = await _read_func(invocation_ctx, file_path="playbooks/android_sandbox_execution.md")
 
@@ -88,7 +88,7 @@ async def test_read_returns_playbook_source_for_normal_execution(monkeypatch) ->
 async def test_read_allows_explicit_skill_debug_request(monkeypatch) -> None:
     ctx = _ctx("请调试技能源码")
     invocation_ctx = SimpleNamespace(kwargs={"tool_context": ctx})
-    monkeypatch.setattr("app.tools.read.CHAT_FS.read_file", lambda *_args: "skill source content\n")
+    monkeypatch.setattr("app.tools.read.CHAT_FS.read_file", lambda *_args, **_kwargs: "skill source content\n")
 
     result = await _read_func(invocation_ctx, file_path="skills/1/SKILL.md")
 
@@ -100,7 +100,7 @@ async def test_read_allows_explicit_skill_debug_request(monkeypatch) -> None:
 async def test_read_returns_skill_source_for_generic_workspace_source_debug(monkeypatch) -> None:
     ctx = _ctx("Debug the delegation guard implementation by inspecting workspace source only")
     invocation_ctx = SimpleNamespace(kwargs={"tool_context": ctx})
-    monkeypatch.setattr("app.tools.read.CHAT_FS.read_file", lambda *_args: "runner source content\n")
+    monkeypatch.setattr("app.tools.read.CHAT_FS.read_file", lambda *_args, **_kwargs: "runner source content\n")
 
     result = await _read_func(invocation_ctx, file_path="skills/1/android_tester/runner.py")
 

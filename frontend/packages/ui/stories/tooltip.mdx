@@ -1,0 +1,113 @@
+import { Canvas, ColorItem, ColorPalette, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as TooltipStories from "./tooltip.stories";
+
+<Meta of={TooltipStories} />
+
+# Tooltip
+
+A floating label that surfaces context when a user hovers, focuses, or taps a
+trigger. Built on [`@base-ui-components/react`](https://base-ui.com/react). The
+dark inverted treatment is SICO-specific — every other behaviour is upstream.
+
+## Examples
+
+### Variants
+
+Tooltip exposes two visual options: with or without an arrow.
+
+<Description of={TooltipStories.Default} />
+<Canvas of={TooltipStories.Default} />
+
+<Description of={TooltipStories.NoArrow} />
+<Canvas of={TooltipStories.NoArrow} />
+
+### Placement
+
+Side placement (`top` / `right` / `bottom` / `left`) is positional, not visual.
+Default is `top`.
+
+<Description of={TooltipStories.SideRight} />
+<Canvas of={TooltipStories.SideRight} />
+
+<Description of={TooltipStories.SideBottom} />
+<Canvas of={TooltipStories.SideBottom} />
+
+### Content
+
+<Description of={TooltipStories.LongContent} />
+<Canvas of={TooltipStories.LongContent} />
+
+---
+
+## Token Audit
+
+Tooltip uses inverted surface tokens so the dark treatment stays semantic
+across themes.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Surface"
+    subtitle="Dark inverted background — used for content and arrow"
+    colors={{
+      "Background · neutral-800": "var(--color-surface-inverted)",
+      "Arrow · neutral-800": "var(--color-surface-inverted)",
+    }}
+  />
+  <ColorItem
+    title="Foreground"
+    subtitle="Text on inverted surface"
+    colors={{
+      "Text · neutral-0": "var(--color-foreground-on-inverted)",
+    }}
+  />
+</ColorPalette>
+
+### Sizing & spacing
+
+| Property       | Class / token          | Value                          |
+| -------------- | ---------------------- | ------------------------------ |
+| Radius         | `rounded-lg`           | 8px                            |
+| Padding        | `px-3 py-2`            | 12px / 8px                     |
+| Font size      | `text-sm`              | 14px                           |
+| Shadow         | `--shadow-m`           | `0 1px 2px + 0 1px 4px`        |
+| Side offset    | `sideOffset` (default) | 8px                            |
+| Show arrow     | `showArrow` (default)  | `true` / `false`               |
+
+---
+
+## API
+
+| Component | Props | Description |
+| --- | --- | --- |
+| `Tooltip` | Radix `Tooltip.Root` props | Controls open state, delay, etc. |
+| `TooltipProvider` | `delayDuration`, `skipDelayDuration` | Shared delay context for grouped tooltips |
+| `TooltipTrigger` | `asChild` | The element that triggers the tooltip |
+| `TooltipContent` | `side`, `sideOffset`, `showArrow`, `className` | Floating content panel |
+
+---
+
+## Upstream Audit
+
+Shadcn restyle of `base-nova/tooltip` (no upstream drift).
+
+### Token swaps
+
+| Upstream class | SICO token |
+| --- | --- |
+| `bg-popover` | `bg-surface-inverted` |
+| `text-popover-foreground` | `text-foreground-on-inverted` |
+| `shadow-md` | `--shadow-m` |
+
+### API contract
+
+`Tooltip`, `TooltipProvider`, `TooltipTrigger`, `TooltipContent` all match
+upstream signatures. No props added or removed.
+
+### Deleted from upstream
+
+| Upstream behaviour | Reason |
+| --- | --- |
+| None | No upstream behaviour was removed |

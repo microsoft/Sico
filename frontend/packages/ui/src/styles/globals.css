@@ -1,0 +1,940 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Tailwind v4 scans only the Vite root by default — declare every
+   package source here so app/shared/ui Storybooks all generate the
+   same utilities. Paths are relative to this CSS file. */
+@source "../../../shared/src/**/*.{ts,tsx}";
+@source "../../../shared/stories/**/*.{ts,tsx}";
+@source "../../../ui/src/**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  /**
+   * @tokens Foundation / Neutrals
+   * @presenter Color
+   */
+  --color-neutral-0: #FFFFFF;    /* pure white — page background */
+  --color-neutral-50: #fdfdfc;   /* sand-1  — subtle background */
+  --color-neutral-75: #f9f9f8;   /* sand-2  — UI element background */
+  --color-neutral-100: #f1f0ef;  /* sand-3  — hovered element background */
+  --color-neutral-150: #e9e8e6;  /* sand-4  — active element / subtle border */
+  --color-neutral-200: #e2e1de;  /* sand-5  — border rest */
+  --color-neutral-250: #dad9d6;  /* sand-6  — border hover / stroke pressed */
+  --color-neutral-300: #cfceca;  /* sand-7  — strong border, faint foreground */
+  --color-neutral-500: #bcbbb5;  /* sand-8  — icon secondary */
+  --color-neutral-600: #8d8d86;  /* sand-9  — tertiary text */
+  --color-neutral-700: #82827c;  /* sand-10 — secondary text */
+  --color-neutral-800: #63635e;  /* sand-11 — secondary text */
+  --color-neutral-900: #3c3c39;  /* custom — softened, between sand-11 and sand-12; primary text, inverted surfaces */
+  --color-neutral-950: #21201c;  /* sand-12 — emphasis, deepest */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Foundation / Overlay
+   * @presenter Color
+   *
+   * Semi-transparent layers for hover states, borders, dividers, and
+   * frosted surfaces. Black variants for light mode, white for dark mode.
+   * Can be applied to any UI element — text, icons, backgrounds, strokes,
+   * and visual effects — wherever varying levels of transparency are needed.
+   */
+  --color-overlay-black-2: #21201c05;   /* Subtle tint, metric boards */
+  --color-overlay-black-5: #21201c0d;   /* Light hover, subtle card borders */
+  --color-overlay-black-8: #21201c14;
+  --color-overlay-black-10: #21201c1a;  /* Dividers */
+  --color-overlay-black-15: #21201c26;  /* Input borders (rest) */
+  --color-overlay-black-20: #21201c33;
+  --color-overlay-black-25: #21201c40;  /* Pressed states */
+  --color-overlay-black-30: #21201c4d;  /* Strong borders, input hover */
+  --color-overlay-black-35: #21201c59;
+  --color-overlay-black-40: #21201c66;
+  --color-overlay-black-50: #21201c80;  /* Focus states, input pressed */
+  --color-overlay-black-60: #21201c99;
+  --color-overlay-black-70: #21201cb3;
+  --color-overlay-black-80: #21201ccc;
+  --color-overlay-black-90: #21201ce6;
+
+  --color-overlay-white-2: #ffffff05;
+  --color-overlay-white-5: #ffffff0d;
+  --color-overlay-white-8: #ffffff14;
+  --color-overlay-white-10: #ffffff1a;
+  --color-overlay-white-15: #ffffff26;
+  --color-overlay-white-20: #ffffff33;
+  --color-overlay-white-25: #ffffff40;
+  --color-overlay-white-30: #ffffff4d;
+  --color-overlay-white-35: #ffffff59;
+  --color-overlay-white-40: #ffffff66;
+  --color-overlay-white-50: #ffffff80;
+  --color-overlay-white-60: #ffffff99;
+  --color-overlay-white-70: #ffffffb3;
+  --color-overlay-white-80: #ffffffcc;  /* Acrylic / frosted glass surfaces */
+  --color-overlay-white-90: #ffffffe6;
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Foundation / Overlay Contextual
+   * @presenter Color
+   *
+   * Mode-aware aliases that flip automatically in dark mode.
+   * "tint" = darkens surface (contrast-adding): black in light, white in dark.
+   * "wash" = lightens surface (contrast-reducing): white in light, black in dark.
+   * Semantic tokens should reference these, not black/white directly.
+   */
+  --color-overlay-tint-2: var(--color-overlay-black-2);
+  --color-overlay-tint-5: var(--color-overlay-black-5);
+  --color-overlay-tint-8: var(--color-overlay-black-8);
+  --color-overlay-tint-10: var(--color-overlay-black-10);
+  --color-overlay-tint-15: var(--color-overlay-black-15);
+  --color-overlay-tint-20: var(--color-overlay-black-20);
+  --color-overlay-tint-25: var(--color-overlay-black-25);
+  --color-overlay-tint-30: var(--color-overlay-black-30);
+  --color-overlay-tint-35: var(--color-overlay-black-35);
+  --color-overlay-tint-40: var(--color-overlay-black-40);
+  --color-overlay-tint-50: var(--color-overlay-black-50);
+  --color-overlay-tint-60: var(--color-overlay-black-60);
+  --color-overlay-tint-70: var(--color-overlay-black-70);
+  --color-overlay-tint-80: var(--color-overlay-black-80);
+  --color-overlay-tint-90: var(--color-overlay-black-90);
+
+  --color-overlay-wash-2: var(--color-overlay-white-2);
+  --color-overlay-wash-5: var(--color-overlay-white-5);
+  --color-overlay-wash-8: var(--color-overlay-white-8);
+  --color-overlay-wash-10: var(--color-overlay-white-10);
+  --color-overlay-wash-15: var(--color-overlay-white-15);
+  --color-overlay-wash-20: var(--color-overlay-white-20);
+  --color-overlay-wash-25: var(--color-overlay-white-25);
+  --color-overlay-wash-30: var(--color-overlay-white-30);
+  --color-overlay-wash-35: var(--color-overlay-white-35);
+  --color-overlay-wash-40: var(--color-overlay-white-40);
+  --color-overlay-wash-50: var(--color-overlay-white-50);
+  --color-overlay-wash-60: var(--color-overlay-white-60);
+  --color-overlay-wash-70: var(--color-overlay-white-70);
+  --color-overlay-wash-80: var(--color-overlay-white-80);
+  --color-overlay-wash-90: var(--color-overlay-white-90);
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Foundation / Support
+   * @presenter Color
+   */
+  --color-danger-50: #FEF4F4;
+  --color-danger-100: #FEDAD9;
+  --color-danger-500: #D14454;
+  --color-danger-700: #AC1922;
+  --color-danger-800: #8E1F0B;
+
+  --color-warn-50: #FEF8F4;
+  --color-warn-100: #FEF0D0;
+  --color-warn-500: #B36D1C;
+  --color-warn-600: #B26C16;
+  --color-warn-700: #8E530B;
+  --color-warn-800: #6B3F08;
+
+  --color-running-50: #EBF5FF;
+  --color-running-100: #E6F3FA;
+  --color-running-500: #0078D4;
+  --color-running-700: #0468BF;
+  --color-running-800: #004C8E;
+
+  --color-pass-100: #F5FFFA;
+  --color-pass-200: #E1F6EA;
+  --color-pass-500: #0D9A6B;
+  --color-pass-700: #06774D;
+  --color-pass-800: #00532F;
+
+  --color-graph-blue-green: #00BBA6;
+  --color-graph-lime: #FCD34D;
+  --color-graph-orange: #FF8B16;
+  --color-graph-purple: #B450FF;
+  --color-graph-magenta: #FF69BA;
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Foundation / Gradient
+   * @presenter Color
+   */
+  /* Color, not Gradient: the addon's parser accepts a Gradient presenter but
+     ships no renderer for it (got: undefined → page-wide ErrorBoundary). The
+     Color presenter paints token.value as a background, which renders the
+     linear/radial-gradient values correctly. */
+  --gradient-sky: linear-gradient(180deg, rgba(255, 255, 255, 0.00) 54.06%, rgba(255, 255, 255, 0.50) 108.13%), #BDBFFF; /* Agent avatar halo */
+  --gradient-dawn: radial-gradient(213.78% 164.07% at 97.89% 100%, #FFF0D6 4.08%, #ECC5FF 45.41%); /* Decorative warm gradient */
+  --gradient-auth-page: linear-gradient(180deg, #EEF3FF 0%, #FFF 66.1%, #D7D4FC 100%); /* Login/auth page background */
+  --gradient-dune: linear-gradient(180deg, rgba(255, 255, 255, 0.00) 50%, rgba(255, 255, 255, 0.50) 100%), #EDCAA3; /* Warm decorative gradient */
+  --gradient-icon-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.00) 0%, rgba(255, 255, 255, 0.40) 100%), var(--color-neutral-100); /* Attachment icon tile background */
+  --gradient-shimmer-text: linear-gradient(90deg, color-mix(in srgb, var(--color-foreground-secondary) 100%, transparent) 35%, color-mix(in srgb, var(--color-foreground-secondary) 11%, transparent) 50%, color-mix(in srgb, var(--color-foreground-secondary) 100%, transparent) 65%); /* Clipped text-fill swept by @keyframes shimmer (thinking strip). Symmetric secondary→(11% secondary)→secondary; narrow 35%–65% gray band so the sweep reads as a strong dark→faint→dark ramp while the viewport still always contains a dark region. */
+  /**
+   * @tokens-end
+   */
+
+  /* ========================
+     Foundation — Radius
+     All Radius tokens align with Tailwind v4 defaults — no CSS variables emitted.
+     Use rounded-{none|xs|sm|md|lg|2xl|3xl|4xl|full} directly.
+     ======================== */
+
+  /**
+   * @tokens Foundation / Shadow
+   * @presenter Shadow
+   *
+   * Elevation ramp — higher = more prominent.
+   * s: buttons, cards, icon wrappers
+   * m: raised cards, raised panels (Figma neutral-100)
+   * l: toast, dropdowns, flyouts, popovers (Figma neutral-200)
+   * xl: composer, page-level modals, toolbars (Figma neutral-300)
+   */
+  --shadow-s: inset 0 -0.5px 0.5px 0.5px #f1f0ef, 0 1px 3px 0 var(--color-overlay-tint-5);
+  --shadow-m: 0 1px 8px 0 rgba(33, 32, 28, 0.05);
+  --shadow-l: 0 1px 2px 0 rgba(33, 32, 28, 0.05), 0 2px 8px 0 rgba(33, 32, 28, 0.08);
+  --shadow-xl: 0 4px 12px 0 rgba(33, 32, 28, 0.08), 0 2px 4px 0 rgba(33, 32, 28, 0.05);
+  --shadow-2xl: 0 12px 32px 0 rgba(33, 32, 28, 0.08), 0 4px 8px 0 rgba(33, 32, 28, 0.05);
+  /* Leftward cast shadow for the app-shell content column onto the sidebar.
+     Two soft layers — a tight inner one for edge definition, a wider outer
+     one for depth. Both blurred (no 0-blur step) so the seam reads as a
+     soft elevation, not a hairline. */
+  --shadow-seam:
+    -1px 0 2px 0 rgba(33, 32, 28, 0.02),
+    -4px 0 10px -2px rgba(33, 32, 28, 0.015);
+  /* DW-home hero avatar glow: a faint grey ring at rest that blooms into a soft
+     brand-purple halo on hover (ported from the legacy ConversationStarter). */
+  --shadow-avatar-glow-rest: 0 0 2px 0 #c6d0da;
+  --shadow-avatar-glow-hover: 0 0 16px 0 #d8a4fe;
+  /* Soft grey halo on the skill progress-bar fill (neutral-800 @ 60%). */
+  --shadow-progress-glow: 0 0 8px 0 rgba(99, 99, 94, 0.6);
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Foundation / Typography
+   * @presenter FontFamily
+   */
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif; /* Default UI text */
+  --font-mono: "Cascadia Code", ui-monospace, monospace; /* Code blocks, inline code */
+
+  --leading-display: 1.15; /* Display/heading — tighter for Geist's tall x-height */
+  --leading-body: 1.5;     /* Body text (WCAG SC 1.4.12 ≥ 1.5) */
+  --leading-body-2: 1.6;   /* Body 16 — longer paragraphs */
+
+  --tracking-tighter: -0.02em; /* Display 24px+ — Geist needs tight at large sizes */
+  --tracking-tight: -0.01em;   /* Headings 18-24px */
+  --tracking-normal: 0em;      /* Body 14-16px — Geist default is optimal */
+  --tracking-wide: 0.01em;     /* Small labels, captions 12px */
+  --tracking-wider: 0.03em;    /* Table headers, badges, uppercase text */
+
+  /* Extra-extra-small text for compact UI elements like count badges */
+  --text-2xs: 0.625rem;
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Foundation / Motion — Easing
+   *
+   * Easing curves. Class: ease-entrance, ease-exit, ease-persistent, ease-elastic.
+   * For linear (opacity fades, color shifts) use Tailwind's built-in `ease-linear`.
+   */
+  --ease-entrance: cubic-bezier(0, 0, 0, 1);       /* Entrance: translate & scale */
+  --ease-exit: cubic-bezier(0.6, 0, 0.75, 0.4);    /* Exit: scale & translate out */
+  --ease-persistent: cubic-bezier(0.33, 0, 0, 1);  /* On-screen: translate & scale */
+  --ease-elastic: cubic-bezier(0.2, 1.5, 0.4, 1);  /* Overshoot: dropdown, popup, composer */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Foundation / Motion — Duration
+   *
+   * Duration scale. Class: duration-micro, duration-short-1, etc.
+   */
+  --duration-micro: 50ms;     /* Click/tap state changes */
+  --duration-short-1: 100ms;  /* Hover accents, underline grow */
+  --duration-short-2: 200ms;  /* Tooltips, popovers, linear fade-in */
+  --duration-medium-1: 300ms; /* Image zoom, scale transforms */
+  --duration-medium-2: 400ms; /* Entrance, modals, navigation */
+  --duration-mega: 1000ms;    /* Spinners, progress bars, auto-play */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Foundation / Motion — Animation
+   *
+   * Composite shorthands (keyframes + easing + duration).
+   * Class: animate-entrance, animate-pop, etc.
+   */
+  --animate-entrance: enter var(--duration-medium-2) var(--ease-entrance) both;
+  --animate-exit: exit var(--duration-short-2) var(--ease-exit) both;
+  --animate-pop: pop var(--duration-medium-1) var(--ease-elastic) both;
+  --animate-fade: fade-in var(--duration-short-2) linear both;
+  --animate-shimmer: shimmer 3.9s linear infinite; /* Shiny-text loading sheen — pair with the `shiny-text` utility. `linear` is required: any non-linear easing on `infinite` produces a velocity discontinuity at the loop boundary and reads as a stutter. */
+  --animate-toast-progress: toast-progress 2000ms var(--ease-persistent) infinite; /* Indeterminate hairline on the white loading toast — 2s sweep reads calm, not urgent */
+  --animate-skeleton: shimmer 2400ms linear infinite; /* Skeleton placeholder — sweeps a light highlight band across an overlay-tint base. Plain animate-pulse only animates opacity, which is invisible on near-white surfaces; this scrolls a linear-gradient via background-position. */
+  /* Login entrance/exit — durations + eases lifted verbatim from dwp's
+     framer-motion login (250ms in / 150ms out). The eases are bespoke to this
+     screen so they're inlined rather than promoted to --ease-* tokens. The
+     stagger delay is applied per element via an inline `animationDelay` style
+     (a longhand that reliably wins over this shorthand). */
+  --animate-login-entrance: login-entrance 250ms cubic-bezier(0, 0.7, 0.2, 1) both;
+  --animate-login-exit: login-exit 150ms cubic-bezier(0.4, 0, 1, 1) both;
+  /* Empty-state ConversationStarter entrance (ported from the legacy
+     styled-components keyframes). `starter-reveal` rises + de-blurs a block in;
+     `starter-fade` de-blurs a single row in. Bound as `--animate-*` tokens (not
+     used purely inline) so Tailwind emits the `animate-starter-*` utility AND
+     keeps the @keyframes — a pure inline `animation` would be invisible to the
+     content scanner and tree-shaken. The per-block stagger is an inline
+     `animationDelay` longhand that wins over this shorthand. */
+  --animate-starter-reveal: starter-reveal 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-starter-fade: starter-fade 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Brand / Primary
+   * @presenter Color
+   */
+  --color-primary-10: #F7F7FA;
+  --color-primary-25: #F5F5FA;
+  --color-primary-50: #EFEEFF;
+  --color-primary-100: #E9E8FF;
+  --color-primary-200: #C8C4FF;
+  --color-primary-300: #A9A1FF;
+  --color-primary-400: #8578F5;
+  --color-primary-500: #6A5CED;
+  --color-primary-600: #4F45E0;
+  --color-primary-700: #3D35B8;
+  --color-primary-800: #2D2790;
+  --color-primary-900: #1E1A68;
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Semantic / Surface
+   * @presenter Color
+   *
+   * Background surfaces that form the foundational layers of the interface.
+   * These colors define distinct areas and establish visual hierarchy through
+   * containers, cards, and page surfaces — serving as the base layer for
+   * foreground content like text, icons, and interactive elements.
+   */
+  --color-surface-basic: var(--color-neutral-0);           /* Default page/card background */
+  --color-surface-canvas: var(--color-neutral-50);         /* Page canvas, app background */
+  --color-surface-sunken: var(--color-neutral-75);         /* Recessed areas, secondary surfaces */
+  --color-surface-icon-tile: var(--color-neutral-100);     /* Attachment / file chip icon tile */
+  --color-surface-strong: var(--color-neutral-100);        /* Strongest neutral surface; header bands, table heads */
+  --color-surface-acrylic-board: var(--color-overlay-wash-80); /* Frosted glass panels */
+  --color-surface-tinted: var(--color-overlay-tint-2);     /* Subtly tinted surface (metric boards, etc.) */
+  --color-surface-muted: var(--color-overlay-tint-5);      /* Deeper tinted surface; also the Skeleton shimmer base */
+  --color-surface-user-input: var(--color-primary-100);    /* User input highlight areas */
+  --color-surface-inverted: var(--color-neutral-900);      /* Dark/inverted surfaces */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Semantic / Foreground
+   * @presenter Color
+   *
+   * Text and icon colors. Ordered by visual weight (emphasis → faint).
+   * Adapt between Light and Dark modes for interactive and informational
+   * elements that need strong visual prominence against their backgrounds.
+   * Ensure sufficient contrast with backgrounds for accessibility.
+   */
+  --color-foreground-emphasis: var(--color-neutral-950);   /* Headings, highest weight */
+  --color-foreground-primary: var(--color-neutral-900);    /* Primary body text */
+  --color-foreground-secondary: var(--color-neutral-800);  /* Descriptions, secondary text */
+  --color-foreground-tertiary: var(--color-neutral-700);   /* Hints, tertiary text */
+  --color-foreground-faint: var(--color-neutral-500);      /* Placeholders, muted content */
+  --color-foreground-disabled: var(--color-neutral-500);   /* Disabled state text */
+  --color-foreground-link-rest: var(--color-link-rest);    /* Link default */
+  --color-foreground-link-hover: var(--color-link-hover);  /* Link hover */
+  --color-foreground-link-pressed: var(--color-link-pressed); /* Link pressed */
+  --color-foreground-on-inverted: var(--color-neutral-0);  /* Text on dark backgrounds */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Semantic / Stroke
+   * @presenter Color
+   *
+   * Border/divider colors. rest → hover → pressed state progression.
+   * Define boundaries and create visual separation — delineate sections,
+   * outline containers, or create subtle visual breaks.
+   */
+  --color-divider: var(--color-overlay-tint-10);              /* Section dividers, <hr> */
+  --color-stroke-seam: var(--color-overlay-tint-5);           /* App-shell content↔sidebar seam hairline (one step lighter than divider) */
+  --color-stroke-subtle-card-rest: var(--color-overlay-tint-10);    /* Card border (rest) */
+  --color-stroke-subtle-card-hover: var(--color-overlay-tint-15);   /* Card border (hover) */
+  --color-stroke-subtle-card-pressed: var(--color-overlay-tint-25); /* Card border (pressed) */
+  --color-stroke-strong-rest: var(--color-overlay-tint-30);         /* Emphasized borders */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Semantic / Icon
+   * @presenter Color
+   */
+  --color-icon-primary: var(--color-neutral-900);      /* Primary icons */
+  --color-icon-secondary: var(--color-neutral-600);    /* Secondary/muted icons */
+  --color-icon-on-inverted: var(--color-neutral-0);    /* Icons on dark backgrounds */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Semantic / Focus
+   * @presenter Color
+   */
+  --color-focus-rest: var(--color-neutral-900);   /* Default focus ring */
+  --color-focus-error: var(--color-danger-500);   /* Error state focus ring */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Semantic / Status
+   * @presenter Color
+   *
+   * Status badge / banner colors. `foreground` is the saturated standalone
+   * text tone (text-only treatments on the default surface, e.g. the badge
+   * `secondary` variant); the `on-fill-foreground` variant is the deeper tone
+   * for text painted on top of the tinted `fill`. Warning ships a single
+   * `foreground` that reads on both surfaces, so it has no on-fill variant.
+   */
+  --color-status-success-fill: var(--color-pass-200);                     /* Success background */
+  --color-status-success-foreground: var(--color-pass-500);               /* Success text, standalone */
+  --color-status-success-on-inverted-foreground: var(--color-pass-500);   /* Success glyph on dark surface (toast) — mid-tone for contrast on black */
+  --color-status-success-on-fill-foreground: var(--color-pass-800);       /* Success text on fill */
+  --color-status-warning-fill: var(--color-warn-100);                     /* Warning background */
+  --color-status-warning-subtle-fill: var(--color-warn-50);               /* Low-emphasis warning tint — toast surface, faint status banner */
+  --color-status-warning-foreground: var(--color-warn-700);               /* Warning text */
+  --color-status-warning-strong-foreground: var(--color-warn-600);        /* Brighter warning glyph for low-emphasis tints (toast icon) — keeps warn-700 text at AA */
+  --color-status-warning-on-inverted-foreground: var(--color-warn-500);   /* Warning glyph on dark surface (toast) — mid-tone for contrast on black */
+  --color-status-info-fill: var(--color-running-100);                     /* Info background */
+  --color-status-info-foreground: var(--color-running-500);               /* Info text, standalone */
+  --color-status-info-on-fill-foreground: var(--color-running-700);       /* Info text on fill */
+  --color-status-error-fill: var(--color-danger-100);                     /* Error background */
+  --color-status-error-subtle-fill: var(--color-danger-50);               /* Low-emphasis error tint — toast surface */
+  --color-status-error-foreground: var(--color-danger-700);               /* Error text, standalone */
+  --color-status-error-on-inverted-foreground: var(--color-danger-500);   /* Error glyph on dark surface (toast) — mid-tone for contrast on black */
+  --color-status-error-on-fill-foreground: var(--color-danger-800);       /* Error text on fill */
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Components / Button
+   * @presenter Color
+   */
+  --color-button-primary-fill-rest: var(--color-neutral-900);
+  --color-button-primary-fill-hover: var(--color-neutral-950);
+  --color-button-primary-fill-pressed: var(--color-neutral-900);
+  --color-button-primary-fill-disabled: var(--color-neutral-100);
+  --color-button-primary-foreground-rest: var(--color-neutral-0);
+  --color-button-primary-foreground-disabled: var(--color-foreground-disabled);
+  --shadow-button-primary: var(--shadow-s); /* @presenter Shadow */
+
+  --color-button-secondary-fill-rest: var(--color-neutral-0);
+  --color-button-secondary-fill-hover: var(--color-neutral-50);
+  --color-button-secondary-fill-pressed: var(--color-neutral-50);
+  --color-button-secondary-fill-disabled: var(--color-neutral-100);
+  --color-button-secondary-stroke-rest: var(--color-neutral-150);
+  --color-button-secondary-stroke-hover: var(--color-neutral-200);
+  --color-button-secondary-stroke-pressed: var(--color-neutral-250);
+  --color-button-secondary-stroke-disabled: var(--color-overlay-tint-5);
+  --color-button-secondary-foreground-rest: var(--color-foreground-primary);
+  --color-button-secondary-foreground-disabled: var(--color-foreground-disabled);
+  --shadow-button-secondary: var(--shadow-s); /* @presenter Shadow */
+
+  --color-button-subtle-fill-rest: transparent;
+  --color-button-subtle-fill-hover: var(--color-overlay-tint-5);
+  --color-button-subtle-fill-pressed: var(--color-overlay-tint-5);
+  --color-button-subtle-fill-disabled: transparent;
+  --color-button-subtle-foreground-rest: var(--color-foreground-primary);
+  --color-button-subtle-foreground-disabled: var(--color-foreground-disabled);
+
+  --color-button-destructive-fill-rest: transparent;
+  --color-button-destructive-fill-hover: var(--color-danger-50);
+  --color-button-destructive-fill-pressed: var(--color-danger-50);
+  --color-button-destructive-fill-disabled: transparent;
+  --color-button-destructive-foreground-rest: var(--color-danger-500);
+  --color-button-destructive-foreground-hover: var(--color-danger-700);
+  --color-button-destructive-foreground-pressed: var(--color-danger-700);
+  --color-button-destructive-foreground-disabled: var(--color-foreground-disabled);
+
+  --color-button-destructive-outline-fill-rest: var(--color-neutral-0);
+  --color-button-destructive-outline-fill-hover: var(--color-danger-50);
+  --color-button-destructive-outline-fill-pressed: var(--color-danger-50);
+  --color-button-destructive-outline-fill-disabled: var(--color-overlay-tint-5);
+  --color-button-destructive-outline-stroke-rest: var(--color-danger-500);
+  --color-button-destructive-outline-stroke-hover: var(--color-danger-700);
+  --color-button-destructive-outline-stroke-pressed: var(--color-danger-700);
+  --color-button-destructive-outline-stroke-disabled: var(--color-overlay-tint-5);
+  --color-button-destructive-outline-foreground-rest: var(--color-danger-500);
+  --color-button-destructive-outline-foreground-hover: var(--color-danger-700);
+  --color-button-destructive-outline-foreground-pressed: var(--color-danger-700);
+  --color-button-destructive-outline-foreground-disabled: var(--color-foreground-disabled);
+  --shadow-button-destructive-outline: var(--shadow-s); /* @presenter Shadow */
+
+  --color-button-link-foreground-rest: var(--color-link-rest);
+  --color-button-link-foreground-hover: var(--color-link-hover);
+  --color-button-link-foreground-pressed: var(--color-link-pressed);
+  --color-button-link-foreground-disabled: var(--color-foreground-disabled);
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Components / Input
+   * @presenter Color
+   */
+  --color-input-fill-rest: var(--color-neutral-0);
+  --color-input-fill-hover: var(--color-neutral-0);
+  --color-input-fill-pressed: var(--color-neutral-0);
+  --color-input-fill-disabled: var(--color-neutral-100);
+  --color-input-fill-error: var(--color-danger-50);
+  --color-input-stroke-rest: var(--color-overlay-tint-15);
+  --color-input-stroke-hover: var(--color-overlay-tint-30);
+  --color-input-stroke-pressed: var(--color-overlay-tint-50);
+  --color-input-stroke-disabled: transparent;
+  --color-input-stroke-error: var(--color-danger-700);
+  --color-input-stroke-error-hover: var(--color-danger-700);
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Components / Link
+   * @presenter Color
+   */
+  --color-link-rest: var(--color-running-500);
+  --color-link-hover: var(--color-running-700);
+  --color-link-pressed: var(--color-running-800);
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Components / Tabs
+   * @presenter Color
+   */
+  --color-tabs-foreground-rest: var(--color-foreground-tertiary);
+  --color-tabs-foreground-selected: var(--color-foreground-emphasis);
+  --color-tabs-indicator-fill-hover: var(--color-primary-500);
+  --color-tabs-indicator-fill-selected: var(--color-primary-600);
+  --color-tabs-pill-fill-hover: var(--color-overlay-tint-5);
+  --color-tabs-pill-fill-selected: var(--color-overlay-tint-8);
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Components / Progress
+   * @presenter Color
+   */
+  --color-progress-track-fill: var(--color-surface-strong);
+  --color-progress-indicator-fill: var(--color-primary-600);
+  /**
+   * @tokens-end
+   */
+
+  /**
+   * @tokens Shadcn Theme
+   * @presenter Color
+   *
+   * Mappings confirmed by designer.
+   */
+  --color-background: var(--color-surface-basic);
+  --color-foreground: var(--color-foreground-primary);
+  --color-card: var(--color-surface-basic);
+  --color-card-foreground: var(--color-foreground-primary);
+  --color-popover: var(--color-surface-basic);
+  --color-popover-foreground: var(--color-foreground-primary);
+  --color-primary: var(--color-button-primary-fill-rest);
+  --color-primary-foreground: var(--color-neutral-0);
+  --color-secondary: var(--color-surface-sunken);
+  --color-secondary-foreground: var(--color-foreground-primary);
+  --color-muted: var(--color-surface-sunken);
+  --color-muted-foreground: var(--color-foreground-tertiary);
+  --color-accent: var(--color-surface-canvas);
+  --color-accent-foreground: var(--color-foreground-primary);
+  --color-destructive: var(--color-danger-500);
+  --color-border: var(--color-divider);
+  --color-input: var(--color-input-stroke-rest);
+  --color-ring: var(--color-focus-rest);
+  --color-sidebar: var(--color-surface-basic);
+  --color-sidebar-foreground: var(--color-foreground-primary);
+  --color-sidebar-primary: var(--color-primary-600);
+  --color-sidebar-primary-foreground: var(--color-neutral-0);
+  --color-sidebar-accent: var(--color-surface-canvas);
+  --color-sidebar-accent-foreground: var(--color-foreground-primary);
+  --color-sidebar-border: var(--color-divider);
+  --color-sidebar-ring: var(--color-primary-500);
+  /**
+   * @tokens-end
+   */
+}
+
+/* ========================
+   SICO Motion — @keyframes
+   These pair with --animate-* tokens above.
+   tw-animate-css already provides `enter` and `exit` keyframes.
+   ======================== */
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Indeterminate sweep for the white loading toast's bottom progress hairline.
+   Pairs with the `toast-loading-bar` utility. */
+@keyframes toast-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* Empty-state ConversationStarter entrance. `starter-reveal` rises + de-blurs a
+   block in (hero, composer, section label); `starter-fade` de-blurs a single
+   element in (each suggested-task row). Ported from the legacy ConversationStarter
+   styled-components keyframes (opacity + translateY(10px) + blur(8px), the blur
+   clearing by 60%). Paired with the `--animate-starter-*` tokens above (applied
+   as `animate-starter-*` utility classes + an inline `animationDelay` stagger);
+   `both` fill-mode holds the hidden 0% state through the delay so nothing
+   flashes pre-animation. */
+@keyframes starter-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(8px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes starter-fade {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+/* Login screen entrance / exit — replicates dwp's framer-motion login stagger
+   (fade + 12px rise in, fade + 8px lift out) so the SICO ⇄ SICO.Dev toggle
+   keeps the same motion without a runtime animation lib. Paired with
+   --animate-login-entrance / --animate-login-exit. */
+@keyframes login-entrance {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* Shiny-text loading sheen: a clipped highlight sweeps across the text while
+   a value is still resolving (distinct from Skeleton's `animate-pulse`). Pairs
+   with the `shiny-text` utility, which lays the moving gradient + bg-clip. */
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/*
+ * Spring-inspired dropdown open/close animations.
+ * Uses a custom cubic-bezier that overshoots slightly,
+ * mimicking a spring settle — inspired by smoothui.dev.
+ */
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dropdown-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+
+/* `--gradient-*` is outside Tailwind v4's automatic namespaces, so map it
+   to a `bg-gradient-*` utility once for all gradient tokens. */
+@utility bg-gradient-* {
+  background-image: --value(--gradient- *);
+}
+
+/* Decorative ambient app background — the washes that make up the app-canvas
+   atmosphere, rendered as three sibling divs inside the `dark:hidden` wrapper
+   in `app-shell`'s `<main>`: two blurred color-wash blobs (graph-orange
+   bottom-right, primary-300 top, center-biased) with a paper-grain overlay multiplied on
+   top. Kept as sibling layers — NOT wrapper pseudo-elements — so the two washes
+   blend with each other and the grain's `mix-blend-multiply` lands on both,
+   matching the original component exactly. Each utility carries only the values
+   Tailwind can't express (radial gradients, vw/vh spill positions, heavy blur);
+   the divs keep their `absolute rounded-full opacity-*` classes inline. Sizes
+   are vw/vh so the washes always bleed past every edge and read as ambient
+   light, not shapes. Light-only for now; dark treatment lands in a follow-up. */
+
+/* Blob A — graph-orange peach, bottom-right. */
+@utility bg-app-glow-warm {
+  top: 70vh;
+  left: 70vw;
+  width: 130vw;
+  height: 130vh;
+  transform: rotate(0deg);
+  filter: blur(140px);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklch, var(--color-graph-orange) 45%, transparent),
+    transparent 75%
+  );
+}
+
+/* Blob B — primary-300 lavender, top, center-biased (spills from the top-left corner). */
+@utility bg-app-glow-cool {
+  top: -25vh;
+  left: -8vw;
+  width: 120vw;
+  height: 120vh;
+  transform: rotate(0deg);
+  filter: blur(140px);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklch, var(--color-primary-300) 55%, transparent),
+    transparent 75%
+  );
+}
+
+/* Warm paper grain, multiplied over the washes to break their flatness.
+   Inline data-URI so it costs no extra HTTP request. */
+@utility bg-app-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.13 0 0 0 0 0.13 0 0 0 0 0.11 0 0 0 0.22 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Shiny-text loading sheen: clips a moving highlight to the text glyphs while
+   a value is still resolving (the asset-name shimmer while extraction polls).
+   The glyphs read as normal dark text with a lighter highlight sweeping across
+   (a gloss), not a dark band over faint text. Pair with `animate-shimmer` for
+   the motion; distinct from Skeleton's pulse. */
+@utility shiny-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-foreground-secondary) 45%,
+    var(--color-foreground-faint) 50%,
+    var(--color-foreground-secondary) 55%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* Skeleton sheen: the second skin on the shared `shimmer` engine. A translucent
+   overlay-wash highlight band sweeps across an overlay-tint base via
+   background-position (animate-skeleton). Unlike `shiny-text` it paints a solid
+   surface band, not glyphs. Both overlay tokens auto-invert in dark mode, so
+   dark surfaces get the inverse sheen for free. Replaces shadcn's opacity-only
+   `animate-pulse`, which is invisible on near-white surfaces. */
+@utility skeleton {
+  background-image: linear-gradient(
+    90deg,
+    transparent 35%,
+    var(--color-overlay-wash-40) 46%,
+    transparent 60%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+}
+
+@utility scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-overlay-tint-15) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: var(--color-overlay-tint-15);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--color-overlay-tint-25);
+  }
+}
+
+/* White loading toast's indeterminate progress hairline. Painted as a clipped
+   `::after` pinned to the card's bottom edge so no extra DOM node is injected
+   into sonner's toast markup. Pair with `animate-toast-progress`. */
+@utility toast-loading-bar {
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    width: 28%;
+    background: var(--color-primary-600);
+    animation: var(--animate-toast-progress);
+  }
+}
+
+/* Fully hides the scrollbar while keeping the element scrollable (wheel /
+   trackpad / keyboard still work). `scrollbar-width: none` covers Firefox +
+   modern Chromium; the `::-webkit-scrollbar` reset covers older WebKit/Blink. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("../assets/fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* ─── Dark Mode — DISABLED ───────────────────────────────────────────────
+   SICO ships light-only for now. The OS-driven dark palette below is kept
+   intact (every token value preserved) but gated behind an impossible
+   `and (color: 0)` so the block never matches — re-enable by removing that
+   clause to restore `prefers-color-scheme: dark`. */
+@media (prefers-color-scheme: dark) and (color: 0) {
+  :root {
+    /* Foundation / Neutrals — Radix Sand Dark */
+    --color-neutral-0: #111110;    /* sand-dark-1 — page background */
+    --color-neutral-50: #191918;   /* sand-dark-2 — subtle background */
+    --color-neutral-75: #222221;   /* sand-dark-3 — UI element background */
+    --color-neutral-100: #2a2a28;  /* sand-dark-4 — hovered element background */
+    --color-neutral-150: #31312e;  /* sand-dark-5 — active element / subtle border */
+    --color-neutral-200: #3b3a37;  /* sand-dark-6 — border rest */
+    --color-neutral-250: #494844;  /* sand-dark-7 — border hover / stroke pressed */
+    --color-neutral-300: #62605b;  /* sand-dark-8 — strong border, faint foreground */
+    --color-neutral-500: #6f6d66;  /* sand-dark-9 — icon secondary */
+    --color-neutral-600: #7c7b74;  /* sand-dark-10 — tertiary text */
+    --color-neutral-700: #b5b3ad;  /* sand-dark-11 — secondary text */
+    --color-neutral-800: #b5b3ad;  /* sand-dark-11 — secondary text */
+    --color-neutral-900: #eeeeec;  /* sand-dark-12 — primary text */
+    --color-neutral-950: #FFFFFF;  /* pure white — emphasis */
+
+    /* Overlay contextual flip: tint↔wash */
+    --color-overlay-tint-2: var(--color-overlay-white-2);
+    --color-overlay-tint-5: var(--color-overlay-white-5);
+    --color-overlay-tint-8: var(--color-overlay-white-8);
+    --color-overlay-tint-10: var(--color-overlay-white-10);
+    --color-overlay-tint-15: var(--color-overlay-white-15);
+    --color-overlay-tint-20: var(--color-overlay-white-20);
+    --color-overlay-tint-25: var(--color-overlay-white-25);
+    --color-overlay-tint-30: var(--color-overlay-white-30);
+    --color-overlay-tint-35: var(--color-overlay-white-35);
+    --color-overlay-tint-40: var(--color-overlay-white-40);
+    --color-overlay-tint-50: var(--color-overlay-white-50);
+    --color-overlay-tint-60: var(--color-overlay-white-60);
+    --color-overlay-tint-70: var(--color-overlay-white-70);
+    --color-overlay-tint-80: var(--color-overlay-white-80);
+    --color-overlay-tint-90: var(--color-overlay-white-90);
+
+    --color-overlay-wash-2: var(--color-overlay-black-2);
+    --color-overlay-wash-5: var(--color-overlay-black-5);
+    --color-overlay-wash-8: var(--color-overlay-black-8);
+    --color-overlay-wash-10: var(--color-overlay-black-10);
+    --color-overlay-wash-15: var(--color-overlay-black-15);
+    --color-overlay-wash-20: var(--color-overlay-black-20);
+    --color-overlay-wash-25: var(--color-overlay-black-25);
+    --color-overlay-wash-30: var(--color-overlay-black-30);
+    --color-overlay-wash-35: var(--color-overlay-black-35);
+    --color-overlay-wash-40: var(--color-overlay-black-40);
+    --color-overlay-wash-50: var(--color-overlay-black-50);
+    --color-overlay-wash-60: var(--color-overlay-black-60);
+    --color-overlay-wash-70: var(--color-overlay-black-70);
+    --color-overlay-wash-80: var(--color-overlay-black-80);
+    --color-overlay-wash-90: var(--color-overlay-black-90);
+  }
+}
+
+/* WCAG 2.4.7 baseline: keyboard focus must be visible. Token sourced
+   so the design system stays the single source of truth.
+   Inputs/textareas handle their own focus styling (border + shadow).
+   Menu items (role="menuitem"/"menuitemcheckbox"/"menuitemradio") opt out:
+   they indicate focus via fill swap (`bg-accent`), and Base UI
+   programmatically focuses the first item on open which would otherwise
+   trigger this global ring. */
+:focus-visible:not(input):not(textarea):not(select):not([data-slot="input"]):not([data-slot="input-group-control"]):not([role="menuitem"]):not([role="menuitemcheckbox"]):not([role="menuitemradio"]) {
+  outline: 2px solid var(--color-focus-rest);
+  outline-offset: 2px;
+}

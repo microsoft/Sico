@@ -60,6 +60,7 @@ type ChatConnection struct {
 	ctx                   context.Context
 	sender                sse.SSESender
 	notifyDone            chan struct{}
+	notifyDoneOnce        sync.Once
 	agent                 *singleagentpb.SingleAgent
 	agentInstance         *singleagentpb.SingleAgentInstance
 	username              string
@@ -69,6 +70,21 @@ type ChatConnection struct {
 	bufferedTopicMessages map[int64]*conversationdto.TopicMessage // key is seq
 	busyMutex             sync.Mutex
 	lastActive            time.Time
+}
+
+// signalDone closes notifyDone exactly once so any number of producers
+// (eventbus push, gRPC stream error, keepalive timeout, client disconnect)
+// can safely signal without attempting to close an already-closed channel.
+func (c *ChatConnection) signalDone() {
+	c.notifyDoneOnce.Do(func() {
+		close(c.notifyDone)
+	})
+}
+
+func (c *ChatConnection) hasSentTopicMessages() bool {
+	c.busyMutex.Lock()
+	defer c.busyMutex.Unlock()
+	return c.sentSeq > 0
 }
 
 type ChatConnectionIdentifier struct {

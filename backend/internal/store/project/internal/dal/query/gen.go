@@ -16,44 +16,49 @@ import (
 )
 
 var (
-	Q             = new(Query)
-	TProject      *tProject
-	TProjectAsset *tProjectAsset
-	TProjectUser  *tProjectUser
+	Q                   = new(Query)
+	TProject            *tProject
+	TProjectAsset       *tProjectAsset
+	TProjectDeliverable *tProjectDeliverable
+	TProjectUser        *tProjectUser
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	*Q = *Use(db, opts...)
 	TProject = &Q.TProject
 	TProjectAsset = &Q.TProjectAsset
+	TProjectDeliverable = &Q.TProjectDeliverable
 	TProjectUser = &Q.TProjectUser
 }
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
-		db:            db,
-		TProject:      newTProject(db, opts...),
-		TProjectAsset: newTProjectAsset(db, opts...),
-		TProjectUser:  newTProjectUser(db, opts...),
+		db:                  db,
+		TProject:            newTProject(db, opts...),
+		TProjectAsset:       newTProjectAsset(db, opts...),
+		TProjectDeliverable: newTProjectDeliverable(db, opts...),
+		TProjectUser:        newTProjectUser(db, opts...),
 	}
 }
 
 type Query struct {
 	db *gorm.DB
 
-	TProject      tProject
-	TProjectAsset tProjectAsset
-	TProjectUser  tProjectUser
+	TProject            tProject
+	TProjectAsset       tProjectAsset
+	TProjectDeliverable tProjectDeliverable
+	TProjectUser        tProjectUser
 }
 
 func (q *Query) Available() bool { return q.db != nil }
 
 func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
-		db:            db,
-		TProject:      q.TProject.clone(db),
-		TProjectAsset: q.TProjectAsset.clone(db),
-		TProjectUser:  q.TProjectUser.clone(db),
+		db:                  db,
+		TProject:            q.TProject.clone(db),
+		TProjectAsset:       q.TProjectAsset.clone(db),
+		TProjectDeliverable: q.TProjectDeliverable.clone(db),
+		TProjectUser:        q.TProjectUser.clone(db),
 	}
 }
 
@@ -67,24 +72,27 @@ func (q *Query) WriteDB() *Query {
 
 func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
-		db:            db,
-		TProject:      q.TProject.replaceDB(db),
-		TProjectAsset: q.TProjectAsset.replaceDB(db),
-		TProjectUser:  q.TProjectUser.replaceDB(db),
+		db:                  db,
+		TProject:            q.TProject.replaceDB(db),
+		TProjectAsset:       q.TProjectAsset.replaceDB(db),
+		TProjectDeliverable: q.TProjectDeliverable.replaceDB(db),
+		TProjectUser:        q.TProjectUser.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
-	TProject      ITProjectDo
-	TProjectAsset ITProjectAssetDo
-	TProjectUser  ITProjectUserDo
+	TProject            ITProjectDo
+	TProjectAsset       ITProjectAssetDo
+	TProjectDeliverable ITProjectDeliverableDo
+	TProjectUser        ITProjectUserDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
-		TProject:      q.TProject.WithContext(ctx),
-		TProjectAsset: q.TProjectAsset.WithContext(ctx),
-		TProjectUser:  q.TProjectUser.WithContext(ctx),
+		TProject:            q.TProject.WithContext(ctx),
+		TProjectAsset:       q.TProjectAsset.WithContext(ctx),
+		TProjectDeliverable: q.TProjectDeliverable.WithContext(ctx),
+		TProjectUser:        q.TProjectUser.WithContext(ctx),
 	}
 }
 

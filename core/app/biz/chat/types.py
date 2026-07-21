@@ -158,8 +158,8 @@ class ChatIntentCheckerInput(BaseModel):
         ),
     )
 
-    # Pre-rendered context sections, reused by both the router prompt and the
-    # downstream chat agent's user message.
+    # Pre-rendered context sections for the router prompt; skills_section is
+    # also appended to the chat agent system prompt.
     workspace_attachments_section: str = Field(default="")
     workspace_knowledge_section: str = Field(default="")
     prior_rerun_sources_section: str = Field(default="")

@@ -101,7 +101,12 @@ func (d *DocumentV2DAO) List(ctx context.Context, filter *DocumentV2Filter) ([]*
 		return nil, 0, err
 	}
 
-	list, err := do.Offset(filter.Offset).Limit(filter.Limit).Order(q.ID.Desc()).Find()
+	do = do.Offset(filter.Offset).Order(q.ID.Desc())
+	if filter.Limit > 0 {
+		do = do.Limit(filter.Limit)
+	}
+
+	list, err := do.Find()
 	if err != nil {
 		return nil, 0, err
 	}

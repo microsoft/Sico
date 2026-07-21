@@ -39,11 +39,7 @@ from .workbook_cases import SUPPORTED_WORKBOOK_SUFFIXES, workbook_case_sources, 
 
 
 def _workbook_attachment_hook(context: AttachmentHookContext) -> None:
-    if (
-        context.path.suffix.lower() not in SUPPORTED_WORKBOOK_SUFFIXES
-        or context.agent_instance_id <= 0
-        or context.turn_id <= 0
-    ):
+    if context.path.suffix.lower() not in SUPPORTED_WORKBOOK_SUFFIXES or context.agent_instance_id <= 0 or context.turn_id <= 0:
         return
     manifest = workbook_manifest(context.path)
     if not manifest:
@@ -54,6 +50,7 @@ def _workbook_attachment_hook(context: AttachmentHookContext) -> None:
     archive_workbook_attachment_source(
         agent_instance_id=context.agent_instance_id,
         username=context.username,
+        conversation_id=context.conversation_id,
         file_path=f"attachments/{context.name}",
         data_rows=int(manifest.get("runnable_data_rows") or manifest.get("total_data_rows") or 0),
         workbook_manifest=manifest,

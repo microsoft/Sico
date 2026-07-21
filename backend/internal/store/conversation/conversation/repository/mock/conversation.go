@@ -61,6 +61,18 @@ func (m *mockConversationRepo) Update(_ context.Context, msg *entity.Conversatio
 	return nil
 }
 
+func (m *mockConversationRepo) UpdateTitleIfCurrent(_ context.Context, id int64, currentTitle, nextTitle string) (int64, error) {
+	conversation, exists := m.conversations[id]
+	if !exists {
+		return 0, nil
+	}
+	if conversation.Title != currentTitle {
+		return 0, nil
+	}
+	conversation.Title = nextTitle
+	return 1, nil
+}
+
 func (m *mockConversationRepo) GetByID(_ context.Context, id int64) (*entity.Conversation, error) {
 	if c, exists := m.conversations[id]; exists {
 		return copyConversation(c), nil
@@ -74,7 +86,7 @@ func (m *mockConversationRepo) Get(
 	agentInstanceID int64,
 ) (*entity.Conversation, error) {
 	for _, c := range m.conversations {
-		if c.CreatorUsername == username && c.AgentID == agentID && c.AgentInstanceID == agentInstanceID {
+		if conversationMatches(c, username, agentID, agentInstanceID) {
 			return copyConversation(c), nil
 		}
 	}
@@ -96,7 +108,7 @@ func (m *mockConversationRepo) List(
 ) ([]*entity.Conversation, bool, error) {
 	var filtered []*entity.Conversation
 	for _, c := range m.conversations {
-		if c.CreatorUsername == username && c.AgentID == agentID && c.AgentInstanceID == agentInstanceID {
+		if conversationMatches(c, username, agentID, agentInstanceID) {
 			filtered = append(filtered, copyConversation(c))
 		}
 	}
@@ -121,9 +133,13 @@ func (m *mockConversationRepo) CountByStatus(
 ) (map[int32]int64, error) {
 	result := make(map[int32]int64)
 	for _, c := range m.conversations {
-		if c.CreatorUsername == username && c.AgentID == agentID && c.AgentInstanceID == agentInstanceID {
+		if conversationMatches(c, username, agentID, agentInstanceID) {
 			result[c.Status]++
 		}
 	}
 	return result, nil
+}
+
+func conversationMatches(c *entity.Conversation, username string, agentID string, agentInstanceID int64) bool {
+	return c.CreatorUsername == username && (agentID == "" || c.AgentID == agentID) && c.AgentInstanceID == agentInstanceID
 }

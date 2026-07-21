@@ -1,0 +1,99 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as SpinnerStories from "./spinner.stories";
+
+<Meta of={SpinnerStories} />
+
+# Spinner
+
+Loading indicator that plays the legacy four-dot comet animation — ported 1:1
+via [Lottie](https://airbnb.io/lottie/) from the old repo's `loading.json`. Not
+a shadcn component; a plain `<div role="status">` wrapping a Lottie player.
+
+Behavior contract:
+
+- **Two locked sizes.** `size="default"` (40px, `size-10`) for inline /
+  route-level loading; `size="lg"` (64px, `size-16`) for full-page fallbacks
+  where 40px reads as too small against the viewport. The variant class is
+  appended after `className` so size stays locked — `className` is for layout
+  only (margins, positioning), never sizing.
+- **Accessible by default.** `role="status"` + `aria-label="Loading"` on the
+  wrapper; the Lottie canvas itself is `aria-hidden`. Callers override the label
+  for context (`aria-label="Loading more"`).
+- **Four-dot comet.** The animation is four `primary`-scale dots in a trailing
+  chain — a 4.0s loop (100 frames @ 25fps) authored in After Effects. Motion and
+  timing are baked into the JSON; nothing is reconstructed in CSS.
+
+## Examples
+
+### Default
+
+<Description of={SpinnerStories.Default} />
+<Canvas of={SpinnerStories.Default} />
+
+### Large
+
+<Description of={SpinnerStories.Large} />
+<Canvas of={SpinnerStories.Large} />
+
+### Custom label
+
+<Description of={SpinnerStories.CustomLabel} />
+<Canvas of={SpinnerStories.CustomLabel} />
+
+## API
+
+<Controls of={SpinnerStories.Default} />
+
+---
+
+## Token Audit
+
+The Spinner's only Tailwind-applied tokens are the locked size footprints
+(`size-10` default, `size-16` lg) — everything else (colors, motion, dot
+geometry) is baked into the Lottie JSON.
+The four comet dots were recolored at the source so the artwork tracks the SICO
+`primary` scale instead of the legacy purple; they are documented here as the
+palette the asset owns, even though they are not applied as runtime classes.
+
+### Color tokens
+
+The four dots step down the `primary` scale, deepest at the comet head fading to
+lightest at the tail. Each hex below is baked verbatim into `loading.json`.
+
+<ColorPalette>
+  <ColorItem
+    title="Comet head"
+    subtitle="Leading dot — --color-primary-600"
+    colors={{ "primary-600": "var(--color-primary-600)" }}
+  />
+  <ColorItem
+    title="Comet body"
+    subtitle="Second dot — --color-primary-400"
+    colors={{ "primary-400": "var(--color-primary-400)" }}
+  />
+  <ColorItem
+    title="Comet trail"
+    subtitle="Third dot — --color-primary-300"
+    colors={{ "primary-300": "var(--color-primary-300)" }}
+  />
+  <ColorItem
+    title="Comet tail"
+    subtitle="Fourth dot — --color-primary-200"
+    colors={{ "primary-200": "var(--color-primary-200)" }}
+  />
+</ColorPalette>
+
+### Sizing & shape
+
+| Property | Class | Value |
+|----------|-------|-------|
+| Footprint (default) | `size-10` | 40×40px (locked) |
+| Footprint (lg) | `size-16` | 64×64px (locked) |
+| Player fill | `size-full` | Lottie scales its 150×150 source into the box |
+
+### Motion
+
+No `--animate-*` token applies — the animation is self-contained in the Lottie
+JSON: a 4.0s loop (100 frames @ 25fps), `loop` + `autoplay`, with per-dot
+easing and the staggered comet timing authored in After Effects.

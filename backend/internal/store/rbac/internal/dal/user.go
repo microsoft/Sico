@@ -92,3 +92,14 @@ func (d *UserDAO) QueryUsers(
 func (d *UserDAO) UpdatePassword(ctx context.Context, id int64, hashedPassword string) error {
 	return d.db.WithContext(ctx).Model(&model.TUser{}).Where("id = ?", id).Update("password", hashedPassword).Error
 }
+
+func (d *UserDAO) GetUsersByIDs(ctx context.Context, ids []int64) ([]*model.TUser, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var users []*model.TUser
+	if err := d.db.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
+}

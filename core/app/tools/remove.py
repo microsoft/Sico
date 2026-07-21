@@ -51,7 +51,7 @@ async def _remove_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any)
         return {"error_message": "file_path must be relative and within the workspace directory"}
 
     def _impl() -> dict[str, Any]:
-        CHAT_FS.delete_file(ctx.agent_instance_id, ctx.username, file_path)
+        CHAT_FS.delete_file(ctx.agent_instance_id, ctx.username, file_path, conversation_id=ctx.conversation_id)
         return {"error_message": "", "message": f"Removed {file_path}"}
 
     try:

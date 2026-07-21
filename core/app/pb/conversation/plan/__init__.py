@@ -14,11 +14,13 @@ __all__ = (
     "ToolCallStatus",
     "ToolDeliverable",
     "ToolDeliverableAcquiredSandbox",
+    "ToolDeliverableFile",
     "ToolDeliverableType",
     "ToolExecutionInfo",
     "ToolType",
 )
 
+import warnings
 from dataclasses import dataclass
 
 import betterproto2
@@ -449,11 +451,6 @@ class ToolDeliverable(betterproto2.Message):
     @gotag: json:"markdownContent,omitempty"
     """
 
-    markdown_title: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"markdownTitle,omitempty"
-    """
-
     file_url: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
     """
     @gotag: json:"fileUrl,omitempty"
@@ -462,6 +459,18 @@ class ToolDeliverable(betterproto2.Message):
     file_name: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
     """
     @gotag: json:"fileName,omitempty"
+    """
+
+    markdown_title: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"markdownTitle,omitempty"
+    """
+
+    file: "ToolDeliverableFile | None" = betterproto2.field(
+        8, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"file,omitempty"
     """
 
     web_preview_sas_url: "str" = betterproto2.field(6, betterproto2.TYPE_STRING)
@@ -475,6 +484,13 @@ class ToolDeliverable(betterproto2.Message):
     """
     @gotag: json:"acquiredSandbox,omitempty"
     """
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.is_set("file_url"):
+            warnings.warn("ToolDeliverable.file_url is deprecated", DeprecationWarning)
+        if self.is_set("file_name"):
+            warnings.warn("ToolDeliverable.file_name is deprecated", DeprecationWarning)
 
 
 default_message_pool.register_message("plan", "ToolDeliverable", ToolDeliverable)
@@ -520,6 +536,29 @@ class ToolDeliverableAcquiredSandbox(betterproto2.Message):
 
 default_message_pool.register_message(
     "plan", "ToolDeliverableAcquiredSandbox", ToolDeliverableAcquiredSandbox
+)
+
+
+@dataclass(eq=False, repr=False)
+class ToolDeliverableFile(betterproto2.Message):
+    file_sas_url: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"fileSasUrl,omitempty"
+    """
+
+    file_name: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"fileName,omitempty"
+    """
+
+    file_uri: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"fileUri,omitempty"
+    """
+
+
+default_message_pool.register_message(
+    "plan", "ToolDeliverableFile", ToolDeliverableFile
 )
 
 

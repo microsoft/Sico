@@ -157,3 +157,20 @@ func (dao *ProjectDAO) GetProjectIDsByAdminUsername(ctx context.Context, usernam
 
 	return ids, nil
 }
+
+// ListProjectMemberUsernames returns all usernames belonging to a project.
+func (dao *ProjectDAO) ListProjectMemberUsernames(ctx context.Context, projectID int64) ([]string, error) {
+	rows, err := dao.query.TProjectUser.WithContext(ctx).Where(
+		dao.query.TProjectUser.ProjectID.Eq(projectID),
+	).Find()
+	if err != nil {
+		return nil, err
+	}
+
+	usernames := make([]string, 0, len(rows))
+	for _, row := range rows {
+		usernames = append(usernames, row.Username)
+	}
+
+	return usernames, nil
+}

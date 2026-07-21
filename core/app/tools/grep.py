@@ -153,7 +153,7 @@ def _format_grep_output(
 
 
 def _run_grep(ctx: ToolContext, pattern: str, files: list[str] | None = None) -> dict[str, Any]:
-    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id, ctx.username)
+    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id, ctx.username, ctx.conversation_id)
     if not workspace.exists():
         return {"matches": 0, "output": "Workspace is empty"}
 

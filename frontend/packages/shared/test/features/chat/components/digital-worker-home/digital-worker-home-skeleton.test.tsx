@@ -1,0 +1,28 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { DigitalWorkerHomeSkeleton } from "@/features/chat/components/digital-worker-home/digital-worker-home-skeleton";
+
+describe("DigitalWorkerHomeSkeleton", () => {
+  it("exposes a loading status for assistive tech", () => {
+    render(<DigitalWorkerHomeSkeleton />);
+    expect(
+      screen.getByRole("status", { name: /loading/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders skeleton placeholders (avatar, line, composer, tasks)", () => {
+    const { container } = render(<DigitalWorkerHomeSkeleton />);
+    // Hero avatar + line, composer, and the 3 task rows from the reused tasks
+    // skeleton — at least the four hero/composer placeholders plus tasks.
+    expect(
+      container.querySelectorAll('[data-slot="skeleton"]').length,
+    ).toBeGreaterThanOrEqual(4);
+  });
+
+  it("renders no interactive controls (it is a placeholder)", () => {
+    render(<DigitalWorkerHomeSkeleton />);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Message input")).not.toBeInTheDocument();
+  });
+});

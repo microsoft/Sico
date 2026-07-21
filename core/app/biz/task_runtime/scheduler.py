@@ -140,6 +140,14 @@ class BatchScheduler:
                     # Reopen was refused (run no longer reopenable) — fall through
                     # and record the prior terminal result so the case is counted.
                 results[run.run_id] = result
+                _LOGGER.info(
+                    "batch %s progress: %d/%d cases finished — %s [%s]",
+                    run.batch_id,
+                    len(results),
+                    len(runs),
+                    run.spec.title,
+                    result.status.value,
+                )
                 stop_reason = stop_reason or _stop_reason(join_strategy, result)
 
         if stop_reason is not None:

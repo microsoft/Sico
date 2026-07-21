@@ -494,6 +494,8 @@ definitions:
         items:
           $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ChatAttachment'
         type: array
+      conversationId:
+        type: integer
       message:
         type: string
     required:
@@ -538,14 +540,21 @@ definitions:
       title:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_conversation.ConversationListItem:
+    properties:
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      id:
+        type: integer
+      title:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_conversation.CreateConversationRequest:
     properties:
       agentInstanceId:
         type: integer
-      metaData:
-        additionalProperties:
-          type: string
-        type: object
       title:
         type: string
     required:
@@ -557,6 +566,13 @@ definitions:
         type: integer
       data:
         $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.DeleteConversationResponse:
+    properties:
+      code:
+        type: integer
       msg:
         type: string
     type: object
@@ -659,7 +675,7 @@ definitions:
     properties:
       conversations:
         items:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationData'
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationListItem'
         type: array
       hasMore:
         type: boolean
@@ -846,6 +862,8 @@ definitions:
     properties:
       agentInstanceId:
         type: integer
+      conversationId:
+        type: integer
     required:
     - agentInstanceId
     type: object
@@ -1007,12 +1025,6 @@ definitions:
   sico-backend_internal_transport_http_dto_conversation.UpdateConversationRequest:
     properties:
       id:
-        type: integer
-      metaData:
-        additionalProperties:
-          type: string
-        type: object
-      status:
         type: integer
       title:
         type: string
@@ -3218,6 +3230,23 @@ paths:
       tags:
       - SingleAgent
   /api/sico/conversation:
+    delete:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.DeleteConversationResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
     get:
       consumes:
       - application/json
@@ -3358,6 +3387,10 @@ paths:
   /api/sico/conversation/list:
     get:
       parameters:
+      - in: query
+        name: agentInstanceId
+        required: true
+        type: integer
       - default: 1
         in: query
         minimum: 0
@@ -3389,6 +3422,9 @@ paths:
       - in: query
         name: agentInstanceId
         required: true
+        type: integer
+      - in: query
+        name: conversationId
         type: integer
       - default: 1
         in: query

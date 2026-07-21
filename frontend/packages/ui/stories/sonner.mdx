@@ -1,0 +1,241 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as SonnerStories from "./sonner.stories";
+
+<Meta of={SonnerStories} />
+
+# Sonner
+
+A SICO-tokened restyle of [shadcn's Sonner](https://ui.shadcn.com/docs/components/radix/sonner)
+toast wrapper. All of sonner's runtime behavior is preserved — positioning,
+stacking, swipe-to-dismiss, durations, and the
+`toast.success/info/warning/error/loading/promise` API. Only presentation
+moves to `@sico/ui` tokens.
+
+Toasts split into two surfaces with deliberately different semantics:
+
+- **White** (default) — informational. Light card, elevated shadow, roomy
+  inset, optional `View` action. The reader is the audience; the toast lingers.
+- **Black** (`invert: true`) — transient feedback. Inverted, hug-width, tighter,
+  no action/close/progress. A flash, not a card.
+
+Surface is chosen **per-toast** with sonner's `invert` flag at the call site.
+That single flag does two jobs: it styles the card (inverted) **and** routes the
+toast to the black surface, which renders at a different screen position. So call
+sites never mention positioning — they only opt in with `invert`:
+
+```tsx
+toast.error("Scheduled <task> failed.", { action: { label: "View", onClick } }); // white → bottom-right
+toast.success("Copied", { invert: true });                                       // black → bottom-center
+```
+
+Under the hood, `<Toaster>` mounts two sonner `<Toaster>` instances (white at
+bottom-right, black at bottom-center), and the `@sico/ui` `toast` export is a thin
+wrapper that injects sonner's `toasterId` when `invert` is set — see the Upstream
+Audit for why the re-export is no longer raw.
+
+## Examples
+
+### White surface — informational
+
+<Description of={SonnerStories.WhiteLoading} />
+<Canvas of={SonnerStories.WhiteLoading} />
+<Canvas of={SonnerStories.WhiteInfo} />
+<Canvas of={SonnerStories.WhiteWarning} />
+<Canvas of={SonnerStories.WhiteError} />
+<Canvas of={SonnerStories.WhiteSuccess} />
+<Canvas of={SonnerStories.WhitePlain} />
+<Canvas of={SonnerStories.WhiteDismissible} />
+
+### Black surface — transient
+
+<Description of={SonnerStories.BlackSuccess} />
+<Canvas of={SonnerStories.BlackSuccess} />
+<Canvas of={SonnerStories.BlackInfo} />
+<Canvas of={SonnerStories.BlackWarning} />
+<Canvas of={SonnerStories.BlackError} />
+<Canvas of={SonnerStories.BlackPlain} />
+
+## API
+
+`<Toaster>` takes sonner's `ToasterProps` **minus** `id` / `position` / `offset` /
+`mobileOffset` — those are owned internally now that the component renders two
+positioned surfaces (see Upstream Audit). `theme` still defaults to `"light"`.
+There are no other SICO-specific props — surface, kind, action, and dismissal all
+flow through the standard `toast.*` call options (surface via `invert`).
+
+<Controls of={SonnerStories.WhiteInfo} />
+
+---
+
+## Token Audit
+
+Sonner owns no token family of its own — it composes existing semantic tokens
+across two surfaces. The two `*-subtle-fill` status tokens were minted for this
+component (low-emphasis status surfaces) and are reused by any faint status banner.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Surface — white"
+    subtitle="Card background per kind (informational surface)"
+    colors={{
+      "Success / Info / Loading / Default · surface-basic": "var(--color-surface-basic)",
+      "Warning · status-warning-subtle-fill": "var(--color-status-warning-subtle-fill)",
+      "Error · status-error-subtle-fill": "var(--color-status-error-subtle-fill)",
+    }}
+  />
+  <ColorItem
+    title="Surface — black"
+    subtitle="Inverted transient surface + its foreground"
+    colors={{
+      "Fill · surface-inverted": "var(--color-surface-inverted)",
+      "Text · foreground-on-inverted": "var(--color-foreground-on-inverted)",
+    }}
+  />
+  <ColorItem
+    title="Foreground"
+    subtitle="Body copy (white surface) and secondary description text"
+    colors={{
+      "Body · foreground-primary": "var(--color-foreground-primary)",
+      "Description · foreground-secondary": "var(--color-foreground-secondary)",
+    }}
+  />
+  <ColorItem
+    title="Border"
+    subtitle="White card hairline border (rest)"
+    colors={{
+      "Card · stroke-subtle-card-rest": "var(--color-stroke-subtle-card-rest)",
+    }}
+  />
+  <ColorItem
+    title="Status icon foreground"
+    subtitle="Filled tabler glyph color per kind on the white surface (info + loading use the muted foreground, not a status hue)"
+    colors={{
+      "Success · status-success-foreground": "var(--color-status-success-foreground)",
+      "Info · foreground-secondary": "var(--color-foreground-secondary)",
+      "Warning · status-warning-strong-foreground": "var(--color-status-warning-strong-foreground)",
+      "Error · status-error-foreground": "var(--color-status-error-foreground)",
+      "Loading · foreground-secondary": "var(--color-foreground-secondary)",
+    }}
+  />
+  <ColorItem
+    title="Status icon foreground — inverted"
+    subtitle="Glyph color on the black surface: white default (info/loading/plain), then mid-tone status overrides tuned for dark backgrounds (the white-surface status hues read muddy on black)"
+    colors={{
+      "Default · icon-on-inverted": "var(--color-icon-on-inverted)",
+      "Success · status-success-on-inverted-foreground": "var(--color-status-success-on-inverted-foreground)",
+      "Warning · status-warning-on-inverted-foreground": "var(--color-status-warning-on-inverted-foreground)",
+      "Error · status-error-on-inverted-foreground": "var(--color-status-error-on-inverted-foreground)",
+    }}
+  />
+  <ColorItem
+    title="Action — View button"
+    subtitle="Subtle-button hover fill on the white-surface action (rest is foreground-primary text)"
+    colors={{
+      "Hover · button-subtle-fill-hover": "var(--color-button-subtle-fill-hover)",
+    }}
+  />
+  <ColorItem
+    title="Close button"
+    subtitle="Opt-in dismiss X at the trailing edge (any kind except loading) — muted, brightens on hover"
+    colors={{
+      "Rest · foreground-secondary": "var(--color-foreground-secondary)",
+    }}
+  />
+  <ColorItem
+    title="Progress hairline"
+    subtitle="Indeterminate loading bar (white surface) — a brand-primary accent"
+    colors={{
+      "Bar · primary-600": "var(--color-primary-600)",
+    }}
+  />
+</ColorPalette>
+
+### Sizing & shape
+
+| Property | Class | Value |
+|----------|-------|-------|
+| Radius — white | `rounded-xl` | 12px |
+| Radius — black | `rounded-lg` | 8px |
+| Footprint — white | `h-16! w-80` | fixed 64 / 320px |
+| Footprint — black | `h-auto! min-h-10 max-w-60` | hug, min 40px tall / max 240px wide |
+| Padding — white | `p-3` | 12px |
+| Padding — black | `px-3 py-2` | 12 / 8px |
+| Shadow | `shadow-l` | toast elevation |
+| Hairline height | `toast-loading-bar` | 2px |
+| Icon | `size-4` | 16px |
+| Position — white | `bottom-right` | offset right 32 / bottom 44px |
+| Position — black | `bottom-center` | offset bottom 44px |
+
+---
+
+## Upstream Audit
+
+Restyles shadcn's `sonner` wrapper. The shadcn upstream is a thin component —
+a `<Toaster>` that maps `--normal-bg/text/border` onto sonner's knobs and sets
+five lucide icons. The SICO version diverges beyond token swaps in a few
+documented ways: it mounts **two** sonner Toasters for the white/black position
+split, it **wraps** the `toast` export to auto-route inverted toasts (see API
+contract), and it **replaces the icon set** — filled tabler status glyphs plus a
+custom close X and an inline-reset loader (see Icons below). a11y and per-toast
+runtime behavior are otherwise unchanged.
+
+### Token swaps
+
+The upstream `--normal-*` CSS-var aliasing is replaced by sonner's `classNames`
+slot map keyed on SICO tokens (see API contract below for why).
+
+| Upstream | SICO replacement |
+|----------|------------------|
+| `--normal-bg: var(--popover)` | `bg-surface-basic` / per-type `*-subtle-fill` / `bg-surface-inverted` |
+| `--normal-text: var(--popover-foreground)` | `text-foreground-primary` / `text-foreground-on-inverted` |
+| `--normal-border: var(--border)` | `border-stroke-subtle-card-rest` |
+| icons `size-4` (uncolored lucide) | filled tabler `size-4` + `text-status-{kind}-foreground` (white) / `*-on-inverted-foreground` (black) |
+
+### API contract
+
+`<Toaster>` accepts sonner's `ToasterProps` minus `id` / `position` / `offset` /
+`mobileOffset` — those are owned internally now that the component renders two
+positioned surfaces (white bottom-right, black bottom-center). `theme` still
+defaults to `"light"`; the remaining props (expand, duration, gap, …) apply to
+both surfaces.
+
+The `@sico/ui` `toast` export is **no longer a raw re-export** of sonner's — it's
+a thin wrapper that injects sonner's `toasterId` whenever a call passes
+`invert: true`, so the single `invert` flag both styles the card and routes it to
+the black surface. Every call signature is preserved (the wrapper is annotated
+`: typeof sonnerToast`, a compile-time contract), so existing call sites are
+unchanged. This is the one deliberate departure from the issue's "keep the
+re-export raw" note — the designer's split-position requirement makes routing
+unavoidable, and the call-site-invisible place to inject it is the export.
+
+### Icons
+
+The upstream lucide icon set is replaced, which introduces divergences beyond a
+className swap:
+
+- **Filled tabler status glyphs.** `success`/`info`/`warning`/`error` move from
+  outlined lucide to `@tabler/icons-react` filled variants
+  (`IconCircleCheckFilled`, `IconInfoCircleFilled`, `IconAlertTriangleFilled`,
+  `IconCircleXFilled`) — the filled treatment reads at 16px on the toast surface.
+  `loading` stays on lucide's `Loader2Icon`.
+- **Custom close X with a per-icon `strokeWidth={1.5}`.** A 6th icon (`close`,
+  lucide `XIcon`) is added — sonner's default 14px stroke-1 X reads too small and
+  faint next to the size-4 status glyphs. The per-icon `strokeWidth` is a
+  sanctioned exception to the global `LucideProvider strokeWidth={1}`, matching
+  the FileTile/ImageTile dismiss X precedent in `@sico/shared`.
+- **Inline-reset loader.** The `classNames.loader` slot clears sonner's
+  `.sonner-loader` absolute centering (`static! inset-auto! transform-none!`) so
+  the spinner sits inline in the icon slot with the other glyphs. `transform-none`
+  is required because sonner sets the `transform` shorthand, which Tailwind's
+  `translate-*` utilities (they set the `translate` property) don't override.
+
+### Deleted from upstream
+
+| Deleted | Reason |
+|---------|--------|
+| `useTheme()` / next-themes dependency | SICO is single-theme; `theme` defaults to `"light"` (pre-existing deviation, kept) |
+| Inline `--normal-*` style vars | Superseded by the `classNames` slot map — sonner's `[data-styled=true]` card CSS (fixed padding/radius/shadow, single bg) can't express the two-tier surface or per-type tints, and its specificity would beat single-class utilities. Toasts render `unstyled` so the slot classes fully own presentation. |
+| `dark:` variants | SICO has no dark theme yet |

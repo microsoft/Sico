@@ -113,7 +113,7 @@ async def test_search_memory_uses_mem0_filters_and_threshold(monkeypatch):
     assert fake_memory.calls == [
         {
             "query": "where should I ship it?",
-            "filters": {"user_id": "alice@example.com", "agent_id": "123"},
+            "filters": {"user_id": "alice@example.com", "agent_id": "123", "run_id": "1001"},
             "threshold": 0.5,
             "top_k": 5,
         }
@@ -152,9 +152,10 @@ async def test_search_memory_returns_error_payload_on_failure(monkeypatch):
 
 
 def test_build_memory_filters_sanitizes_mem0_entity_ids():
-    assert build_memory_filters(username=" Alice Smith ", agent_id=" agent 123 ") == {
+    assert build_memory_filters(username=" Alice Smith ", agent_id=" agent 123 ", conversation_id=" conversation 42 ") == {
         "user_id": "Alice_Smith",
         "agent_id": "agent_123",
+        "run_id": "conversation_42",
     }
 
 
@@ -190,6 +191,7 @@ async def test_store_memories_sanitizes_mem0_entity_ids(monkeypatch):
         _Mem0MemoryTask(
             username=" Alice Smith ",
             agent_instance_id=" agent 123 ",
+            conversation_id=" conversation 42 ",
             messages=[{"role": "user", "content": "remember this"}],
         )
     )
@@ -199,5 +201,6 @@ async def test_store_memories_sanitizes_mem0_entity_ids(monkeypatch):
             "messages": [{"role": "user", "content": "remember this"}],
             "user_id": "Alice_Smith",
             "agent_id": "agent_123",
+            "run_id": "conversation_42",
         }
     ]

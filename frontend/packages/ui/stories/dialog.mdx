@@ -1,0 +1,160 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Meta } from "@storybook/addon-docs/blocks";
+
+import * as DialogStories from "./dialog.stories";
+
+<Meta of={DialogStories} />
+
+# Dialog
+
+Modal dialog for confirmations, forms, and content. Built on Base UI Dialog
+primitive with SICO design tokens. Shadcn restyle — upstream reference: [shadcn/ui dialog](https://ui.shadcn.com/docs/components/dialog).
+
+## Examples
+
+### Confirmation
+
+Text body with action buttons (Save / Cancel / Discard). The default
+`variant="confirmation"` size preset.
+
+<Canvas of={DialogStories.Confirmation} />
+
+### Content
+
+Wider slot body for forms, media, or custom content (`variant="content"`).
+
+<Canvas of={DialogStories.Content} />
+
+### Dismiss-only
+
+Single action to acknowledge and close.
+
+<Canvas of={DialogStories.DismissOnly} />
+
+### Without close button
+
+`showCloseButton={false}` forces resolution through a footer action.
+
+<Canvas of={DialogStories.WithoutCloseButton} />
+
+## API
+
+<Controls of={DialogStories.Confirmation} />
+
+---
+
+## Token Audit
+
+All design tokens consumed by Dialog.
+
+### Surface
+
+<ColorPalette>
+  <ColorItem
+    title="Background"
+    subtitle="Dialog surface"
+    colors={{
+      "surface · surface-basic": "var(--color-surface-basic)",
+    }}
+  />
+  <ColorItem
+    title="Border"
+    subtitle="Dialog border"
+    colors={{
+      "border · divider": "var(--color-divider)",
+    }}
+  />
+  <ColorItem
+    title="Overlay"
+    subtitle="Backdrop scrim behind dialog — the overlay-black foundation ramp is the sanctioned scrim layer; there is no separate semantic scrim alias."
+    colors={{
+      "overlay · overlay-black-50": "var(--color-overlay-black-50)",
+    }}
+  />
+</ColorPalette>
+
+### Text
+
+<ColorPalette>
+  <ColorItem
+    title="Text"
+    subtitle="Title and description"
+    colors={{
+      "title · foreground-primary": "var(--color-foreground-primary)",
+      "description · foreground-secondary": "var(--color-foreground-secondary)",
+    }}
+  />
+</ColorPalette>
+
+### Shadow
+
+| Token       | Value                       |
+| ----------- | --------------------------- |
+| `shadow-l`  | 0 1px 2px + 0 2px 16px      |
+
+### Sizing
+
+| Property                | Class       | Value |
+| ----------------------- | ----------- | ----- |
+| Padding                 | `p-5`       | 20px  |
+| Gap                     | `gap-6`     | 24px  |
+| Border radius           | `rounded-2xl` | 16px |
+| Width (confirmation)    | `w-150`     | 600px |
+| Max height (confirmation) | `max-h-60` | 240px |
+| Min width (content)     | `min-w-110` | 440px |
+| Max width (content)     | `max-w-240` | 960px |
+| Max height (content)    | `max-h-160` | 640px |
+
+### Typography
+
+| Element     | Class                              | Value              |
+| ----------- | ---------------------------------- | ------------------ |
+| Title       | `text-lg font-semibold text-foreground-primary` | 18px semibold |
+| Description | `text-base text-foreground-secondary`      | 16px regular       |
+
+---
+
+## Upstream Audit
+
+Restyle of `base-nova/dialog`, built on `@base-ui/react/dialog`. Divergence from
+upstream is className only — token swaps plus a dropped footer bar; the footer's
+flex layout, primitive library, props, structure, and accessibility match
+upstream.
+
+### Token swaps
+
+Per `npx shadcn@latest diff dialog` against `base-nova/dialog`:
+
+| Upstream class | SICO token |
+|----------------|------------|
+| `bg-popover` | `bg-surface-basic` |
+| `text-popover-foreground` | `text-foreground-primary` |
+| `ring-1 ring-foreground/10` | `border border-divider` |
+| `bg-black/10` (backdrop) | `bg-overlay-black-50` |
+| `text-muted-foreground` (description) | `text-foreground-secondary` |
+| description link `*:[a]:hover:text-foreground` | `*:[a]:hover:text-foreground-primary` (the `*:[a]:underline *:[a]:underline-offset-3` affordance is kept verbatim) |
+| close button `variant="ghost"` at `top-2 right-2` | `variant="subtle"` at `top-5 right-5` (aligns to the `p-5` padding) |
+| `DialogFooter` close button `variant="outline"` | `variant="secondary"` (SICO has no `outline` Button; `secondary` is the neutral-bordered equivalent) |
+
+### API contract
+
+| Prop | Upstream | SICO | Notes |
+|------|----------|------|-------|
+| `open` | ✓ | ✓ | Same |
+| `onOpenChange` | ✓ | ✓ | Same |
+| `DialogContent` `showCloseButton` | ✓ | ✓ | Upstream prop, preserved (default `true`) |
+| `DialogFooter` `showCloseButton` | ✓ | ✓ | Upstream prop, preserved (default `false`); appends a built-in `Close` button, restyled `outline`→`secondary` |
+| `DialogContent` `variant` | — | ✓ | Added: `"confirmation"` (default) or `"content"` size preset, driven by the `dialogContentVariants` cva |
+
+### Layout drift (design-driven, not token swaps)
+
+The footer's flex layout matches upstream verbatim
+(`flex flex-col-reverse gap-2 sm:flex-row sm:justify-end`) — including the
+mobile-stack-to-row reflow. The one divergence is the dropped tinted bar:
+
+| Dropped upstream classes | Reason |
+|--------------------------|--------|
+| `-mx-4 -mb-4 border-t bg-muted/50 rounded-b-xl p-4` (the tinted footer bar) | Figma footer sits flush inside the dialog — no tinted bar, no divider, no edge-bleed. The bar's `-mx`/`-mb`/`rounded-b`/`p` are scaffolding that only exist to bleed that bar to the dialog edge, so they go with it. |
+
+### Deleted from upstream
+
+None — every upstream prop and exported part is preserved.

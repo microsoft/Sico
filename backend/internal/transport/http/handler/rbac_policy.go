@@ -191,3 +191,25 @@ func QueryPolicies(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, resp)
 }
+
+// ReloadEnforcer reloads all Casbin policies from the database into the in-memory enforcer.
+// @Summary Reload Casbin Enforcer
+// @Router /api/sico/rbac/enforcer/reload [POST]
+// @Tags RBAC
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Security BearerAuth
+func ReloadEnforcer(ctx *gin.Context) {
+	_, ok := middleware.GetUserFromContext(ctx)
+	if !ok {
+		unauthorizedResponse(ctx, "Authentication required")
+		return
+	}
+
+	if err := rbacbiz.Default().ReloadEnforcer(reqctx(ctx)); err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"code": 0, "msg": "enforcer reloaded"})
+}

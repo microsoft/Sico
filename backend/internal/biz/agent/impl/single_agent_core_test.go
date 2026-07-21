@@ -33,6 +33,7 @@ import (
 	sandboxbiz "sico-backend/internal/biz/sandbox"
 	sandboximpl "sico-backend/internal/biz/sandbox/impl"
 	entity "sico-backend/internal/entity/agent/singleagent"
+	"sico-backend/internal/transport/http/dto/agent/single_agent"
 )
 
 type fakeSingleAgentInstanceRepo struct {
@@ -58,10 +59,10 @@ func (f *fakeSingleAgentInstanceRepo) MGet(
 	return nil, nil
 }
 
-func (f *fakeSingleAgentInstanceRepo) GetNamesByIDs(
-	context.Context, []int64,
-) (map[int64]string, error) {
-	return nil, nil
+func (f *fakeSingleAgentInstanceRepo) UpdateStatus(
+	context.Context, int64, single_agent.SingleAgentInstanceStatus,
+) error {
+	return nil
 }
 
 func (f *fakeSingleAgentInstanceRepo) Update(
@@ -77,38 +78,10 @@ func (f *fakeSingleAgentInstanceRepo) Delete(
 	return f.deleteErr
 }
 
-func (f *fakeSingleAgentInstanceRepo) ListByOperatorUsername(
-	context.Context, string, int, int,
-) ([]*entity.SingleAgentInstance, error) {
-	return nil, nil
-}
-
-func (f *fakeSingleAgentInstanceRepo) CountByOperatorUsername(
-	context.Context, string,
-) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeSingleAgentInstanceRepo) ListByCondition(
-	context.Context, bool, string, int, int,
-) ([]*entity.SingleAgentInstance, error) {
-	return nil, nil
-}
-
-func (f *fakeSingleAgentInstanceRepo) CountByCondition(
-	context.Context, bool, string,
-) (int64, error) {
-	return 0, nil
-}
-
 func (f *fakeSingleAgentInstanceRepo) ListByFilter(
 	context.Context, *entity.ListSingleAgentInstanceFilter, int, int,
 ) ([]*entity.SingleAgentInstance, int64, error) {
 	return nil, 0, nil
-}
-
-func (f *fakeSingleAgentInstanceRepo) CountByAgentID(context.Context, string) (int64, error) {
-	return 0, nil
 }
 
 func seedAssignedSandbox(t *testing.T, ctx context.Context, rds *redis.Client, lease *sandboximpl.Lease) {

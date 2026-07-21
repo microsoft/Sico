@@ -49,10 +49,10 @@ if TYPE_CHECKING:
 class WorkspaceLayout(Protocol):
     """Resolves on-disk locations the runtime reads from / writes to."""
 
-    def turn_path(self, agent_instance_id: int, username: str, turn_id: int) -> Path:
+    def turn_path(self, agent_instance_id: int, username: str, turn_id: int, *, conversation_id: int = 0) -> Path:
         """Directory holding per-turn run state (sidechain results live under it)."""
 
-    def workspace_path(self, agent_instance_id: int, username: str) -> Path:
+    def workspace_path(self, agent_instance_id: int, username: str, *, conversation_id: int = 0) -> Path:
         """The user's persistent chat workspace directory for an agent instance."""
 
     @property
@@ -83,11 +83,11 @@ class _StorageFsLayout:
     _chat_fs: Any
     _skills_fs: Any
 
-    def turn_path(self, agent_instance_id: int, username: str, turn_id: int) -> Path:
-        return self._chat_fs.get_turn_path(agent_instance_id, username, turn_id)
+    def turn_path(self, agent_instance_id: int, username: str, turn_id: int, *, conversation_id: int = 0) -> Path:
+        return self._chat_fs.get_turn_path(agent_instance_id, username, turn_id, conversation_id)
 
-    def workspace_path(self, agent_instance_id: int, username: str) -> Path:
-        return self._chat_fs.get_workspace_path(agent_instance_id, username)
+    def workspace_path(self, agent_instance_id: int, username: str, *, conversation_id: int = 0) -> Path:
+        return self._chat_fs.get_workspace_path(agent_instance_id, username, conversation_id)
 
     @property
     def chat_root(self) -> Path:

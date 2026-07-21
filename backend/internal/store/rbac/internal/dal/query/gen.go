@@ -18,7 +18,6 @@ import (
 var (
 	Q           = new(Query)
 	TCasbinRule *tCasbinRule
-	TRole       *tRole
 	TUser       *tUser
 	TUserRole   *tUserRole
 )
@@ -26,7 +25,6 @@ var (
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	*Q = *Use(db, opts...)
 	TCasbinRule = &Q.TCasbinRule
-	TRole = &Q.TRole
 	TUser = &Q.TUser
 	TUserRole = &Q.TUserRole
 }
@@ -35,7 +33,6 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
 		db:          db,
 		TCasbinRule: newTCasbinRule(db, opts...),
-		TRole:       newTRole(db, opts...),
 		TUser:       newTUser(db, opts...),
 		TUserRole:   newTUserRole(db, opts...),
 	}
@@ -45,7 +42,6 @@ type Query struct {
 	db *gorm.DB
 
 	TCasbinRule tCasbinRule
-	TRole       tRole
 	TUser       tUser
 	TUserRole   tUserRole
 }
@@ -56,7 +52,6 @@ func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
 		db:          db,
 		TCasbinRule: q.TCasbinRule.clone(db),
-		TRole:       q.TRole.clone(db),
 		TUser:       q.TUser.clone(db),
 		TUserRole:   q.TUserRole.clone(db),
 	}
@@ -74,7 +69,6 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
 		db:          db,
 		TCasbinRule: q.TCasbinRule.replaceDB(db),
-		TRole:       q.TRole.replaceDB(db),
 		TUser:       q.TUser.replaceDB(db),
 		TUserRole:   q.TUserRole.replaceDB(db),
 	}
@@ -82,7 +76,6 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 
 type queryCtx struct {
 	TCasbinRule ITCasbinRuleDo
-	TRole       ITRoleDo
 	TUser       ITUserDo
 	TUserRole   ITUserRoleDo
 }
@@ -90,7 +83,6 @@ type queryCtx struct {
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
 		TCasbinRule: q.TCasbinRule.WithContext(ctx),
-		TRole:       q.TRole.WithContext(ctx),
 		TUser:       q.TUser.WithContext(ctx),
 		TUserRole:   q.TUserRole.WithContext(ctx),
 	}

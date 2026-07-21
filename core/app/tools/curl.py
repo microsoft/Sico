@@ -35,8 +35,6 @@ _LOGGER = logging.getLogger(__name__)
 
 _DEFAULT_TIMEOUT = 30  # seconds
 _MAX_TIMEOUT = 120  # seconds
-_MAX_OUTPUT_SIZE = 100 * 1024  # 100KB per stream
-_TRUNCATED_MARKER = "\n...TRUNCATED..."
 
 
 class CurlInput(BaseModel):
@@ -134,20 +132,11 @@ async def _curl_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -
                 "stderr": "",
             }
 
-        stdout = result.stdout
-        stderr = result.stderr
-
-        # Truncate large outputs
-        if len(stdout.encode("utf-8")) > _MAX_OUTPUT_SIZE:
-            stdout = stdout.encode("utf-8")[:_MAX_OUTPUT_SIZE].decode("utf-8", errors="ignore") + _TRUNCATED_MARKER
-        if len(stderr.encode("utf-8")) > _MAX_OUTPUT_SIZE:
-            stderr = stderr.encode("utf-8")[:_MAX_OUTPUT_SIZE].decode("utf-8", errors="ignore") + _TRUNCATED_MARKER
-
         return {
             "error_message": "",
             "return_code": result.returncode,
-            "stdout": stdout,
-            "stderr": stderr,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
         }
 
     try:
@@ -183,7 +172,8 @@ CURL_TOOL = FunctionTool(
         '- The command must start with "curl"\n'
         "- Supports all standard curl options (headers, methods, data payloads, etc.)\n"
         f"- Default timeout: {_DEFAULT_TIMEOUT}s, maximum: {_MAX_TIMEOUT}s\n"
-        "- Output is truncated if it exceeds 100KB\n\n"
+        "- If the output is very large, it will be automatically truncated. The full output is\n"
+        "  saved to a temporary file in the workspace. Use the read or grep tool to inspect it.\n\n"
         "Examples:\n"
         "  curl https://api.example.com/data\n"
         '  curl -X POST -H "Content-Type: application/json" -d \'{"key":"value"}\' https://api.example.com/data\n'

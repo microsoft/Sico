@@ -8,6 +8,8 @@ __all__ = (
     "CancelPlanResponse",
     "ChatDirectResponse",
     "ChatRequest",
+    "DeleteConversationRequest",
+    "DeleteConversationResponse",
     "GenerateOnboardRecommendationTasksData",
     "GenerateOnboardRecommendationTasksRequest",
     "GenerateOnboardRecommendationTasksResponse",
@@ -222,8 +224,44 @@ class ChatRequest(betterproto2.Message):
     @gotag: json:"projectName,omitempty"
     """
 
+    need_update_title: "bool" = betterproto2.field(17, betterproto2.TYPE_BOOL)
+    """
+    @gotag: json:"needUpdateTitle,omitempty"
+    """
+
 
 default_message_pool.register_message("api", "ChatRequest", ChatRequest)
+
+
+@dataclass(eq=False, repr=False)
+class DeleteConversationRequest(betterproto2.Message):
+    id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"id" form:"id" binding:"required"
+    """
+
+
+default_message_pool.register_message(
+    "api", "DeleteConversationRequest", DeleteConversationRequest
+)
+
+
+@dataclass(eq=False, repr=False)
+class DeleteConversationResponse(betterproto2.Message):
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "api", "DeleteConversationResponse", DeleteConversationResponse
+)
 
 
 @dataclass(eq=False, repr=False)
@@ -497,7 +535,7 @@ default_message_pool.register_message(
 
 @dataclass(eq=False, repr=False)
 class ListConversationData(betterproto2.Message):
-    conversations: "list[_conversation__.ConversationData]" = betterproto2.field(
+    conversations: "list[_conversation__.ConversationListItem]" = betterproto2.field(
         1, betterproto2.TYPE_MESSAGE, repeated=True
     )
     """
@@ -517,12 +555,17 @@ default_message_pool.register_message(
 
 @dataclass(eq=False, repr=False)
 class ListConversationRequest(betterproto2.Message):
-    page: "int" = betterproto2.field(1, betterproto2.TYPE_INT32)
+    agent_instance_id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"agentInstanceId" form:"agentInstanceId" binding:"required"
+    """
+
+    page: "int" = betterproto2.field(2, betterproto2.TYPE_INT32)
     """
     @gotag: json:"page" form:"page" binding:"min=0" default:"1"
     """
 
-    page_size: "int" = betterproto2.field(2, betterproto2.TYPE_INT32)
+    page_size: "int" = betterproto2.field(3, betterproto2.TYPE_INT32)
     """
     @gotag: json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"10"
     """
@@ -669,6 +712,11 @@ class ListMessagesByUserAndAgentRequest(betterproto2.Message):
     @gotag: json:"turnId,omitempty" form:"turnId"
     """
 
+    conversation_id: "int" = betterproto2.field(6, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"conversationId,omitempty" form:"conversationId"
+    """
+
 
 default_message_pool.register_message(
     "api", "ListMessagesByUserAndAgentRequest", ListMessagesByUserAndAgentRequest
@@ -725,25 +773,9 @@ class UpdateConversationRequest(betterproto2.Message):
     @gotag: json:"id", binding:"required"
     """
 
-    meta_data: "dict[str, str]" = betterproto2.field(
-        2,
-        betterproto2.TYPE_MAP,
-        map_meta=betterproto2.map_meta(
-            betterproto2.TYPE_STRING, betterproto2.TYPE_STRING
-        ),
-    )
-    """
-    @gotag: json:"metaData"
-    """
-
-    title: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    title: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
     """
     @gotag: json:"title"
-    """
-
-    status: "int" = betterproto2.field(4, betterproto2.TYPE_INT32)
-    """
-    @gotag: json:"status"
     """
 
 

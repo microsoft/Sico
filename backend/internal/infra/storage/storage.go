@@ -53,6 +53,8 @@ var defaultStorage Storage
 
 func Default() Storage { return defaultStorage }
 
+func SetDefault(s Storage) { defaultStorage = s }
+
 func New(ctx context.Context, storageType enum.StorageType) (Storage, error) {
 	if defaultStorage != nil {
 		return defaultStorage, nil

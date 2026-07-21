@@ -45,6 +45,7 @@ message ChatRequest {
   string model = 14;               // @gotag: json:"model,omitempty"
   string agent_role = 15;          // @gotag: json:"agentRole,omitempty"
   string project_name = 16;         // @gotag: json:"projectName,omitempty"
+  bool need_update_title = 17;      // @gotag: json:"needUpdateTitle,omitempty"
 }
 
 message ChatDirectResponse {
@@ -59,6 +60,7 @@ message ListMessagesByUserAndAgentRequest {
   int32 page = 3; // @gotag: json:"page" form:"page" binding:"min=1" default:"1"
   int32 page_size = 4; // @gotag: json:"pageSize" form:"pageSize" binding:"min=1,max=50" default:"10"
   optional int64 turn_id = 5; // @gotag: json:"turnId,omitempty" form:"turnId"
+  int64 conversation_id = 6; // @gotag: json:"conversationId,omitempty" form:"conversationId"
 }
 
 message ListMessagesByUserAndAgentData {
@@ -87,9 +89,7 @@ message GetUserMessageByUserAgentTurnIDResponse {
 
 message UpdateConversationRequest {
   int64 id = 1; // @gotag: json:"id", binding:"required"
-  map<string, string> meta_data = 2; // @gotag: json:"metaData"
-  string title = 3; // @gotag: json:"title"
-  int32 status = 4; // @gotag: json:"status"
+  string title = 2; // @gotag: json:"title"
 }
 
 message UpdateConversationResponse {
@@ -98,8 +98,9 @@ message UpdateConversationResponse {
 }
 
 message ListConversationRequest {
-  int32 page = 1;         // @gotag: json:"page" form:"page" binding:"min=0" default:"1"
-  int32 page_size = 2;    // @gotag: json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"10"
+  int64 agent_instance_id = 1; // @gotag: json:"agentInstanceId" form:"agentInstanceId" binding:"required"
+  int32 page = 2;              // @gotag: json:"page" form:"page" binding:"min=0" default:"1"
+  int32 page_size = 3;         // @gotag: json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"10"
 }
 
 message ListConversationResponse {
@@ -109,8 +110,17 @@ message ListConversationResponse {
 }
 
 message ListConversationData {
-  repeated conversation.ConversationData conversations = 1; // @gotag: json:"conversations"
+  repeated conversation.ConversationListItem conversations = 1; // @gotag: json:"conversations"
   bool has_more = 2; // @gotag: json:"hasMore"
+}
+
+message DeleteConversationRequest {
+  int64 id = 1; // @gotag: json:"id" form:"id" binding:"required"
+}
+
+message DeleteConversationResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
 }
 
 message GetConversationRequest {

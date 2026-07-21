@@ -34,18 +34,16 @@ from urllib.request import urlopen
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .delta import DeltaBatch
-from app.llmhubs.structured import LLMClient
-from .playbook import Playbook
+from .llm import LLMClient
+from .playbook import DeltaBatch, Playbook
 from .prompts import PromptManager
 
-# Use PromptManager to get v2.1 prompts
-_prompt_manager = PromptManager(default_version="2.1")
+_prompt_manager = PromptManager()
 REFLECTOR_PROMPT = _prompt_manager.get_reflector_prompt()
 CURATOR_PROMPT = _prompt_manager.get_curator_prompt()
 
 if TYPE_CHECKING:
-    from .deduplication import DeduplicationManager
+    from .playbook import EntryConsolidator
 
 logger = logging.getLogger(__name__)
 
@@ -189,8 +187,8 @@ def extract_cited_bullet_ids(text: str) -> list[str]:
         Pattern matches: [word_characters-digits]
         Deduplicates while preserving order of first occurrence.
     """
-    # Match [section-digits] pattern
-    matches = re.findall(r"\[([a-zA-Z_]+-\d+)\]", text)
+    # Allow `/` and `-` for legacy IDs like `interactive/browser-00009`.
+    matches = re.findall(r"\[([a-zA-Z_][a-zA-Z0-9_/-]*-\d+)\]", text)
     # Deduplicate while preserving order
     cited_ids = list(dict.fromkeys(matches))
     if cited_ids:
@@ -269,7 +267,7 @@ class _DeltaBatchSchema(BaseModel):
 class _ConsolidationOperationSchema(BaseModel):
     model_config = STRICT_SCHEMA_CONFIG
 
-    type: str = Field(..., description="Consolidation type: MERGE, DELETE, KEEP, or UPDATE")
+    type: str = Field(..., description="Consolidation type: merge, drop, keep, or patch")
     source_ids: list[str] = Field(default_factory=list, description="Source bullet ids for merge")
     merged_content: str = Field(default="", description="Merged content for merge operations")
     keep_id: str = Field(default="", description="Bullet id to keep for merge operations")
@@ -300,7 +298,7 @@ class _CuratorResponseSchema(BaseModel):
     delta: _DeltaBatchSchema = Field(..., description="Batch of delta operations to apply to playbook")
     consolidation_operations: list[_ConsolidationOperationSchema] = Field(
         default_factory=list,
-        description="Optional bullet consolidation decisions produced during deduplication",
+        description="Optional bullet consolidation decisions produced during consolidation",
     )
 
 
@@ -476,7 +474,7 @@ class Curator:
         llm: The LLM client to use for curation
         prompt_template: Custom prompt template (uses CURATOR_PROMPT by default)
         max_retries: Maximum validation retries (default: 3)
-        dedup_manager: Optional DeduplicationManager for bullet deduplication
+        consolidator: Optional EntryConsolidator for similarity-based consolidation
 
     Example:
         >>> from app.experiences import Curator, HubLLMClient
@@ -504,12 +502,12 @@ class Curator:
         prompt_template: str = CURATOR_PROMPT,
         *,
         max_retries: int = 3,
-        dedup_manager: DeduplicationManager | None = None,
+        consolidator: EntryConsolidator | None = None,
     ) -> None:
         self.llm = llm
         self.prompt_template = prompt_template
         self.max_retries = max_retries
-        self.dedup_manager = dedup_manager
+        self.consolidator = consolidator
 
     async def curate(
         self,
@@ -523,7 +521,7 @@ class Curator:
         """
         Generate delta operations to update the playbook based on reflection.
 
-        If a DeduplicationManager is configured, this method will:
+        If an EntryConsolidator is configured, this method will:
         1. Generate a similarity report for similar bullet pairs
         2. Include the report in the prompt for the Curator to handle
         3. Parse and apply consolidation operations from the response
@@ -538,10 +536,10 @@ class Curator:
         Returns:
             CuratorOutput containing the delta operations to apply
         """
-        # Get similarity report if deduplication is enabled
+        # Get similarity report if consolidation is enabled
         similarity_report = None
-        if self.dedup_manager is not None:
-            similarity_report = self.dedup_manager.get_similarity_report(playbook)
+        if self.consolidator is not None:
+            similarity_report = self.consolidator.get_similarity_report(playbook)
             if similarity_report:
                 logger.info("Including similarity report in Curator prompt")
 
@@ -593,9 +591,9 @@ class Curator:
             raw=_consolidation_payload(output.consolidation_operations),
         )
 
-        # Apply consolidation operations if deduplication is enabled
-        if self.dedup_manager is not None and public_output.raw:
-            applied_ops = self.dedup_manager.apply_operations_from_response(
+        # Apply consolidation operations if consolidation is enabled
+        if self.consolidator is not None and public_output.raw:
+            applied_ops = self.consolidator.apply_operations_from_response(
                 public_output.raw, playbook
             )
             if applied_ops:

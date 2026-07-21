@@ -23,12 +23,15 @@ package project;
 
 option go_package = "sico-backend/internal/transport/http/dto/project";
 
+import "common/common.proto";
+
 // Request message for creating a project
 message CreateProjectRequest {
   string name = 1;        // @gotag: json:"name" binding:"required,min=1,max=100"
   string description = 2; // @gotag: json:"description" binding:"max=500"
   string icon_uri = 3;    // @gotag: json:"iconUri" binding:"max=500"
   repeated string operator_admins = 4; // @gotag: json:"operatorAdmins" binding:"max=100"
+  int64 organization_id = 5; // @gotag: json:"organizationId"
 }
 
 // Response message for creating a project
@@ -101,9 +104,26 @@ message GetUserProjectListData {
   bool hasNext = 3; // @gotag: json:"hasNext"
 }
 
-message ProjectAgentInstance {
-  int64 id = 1; // @gotag: json:"id"
-  string icon_url = 2; // @gotag: json:"iconUrl"
+// Filter for listing projects (query params for GET /project/list)
+message ListProjectFilter {
+  int32 page = 1;                          // @gotag: form:"page" binding:"required,min=1"
+  int32 page_size = 2;                     // @gotag: form:"pageSize" binding:"required,min=1,max=100"
+  optional int64 organization_id = 3;      // @gotag: form:"organizationId"
+  optional string creator_username = 4;    // @gotag: form:"creatorUsername"
+  optional string owner_username = 5;      // @gotag: form:"ownerUsername"
+}
+
+// Response for listing projects
+message ListProjectResponse {
+  ListProjectData data = 1;  // @gotag: json:"data"
+  int32 code = 253;          // @gotag: json:"code"
+  string msg = 254;          // @gotag: json:"msg"
+}
+
+message ListProjectData {
+  repeated Project projects = 1; // @gotag: json:"projects"
+  int32 total = 2;               // @gotag: json:"total"
+  bool has_next = 3;             // @gotag: json:"hasNext"
 }
 
 // Project entity message
@@ -117,8 +137,12 @@ message Project {
   int64 created_at = 7;   // @gotag: json:"createdAt"
   int64 updated_at = 8;   // @gotag: json:"updatedAt"
   repeated string operator_admins = 9; // @gotag: json:"operatorAdmins"
-  repeated ProjectAgentInstance agent_instances = 10; // @gotag: json:"agentInstances"
+  repeated common.AgentInstanceDigest agent_instances = 10; // @gotag: json:"agentInstances"
+  int64 organization_id = 11; // @gotag: json:"organizationId"
   string icon_sas_url = 12; // @gotag: json:"iconUrl"
+  repeated common.UserDigest project_members = 13; // @gotag: json:"projectMembers"
+  repeated common.UserDigest project_admins = 14;  // @gotag: json:"projectAdmins"
+  repeated common.SandboxDigest sandboxes = 15;    // @gotag: json:"sandboxes"
 }
 
 // MemberType enum

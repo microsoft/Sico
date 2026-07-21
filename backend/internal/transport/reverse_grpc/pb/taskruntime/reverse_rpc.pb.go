@@ -40,8 +40,8 @@ const (
 
 type EmptyTaskRuntimeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -92,7 +92,7 @@ func (x *EmptyTaskRuntimeResponse) GetMsg() string {
 
 type CreateBatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`
+	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -136,7 +136,7 @@ func (x *CreateBatchRequest) GetBatchJson() string {
 
 type UpdateBatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`
+	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -180,7 +180,7 @@ func (x *UpdateBatchRequest) GetBatchJson() string {
 
 type GetBatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`
+	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -224,10 +224,10 @@ func (x *GetBatchRequest) GetBatchId() string {
 
 type GetBatchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`
-	Found         bool                   `protobuf:"varint,2,opt,name=found,proto3" json:"found"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`  
+	Found         bool                   `protobuf:"varint,2,opt,name=found,proto3" json:"found"`                          
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                          
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                             
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -292,7 +292,7 @@ func (x *GetBatchResponse) GetMsg() string {
 
 type CreateRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunJson       string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`
+	RunJson       string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -336,7 +336,7 @@ func (x *CreateRunRequest) GetRunJson() string {
 
 type UpdateRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunJson       string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`
+	RunJson       string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -380,7 +380,7 @@ func (x *UpdateRunRequest) GetRunJson() string {
 
 type LookupIdempotentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotencyKey"`
+	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotencyKey"`  
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -424,8 +424,8 @@ func (x *LookupIdempotentRequest) GetIdempotencyKey() string {
 
 type ClaimRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`
-	WorkerId      string                 `protobuf:"bytes,2,opt,name=worker_id,json=workerId,proto3" json:"workerId"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`           
+	WorkerId      string                 `protobuf:"bytes,2,opt,name=worker_id,json=workerId,proto3" json:"workerId"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -476,9 +476,9 @@ func (x *ClaimRunRequest) GetWorkerId() string {
 
 type ClaimRunResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TokenJson     string                 `protobuf:"bytes,1,opt,name=token_json,json=tokenJson,proto3" json:"tokenJson"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	TokenJson     string                 `protobuf:"bytes,1,opt,name=token_json,json=tokenJson,proto3" json:"tokenJson"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                          
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                             
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -536,7 +536,7 @@ func (x *ClaimRunResponse) GetMsg() string {
 
 type HeartbeatBatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`
+	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -580,9 +580,9 @@ func (x *HeartbeatBatchRequest) GetBatchId() string {
 
 type SetRunProgressRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message"`
-	Ts            int64                  `protobuf:"varint,3,opt,name=ts,proto3" json:"ts"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`  
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message"`           
+	Ts            int64                  `protobuf:"varint,3,opt,name=ts,proto3" json:"ts"`                    
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -640,9 +640,9 @@ func (x *SetRunProgressRequest) GetTs() int64 {
 
 type WriteResultRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`
-	ResultJson    string                 `protobuf:"bytes,2,opt,name=result_json,json=resultJson,proto3" json:"resultJson"`
-	TokenJson     string                 `protobuf:"bytes,3,opt,name=token_json,json=tokenJson,proto3" json:"tokenJson"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`                 
+	ResultJson    string                 `protobuf:"bytes,2,opt,name=result_json,json=resultJson,proto3" json:"resultJson"`  
+	TokenJson     string                 `protobuf:"bytes,3,opt,name=token_json,json=tokenJson,proto3" json:"tokenJson"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -700,8 +700,8 @@ func (x *WriteResultRequest) GetTokenJson() string {
 
 type CancelBatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason"`
+	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`  
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason"`                   
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -752,8 +752,8 @@ func (x *CancelBatchRequest) GetReason() string {
 
 type CancelRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`  
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason"`             
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -804,7 +804,7 @@ func (x *CancelRunRequest) GetReason() string {
 
 type GetRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -848,10 +848,10 @@ func (x *GetRunRequest) GetRunId() string {
 
 type GetRunResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunJson       string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`
-	Found         bool                   `protobuf:"varint,2,opt,name=found,proto3" json:"found"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	RunJson       string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`  
+	Found         bool                   `protobuf:"varint,2,opt,name=found,proto3" json:"found"`                    
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                    
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                       
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -916,8 +916,8 @@ func (x *GetRunResponse) GetMsg() string {
 
 type GetTaskDetailRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`
-	View          string                 `protobuf:"bytes,2,opt,name=view,proto3" json:"view"`
+	RunId         string                 `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"runId"`  
+	View          string                 `protobuf:"bytes,2,opt,name=view,proto3" json:"view"`                 
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -968,14 +968,14 @@ func (x *GetTaskDetailRequest) GetView() string {
 
 type GetTaskDetailResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunJson       string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`
-	ResultJson    string                 `protobuf:"bytes,2,opt,name=result_json,json=resultJson,proto3" json:"resultJson"`
-	View          string                 `protobuf:"bytes,3,opt,name=view,proto3" json:"view"`
-	Content       string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content"`
-	ArtifactsJson string                 `protobuf:"bytes,5,opt,name=artifacts_json,json=artifactsJson,proto3" json:"artifactsJson"`
-	Found         bool                   `protobuf:"varint,6,opt,name=found,proto3" json:"found"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	RunJson       string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`                    
+	ResultJson    string                 `protobuf:"bytes,2,opt,name=result_json,json=resultJson,proto3" json:"resultJson"`           
+	View          string                 `protobuf:"bytes,3,opt,name=view,proto3" json:"view"`                                         
+	Content       string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content"`                                   
+	ArtifactsJson string                 `protobuf:"bytes,5,opt,name=artifacts_json,json=artifactsJson,proto3" json:"artifactsJson"`  
+	Found         bool                   `protobuf:"varint,6,opt,name=found,proto3" json:"found"`                                      
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                                      
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                                         
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1068,7 +1068,7 @@ func (x *GetTaskDetailResponse) GetMsg() string {
 
 type ListBatchRunsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`
+	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batchId"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1112,9 +1112,9 @@ func (x *ListBatchRunsRequest) GetBatchId() string {
 
 type ListBatchRunsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RunsJson      []string               `protobuf:"bytes,1,rep,name=runs_json,json=runsJson,proto3" json:"runsJson"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	RunsJson      []string               `protobuf:"bytes,1,rep,name=runs_json,json=runsJson,proto3" json:"runsJson"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                       
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                          
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1172,9 +1172,9 @@ func (x *ListBatchRunsResponse) GetMsg() string {
 
 type ListBatchesByTurnRequest struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
-	ParentConversationId int64                  `protobuf:"varint,1,opt,name=parent_conversation_id,json=parentConversationId,proto3" json:"parentConversationId"`
-	ParentTurnId         int64                  `protobuf:"varint,2,opt,name=parent_turn_id,json=parentTurnId,proto3" json:"parentTurnId"`
-	ActiveOnly           bool                   `protobuf:"varint,3,opt,name=active_only,json=activeOnly,proto3" json:"activeOnly"`
+	ParentConversationId int64                  `protobuf:"varint,1,opt,name=parent_conversation_id,json=parentConversationId,proto3" json:"parentConversationId"`  
+	ParentTurnId         int64                  `protobuf:"varint,2,opt,name=parent_turn_id,json=parentTurnId,proto3" json:"parentTurnId"`                          
+	ActiveOnly           bool                   `protobuf:"varint,3,opt,name=active_only,json=activeOnly,proto3" json:"activeOnly"`                                  
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -1232,9 +1232,9 @@ func (x *ListBatchesByTurnRequest) GetActiveOnly() bool {
 
 type ListBatchesByTurnResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchesJson   []string               `protobuf:"bytes,1,rep,name=batches_json,json=batchesJson,proto3" json:"batchesJson"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	BatchesJson   []string               `protobuf:"bytes,1,rep,name=batches_json,json=batchesJson,proto3" json:"batchesJson"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                                
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                                   
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1292,7 +1292,7 @@ func (x *ListBatchesByTurnResponse) GetMsg() string {
 
 type SweepStaleRunsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BeforeTs      int64                  `protobuf:"varint,1,opt,name=before_ts,json=beforeTs,proto3" json:"beforeTs"`
+	BeforeTs      int64                  `protobuf:"varint,1,opt,name=before_ts,json=beforeTs,proto3" json:"beforeTs"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1336,9 +1336,9 @@ func (x *SweepStaleRunsRequest) GetBeforeTs() int64 {
 
 type SweepStaleRunsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	StaleRunsJson []string               `protobuf:"bytes,1,rep,name=stale_runs_json,json=staleRunsJson,proto3" json:"staleRunsJson"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	StaleRunsJson []string               `protobuf:"bytes,1,rep,name=stale_runs_json,json=staleRunsJson,proto3" json:"staleRunsJson"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                                        
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                                           
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1404,8 +1404,8 @@ func (x *SweepStaleRunsResponse) GetMsg() string {
 // a retryable terminal status at “expected_attempt“.
 type ReopenRunForRetryRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	RunJson         string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`
-	ExpectedAttempt int32                  `protobuf:"varint,2,opt,name=expected_attempt,json=expectedAttempt,proto3" json:"expectedAttempt"`
+	RunJson         string                 `protobuf:"bytes,1,opt,name=run_json,json=runJson,proto3" json:"runJson"`                           
+	ExpectedAttempt int32                  `protobuf:"varint,2,opt,name=expected_attempt,json=expectedAttempt,proto3" json:"expectedAttempt"`  
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }

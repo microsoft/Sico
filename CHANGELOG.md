@@ -35,6 +35,51 @@ Guidelines for editors:
 ### Security
 
 
+## [0.3.0] - 2026-07-21
+
+_Highlights: multi-session chat, project deliverables, context management, and a
+domain-scoped RBAC system._
+
+### Added
+
+- **Multi-session chat:** session management and transcript handling so a
+  conversation can span multiple chat sessions, with single-session history
+  loading that is context-aware (#63).
+- **Conversation re-connect:** resume interrupted conversations with unit-test
+  coverage for the reconnect path.
+- **Project deliverables:** publish files produced during chat sessions as
+  project deliverables. Adds the `t_project_deliverable` store, deliverable
+  proto/API, and richer project detail/query responses (#69).
+- **RBAC system (domain-scoped):** introduce an organization entity and switch
+  Casbin from flat `(sub, obj, act)` to domain-scoped `(sub, dom, obj, act)`
+  policies. Adds the `t_organization` table, `role_code` + scope columns on
+  user roles, and seeded `platform_admin` / `org_admin` / `project_admin` /
+  `project_member` role templates. Agent-instance CRUD is now guarded by the
+  `dw.manage` permission.
+- **Experience improvements:** playbook management, per-turn learned
+  experience tuning, and display fixes (restored from #59).
+
+### Changed
+
+- **Context management:** reintegrate tool-context compaction to keep long
+  conversations within the model's context budget.
+- Sync chat construction and plan/message handling with upstream.
+
+### Removed
+
+- Removed the `test-cases-rewrite` skill and its backend wiring.
+
+### Fixed
+
+- Core: repair cancelled tool-call history.
+- Frontend: read agent avatar from `agentIconUrl`, pass `conversationId` to
+  `/conversation/plan` and `plan/cancel`, redirect bare `/` to `/digital-worker`
+  with deliverable `fileUri` fallback, treat roles as scoped objects with an
+  optional project `iconUrl`, and commit vendored config base files (#90, #93,
+  #96, #97, #98).
+- Restore the vendored frontend build-from-source pipeline (#83).
+
+
 ## [0.2.0] - 2026-06-11
 
 ### Added

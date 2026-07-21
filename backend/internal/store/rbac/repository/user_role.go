@@ -31,11 +31,13 @@ import (
 
 type UserRoleModel = model.TUserRole
 
+// UserRoleFilter is re-exported from the DAL layer for convenience.
+type UserRoleFilter = dal.UserRoleFilter
+
 type UserRoleRepository interface {
 	Assign(ctx context.Context, ur *UserRoleModel) error
-	Remove(ctx context.Context, userID, roleID int64) error
-	ListRolesByUser(ctx context.Context, userID int64, page, pageSize int32) ([]*RoleModel, int64, error)
-	ListUsersByRole(ctx context.Context, roleID int64, page, pageSize int32) ([]*UserModel, int64, error)
+	Remove(ctx context.Context, userID int64, roleCode, scopeType string, scopeID int64) error
+	List(ctx context.Context, filter *UserRoleFilter) ([]*UserRoleModel, int64, error)
 }
 
 func NewUserRoleRepository(db *gorm.DB) UserRoleRepository {

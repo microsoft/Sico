@@ -47,6 +47,7 @@ class AttachmentHookContext:
     attachment_type: str
     agent_instance_id: int
     username: str
+    conversation_id: int
     turn_id: int
 
 

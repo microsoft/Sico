@@ -23,6 +23,7 @@ package sandbox
 import (
 	"context"
 
+	sandboxdto "sico-backend/internal/transport/http/dto/sandbox"
 	sandboxRgrpc "sico-backend/internal/transport/reverse_grpc/pb/sandbox"
 )
 
@@ -48,6 +49,10 @@ type Service interface {
 	// ListAllResources lists all sandbox resources grouped by type with status and usage info.
 	ListAllResources(ctx context.Context) (map[string]interface{}, error)
 
+	// ListAllResourcesFiltered lists sandbox resources with optional filters.
+	ListAllResourcesFiltered(ctx context.Context, filter *sandboxdto.ListSandboxResourcesFilter,
+	) (map[string]interface{}, error)
+
 	// GetInstanceVNCURLs returns VNC URLs for all sandboxes of an instance.
 	GetInstanceVNCURLs(ctx context.Context, instanceID string) ([]map[string]interface{}, error)
 
@@ -65,6 +70,24 @@ type Service interface {
 	// UnassignSandbox removes a sandbox assignment from an instance (dashboard operation).
 	// The lease is deleted only if the sandbox is still owned by that instance.
 	UnassignSandbox(ctx context.Context, instanceID string, sandboxID string) error
+
+	// AssignSandboxToOrg binds sandboxes to an organization.
+	AssignSandboxToOrg(ctx context.Context, orgID int64, sandboxIDs []string) error
+
+	// UnassignSandboxFromOrg unbinds sandboxes from an organization.
+	UnassignSandboxFromOrg(ctx context.Context, orgID int64, sandboxIDs []string) error
+
+	// AssignSandboxToProject binds sandboxes to a project within its organization.
+	AssignSandboxToProject(ctx context.Context, projectID, orgID int64, sandboxIDs []string) error
+
+	// UnassignSandboxFromProject unbinds sandboxes from a project.
+	UnassignSandboxFromProject(ctx context.Context, projectID int64, sandboxIDs []string) error
+
+	// GetSandboxOrgID returns the org ID a sandbox is assigned to, or 0 if unassigned.
+	GetSandboxOrgID(ctx context.Context, sandboxID string) (int64, error)
+
+	// GetSandboxProjectID returns the project ID a sandbox is assigned to, or 0 if unassigned.
+	GetSandboxProjectID(ctx context.Context, sandboxID string) (int64, error)
 
 	// GetInstanceSandboxesWithStatus returns sandboxes for an instance including type, status, and endpoints.
 	// osFilter, when non-empty, is an OS selector (e.g. "windows"); empty returns all.

@@ -1,0 +1,44 @@
+import { Globe } from "lucide-react";
+import type { JSX } from "react";
+
+import { SandboxedIframe } from "../../../../file-preview/components/sandboxed-iframe";
+import type { SidepaneContent } from "../../../atoms/sidepane-atom";
+import { SidepaneHeader } from "../sidepane-header";
+
+// Only the webpage variant of the union — the registry hands this previewer
+// exactly that shape, so the prop is the narrowed branch, not the whole union.
+type WebpageContent = Extract<SidepaneContent, { kind: "webpage" }>;
+
+export type WebpagePreviewerProps = {
+  content: WebpageContent;
+};
+
+// Verbatim §-copy (no i18n layer in this repo — peer previewers inline their own
+// COPY const the same way). `title` doubles as the iframe's accessible name.
+const COPY = {
+  title: "Preview Page",
+  blocked: "This page can't be shown here. Open it in a new tab to view it.",
+} as const;
+
+/**
+ * Self-contained `kind:"webpage"` previewer (design "A": header + body
+ * co-located). Mounts the shared `SidepaneHeader`, then hands the
+ * agent-authored URL to `SandboxedIframe` — the shared body that gates the URL
+ * to `https:` and frames it under the minimal `sandbox="allow-scripts"`. The
+ * D3 file `html` subtype reuses that same body, so the security-critical iframe
+ * logic lives in one place instead of being duplicated (as it was in legacy).
+ */
+export function WebpagePreviewer({
+  content,
+}: WebpagePreviewerProps): JSX.Element {
+  return (
+    <div className="bg-surface-basic flex h-full flex-col overflow-hidden">
+      <SidepaneHeader icon={Globe} title={COPY.title} />
+      <SandboxedIframe
+        url={content.url}
+        title={COPY.title}
+        blockedCopy={COPY.blocked}
+      />
+    </div>
+  );
+}

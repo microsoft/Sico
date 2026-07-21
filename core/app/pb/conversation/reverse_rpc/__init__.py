@@ -11,6 +11,8 @@ __all__ = (
     "ListUserMessageByUserAgentTurnIdResponse",
     "ReverseConversationRpcBase",
     "ReverseConversationRpcStub",
+    "UpdateConversationTitleRequest",
+    "UpdateConversationTitleResponse",
 )
 
 from dataclasses import dataclass
@@ -135,6 +137,42 @@ default_message_pool.register_message(
 )
 
 
+@dataclass(eq=False, repr=False)
+class UpdateConversationTitleRequest(betterproto2.Message):
+    conversation_id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"conversationId"
+    """
+
+    title: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"title"
+    """
+
+
+default_message_pool.register_message(
+    "reverse_rpc", "UpdateConversationTitleRequest", UpdateConversationTitleRequest
+)
+
+
+@dataclass(eq=False, repr=False)
+class UpdateConversationTitleResponse(betterproto2.Message):
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "reverse_rpc", "UpdateConversationTitleResponse", UpdateConversationTitleResponse
+)
+
+
 class ReverseConversationRpcStub:
     def __init__(self, channel: grpc.Channel):
         self._channel = channel
@@ -157,6 +195,15 @@ class ReverseConversationRpcStub:
             ListUserMessageByUserAgentTurnIdResponse.FromString,
         )(message)
 
+    def rpc_update_conversation_title(
+        self, message: "UpdateConversationTitleRequest"
+    ) -> "UpdateConversationTitleResponse":
+        return self._channel.unary_unary(
+            "/reverse_rpc.ReverseConversationRPC/RpcUpdateConversationTitle",
+            UpdateConversationTitleRequest.SerializeToString,
+            UpdateConversationTitleResponse.FromString,
+        )(message)
+
 
 from ...conversation import msg as _msg__
 
@@ -170,6 +217,11 @@ class ReverseConversationRpcBase(betterproto2_grpclib.ServiceBase):
     async def rpc_list_user_message_by_user_agent_turn_id(
         self, message: "ListUserMessageByUserAgentTurnIdRequest"
     ) -> "ListUserMessageByUserAgentTurnIdResponse":
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
+    async def rpc_update_conversation_title(
+        self, message: "UpdateConversationTitleRequest"
+    ) -> "UpdateConversationTitleResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def __rpc_rpc_create_message(
@@ -190,6 +242,15 @@ class ReverseConversationRpcBase(betterproto2_grpclib.ServiceBase):
         response = await self.rpc_list_user_message_by_user_agent_turn_id(request)
         await stream.send_message(response)
 
+    async def __rpc_rpc_update_conversation_title(
+        self,
+        stream: "grpclib.server.Stream[UpdateConversationTitleRequest, UpdateConversationTitleResponse]",
+    ) -> None:
+        request = await stream.recv_message()
+        assert request is not None
+        response = await self.rpc_update_conversation_title(request)
+        await stream.send_message(response)
+
     def __mapping__(self) -> "dict[str, grpclib.const.Handler]":
         return {
             "/reverse_rpc.ReverseConversationRPC/RpcCreateMessage": grpclib.const.Handler(
@@ -203,5 +264,11 @@ class ReverseConversationRpcBase(betterproto2_grpclib.ServiceBase):
                 grpclib.const.Cardinality.UNARY_UNARY,
                 ListUserMessageByUserAgentTurnIdRequest,
                 ListUserMessageByUserAgentTurnIdResponse,
+            ),
+            "/reverse_rpc.ReverseConversationRPC/RpcUpdateConversationTitle": grpclib.const.Handler(
+                self.__rpc_rpc_update_conversation_title,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                UpdateConversationTitleRequest,
+                UpdateConversationTitleResponse,
             ),
         }

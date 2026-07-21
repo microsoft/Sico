@@ -44,6 +44,19 @@ func (dao *ConversationDAO) Update(ctx context.Context, msg *entity.Conversation
 	return err
 }
 
+func (dao *ConversationDAO) UpdateTitleIfCurrent(ctx context.Context, id int64, currentTitle, nextTitle string) (int64, error) {
+	table := dao.query.TConversation
+	result, err := table.WithContext(ctx).
+		Where(table.ID.Eq(id)).
+		Where(table.Title.Eq(currentTitle)).
+		Where(table.DeletedAt.IsNull()).
+		Update(table.Title, nextTitle)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected, nil
+}
+
 func (dao *ConversationDAO) GetByID(ctx context.Context, id int64) (*entity.Conversation, error) {
 	poData, err := dao.query.TConversation.WithContext(ctx).Debug().Where(dao.query.TConversation.ID.Eq(id)).First()
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -99,6 +112,7 @@ func (dao *ConversationDAO) List(
 	var hasMore bool
 
 	do := dao.query.TConversation.WithContext(ctx).Debug()
+	do = do.Where(dao.query.TConversation.DeletedAt.IsNull())
 	if agentInstanceID > 0 {
 		do = do.Where(dao.query.TConversation.AgentInstanceID.Eq(agentInstanceID))
 	}
@@ -110,6 +124,7 @@ func (dao *ConversationDAO) List(
 	}
 
 	do = do.Where(dao.query.TConversation.CreatorUsername.Eq(username))
+	do = do.Order(dao.query.TConversation.CreatedAt.Desc())
 	do = do.Offset((page - 1) * limit)
 
 	poList, err := do.Find()

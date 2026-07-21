@@ -1,0 +1,14 @@
+commit-msg:
+  commands:
+    commitlint:
+      run: npx commitlint --edit {1}
+
+pre-commit:
+  commands:
+    lint:
+      run: pnpm turbo run lint --filter=...[HEAD]
+
+pre-push:
+  commands:
+    test:
+      run: pnpm turbo run test --filter=...[HEAD]

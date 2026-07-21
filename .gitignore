@@ -17,6 +17,11 @@ scripts/acceptance-*.json
 *.BASE.*
 *.LOCAL.*
 *.REMOTE.*
+# Un-ignore legit vendored config files: on case-insensitive filesystems
+# (macOS/Windows) `*.BASE.*` above matches `*.base.*`, which would wrongly
+# ignore these shared build configs and break the from-source frontend build.
+!frontend/packages/config/tsconfig.base.json
+!frontend/packages/config/vitest.config.base.ts
 *_BACKUP_*.txt
 *_BASE_*.txt
 *_LOCAL_*.txt
@@ -349,6 +354,3 @@ __pycache__/
 # Temporary files
 tmp/
 .local/
-
-# Frontend build artifacts (unzipped from frontend-dist.zip)
-frontend-dist/

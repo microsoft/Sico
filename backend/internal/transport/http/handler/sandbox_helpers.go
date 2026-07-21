@@ -24,10 +24,10 @@ import (
 	"context"
 
 	sandboxbiz "sico-backend/internal/biz/sandbox"
-	sandboxdto "sico-backend/internal/transport/http/dto/sandbox"
+	commondto "sico-backend/internal/transport/http/dto/common"
 )
 
-func getInstanceSandboxes(ctx context.Context, instanceID string) []*sandboxdto.InstanceSandboxStatusInfo {
+func getInstanceSandboxes(ctx context.Context, instanceID string) []*commondto.SandboxDigest {
 	svc := sandboxbiz.Default()
 	if svc == nil {
 		return nil
@@ -38,9 +38,9 @@ func getInstanceSandboxes(ctx context.Context, instanceID string) []*sandboxdto.
 		return nil
 	}
 
-	var result []*sandboxdto.InstanceSandboxStatusInfo
+	var result []*commondto.SandboxDigest
 	for _, sb := range sandboxes {
-		info := &sandboxdto.InstanceSandboxStatusInfo{
+		info := &commondto.SandboxDigest{
 			SandboxId:   getStringFromMap(sb, "sandbox_id"),
 			Type:        getStringFromMap(sb, "type"),
 			Status:      getStringFromMap(sb, "status"),

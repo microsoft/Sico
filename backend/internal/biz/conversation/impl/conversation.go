@@ -22,6 +22,7 @@ package impl
 
 import (
 	"context"
+	"strings"
 
 	appresp "sico-backend/internal/biz/common/response"
 	entity "sico-backend/internal/entity/conversation/conversation"
@@ -30,17 +31,37 @@ import (
 	messageRepo "sico-backend/internal/store/conversation/message/repository"
 	model "sico-backend/internal/transport/http/dto/conversation"
 	"sico-backend/internal/transport/http/middleware"
+	rgrpc "sico-backend/internal/transport/reverse_grpc/pb/conversation"
 	"sico-backend/pkg/logger"
 )
 
+const DefaultConversationTitle = "New Session"
+
 func (c *Service) UpdateConversation(ctx context.Context,
 	req *model.UpdateConversationRequest) (*model.UpdateConversationResponse, error) {
-	err := c.conversationRepo.Update(ctx, &entity.Conversation{
-		ID:    req.Id,
-		Title: req.Title,
-	})
+	username := middleware.MustGetUsernameFromCtx(ctx)
+	conversation, err := c.conversationRepo.GetByID(ctx, req.GetId())
 	if err != nil {
 		return nil, err
+	}
+	if conversation == nil || conversation.CreatorUsername != username {
+		return nil, apperr.New(errcode.CommonNotFound, "conversation not found")
+	}
+
+	title := strings.TrimSpace(req.GetTitle())
+	if title == "" {
+		return nil, apperr.New(errcode.CommonInvalidParam, "title is required")
+	}
+	if title == conversation.Title {
+		return appresp.Success(&model.UpdateConversationResponse{}), nil
+	}
+
+	updated, err := c.conversationRepo.UpdateTitleIfCurrent(ctx, req.GetId(), conversation.Title, title)
+	if err != nil {
+		return nil, err
+	}
+	if updated == 0 {
+		return nil, apperr.New(errcode.CommonConflict, "conversation title changed, please retry")
 	}
 
 	return appresp.Success(&model.UpdateConversationResponse{}), nil
@@ -78,18 +99,24 @@ func (c *Service) GetConversation(ctx context.Context,
 func (c *Service) CreateConversation(ctx context.Context,
 	req *model.CreateConversationRequest) (*model.CreateConversationResponse, error) {
 	resp := new(model.CreateConversationResponse)
+	title := strings.TrimSpace(req.GetTitle())
+	if title == "" {
+		title = DefaultConversationTitle
+	}
 	conversationData, err := c.conversationRepo.Create(ctx, &entity.Conversation{
 		CreatorUsername: middleware.MustGetUsernameFromCtx(ctx),
 		AgentInstanceID: req.AgentInstanceId,
-		Title:           req.Title,
+		Title:           title,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	resp.Data = &model.ConversationData{
-		Id:        conversationData.ID,
-		CreatedAt: conversationData.CreatedAt / 1000,
+		Id:              conversationData.ID,
+		CreatedAt:       conversationData.CreatedAt / 1000,
+		CreatorUsername: conversationData.CreatorUsername,
+		Title:           conversationData.Title,
 	}
 	return resp, nil
 }
@@ -99,27 +126,20 @@ func (c *Service) ListConversation(
 	resp := new(model.ListConversationResponse)
 	userID := middleware.MustGetUsernameFromCtx(ctx)
 	conversationDOList, hasMore, err := c.conversationRepo.List(
-		ctx, userID, "", 0, int(req.GetPageSize()), int(req.GetPage()),
+		ctx, userID, "", req.GetAgentInstanceId(), int(req.GetPageSize()), int(req.GetPage()),
 	)
 	if err != nil {
 		return resp, err
 	}
 
-	conversationData := make([]*model.ConversationData, 0, len(conversationDOList))
+	conversationData := make([]*model.ConversationListItem, 0, len(conversationDOList))
 
 	for _, conv := range conversationDOList {
-		agentInstanceInfo, err := c.getAgentInstanceInfo(ctx, conv.AgentInstanceID)
-		if err != nil {
-			logger.CtxError(ctx, "[ListConversation] getAgentInstanceInfo failed, err:%v", err)
-			continue
-		}
-
-		conversationData = append(conversationData, &model.ConversationData{
-			Id:                conv.ID,
-			CreatedAt:         conv.CreatedAt / 1000,
-			CreatorUsername:   conv.CreatorUsername,
-			Title:             conv.Title,
-			AgentInstanceInfo: agentInstanceInfo,
+		conversationData = append(conversationData, &model.ConversationListItem{
+			Id:              conv.ID,
+			CreatedAt:       conv.CreatedAt / 1000,
+			CreatorUsername: conv.CreatorUsername,
+			Title:           conv.Title,
 		})
 	}
 
@@ -129,6 +149,56 @@ func (c *Service) ListConversation(
 	}
 
 	return resp, nil
+}
+
+func (c *Service) DeleteConversation(ctx context.Context,
+	req *model.DeleteConversationRequest) (*model.DeleteConversationResponse, error) {
+	username := middleware.MustGetUsernameFromCtx(ctx)
+	conversation, err := c.conversationRepo.GetByID(ctx, req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	if conversation == nil || conversation.CreatorUsername != username {
+		return nil, apperr.New(errcode.CommonNotFound, "conversation not found")
+	}
+
+	rowsAffected, err := c.conversationRepo.Delete(ctx, req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	if rowsAffected == 0 {
+		return nil, apperr.New(errcode.CommonNotFound, "conversation not found")
+	}
+
+	return appresp.Success(&model.DeleteConversationResponse{}), nil
+}
+
+func (c *Service) RpcUpdateConversationTitle(
+	ctx context.Context,
+	req *rgrpc.UpdateConversationTitleRequest,
+) (*rgrpc.UpdateConversationTitleResponse, error) {
+	if req == nil || req.GetConversationId() <= 0 {
+		return appresp.Success(&rgrpc.UpdateConversationTitleResponse{}), nil
+	}
+	title := strings.TrimSpace(req.GetTitle())
+	if title == "" {
+		return appresp.Success(&rgrpc.UpdateConversationTitleResponse{}), nil
+	}
+	titleRunes := []rune(title)
+	if len(titleRunes) > 80 {
+		title = string(titleRunes[:80])
+	}
+
+	_, err := c.conversationRepo.UpdateTitleIfCurrent(
+		ctx,
+		req.GetConversationId(),
+		DefaultConversationTitle,
+		title,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return appresp.Success(&rgrpc.UpdateConversationTitleResponse{}), nil
 }
 
 // getAgentInstanceInfo is a helper method to fetch and convert agent instance data
@@ -183,12 +253,50 @@ func (s *Service) GetPlan(ctx context.Context, req *model.GetPlanRequest) (*mode
 		return nil, apperr.New(errcode.CommonNotFound, "failed to obtain plan data")
 	}
 
+	// Normalize deprecated file_url/file_name into the file submessage for old data.
+	normalizePlanDeliverables(response.Data.Plan)
+
 	return appresp.Success(&model.GetPlanResponse{
 		Data: &model.GetPlanData{
 			Plan:   response.Data.Plan,
 			Status: response.Data.Status,
 		},
 	}), nil
+}
+
+// normalizePlanDeliverables migrates deprecated file_url/file_name fields into
+// the ToolDeliverableFile submessage for backward compatibility with old data.
+func normalizePlanDeliverables(plan *model.Plan) {
+	if plan == nil {
+		return
+	}
+	for _, step := range plan.Steps {
+		for _, tc := range step.ToolCalls {
+			normalizeToolCallDeliverables(tc)
+		}
+	}
+}
+
+func normalizeToolCallDeliverables(tc *model.ToolCall) {
+	if tc == nil {
+		return
+	}
+	for _, d := range tc.Deliverables {
+		if d.File == nil && (d.FileUrl != "" || d.FileName != "") {
+			// Migrate old top-level fields into the file submessage.
+			d.File = &model.ToolDeliverableFile{
+				FileSasUrl: d.FileUrl,
+				FileName:   d.FileName,
+			}
+		} else if d.File != nil {
+			// Back-fill deprecated fields so old frontends can still read them.
+			d.FileUrl = d.File.FileSasUrl
+			d.FileName = d.File.FileName
+		}
+	}
+	for _, sub := range tc.SubCalls {
+		normalizeToolCallDeliverables(sub)
+	}
 }
 
 func (s *Service) CancelPlan(ctx context.Context, req *model.CancelPlanRequest) (*model.CancelPlanResponse, error) {

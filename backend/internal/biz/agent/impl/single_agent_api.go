@@ -29,6 +29,8 @@ import (
 
 	appresp "sico-backend/internal/biz/common/response"
 	knowledgebiz "sico-backend/internal/biz/knowledge"
+	rbac "sico-backend/internal/biz/rbac"
+	sandboxbiz "sico-backend/internal/biz/sandbox"
 	entity "sico-backend/internal/entity/agent/singleagent"
 	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/shared/apperr"
@@ -164,7 +166,9 @@ func (s *Service) DeleteSingleAgent(
 			return apperr.New(errcode.CommonNotFound, "agent not found")
 		}
 
-		count, err := instanceRepo.CountByAgentID(ctx, req.AgentId)
+		_, count, err := instanceRepo.ListByFilter(ctx, &entity.ListSingleAgentInstanceFilter{
+			AgentId: &req.AgentId,
+		}, 0, 0)
 		if err != nil {
 			return apperr.New(errcode.AgentInstanceQueryDatabaseError,
 				fmt.Sprintf("failed to check existing instances for agent %s: %v", req.AgentId, err))
@@ -319,6 +323,12 @@ func (s *Service) CreateSingleAgentInstance(
 		return nil, apperr.New(errcode.CommonInvalidParam, "agentId is required")
 	}
 
+	if req.ProjectId > 0 {
+		if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, req.ProjectId, "dw", "manage"); err != nil {
+			return nil, err
+		}
+	}
+
 	instanceEntity := &entity.SingleAgentInstance{
 		SingleAgentInstance: &single_agent.SingleAgentInstance{
 			AgentId:          agentID,
@@ -327,6 +337,7 @@ func (s *Service) CreateSingleAgentInstance(
 			Desc:             req.Desc,
 			IconUri:          req.IconUri,
 			Role:             req.Role,
+			ProjectId:        req.ProjectId,
 		},
 	}
 
@@ -479,6 +490,24 @@ func (s *Service) populateOnboardKnowledge(ctx context.Context, instanceID int64
 func (s *Service) UpdateSingleAgentInstance(
 	ctx context.Context, req *single_agent.UpdateSingleAgentInstanceRequest,
 ) (resp *single_agent.UpdateSingleAgentInstanceResponse, err error) {
+	previousEntity, err := s.getSingleAgentInstance(ctx, req.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	projectID := req.ProjectId
+	if projectID == 0 {
+		projectID = previousEntity.ProjectId
+	}
+	if projectID != 0 {
+		if err := rbac.CheckCtxAccessOrOwner(
+			ctx, rbac.ScopeProject, projectID,
+			"dw", "manage", previousEntity.EmployerUsername,
+		); err != nil {
+			return nil, err
+		}
+	}
+
 	// Convert request to domain entity
 	instanceEntity := &entity.SingleAgentInstance{
 		SingleAgentInstance: &single_agent.SingleAgentInstance{
@@ -503,6 +532,19 @@ func (s *Service) UpdateSingleAgentInstance(
 func (s *Service) DeleteSingleAgentInstance(
 	ctx context.Context, req *single_agent.DeleteSingleAgentInstanceRequest,
 ) (resp *single_agent.DeleteSingleAgentInstanceResponse, err error) {
+	instance, err := s.getSingleAgentInstance(ctx, req.Id)
+	if err != nil {
+		return nil, err
+	}
+	if instance.ProjectId != 0 {
+		if err := rbac.CheckCtxAccessOrOwner(
+			ctx, rbac.ScopeProject, instance.ProjectId,
+			"dw", "manage", instance.EmployerUsername,
+		); err != nil {
+			return nil, err
+		}
+	}
+
 	err = s.deleteSingleAgentInstance(ctx, req.Id)
 	if err != nil {
 		return nil, err
@@ -511,54 +553,98 @@ func (s *Service) DeleteSingleAgentInstance(
 	return appresp.Success(&single_agent.DeleteSingleAgentInstanceResponse{}), nil
 }
 
-func (s *Service) ListSingleAgentInstances(
-	ctx context.Context, req *single_agent.ListSingleAgentInstancesRequest,
-) (resp *single_agent.ListSingleAgentInstancesResponse, err error) {
-	instances, total, hasNext, err := s.listSingleAgentInstancesByCondition(ctx, req)
+// DismissSingleAgentInstance deactivates a single agent instance by setting its status to INACTIVE.
+// It first unbinds any idle sandboxes from the instance.
+func (s *Service) DismissSingleAgentInstance(
+	ctx context.Context, req *single_agent.DismissSingleAgentInstanceRequest,
+) (*single_agent.DismissSingleAgentInstanceResponse, error) {
+	instance, err := s.getSingleAgentInstance(ctx, req.Id)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperr.New(errcode.CommonNotFound, "agent instance not found")
+		}
 		return nil, err
 	}
 
-	s.populateSingleAgentInstanceProjects(ctx, instances...)
-
-	// Convert domain entities to protobuf response
-	pbInstances := make([]*single_agent.SingleAgentInstance, len(instances))
-	for i, instance := range instances {
-		agent, err := s.getSingleAgent(ctx, instance.AgentId)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, apperr.New(errcode.CommonNotFound, "agent not found")
-			}
+	if instance.ProjectId > 0 {
+		if err := rbac.CheckCtxAccessOrOwner(
+			ctx, rbac.ScopeProject, instance.ProjectId,
+			"dw", "manage", instance.EmployerUsername,
+		); err != nil {
 			return nil, err
 		}
-		if agent == nil {
-			return nil, apperr.New(errcode.CommonNotFound, "agent not found")
-		}
-
-		cdnIconUri, err := storage.PathToUrl(instance.IconUri)
-		if err != nil {
-			logger.CtxWarn(ctx, "convert icon uri failed, err:%v", err)
-			continue
-		}
-		instance.IconUri = cdnIconUri
-
-		cdnEmployerIconUri, err := storage.PathToUrl(instance.EmployerIconUri)
-		if err != nil {
-			logger.CtxWarn(ctx, "convert EmployerIconUri failed, err:%v", err)
-			continue
-		}
-
-		instance.EmployerIconUri = cdnEmployerIconUri
-		pbInstances[i] = instance.SingleAgentInstance
 	}
 
-	return appresp.Success(&single_agent.ListSingleAgentInstancesResponse{
-		Data: &single_agent.ListSingleAgentInstancesData{
-			Instances: pbInstances,
-			Total:     int32(total),
-			HasNext:   hasNext,
+	// Unbind sandboxes before dismissing.
+	instanceID := strconv.FormatInt(req.Id, 10)
+	if err := s.unassignInstanceSandboxesIfIdle(ctx, instanceID); err != nil {
+		return nil, err
+	}
+
+	instanceEntity := &entity.SingleAgentInstance{
+		SingleAgentInstance: &single_agent.SingleAgentInstance{
+			Id:     req.Id,
+			Status: single_agent.SingleAgentInstanceStatus_INSTANCE_INACTIVE,
 		},
-	}), nil
+	}
+	if err := s.updateSingleAgentInstance(ctx, instanceEntity); err != nil {
+		return nil, err
+	}
+
+	return appresp.Success(&single_agent.DismissSingleAgentInstanceResponse{}), nil
+}
+
+// ReassignSingleAgentInstance reassigns a single agent instance to a new operator.
+func (s *Service) ReassignSingleAgentInstance(
+	ctx context.Context, req *single_agent.ReassignSingleAgentInstanceRequest,
+) (*single_agent.ReassignSingleAgentInstanceResponse, error) {
+	instance, err := s.getSingleAgentInstance(ctx, req.Id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperr.New(errcode.CommonNotFound, "agent instance not found")
+		}
+		return nil, err
+	}
+
+	if instance.ProjectId <= 0 {
+		return nil, apperr.New(errcode.CommonInvalidParam, "agent instance has no project; cannot reassign")
+	}
+
+	if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, instance.ProjectId, "project", "manage"); err != nil {
+		return nil, err
+	}
+
+	instanceEntity := &entity.SingleAgentInstance{
+		SingleAgentInstance: &single_agent.SingleAgentInstance{
+			Id:               req.Id,
+			OperatorUsername: req.NewOperatorUsername,
+		},
+	}
+	if err := s.updateSingleAgentInstance(ctx, instanceEntity); err != nil {
+		return nil, err
+	}
+
+	return appresp.Success(&single_agent.ReassignSingleAgentInstanceResponse{}), nil
+}
+
+// unassignInstanceSandboxesIfIdle unassigns all idle sandboxes from an instance.
+func (s *Service) unassignInstanceSandboxesIfIdle(ctx context.Context, instanceID string) error {
+	hasAssigned, _, err := sandboxbiz.HasAssignedSandboxesStrict(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	if !hasAssigned {
+		return nil
+	}
+
+	sandboxSvc := sandboxbiz.Default()
+	if sandboxSvc == nil {
+		return nil
+	}
+
+	return sandboxbiz.WithInstanceAssignmentLock(ctx, instanceID, func() error {
+		return sandboxSvc.CleanupInstanceSandboxes(ctx, instanceID)
+	})
 }
 
 func (s *Service) ListSingleAgentInstancesByFilter(
@@ -575,15 +661,60 @@ func (s *Service) ListSingleAgentInstancesByFilter(
 	}
 
 	s.populateSingleAgentInstanceProjects(ctx, instances...)
+	s.enrichSingleAgentInstances(ctx, instances)
 
 	return instances, total, err
 }
 
+// enrichSingleAgentInstances converts icon URIs to CDN and populates capability tags from the agent.
+func (s *Service) enrichSingleAgentInstances(ctx context.Context, instances []*entity.SingleAgentInstance) {
+	for _, instance := range instances {
+		cdnIconUri, err := storage.PathToUrl(instance.IconUri)
+		if err != nil {
+			logger.CtxWarn(ctx, "convert icon uri failed, err: %v", err)
+		}
+		instance.IconUri = cdnIconUri
+
+		cdnEmployerIconUri, err := storage.PathToUrl(instance.EmployerIconUri)
+		if err != nil {
+			logger.CtxWarn(ctx, "convert EmployerIconUri failed, err: %v", err)
+		}
+		instance.EmployerIconUri = cdnEmployerIconUri
+	}
+}
+
 func (s *Service) GetSingleAgentInstanceNames(ctx context.Context, ids []int64) (map[int64]string, error) {
-	nameMap, err := s.SingleAgentInstanceRepo.GetNamesByIDs(ctx, ids)
+	instances, err := s.SingleAgentInstanceRepo.MGet(ctx, ids)
 	if err != nil {
 		return nil, apperr.New(errcode.AgentInstanceQueryDatabaseError,
 			fmt.Sprintf("failed to get agent instance names: %v", err))
 	}
+	nameMap := make(map[int64]string, len(instances))
+	for _, inst := range instances {
+		nameMap[inst.Id] = inst.Name
+	}
 	return nameMap, nil
+}
+
+func (s *Service) GetSingleAgentInstanceIconURIs(ctx context.Context, ids []int64) (map[int64]string, error) {
+	instances, err := s.SingleAgentInstanceRepo.MGet(ctx, ids)
+	if err != nil {
+		return nil, apperr.New(errcode.AgentInstanceQueryDatabaseError,
+			fmt.Sprintf("failed to get agent instance icon URIs: %v", err))
+	}
+	iconMap := make(map[int64]string, len(instances))
+	for _, inst := range instances {
+		iconMap[inst.Id] = inst.IconUri
+	}
+	return iconMap, nil
+}
+
+func (s *Service) UpdateSingleAgentInstanceStatus(
+	ctx context.Context, req *single_agent.UpdateSingleAgentInstanceStatusRequest,
+) (*single_agent.UpdateSingleAgentInstanceStatusResponse, error) {
+	if err := s.SingleAgentInstanceRepo.UpdateStatus(ctx, req.Id, req.Status); err != nil {
+		return nil, apperr.New(errcode.AgentInstanceQueryDatabaseError,
+			fmt.Sprintf("failed to update agent instance status: %v", err))
+	}
+	return appresp.Success(&single_agent.UpdateSingleAgentInstanceStatusResponse{}), nil
 }

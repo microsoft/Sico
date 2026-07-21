@@ -162,6 +162,7 @@ def _build_delegate_tool(adapters: dict[str, Adapter]) -> FunctionTool:
         name=_DELEGATE_TOOL_NAME,
         description=_delegate_tool_description(adapters),
         input_model=_build_delegate_input_model(adapters),
+        additional_properties={"max_output_length": 50_000},
         func=_func,
     )
 

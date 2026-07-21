@@ -29,6 +29,7 @@ service ReverseConversationRPC {
 
     rpc RpcCreateMessage(CreateMessageRequest) returns (CreateMessageResponse) {}
     rpc RpcListUserMessageByUserAgentTurnID(ListUserMessageByUserAgentTurnIDRequest) returns (ListUserMessageByUserAgentTurnIDResponse) {}
+    rpc RpcUpdateConversationTitle(UpdateConversationTitleRequest) returns (UpdateConversationTitleResponse) {}
 
 }
 
@@ -54,6 +55,16 @@ message ListUserMessageByUserAgentTurnIDRequest {
 
 message ListUserMessageByUserAgentTurnIDResponse {
     repeated msg.Message data = 1; // @gotag: json:"data"
+    int32 code = 253;     // @gotag: json:"code"
+    string msg = 254;     // @gotag: json:"msg"
+}
+
+message UpdateConversationTitleRequest {
+    int64 conversation_id = 1; // @gotag: json:"conversationId"
+    string title = 2; // @gotag: json:"title"
+}
+
+message UpdateConversationTitleResponse {
     int32 code = 253;     // @gotag: json:"code"
     string msg = 254;     // @gotag: json:"msg"
 }

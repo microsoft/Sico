@@ -1,6 +1,6 @@
 # sico -- Makefile
 .PHONY: help setup setup-check setup-kind setup-kind-check lint lint-fix license-check precommit-run precommit-update
-.PHONY: openapi unzip-frontend
+.PHONY: openapi build-frontend
 .PHONY: compose-up compose-down compose-logs
 .PHONY: kind-up kind-stop kind-down kind-restart
 .PHONY: emulator-setup emulator-start emulator-stop emulator-restart emulator-status emulator-logs
@@ -31,7 +31,7 @@ help:
 	@echo "  make lint-fix          Run lints with auto-fixes where supported"
 	@echo "  make license-check     Verify every source file has a MIT license header"
 	@echo "  make openapi           Regenerate backend swagger docs (api/openapi)"
-	@echo "  make unzip-frontend    Unzip frontend-dist.zip for local development"
+	@echo "  make build-frontend    Install deps and build the frontend SPA from source"
 	@echo ""
 	@echo "Docker Compose (local):"
 	@echo "  make compose-up              Build and start full stack"
@@ -105,18 +105,13 @@ openapi:
 		exit 1; }
 	cd backend && swag init -g cmd/sico-server/main.go --parseDependency --parseInternal -o api/openapi
 
-# -- Frontend dist (for local development) ------------------------------------
-# Unzip pre-built frontend assets so the backend can serve them locally.
+# -- Frontend (build SPA from source) -----------------------------------------
+# Install workspace deps and build packages/app/dist. Optional for local dev:
+# `make compose-up` and `make kind-up` build the frontend image from source too.
 
-unzip-frontend:
-ifeq ($(OS),Windows_NT)
-	@powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force 'frontend-dist' -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force 'frontend-dist' | Out-Null; Expand-Archive -Path 'frontend/frontend-dist.zip' -DestinationPath 'frontend-dist' -Force"
-else
-	@rm -rf frontend-dist
-	@mkdir -p frontend-dist
-	unzip -q frontend/frontend-dist.zip -d frontend-dist
-endif
-	@echo "frontend-dist/ ready"
+build-frontend:
+	cd frontend && pnpm install --frozen-lockfile && pnpm build
+	@echo "frontend/packages/app/dist ready"
 
 # -- Docker Compose -----------------------------------------------------------
 

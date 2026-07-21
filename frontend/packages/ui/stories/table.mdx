@@ -1,0 +1,157 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as TableStories from "./table.stories";
+
+<Meta of={TableStories} />
+
+# Table
+
+Data table for displaying structured content with rows and columns. Built on
+native HTML table elements with SICO design tokens. Shadcn restyle — upstream reference: [shadcn/ui table](https://ui.shadcn.com/docs/components/table).
+
+## Examples
+
+### Default
+
+A minimal table — header plus a few body rows.
+
+<Description of={TableStories.Default} />
+<Canvas of={TableStories.Default} />
+
+### With selection
+
+Click any row to select it with a `bg-primary-50` highlight, driven by the
+`data-state="selected"` attribute. Rows also tint on hover.
+
+<Description of={TableStories.WithSelection} />
+<Canvas of={TableStories.WithSelection} />
+
+### Numeric columns
+
+Right-aligned numeric columns with tabular figures.
+
+<Description of={TableStories.NumericColumns} />
+<Canvas of={TableStories.NumericColumns} />
+
+## API
+
+<Controls of={TableStories.Default} />
+
+---
+
+## Token Audit
+
+All design tokens consumed by Table.
+
+### Text Colors
+
+<ColorPalette>
+  <ColorItem
+    title="Header"
+    subtitle="Column header text"
+    colors={{
+      "header · foreground-tertiary": "var(--color-foreground-tertiary)",
+    }}
+  />
+  <ColorItem
+    title="Body"
+    subtitle="Cell text colors"
+    colors={{
+      "primary · foreground-primary": "var(--color-foreground-primary)",
+      "tertiary · foreground-tertiary": "var(--color-foreground-tertiary)",
+    }}
+  />
+</ColorPalette>
+
+### Row States
+
+<ColorPalette>
+  <ColorItem
+    title="Row Background"
+    subtitle="Interactive row states"
+    colors={{
+      "hover · primary-50": "var(--color-primary-50)",
+      "selected · primary-50": "var(--color-primary-50)",
+    }}
+  />
+</ColorPalette>
+
+### Border & Icon
+
+<ColorPalette>
+  <ColorItem
+    title="Divider"
+    subtitle="Header border"
+    colors={{
+      "divider · overlay-black-10": "var(--color-divider)",
+    }}
+  />
+  <ColorItem
+    title="Icon"
+    subtitle="Secondary icons"
+    colors={{
+      "icon · icon-secondary": "var(--color-icon-secondary)",
+    }}
+  />
+</ColorPalette>
+
+### Sizing
+
+| Element      | Class  | Value |
+| ------------ | ------ | ----- |
+| Header row   | `h-10` | 40px  |
+| Body row     | `h-14` | 56px  |
+| Cell padding | `px-4` | 16px  |
+
+### Typography
+
+| Element      | Class                                 | Value                |
+| ------------ | ------------------------------------- | -------------------- |
+| Header text  | `text-xs font-medium text-foreground-tertiary` | 12px medium, #5C6166 |
+| Body text    | `text-base text-foreground-primary`           | 16px regular, #303336 |
+| Caption text | `text-sm text-muted-foreground`          | 14px regular, #5C6166 |
+
+---
+
+## Upstream Audit
+
+### Token swaps
+
+| Upstream class | SICO token |
+|----------------|------------|
+| `hover:bg-muted/50` | `hover:bg-primary-50` |
+| `has-aria-expanded:bg-muted/50` | `has-aria-expanded:bg-primary-50` |
+| `data-[state=selected]:bg-muted` | `data-[state=selected]:bg-primary-50` |
+
+### Intentional default overrides
+
+Kept on purpose to match the SICO Figma spec — re-syncs from upstream must not revert these.
+
+| Upstream default | SICO override | Reason |
+|------------------|---------------|--------|
+| `text-sm` cells | `text-base` | Figma body type for data rows |
+| Intrinsic row height | `h-14` (56px) | Fixed row rhythm in Figma |
+| `[&_tr]:border-b` on `<thead>` (underline via the header row) | `border-divider border-b` on `<thead>` (underline on the header element) | SICO drops all per-row borders, so the header underline moves onto the `<thead>` itself; `border-divider` is the same value as upstream's default `border` |
+| No header-specific hover rule (upstream's neutral `hover:bg-muted/50` applies to every row, header included, and is unobtrusive) | `TableRow` scopes its brand fills to `[tbody_&]`; `<thead>` carries no hover rule | SICO's `TableRow` swaps the neutral tint for a prominent brand `hover:bg-primary-50`; on a header (not data) it reads as a false affordance. Rather than neutralize it on the `<thead>`, the interactive fills (`hover` / `has-aria-expanded` / `data-[state=selected]`) are scoped at the source to `[tbody_&]`, so header (and footer) rows never pick them up. A sticky header therefore keeps whatever resting fill it has even on hover — no show-through, and no forced background on the `<thead>`. |
+| `border-b` between rows + `[&_tr:last-child]:border-0` | No row dividers | Cleaner look in Figma |
+| No column width caps | `min-w-16 max-w-80` on `TableHead` / `TableCell` | Prevents extreme columns |
+| `hover:bg-muted/50` (neutral) | `[tbody_&]:hover:bg-primary-50` (brand, body-only) | SICO uses brand-tinted hover, scoped to body rows |
+| `TableHead` `text-foreground font-medium` | `text-foreground-tertiary text-xs font-medium uppercase tracking-wide` | Figma column headers are small, uppercase, tertiary |
+| `TableHead` / `TableCell` `px-2` / `p-2` | `px-4` (no vertical padding, height driven by row `h-14`) | Figma uses 16px horizontal gutter; row height handles vertical rhythm |
+| `TableHead` / `TableCell` `whitespace-nowrap` | _omitted_ | SICO data cells wrap by default; opt in per cell when needed |
+| `TableFooter` `bg-muted/50` (50% tint) | `bg-muted` (solid 100%) | Same `--color-muted` value; SICO drops only the `/50` so the footer reads as a solid recessed band (upstream class kept) |
+
+### API contract
+
+Props match upstream — all components accept the same props as their HTML element counterparts.
+
+### Deleted from upstream
+
+| Deleted | Where | Reason |
+|---------|-------|--------|
+| `[&>tr]:last:border-b-0` | `TableFooter` | Strips the last footer row's bottom border — a no-op in SICO since `TableRow` carries no `border-b` to begin with (no row dividers) |
+
+The `has-aria-expanded:` row-state hook is preserved (re-mapped to
+`has-aria-expanded:bg-primary-50`); the upstream cell affordance dropped on
+purpose (`whitespace-nowrap`) is recorded under **Intentional default
+overrides** above, not here.

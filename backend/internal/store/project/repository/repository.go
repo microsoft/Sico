@@ -30,8 +30,10 @@ import (
 )
 
 type ProjectModel = model.TProject
+type ProjectFilter = dal.ProjectFilter
 type ProjectUserModel = model.TProjectUser
 type ProjectAssetModel = model.TProjectAsset
+type ProjectDeliverableModel = model.TProjectDeliverable
 
 func NewProjectRepo(db *gorm.DB) ProjectRepository {
 	return dal.NewProjectDAO(db)
@@ -66,4 +68,12 @@ type ProjectRepository interface {
 	GetProjectAsset(ctx context.Context, id int64) (*model.TProjectAsset, error)
 	GetProjectAssetListWithPagination(
 		ctx context.Context, projectID string, page, pageSize int32) ([]*model.TProjectAsset, int64, error)
+	CreateProjectDeliverable(ctx context.Context, record *model.TProjectDeliverable) (int64, error)
+	GetProjectDeliverable(ctx context.Context, id int64) (*model.TProjectDeliverable, error)
+	ListProjectDeliverables(
+		ctx context.Context, projectID int64, offset, limit int,
+	) ([]*model.TProjectDeliverable, int64, error)
+	DeleteProjectDeliverable(ctx context.Context, id int64) error
+	ListProjectMemberUsernames(ctx context.Context, projectID int64) ([]string, error)
+	ListProjects(ctx context.Context, filter *ProjectFilter, offset, limit int) ([]*ProjectModel, int64, error)
 }

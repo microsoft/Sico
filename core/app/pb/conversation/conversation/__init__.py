@@ -6,6 +6,7 @@
 __all__ = (
     "AgentInstanceInfo",
     "ConversationData",
+    "ConversationListItem",
     "CreateConversationRequest",
     "CreateConversationResponse",
 )
@@ -105,24 +106,41 @@ default_message_pool.register_message(
 
 
 @dataclass(eq=False, repr=False)
-class CreateConversationRequest(betterproto2.Message):
-    meta_data: "dict[str, str]" = betterproto2.field(
-        1,
-        betterproto2.TYPE_MAP,
-        map_meta=betterproto2.map_meta(
-            betterproto2.TYPE_STRING, betterproto2.TYPE_STRING
-        ),
-    )
+class ConversationListItem(betterproto2.Message):
+    id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
     """
-    @gotag: json:"metaData"
+    @gotag: json:"id"
     """
 
-    title: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    created_at: "int" = betterproto2.field(2, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"createdAt"
+    """
+
+    creator_username: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"creatorUsername"
+    """
+
+    title: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
     """
     @gotag: json:"title"
     """
 
-    agent_instance_id: "int" = betterproto2.field(3, betterproto2.TYPE_INT64)
+
+default_message_pool.register_message(
+    "conversation", "ConversationListItem", ConversationListItem
+)
+
+
+@dataclass(eq=False, repr=False)
+class CreateConversationRequest(betterproto2.Message):
+    title: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"title"
+    """
+
+    agent_instance_id: "int" = betterproto2.field(2, betterproto2.TYPE_INT64)
     """
     @gotag: json:"agentInstanceId" binding:"required"
     """

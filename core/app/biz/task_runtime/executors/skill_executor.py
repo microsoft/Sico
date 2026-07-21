@@ -57,6 +57,7 @@ from ..sandbox_types import (
 )
 from ..skill_loader import SkillLoader
 from ..store import RunStore
+from ..subscribers.experience_learning import on_run_terminal
 from ..time_utils import now_ms as _now_ms
 from ..workspace import workspace_layout
 from .command_backend import CommandBackend, CommandMount, CommandResult, CommandSpec, truncate_stream
@@ -125,6 +126,10 @@ class SkillExecutor:
         token = await store.claim_run(run.run_id, self.worker_id)
         result = await self._run_skill(run)
         await store.write_result(run.run_id, result, token)
+        # Trigger experience learning inline (fire-and-forget) so it fires per run
+        # regardless of the active RunStore — the run-completion event bus is not
+        # published in-process by the backend-backed store.
+        on_run_terminal(run, result)
         return result
 
     async def _run_skill(self, run: TaskRun) -> TaskResult:
@@ -290,9 +295,7 @@ def _sandbox_values_from_lease(action: ResolvedAction, sandbox_lease: SandboxLea
         # A requirement asks for an OS; any concrete lease type that can supply
         # that OS satisfies it, so match on capability, not type.
         if sandbox_lease.type not in eligible_types_for_os(required_os):
-            raise ValueError(
-                f"{requirement} requires a {required_os} sandbox, got {sandbox_lease.type}"
-            )
+            raise ValueError(f"{requirement} requires a {required_os} sandbox, got {sandbox_lease.type}")
         endpoint = _sandbox_lease_endpoint(requirement, sandbox_lease)
         if not endpoint:
             raise ValueError(f"{requirement} sandbox lease is missing endpoint")
@@ -483,7 +486,11 @@ def _run_dir(run: TaskRun) -> Path:
 
 
 def _workspace_dir(run: TaskRun) -> Path:
-    return workspace_layout().workspace_path(run.agent_instance_id, run.username)
+    return workspace_layout().workspace_path(
+        run.agent_instance_id,
+        run.username,
+        conversation_id=run.parent_conversation_id,
+    )
 
 
 def _workspace_relative_path(path: Path, workspace: Path) -> str:

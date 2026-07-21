@@ -78,3 +78,13 @@ class ReverseConversationService:
         if resp.code != 0:
             raise Exception(f"ReverseConversationService.list_user_message_by_user_agent_turn_id failed: {resp.msg}")
         return [Message.from_pb(msg) for msg in resp.data]
+
+    def update_conversation_title(self, conversation_id: int, title: str) -> None:
+        resp = self.stub.rpc_update_conversation_title(
+            pb.UpdateConversationTitleRequest(
+                conversation_id=conversation_id,
+                title=title,
+            )
+        )
+        if resp.code != 0:
+            raise Exception(f"ReverseConversationService.update_conversation_title failed: {resp.msg}")

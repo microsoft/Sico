@@ -36,6 +36,7 @@ import (
 	conversationdto "sico-backend/internal/transport/http/dto/conversation"
 	"sico-backend/internal/transport/http/middleware"
 	rgrpc "sico-backend/internal/transport/reverse_grpc/pb/conversation"
+	"sico-backend/pkg/jsoniter"
 	"sico-backend/pkg/logger"
 	"sico-backend/pkg/ptr"
 )
@@ -72,19 +73,18 @@ func (c *Service) ListMessagesByUserAndAgent(
 
 	username := middleware.MustGetUsernameFromCtx(ctx)
 
-	conversation, err := c.conversationRepo.Get(ctx, username, req.GetAgentId(), agentInstanceID)
+	conversationID, found, err := c.resolveConversationIDForMessageListing(ctx, username, req)
 	if err != nil {
 		return nil, err
 	}
-
-	if conversation == nil {
+	if !found {
 		// No conversation found, return empty list
 		return appresp.Success(&conversationdto.ListMessagesByUserAndAgentResponse{
 			Data: emptyResp,
 		}), nil
 	}
 
-	messages, hasMore, err := c.fetchMessagesForListing(ctx, conversation.ID, req, page, pageSize)
+	messages, hasMore, err := c.fetchMessagesForListing(ctx, conversationID, req, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -99,10 +99,12 @@ func (c *Service) ListMessagesByUserAndAgent(
 	// when querying history without specifying turnId,
 	// omit the current turn if there is a turn ongoing
 	if OmitMessageForOngoingTurn && req.TurnId == nil {
-		messages = c.filterOutOngoingTurn(ctx, conversation.ID, messages)
+		messages = c.filterOutOngoingTurn(ctx, conversationID, messages)
 	}
 
 	resp := buildMessageResponse(messages, hasMore)
+
+	c.enrichPlanMessageContent(ctx, resp.Messages)
 
 	return appresp.Success(&conversationdto.ListMessagesByUserAndAgentResponse{
 		Data: resp,
@@ -120,6 +122,48 @@ func normalizeMessagePagination(page, pageSize int32) (int32, int32) {
 		pageSize = 50
 	}
 	return page, pageSize
+}
+
+func (c *Service) resolveConversationIDForMessageListing(
+	ctx context.Context,
+	username string,
+	req *conversationdto.ListMessagesByUserAndAgentRequest,
+) (int64, bool, error) {
+	if req.GetConversationId() != 0 {
+		conversation, err := c.conversationRepo.GetByID(ctx, req.GetConversationId())
+		if err != nil {
+			return 0, false, err
+		}
+		if conversation == nil || conversation.CreatorUsername != username {
+			return 0, false, apperr.New(errcode.CommonNotFound, "conversation not found")
+		}
+		if conversation.AgentInstanceID != req.GetAgentInstanceId() {
+			return 0, false, apperr.New(
+				errcode.CommonInvalidParam,
+				"conversation does not belong to this user and agent instance",
+			)
+		}
+		if req.GetAgentId() != "" && conversation.AgentID != "" && conversation.AgentID != req.GetAgentId() {
+			return 0, false, apperr.New(errcode.CommonInvalidParam, "conversation does not belong to this agent")
+		}
+		return conversation.ID, true, nil
+	}
+
+	conversations, hasMore, err := c.conversationRepo.List(ctx, username, "", req.GetAgentInstanceId(), 2, 1)
+	if err != nil {
+		return 0, false, err
+	}
+	if len(conversations) == 1 && !hasMore {
+		return conversations[0].ID, true, nil
+	}
+	if len(conversations) > 1 || hasMore {
+		return 0, false, apperr.New(
+			errcode.CommonInvalidParam,
+			"conversationId is required when multiple conversations exist",
+		)
+	}
+
+	return 0, false, nil
 }
 
 func (c *Service) fetchMessagesForListing(
@@ -207,9 +251,47 @@ func (c *Service) GetUserMessageByUserAgentTurnID(
 
 	item := buildMessageItem(msg)
 
+	c.enrichPlanMessageContent(ctx, []*conversationdto.MessageItem{item})
+
 	return appresp.Success(&conversationdto.GetUserMessageByUserAgentTurnIDResponse{
 		Data: item,
 	}), nil
+}
+
+// enrichPlanMessageContent populates the Content field of plan-type messages
+// with the serialized plan JSON so the frontend can render plans inline without
+// an extra GetPlan API call.
+func (c *Service) enrichPlanMessageContent(ctx context.Context, items []*conversationdto.MessageItem) {
+	if c.chatClient == nil {
+		return
+	}
+	for _, item := range items {
+		if item == nil || item.Type != conversationdto.MessageContentType_MESSAGE_CONTENT_TYPE_PLAN {
+			continue
+		}
+		resp, err := c.chatClient.GetPlan(ctx, &conversationdto.GetPlanRequest{
+			AgentInstanceId: item.AgentInstanceId,
+			Username:        item.Username,
+			TurnId:          item.TurnId,
+			ConversationId:  item.ConversationId,
+		})
+		if err != nil {
+			logger.CtxWarn(ctx, "enrich_plan_content failed for turn_id=%d conversation_id=%d: %v",
+				item.TurnId, item.ConversationId, err)
+			continue
+		}
+		if resp == nil || resp.Data == nil {
+			continue
+		}
+		normalizePlanDeliverables(resp.Data.Plan)
+		content, err := jsoniter.MarshalString(resp.Data)
+		if err != nil {
+			logger.CtxWarn(ctx, "enrich_plan_content marshal failed for turn_id=%d: %v",
+				item.TurnId, err)
+			continue
+		}
+		item.Content = content
+	}
 }
 
 func buildMessageResponse(
@@ -281,8 +363,7 @@ func hasTaskRuntimeArtifactFieldReference(loweredContent string) bool {
 	if !strings.Contains(loweredContent, "://") && !strings.Contains(loweredContent, "/storage/") {
 		return false
 	}
-	return strings.Contains(loweredContent, "execution_summary_url") ||
-		strings.Contains(loweredContent, "summary_uri") ||
+	return strings.Contains(loweredContent, "summary_uri") ||
 		strings.Contains(loweredContent, "report_url")
 }
 
@@ -510,6 +591,7 @@ func (c *Service) deduplicatePlanMessage(
 ) (*rgrpc.CreateMessageResponse, error) {
 	existing, _, err := c.messageRepo.ListByFilter(ctx, &messagerepo.MessageFilter{
 		Username:        &message.Username,
+		ConversationId:  &message.ConversationId,
 		AgentInstanceId: &message.AgentInstanceId,
 		TurnId:          &message.TurnId,
 		ContentTypeList: []conversationdto.ChatContentType{

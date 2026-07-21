@@ -69,6 +69,8 @@ def test_adapter_description_is_generated_from_the_catalog() -> None:
     # The bullet block and the inline mention both come from the catalog.
     assert render_runtime_tool_catalog() in description
     assert runtime_tool_names_inline() in description
+    assert "instruction-only Markdown skills" in description
+    assert "chat tools such as `curl`" in description
 
 
 def test_parse_options_rejects_unsupported_direct_tool() -> None:

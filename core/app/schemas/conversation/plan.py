@@ -21,7 +21,7 @@
 from enum import Enum
 from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 import app.pb.conversation.plan as pb
 
@@ -87,28 +87,75 @@ class ToolDeliverableAcquiredSandbox(BaseModel):
         return pb_obj
 
 
+class ToolDeliverableFile(BaseModel):
+    model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
+    file_sas_url: str = Field("", alias="fileSasUrl")
+    file_name: str = Field("", alias="fileName")
+    file_uri: str = Field("", alias="fileUri")
+
+    @classmethod
+    def from_pb(cls, pb_obj: pb.ToolDeliverableFile) -> Self:
+        return cls(
+            file_sas_url=pb_obj.file_sas_url,
+            file_name=pb_obj.file_name,
+            file_uri=pb_obj.file_uri,
+        )
+
+    def to_pb(self) -> pb.ToolDeliverableFile:
+        pb_obj = pb.ToolDeliverableFile()
+        pb_obj.file_sas_url = self.file_sas_url
+        pb_obj.file_name = self.file_name
+        pb_obj.file_uri = self.file_uri
+        return pb_obj
+
+
 class ToolDeliverable(BaseModel):
     model_config = ConfigDict(validate_by_alias=True, validate_by_name=True)
     type: ToolDeliverableType = Field(ToolDeliverableType.UNKNOWN, alias="type")
     markdown_content: str = Field("", alias="markdownContent")
     markdown_title: str = Field("", alias="markdownTitle")
+    # Deprecated: use file submessage instead. Kept for backward compat with old stored JSON.
     file_url: str = Field("", alias="fileUrl")
     file_name: str = Field("", alias="fileName")
+    file: ToolDeliverableFile | None = Field(None, alias="file")
     web_preview_sas_url: str = Field("", alias="webPreviewSasUrl")
     acquired_sandbox: ToolDeliverableAcquiredSandbox = Field(
         default_factory=ToolDeliverableAcquiredSandbox, alias="acquiredSandbox"
     )
 
+    @model_validator(mode="after")
+    def _migrate_deprecated_file_fields(self) -> Self:
+        """Migrate old top-level file_url/file_name into the file submessage."""
+        if self.file is None and (self.file_url or self.file_name):
+            self.file = ToolDeliverableFile(
+                file_sas_url=self.file_url,
+                file_name=self.file_name,
+                file_uri="",
+            )
+        return self
+
     @classmethod
     def from_pb(cls, pb_obj: pb.ToolDeliverable) -> Self:
+        # Backward compat: old data has file_url/file_name at top level instead of the file submessage.
+        file = None
+        if pb_obj.file:
+            file = ToolDeliverableFile.from_pb(pb_obj.file)
+        elif pb_obj.file_url or pb_obj.file_name:
+            file = ToolDeliverableFile(
+                file_sas_url=pb_obj.file_url,
+                file_name=pb_obj.file_name,
+                file_uri="",
+            )
+
         return cls(
             type=ToolDeliverableType.from_pb(pb_obj.type),
             markdown_content=pb_obj.markdown_content,
             markdown_title=pb_obj.markdown_title,
-            file_url=pb_obj.file_url,
-            file_name=pb_obj.file_name,
+            file=file,
             web_preview_sas_url=pb_obj.web_preview_sas_url,
-            acquired_sandbox=ToolDeliverableAcquiredSandbox.from_pb(pb_obj.acquired_sandbox) if pb_obj.acquired_sandbox else None,
+            acquired_sandbox=ToolDeliverableAcquiredSandbox.from_pb(pb_obj.acquired_sandbox)
+            if pb_obj.acquired_sandbox
+            else ToolDeliverableAcquiredSandbox(),
         )
 
     def to_pb(self) -> pb.ToolDeliverable:
@@ -116,8 +163,8 @@ class ToolDeliverable(BaseModel):
         pb_obj.type = self.type.to_pb()
         pb_obj.markdown_content = self.markdown_content
         pb_obj.markdown_title = self.markdown_title
-        pb_obj.file_url = self.file_url
-        pb_obj.file_name = self.file_name
+        if self.file:
+            pb_obj.file = self.file.to_pb()
         pb_obj.web_preview_sas_url = self.web_preview_sas_url
         if self.acquired_sandbox:
             pb_obj.acquired_sandbox = self.acquired_sandbox.to_pb()

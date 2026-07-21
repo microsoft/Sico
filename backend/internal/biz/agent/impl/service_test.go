@@ -22,7 +22,6 @@ package impl
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -206,11 +205,6 @@ func TestCreateSingleAgentInstance(t *testing.T) {
 		stored, err := instanceRepo.Get(context.Background(), id)
 		require.NoError(t, err)
 		assert.Equal(t, "Instance 1", stored.Name)
-
-		// Verify project membership was ensured
-		require.Len(t, projectRepo.added, 1)
-		assert.Equal(t, int64(10), projectRepo.added[0].ProjectID)
-		assert.Equal(t, "user1", projectRepo.added[0].Username)
 	})
 
 	t.Run("nil instance", func(t *testing.T) {
@@ -345,62 +339,4 @@ func TestObtainInstantiatedAgent(t *testing.T) {
 		assert.Equal(t, "Base Agent", result.MergedAgent.Name)
 		assert.Equal(t, "Base desc", result.MergedAgent.Desc)
 	})
-}
-
-func TestEnsureOperatorProjectMembership(t *testing.T) {
-	projectRepo := &mockProjectRepo{}
-	svc := newTestService(nil, nil, projectRepo)
-
-	t.Run("skips when no project or operator", func(t *testing.T) {
-		err := svc.ensureOperatorProjectMembership(context.Background(), makeInstance(1, "a1", "I"))
-		require.NoError(t, err)
-		assert.Empty(t, projectRepo.added)
-	})
-
-	t.Run("adds membership", func(t *testing.T) {
-		inst := makeInstance(1, "a1", "I")
-		inst.ProjectId = 5
-		inst.OperatorUsername = "bob"
-		err := svc.ensureOperatorProjectMembership(context.Background(), inst)
-		require.NoError(t, err)
-		require.Len(t, projectRepo.added, 1)
-		assert.Equal(t, "bob", projectRepo.added[0].Username)
-	})
-
-	t.Run("duplicate key is ignored", func(t *testing.T) {
-		dupeRepo := &mockProjectRepoWithDuplicateError{}
-		dupeSvc := NewService(&Components{ProjectRepo: dupeRepo}, nil)
-		inst := makeInstance(1, "a1", "I")
-		inst.ProjectId = 5
-		inst.OperatorUsername = "bob"
-		err := dupeSvc.ensureOperatorProjectMembership(context.Background(), inst)
-		require.NoError(t, err)
-	})
-}
-
-type mockProjectRepoWithDuplicateError struct {
-	projectrepo.ProjectRepository
-}
-
-func (m *mockProjectRepoWithDuplicateError) AddProjectUser(_ context.Context, _ *projectrepo.ProjectUserModel) error {
-	return gorm.ErrDuplicatedKey
-}
-
-func TestEnsureOperatorProjectMembership_RepoError(t *testing.T) {
-	errRepo := &mockProjectRepoWithError{}
-	svc := NewService(&Components{ProjectRepo: errRepo}, nil)
-
-	inst := makeInstance(1, "a1", "I")
-	inst.ProjectId = 5
-	inst.OperatorUsername = "bob"
-	err := svc.ensureOperatorProjectMembership(context.Background(), inst)
-	require.Error(t, err)
-}
-
-type mockProjectRepoWithError struct {
-	projectrepo.ProjectRepository
-}
-
-func (m *mockProjectRepoWithError) AddProjectUser(_ context.Context, _ *projectrepo.ProjectUserModel) error {
-	return errors.New("db connection failed")
 }

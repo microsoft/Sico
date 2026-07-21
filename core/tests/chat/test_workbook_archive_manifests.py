@@ -183,12 +183,13 @@ def test_prior_workbook_reference_uses_turn_store_for_generic_sheet_name(tmp_pat
     )
     monkeypatch.setattr(
         "app.biz.chat.adapters.workbook.manifests.CHAT_FS.get_workspace_path",
-        lambda _agent_instance_id, _username: workspace,
+        lambda _agent_instance_id, _username, _conversation_id: workspace,
     )
 
     assert is_prior_workbook_execution_reference(
         agent_instance_id=1,
         username="alice",
+        conversation_id=22,
         current_turn_id=11,
         message="跑 用户数据",
     )

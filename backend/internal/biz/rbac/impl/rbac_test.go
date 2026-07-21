@@ -30,11 +30,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/errcode"
+	"sico-backend/internal/shared/apperr"
 	rolerepo "sico-backend/internal/store/rbac/repository"
 	rbacCommon "sico-backend/internal/transport/http/dto/rbac/common"
-	"sico-backend/internal/transport/http/dto/rbac/role"
 	"sico-backend/internal/transport/http/dto/rbac/token"
 	"sico-backend/internal/transport/http/dto/rbac/user"
 	"sico-backend/internal/transport/http/dto/rbac/user_role"
@@ -97,44 +96,12 @@ func (m *mockUserRepo) QueryUsers(
 func (m *mockUserRepo) UpdatePassword(ctx context.Context, id int64, pw string) error {
 	return m.Called(ctx, id, pw).Error(0)
 }
-
-type mockRoleRepo struct{ mock.Mock }
-
-func (m *mockRoleRepo) CreateRole(ctx context.Context, r *rolerepo.RoleModel) error {
-	args := m.Called(ctx, r)
-	if r != nil && args.Error(0) == nil {
-		r.ID = 10
-	}
-	return args.Error(0)
-}
-func (m *mockRoleRepo) UpdateRole(ctx context.Context, r *rolerepo.RoleModel) error {
-	return m.Called(ctx, r).Error(0)
-}
-func (m *mockRoleRepo) DeleteRole(ctx context.Context, id int64) error {
-	return m.Called(ctx, id).Error(0)
-}
-func (m *mockRoleRepo) GetRole(ctx context.Context, id int64) (*rolerepo.RoleModel, error) {
-	args := m.Called(ctx, id)
+func (m *mockUserRepo) GetUsersByIDs(ctx context.Context, ids []int64) ([]*rolerepo.UserModel, error) {
+	args := m.Called(ctx, ids)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*rolerepo.RoleModel), args.Error(1)
-}
-func (m *mockRoleRepo) GetRoleByCode(ctx context.Context, code string) (*rolerepo.RoleModel, error) {
-	args := m.Called(ctx, code)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*rolerepo.RoleModel), args.Error(1)
-}
-func (m *mockRoleRepo) QueryRoles(
-	ctx context.Context, code, name string, status *int32, page, pageSize int32,
-) ([]*rolerepo.RoleModel, int64, error) {
-	args := m.Called(ctx, code, name, status, page, pageSize)
-	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
-	}
-	return args.Get(0).([]*rolerepo.RoleModel), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*rolerepo.UserModel), args.Error(1)
 }
 
 type mockUserRoleRepo struct{ mock.Mock }
@@ -142,26 +109,15 @@ type mockUserRoleRepo struct{ mock.Mock }
 func (m *mockUserRoleRepo) Assign(ctx context.Context, ur *rolerepo.UserRoleModel) error {
 	return m.Called(ctx, ur).Error(0)
 }
-func (m *mockUserRoleRepo) Remove(ctx context.Context, userID, roleID int64) error {
-	return m.Called(ctx, userID, roleID).Error(0)
+func (m *mockUserRoleRepo) Remove(ctx context.Context, userID int64, roleCode, scopeType string, scopeID int64) error {
+	return m.Called(ctx, userID, roleCode, scopeType, scopeID).Error(0)
 }
-func (m *mockUserRoleRepo) ListRolesByUser(
-	ctx context.Context, userID int64, page, pageSize int32,
-) ([]*rolerepo.RoleModel, int64, error) {
-	args := m.Called(ctx, userID, page, pageSize)
+func (m *mockUserRoleRepo) List(ctx context.Context, filter *rolerepo.UserRoleFilter) ([]*rolerepo.UserRoleModel, int64, error) {
+	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)
 	}
-	return args.Get(0).([]*rolerepo.RoleModel), args.Get(1).(int64), args.Error(2)
-}
-func (m *mockUserRoleRepo) ListUsersByRole(
-	ctx context.Context, roleID int64, page, pageSize int32,
-) ([]*rolerepo.UserModel, int64, error) {
-	args := m.Called(ctx, roleID, page, pageSize)
-	if args.Get(0) == nil {
-		return nil, 0, args.Error(2)
-	}
-	return args.Get(0).([]*rolerepo.UserModel), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]*rolerepo.UserRoleModel), args.Get(1).(int64), args.Error(2)
 }
 
 type mockCasbinRepo struct{ mock.Mock }
@@ -226,28 +182,26 @@ type stubTokenInfo struct {
 	expiresAt   int64
 }
 
-func (s *stubTokenInfo) GetAccessToken() string          { return s.accessToken }
-func (s *stubTokenInfo) GetTokenType() string            { return s.tokenType }
-func (s *stubTokenInfo) GetExpiresAt() int64             { return s.expiresAt }
-func (s *stubTokenInfo) EncodeToJSON() ([]byte, error)   { return nil, nil }
+func (s *stubTokenInfo) GetAccessToken() string        { return s.accessToken }
+func (s *stubTokenInfo) GetTokenType() string          { return s.tokenType }
+func (s *stubTokenInfo) GetExpiresAt() int64           { return s.expiresAt }
+func (s *stubTokenInfo) EncodeToJSON() ([]byte, error) { return nil, nil }
 
 // ─── helpers ────────────────────────────────────────────────────────────────────
 
-func newTestService() (*Service, *mockUserRepo, *mockRoleRepo, *mockUserRoleRepo, *mockCasbinRepo, *mockAuther) {
+func newTestService() (*Service, *mockUserRepo, *mockUserRoleRepo, *mockCasbinRepo, *mockAuther) {
 	ur := new(mockUserRepo)
-	rr := new(mockRoleRepo)
 	urr := new(mockUserRoleRepo)
 	cr := new(mockCasbinRepo)
 	auth := new(mockAuther)
 
 	svc := NewService(&Components{
 		UserRepo:     ur,
-		RoleRepo:     rr,
 		UserRoleRepo: urr,
 		CasbinRepo:   cr,
 	}, auth)
 
-	return svc, ur, rr, urr, cr, auth
+	return svc, ur, urr, cr, auth
 }
 
 func hashedPassword(pw string) string {
@@ -313,7 +267,7 @@ func TestCreateUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, ur, _, _, _, _ := newTestService()
+			svc, ur, _, _, _ := newTestService()
 			if tt.setup != nil {
 				tt.setup(ur)
 			}
@@ -382,7 +336,7 @@ func TestUpdateUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, ur, _, _, _, _ := newTestService()
+			svc, ur, _, _, _ := newTestService()
 			if tt.setup != nil {
 				tt.setup(ur)
 			}
@@ -404,20 +358,20 @@ func TestUpdateUser(t *testing.T) {
 
 func TestDeleteUser(t *testing.T) {
 	t.Run("nil request", func(t *testing.T) {
-		svc, _, _, _, _, _ := newTestService()
+		svc, _, _, _, _ := newTestService()
 		_, err := svc.DeleteUser(context.Background(), nil)
 		require.Error(t, err)
 	})
 
 	t.Run("user not found", func(t *testing.T) {
-		svc, ur, _, _, _, _ := newTestService()
+		svc, ur, _, _, _ := newTestService()
 		ur.On("GetUserByID", mock.Anything, int64(99)).Return(nil, gorm.ErrRecordNotFound)
 		_, err := svc.DeleteUser(context.Background(), &user.DeleteUserRequest{Id: 99})
 		require.Error(t, err)
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc, ur, _, _, _, _ := newTestService()
+		svc, ur, _, _, _ := newTestService()
 		ur.On("GetUserByID", mock.Anything, int64(1)).Return(&rolerepo.UserModel{ID: 1}, nil)
 		ur.On("DeleteUser", mock.Anything, int64(1)).Return(nil)
 		resp, err := svc.DeleteUser(context.Background(), &user.DeleteUserRequest{Id: 1})
@@ -430,22 +384,27 @@ func TestDeleteUser(t *testing.T) {
 
 func TestGetUser(t *testing.T) {
 	t.Run("empty username", func(t *testing.T) {
-		svc, _, _, _, _, _ := newTestService()
+		svc, _, _, _, _ := newTestService()
 		_, err := svc.GetUser(context.Background(), &user.GetUserRequest{Username: ""})
 		require.Error(t, err)
 	})
 
 	t.Run("success with roles", func(t *testing.T) {
-		svc, ur, _, urr, _, _ := newTestService()
+		svc, ur, urr, _, _ := newTestService()
 		ur.On("GetUserByUsername", mock.Anything, "alice").
 			Return(&rolerepo.UserModel{ID: 1, Username: "alice", Alias_: "Alice", Email: "a@b.com", Status: 1}, nil)
-		urr.On("ListRolesByUser", mock.Anything, int64(1), mock.Anything, mock.Anything).
-			Return([]*rolerepo.RoleModel{{ID: 10, Code: "admin"}}, int64(1), nil)
+		urr.On("List", mock.Anything, mock.Anything).
+			Return([]*rolerepo.UserRoleModel{{
+				ID: 1, UserID: 1, RoleCode: "project_admin", ScopeType: "project", ScopeID: 1,
+			}}, int64(1), nil)
 
 		resp, err := svc.GetUser(context.Background(), &user.GetUserRequest{Username: "alice"})
 		require.NoError(t, err)
 		assert.Equal(t, "alice", resp.Data.User.Username)
-		assert.Contains(t, resp.Data.User.Roles, "admin")
+		require.Len(t, resp.Data.User.Roles, 1)
+		assert.Equal(t, "project_admin", resp.Data.User.Roles[0].RoleCode)
+		assert.Equal(t, "project", resp.Data.User.Roles[0].ScopeType)
+		assert.Equal(t, int64(1), resp.Data.User.Roles[0].ScopeId)
 	})
 }
 
@@ -453,7 +412,7 @@ func TestGetUser(t *testing.T) {
 
 func TestQueryUsers(t *testing.T) {
 	t.Run("success with pagination", func(t *testing.T) {
-		svc, ur, _, _, _, _ := newTestService()
+		svc, ur, _, _, _ := newTestService()
 		ur.On("QueryUsers", mock.Anything, mock.Anything, int32(1), int32(10)).
 			Return([]*rolerepo.UserModel{
 				{ID: 1, Username: "alice", Alias_: "Alice"},
@@ -467,7 +426,7 @@ func TestQueryUsers(t *testing.T) {
 	})
 
 	t.Run("defaults page and pageSize", func(t *testing.T) {
-		svc, ur, _, _, _, _ := newTestService()
+		svc, ur, _, _, _ := newTestService()
 		ur.On("QueryUsers", mock.Anything, mock.Anything, int32(1), int32(10)).
 			Return([]*rolerepo.UserModel{}, int64(0), nil)
 
@@ -541,8 +500,10 @@ func TestLogin(t *testing.T) {
 					Return(&rolerepo.UserModel{
 						ID: 1, Username: "alice", Email: "a@b.com", Password: pw, Status: 1,
 					}, nil)
-				urr.On("ListRolesByUser", mock.Anything, int64(1), mock.Anything, mock.Anything).
-					Return([]*rolerepo.RoleModel{{Name: "admin", Code: "admin"}}, int64(1), nil)
+				urr.On("List", mock.Anything, mock.Anything).
+					Return([]*rolerepo.UserRoleModel{{
+						ID: 1, UserID: 1, RoleCode: "project_admin",
+					}}, int64(1), nil)
 				auth.On("GenerateToken", mock.Anything, mock.MatchedBy(func(info *jwtx.UserInfo) bool {
 					return info.Name == "alice"
 				})).Return(&stubTokenInfo{accessToken: "jwt-token", tokenType: "Bearer", expiresAt: 9999}, nil)
@@ -552,7 +513,7 @@ func TestLogin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, ur, _, urr, _, auth := newTestService()
+			svc, ur, urr, _, auth := newTestService()
 			if tt.setup != nil {
 				tt.setup(ur, urr, auth)
 			}
@@ -580,7 +541,7 @@ func TestLogin(t *testing.T) {
 
 func TestLogout(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		svc, _, _, _, _, auth := newTestService()
+		svc, _, _, _, auth := newTestService()
 		auth.On("DestroyToken", mock.Anything, "tok").Return(nil)
 		resp, err := svc.Logout(context.Background(), "tok")
 		require.NoError(t, err)
@@ -588,7 +549,7 @@ func TestLogout(t *testing.T) {
 	})
 
 	t.Run("destroy error propagates", func(t *testing.T) {
-		svc, _, _, _, _, auth := newTestService()
+		svc, _, _, _, auth := newTestService()
 		auth.On("DestroyToken", mock.Anything, "tok").Return(errors.New("redis down"))
 		_, err := svc.Logout(context.Background(), "tok")
 		require.Error(t, err)
@@ -599,7 +560,7 @@ func TestLogout(t *testing.T) {
 
 func TestRefreshToken(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		svc, _, _, _, _, auth := newTestService()
+		svc, _, _, _, auth := newTestService()
 		auth.On("DestroyToken", mock.Anything, "old").Return(nil)
 		auth.On("GenerateToken", mock.Anything, mock.Anything).
 			Return(&stubTokenInfo{accessToken: "new-jwt", tokenType: "Bearer", expiresAt: 9999}, nil)
@@ -610,7 +571,7 @@ func TestRefreshToken(t *testing.T) {
 	})
 
 	t.Run("old token destroy failure is non-blocking", func(t *testing.T) {
-		svc, _, _, _, _, auth := newTestService()
+		svc, _, _, _, auth := newTestService()
 		auth.On("DestroyToken", mock.Anything, "old").Return(errors.New("fail"))
 		auth.On("GenerateToken", mock.Anything, mock.Anything).
 			Return(&stubTokenInfo{accessToken: "new"}, nil)
@@ -627,13 +588,13 @@ func TestResetPassword(t *testing.T) {
 	pw := hashedPassword("old-pw")
 
 	t.Run("nil request", func(t *testing.T) {
-		svc, _, _, _, _, _ := newTestService()
+		svc, _, _, _, _ := newTestService()
 		_, err := svc.ResetPassword(context.Background(), nil)
 		require.Error(t, err)
 	})
 
 	t.Run("incorrect old password", func(t *testing.T) {
-		svc, ur, _, _, _, _ := newTestService()
+		svc, ur, _, _, _ := newTestService()
 		ur.On("GetUserByID", mock.Anything, int64(1)).
 			Return(&rolerepo.UserModel{ID: 1, Password: pw}, nil)
 
@@ -647,7 +608,7 @@ func TestResetPassword(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc, ur, _, _, _, _ := newTestService()
+		svc, ur, _, _, _ := newTestService()
 		ur.On("GetUserByID", mock.Anything, int64(1)).
 			Return(&rolerepo.UserModel{ID: 1, Password: pw}, nil)
 		ur.On("UpdatePassword", mock.Anything, int64(1), mock.Anything).Return(nil)
@@ -661,124 +622,23 @@ func TestResetPassword(t *testing.T) {
 
 // ─── CreateRole ─────────────────────────────────────────────────────────────────
 
-func TestCreateRole(t *testing.T) {
-	t.Run("nil request", func(t *testing.T) {
-		svc, _, _, _, _, _ := newTestService()
-		_, err := svc.CreateRole(context.Background(), nil)
-		require.Error(t, err)
-	})
-
-	t.Run("duplicate code", func(t *testing.T) {
-		svc, _, rr, _, _, _ := newTestService()
-		rr.On("GetRoleByCode", mock.Anything, "admin").
-			Return(&rolerepo.RoleModel{ID: 1, Code: "admin"}, nil)
-
-		_, err := svc.CreateRole(context.Background(), &role.CreateRoleRequest{Code: "admin"})
-		require.Error(t, err)
-		ae, _ := apperr.As(err)
-		assert.Equal(t, errcode.RBACRoleCodeAlreadyExists, ae.Code())
-	})
-
-	t.Run("success", func(t *testing.T) {
-		svc, _, rr, _, _, _ := newTestService()
-		rr.On("GetRoleByCode", mock.Anything, "editor").Return(nil, gorm.ErrRecordNotFound)
-		rr.On("CreateRole", mock.Anything, mock.Anything).Return(nil)
-
-		resp, err := svc.CreateRole(context.Background(), &role.CreateRoleRequest{Code: "editor", Name: "Editor"})
-		require.NoError(t, err)
-		assert.Greater(t, resp.Data.Id, int64(0))
-	})
-}
-
-// ─── UpdateRole ─────────────────────────────────────────────────────────────────
-
-func TestUpdateRole(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
-		svc, _, rr, _, _, _ := newTestService()
-		rr.On("GetRole", mock.Anything, int64(99)).Return(nil, gorm.ErrRecordNotFound)
-
-		_, err := svc.UpdateRole(context.Background(), &role.UpdateRoleRequest{Id: 99, Name: "x"})
-		require.Error(t, err)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		svc, _, rr, _, _, _ := newTestService()
-		rr.On("GetRole", mock.Anything, int64(1)).Return(&rolerepo.RoleModel{ID: 1, Name: "Old"}, nil)
-		rr.On("UpdateRole", mock.Anything, mock.MatchedBy(func(r *rolerepo.RoleModel) bool {
-			return r.Name == "New"
-		})).Return(nil)
-
-		_, err := svc.UpdateRole(context.Background(), &role.UpdateRoleRequest{Id: 1, Name: "New"})
-		require.NoError(t, err)
-	})
-}
-
-// ─── DeleteRole ─────────────────────────────────────────────────────────────────
-
-func TestDeleteRole(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
-		svc, _, rr, _, _, _ := newTestService()
-		rr.On("GetRole", mock.Anything, int64(99)).Return(nil, gorm.ErrRecordNotFound)
-		_, err := svc.DeleteRole(context.Background(), &role.DeleteRoleRequest{Id: 99})
-		require.Error(t, err)
-	})
-
-	t.Run("success without enforcer", func(t *testing.T) {
-		svc, _, rr, _, _, _ := newTestService()
-		rr.On("GetRole", mock.Anything, int64(1)).Return(&rolerepo.RoleModel{ID: 1}, nil)
-		rr.On("DeleteRole", mock.Anything, int64(1)).Return(nil)
-
-		_, err := svc.DeleteRole(context.Background(), &role.DeleteRoleRequest{Id: 1})
-		require.NoError(t, err)
-	})
-}
-
 // ─── AssignUserRole ─────────────────────────────────────────────────────────────
 
 func TestAssignUserRole(t *testing.T) {
-	t.Run("missing ids", func(t *testing.T) {
-		svc, _, _, _, _, _ := newTestService()
-		_, err := svc.AssignUserRole(context.Background(), &user_role.AssignUserRoleRequest{UserId: 0, RoleId: 1})
+	t.Run("missing fields", func(t *testing.T) {
+		svc, _, _, _, _ := newTestService()
+		_, err := svc.AssignUserRole(context.Background(), &user_role.AssignUserRoleRequest{UserId: 0, RoleCode: "admin"})
 		require.Error(t, err)
-	})
-
-	t.Run("already assigned", func(t *testing.T) {
-		svc, ur, rr, urr, _, _ := newTestService()
-		ur.On("GetUserByID", mock.Anything, int64(1)).Return(&rolerepo.UserModel{ID: 1, Username: "alice"}, nil)
-		rr.On("GetRole", mock.Anything, int64(10)).Return(&rolerepo.RoleModel{ID: 10, Code: "admin"}, nil)
-		urr.On("ListRolesByUser", mock.Anything, int64(1), int32(1), int32(1000)).
-			Return([]*rolerepo.RoleModel{{ID: 10, Code: "admin"}}, int64(1), nil)
-
-		_, err := svc.AssignUserRole(context.Background(), &user_role.AssignUserRoleRequest{UserId: 1, RoleId: 10})
-		require.Error(t, err)
-		ae, _ := apperr.As(err)
-		assert.Equal(t, errcode.RBACRoleAlreadyAssigned, ae.Code())
-	})
-
-	t.Run("success", func(t *testing.T) {
-		svc, ur, rr, urr, _, _ := newTestService()
-		ur.On("GetUserByID", mock.Anything, int64(1)).Return(&rolerepo.UserModel{ID: 1, Username: "alice"}, nil)
-		rr.On("GetRole", mock.Anything, int64(10)).Return(&rolerepo.RoleModel{ID: 10, Code: "admin"}, nil)
-		urr.On("ListRolesByUser", mock.Anything, int64(1), int32(1), int32(1000)).
-			Return([]*rolerepo.RoleModel{}, int64(0), nil)
-		urr.On("Assign", mock.Anything, mock.Anything).Return(nil)
-
-		_, err := svc.AssignUserRole(
-			context.Background(),
-			&user_role.AssignUserRoleRequest{UserId: 1, RoleId: 10},
-		)
-		require.NoError(t, err)
 	})
 }
 
 // ─── RemoveUserRole ─────────────────────────────────────────────────────────────
 
 func TestRemoveUserRole(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc, _, _, urr, _, _ := newTestService()
-		urr.On("Remove", mock.Anything, int64(1), int64(10)).Return(nil)
-		_, err := svc.RemoveUserRole(context.Background(), &user_role.RemoveUserRoleRequest{UserId: 1, RoleId: 10})
-		require.NoError(t, err)
+	t.Run("missing fields", func(t *testing.T) {
+		svc, _, _, _, _ := newTestService()
+		_, err := svc.RemoveUserRole(context.Background(), &user_role.RemoveUserRoleRequest{UserId: 0, RoleCode: ""})
+		require.Error(t, err)
 	})
 }
 
@@ -786,9 +646,11 @@ func TestRemoveUserRole(t *testing.T) {
 
 func TestListUserRoles(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		svc, _, _, urr, _, _ := newTestService()
-		urr.On("ListRolesByUser", mock.Anything, int64(1), int32(1), int32(20)).
-			Return([]*rolerepo.RoleModel{{ID: 10, Code: "admin", Name: "Admin"}}, int64(1), nil)
+		svc, _, urr, _, _ := newTestService()
+		urr.On("List", mock.Anything, mock.Anything).
+			Return([]*rolerepo.UserRoleModel{{
+				ID: 1, UserID: 1, RoleCode: "project_admin", ScopeType: "project", ScopeID: 1,
+			}}, int64(1), nil)
 
 		resp, err := svc.ListUserRoles(
 			context.Background(),
@@ -796,24 +658,7 @@ func TestListUserRoles(t *testing.T) {
 		)
 		require.NoError(t, err)
 		assert.Len(t, resp.Data.Roles, 1)
-		assert.Equal(t, "admin", resp.Data.Roles[0].Code)
-	})
-}
-
-// ─── QueryRoles ─────────────────────────────────────────────────────────────────
-
-func TestQueryRoles(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc, _, rr, _, _, _ := newTestService()
-		rr.On("QueryRoles", mock.Anything, "", "", mock.Anything, int32(1), int32(20)).
-			Return([]*rolerepo.RoleModel{
-				{ID: 1, Code: "admin", Name: "Admin"},
-				{ID: 2, Code: "user", Name: "User"},
-			}, int64(2), nil)
-
-		resp, err := svc.QueryRoles(context.Background(), &role.QueryRolesRequest{Page: 1, PageSize: 20})
-		require.NoError(t, err)
-		assert.Len(t, resp.Data.Roles, 2)
+		assert.Equal(t, "project_admin", resp.Data.Roles[0].RoleCode)
 	})
 }
 
@@ -863,18 +708,6 @@ func TestPolicyHelpers(t *testing.T) {
 // ─── converter helpers ──────────────────────────────────────────────────────────
 
 func TestConverters(t *testing.T) {
-	t.Run("rolePo2Pb", func(t *testing.T) {
-		po := &rolerepo.RoleModel{
-			ID: 1, Code: "admin", Name: "Admin", Description: "desc",
-			Status: 1, CreatedAt: 1000, UpdatedAt: 2000,
-		}
-		pb := rolePo2Pb(po)
-		assert.Equal(t, int64(1), pb.Id)
-		assert.Equal(t, "admin", pb.Code)
-		assert.Equal(t, int64(1), pb.CreatedAt)   // 1000/1000
-		assert.Equal(t, int64(2), pb.UpdatedAt)
-	})
-
 	t.Run("casbinRulePo2Pb", func(t *testing.T) {
 		po := &rolerepo.PolicyModel{ID: 5, Ptype: "p", V0: "admin", V1: "/api", V2: "GET"}
 		pb := casbinRulePo2Pb(po)
@@ -893,7 +726,7 @@ func TestConverters(t *testing.T) {
 		assert.Equal(t, "Alice", do.Alias)
 		assert.Equal(t, "icon.png", do.IconUri)
 		assert.Equal(t, "icon.png", do.RawIconUri)
-		assert.Equal(t, int64(5), do.CreatedAt)  // 5000/1000
+		assert.Equal(t, int64(5), do.CreatedAt) // 5000/1000
 		assert.Equal(t, rbacCommon.UserStatus(1), do.Status)
 	})
 }

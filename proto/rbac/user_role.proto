@@ -23,34 +23,38 @@ package user_role;
 
 option go_package = "sico-backend/internal/transport/http/dto/rbac/user_role";
 
-import "rbac/role.proto";
 import "rbac/rbac_common.proto";
 
 // UserRole assignment view
 message UserRole {
-  int64 id = 1;            // @gotag: json:"id"
-  int64 user_id = 2;       // @gotag: json:"userId"
-  int64 role_id = 3;       // @gotag: json:"roleId"
-  int64 created_at = 4;    // @gotag: json:"createdAt"
-  int64 updated_at = 5;    // @gotag: json:"updatedAt"
-  role.Role role = 6;      // @gotag: json:"role"
-  common.User user = 7;    // @gotag: json:"user"
+  int64 id = 1;              // @gotag: json:"id"
+  int64 user_id = 2;         // @gotag: json:"userId"
+  string role_code = 3;      // @gotag: json:"roleCode"
+  string scope_type = 4;     // @gotag: json:"scopeType"
+  int64 scope_id = 5;        // @gotag: json:"scopeId"
+  int64 created_at = 6;      // @gotag: json:"createdAt"
+  int64 updated_at = 7;      // @gotag: json:"updatedAt"
+  common.User user = 8;      // @gotag: json:"user"
 }
 
-// Assign role to user
+// Assign role to user within a scope
 message AssignUserRoleRequest {
-  int64 user_id = 1; // @gotag: json:"userId" binding:"required"
-  int64 role_id = 2; // @gotag: json:"roleId" binding:"required"
+  int64 user_id = 1;         // @gotag: json:"userId" binding:"required"
+  string role_code = 2;      // @gotag: json:"roleCode" binding:"required"
+  string scope_type = 3;     // @gotag: json:"scopeType" binding:"required,oneof=platform org project"
+  int64 scope_id = 4;        // @gotag: json:"scopeId"
 }
 message AssignUserRoleResponse {
   int32 code = 253; // @gotag: json:"code"
   string msg = 254; // @gotag: json:"msg"
 }
 
-// Remove role from user
+// Remove role from user within a scope
 message RemoveUserRoleRequest {
-  int64 user_id = 1; // @gotag: json:"userId" binding:"required"
-  int64 role_id = 2; // @gotag: json:"roleId" binding:"required"
+  int64 user_id = 1;         // @gotag: json:"userId" binding:"required"
+  string role_code = 2;      // @gotag: json:"roleCode" binding:"required"
+  string scope_type = 3;     // @gotag: json:"scopeType" binding:"required,oneof=platform org project"
+  int64 scope_id = 4;        // @gotag: json:"scopeId"
 }
 message RemoveUserRoleResponse {
   int32 code = 253; // @gotag: json:"code"
@@ -64,7 +68,7 @@ message ListUserRolesRequest {
   int32 page_size = 3; // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
 }
 message ListUserRolesResponseData {
-  repeated role.Role roles = 1; // @gotag: json:"roles"
+  repeated UserRole roles = 1;  // @gotag: json:"roles"
   int32 total = 2;              // @gotag: json:"total"
   bool has_next = 3;            // @gotag: json:"hasNext"
 }
@@ -74,11 +78,13 @@ message ListUserRolesResponse {
   string msg = 254;                  // @gotag: json:"msg"
 }
 
-// List users by role
+// List users by role within a scope
 message ListUsersByRoleRequest {
-  int64 role_id = 1; // @gotag: form:"roleId" binding:"required"
-  int32 page = 2;    // @gotag: form:"page" binding:"min=1" default:"1"
-  int32 page_size = 3; // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+  string role_code = 1;      // @gotag: form:"roleCode" binding:"required"
+  string scope_type = 2;     // @gotag: form:"scopeType" binding:"required,oneof=platform org project"
+  int64 scope_id = 3;        // @gotag: form:"scopeId"
+  int32 page = 4;            // @gotag: form:"page" binding:"min=1" default:"1"
+  int32 page_size = 5;       // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
 }
 message ListUsersByRoleResponseData {
   repeated common.User users = 1; // @gotag: json:"users"

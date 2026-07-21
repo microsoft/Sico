@@ -51,15 +51,23 @@ const (
 
 const (
 	// LLMHub (110100-110199)
-	LLMHubRuntimeFailed  int32 = 110103
-	LLMHubInvalidConfig  int32 = 110104
-	LLMHubInvalidStatus  int32 = 110105
+	LLMHubRuntimeFailed int32 = 110103
+	LLMHubInvalidConfig int32 = 110104
+	LLMHubInvalidStatus int32 = 110105
 )
 
 const (
 	// Sandbox (112000-112999)
-	SandboxNoAvailableResource int32 = 112001
-	SandboxLeaseNotFound       int32 = 112002
-	SandboxProviderUnavailable int32 = 112003
-	SandboxResetFailed         int32 = 112004
+	SandboxNoAvailableResource      int32 = 112001
+	SandboxLeaseNotFound            int32 = 112002
+	SandboxProviderUnavailable      int32 = 112003
+	SandboxResetFailed              int32 = 112004
+	SandboxAlreadyAssignedToOrg     int32 = 112010
+	SandboxNotAssignedToOrg         int32 = 112011
+	SandboxHasProjectBindings       int32 = 112012
+	SandboxAlreadyAssignedToProject int32 = 112013
+	SandboxNotAssignedToProject     int32 = 112014
+	SandboxNotInOrg                 int32 = 112015
+	SandboxHasInstanceBindings      int32 = 112016
+	SandboxProjectMismatch          int32 = 112017
 )

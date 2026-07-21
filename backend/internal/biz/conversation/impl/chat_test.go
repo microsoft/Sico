@@ -30,6 +30,7 @@ import (
 
 	"sico-backend/internal/biz/agent"
 	singleagententity "sico-backend/internal/entity/agent/singleagent"
+	conventity "sico-backend/internal/entity/conversation/conversation"
 	"sico-backend/internal/infra/eventbus"
 	"sico-backend/internal/infra/sse"
 	conversationrpc "sico-backend/internal/transport/grpc/pb/conversation"
@@ -45,7 +46,6 @@ const (
 type mockChatClient struct {
 	conversationrpc.ChatServiceClient
 	mockEventBus *eventbus.MockEventBus
-	callOpts     []grpc.CallOption
 }
 
 func (m *mockChatClient) StreamChat(
@@ -53,8 +53,6 @@ func (m *mockChatClient) StreamChat(
 	in *conversationdto.ChatRequest,
 	opts ...grpc.CallOption,
 ) (*conversationdto.ChatDirectResponse, error) {
-	m.callOpts = append([]grpc.CallOption(nil), opts...)
-
 	chatResponses := []*conversationdto.ChatResponse{
 		{
 			Content: &conversationdto.ChatContent{
@@ -122,6 +120,67 @@ func (m *mockAgentService) GetSingleAgent(
 	}, nil
 }
 
+func TestResolveChatConversationUsesExplicitConversationID(t *testing.T) {
+	service := newTestConversationService()
+	ctx := ctxWithUser("alice")
+	conv, err := service.conversationRepo.Create(ctx, &conventity.Conversation{
+		CreatorUsername: "alice",
+		AgentID:         "agent-123",
+		AgentInstanceID: 42,
+	})
+	require.NoError(t, err)
+
+	resolved, err := service.resolveChatConversation(ctx, "agent-123", 42, "alice", conv.ID)
+
+	require.NoError(t, err)
+	require.Equal(t, conv.ID, resolved.ID)
+}
+
+func TestResolveChatConversationCreatesWhenMissingForLegacyClient(t *testing.T) {
+	service := newTestConversationService()
+	ctx := ctxWithUser("alice")
+
+	resolved, err := service.resolveChatConversation(ctx, "agent-123", 42, "alice", 0)
+
+	require.NoError(t, err)
+	require.NotZero(t, resolved.ID)
+	require.Equal(t, int64(42), resolved.AgentInstanceID)
+}
+
+func TestResolveChatConversationUsesOnlyExistingConversationForLegacyClient(t *testing.T) {
+	service := newTestConversationService()
+	ctx := ctxWithUser("alice")
+	conv, err := service.conversationRepo.Create(ctx, &conventity.Conversation{
+		CreatorUsername: "alice",
+		AgentID:         "agent-123",
+		AgentInstanceID: 42,
+	})
+	require.NoError(t, err)
+
+	resolved, err := service.resolveChatConversation(ctx, "agent-123", 42, "alice", 0)
+
+	require.NoError(t, err)
+	require.Equal(t, conv.ID, resolved.ID)
+}
+
+func TestResolveChatConversationRejectsAmbiguousLegacyClient(t *testing.T) {
+	service := newTestConversationService()
+	ctx := ctxWithUser("alice")
+	for range 2 {
+		_, err := service.conversationRepo.Create(ctx, &conventity.Conversation{
+			CreatorUsername: "alice",
+			AgentID:         "agent-123",
+			AgentInstanceID: 42,
+		})
+		require.NoError(t, err)
+	}
+
+	_, err := service.resolveChatConversation(ctx, "agent-123", 42, "alice", 0)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "conversationId is required")
+}
+
 func TestChat(t *testing.T) {
 	mockEventBus := eventbus.NewMockEventBus()
 	mockChatClient := &mockChatClient{
@@ -148,7 +207,6 @@ func TestChat(t *testing.T) {
 		}
 		err = service.Chat(ctx, sseSender, chatRequest)
 		require.NoError(t, err)
-		require.True(t, hasWaitForReadyOption(mockChatClient.callOpts))
 
 		// Verify that the SSE sender received the expected events
 		allEvents := sseSender.Sent
@@ -185,16 +243,6 @@ func TestChat(t *testing.T) {
 
 		require.Equal(t, "done", sentEvents[3].Event)
 	})
-}
-
-func hasWaitForReadyOption(opts []grpc.CallOption) bool {
-	for _, opt := range opts {
-		option, ok := opt.(grpc.FailFastCallOption)
-		if ok && !option.FailFast {
-			return true
-		}
-	}
-	return false
 }
 
 func TestReconnect(t *testing.T) {

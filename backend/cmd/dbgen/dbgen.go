@@ -115,6 +115,7 @@ var stores = []storeSpec{
 			{name: "t_project"},
 			{name: "t_project_user"},
 			{name: "t_project_asset"},
+			{name: "t_project_deliverable"},
 		},
 	},
 	{
@@ -140,7 +141,6 @@ var stores = []storeSpec{
 		outDir: "internal/store/rbac/internal/dal/query",
 		tables: []tableSpec{
 			{name: "t_user"},
-			{name: "t_role"},
 			{name: "t_user_role"},
 			{name: "t_casbin_rule"},
 		},

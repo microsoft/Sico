@@ -277,6 +277,7 @@ def is_prior_workbook_execution_reference(
     username: str,
     current_turn_id: int,
     message: str,
+    conversation_id: int = 0,
 ) -> bool:
     if is_workbook_execution_reference(message):
         return True
@@ -284,7 +285,7 @@ def is_prior_workbook_execution_reference(
         return False
     if agent_instance_id <= 0 or current_turn_id <= 0:
         return False
-    for manifest_path in prior_turn_case_source_manifest_paths(agent_instance_id, username, current_turn_id):
+    for manifest_path in prior_turn_case_source_manifest_paths(agent_instance_id, username, current_turn_id, conversation_id):
         loaded = _load_json_dict(manifest_path)
         if _message_mentions_workbook_scope(message, loaded):
             return True
@@ -309,7 +310,12 @@ def prior_case_source_manifest_paths(workspace: Path) -> list[Path]:
     return sorted(paths, key=lambda path: (_manifest_turn_id(path), path.name), reverse=True)
 
 
-def prior_turn_case_source_manifest_paths(agent_instance_id: int, username: str, current_turn_id: int) -> list[Path]:
+def prior_turn_case_source_manifest_paths(
+    agent_instance_id: int,
+    username: str,
+    current_turn_id: int,
+    conversation_id: int = 0,
+) -> list[Path]:
     """Return case-source manifest paths from the workspace.
 
     Case sources are persisted under ``workspace/case_sources/parsed_documents/``
@@ -322,7 +328,7 @@ def prior_turn_case_source_manifest_paths(agent_instance_id: int, username: str,
     with contextlib.suppress(Exception):
         if agent_instance_id <= 0 or not username:
             return []
-        workspace = CHAT_FS.get_workspace_path(agent_instance_id, username)
+        workspace = CHAT_FS.get_workspace_path(agent_instance_id, username, conversation_id)
         return prior_case_source_manifest_paths(workspace)
     return []
 
@@ -347,7 +353,6 @@ def _current_attachment_candidates(workspace: Path, attachment_names: tuple[str,
                 paths=(path,),
                 confidence="current_turn",
                 requires_parse=True,
-                metadata={"source_turn_id": item.get("source_turn_id")},
             )
         )
     return candidates

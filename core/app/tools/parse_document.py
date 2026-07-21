@@ -143,7 +143,7 @@ async def _parse_document_uncached(ctx: ToolContext, file_path: str, extractor) 
     tool_call_id = await _create_parse_plan_tool_call(ctx, file_path)
 
     try:
-        abs_path = CHAT_FS.resolve_workspace_file(ctx.agent_instance_id, ctx.username, file_path)
+        abs_path = CHAT_FS.resolve_workspace_file(ctx.agent_instance_id, ctx.username, file_path, ctx.conversation_id)
         if not abs_path.exists():
             message = f"file not found: {file_path}"
             await _finish_parse_plan_tool_call(ctx, tool_call_id, file_path, message, failed=True)
@@ -155,7 +155,7 @@ async def _parse_document_uncached(ctx: ToolContext, file_path: str, extractor) 
         parent_dir = Path(file_path).parent.as_posix()
         full_md_path = f"{parent_dir}/full.md" if parent_dir != "." else "full.md"
 
-        CHAT_FS.write_file(ctx.agent_instance_id, ctx.username, full_md_path, full_text)
+        CHAT_FS.write_file(ctx.agent_instance_id, ctx.username, full_md_path, full_text, conversation_id=ctx.conversation_id)
 
         inline_limit = _inline_content_limit()
         inline_content = full_text[:inline_limit]

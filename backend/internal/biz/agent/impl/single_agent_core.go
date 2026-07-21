@@ -33,9 +33,7 @@ import (
 	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/errcode"
 	"sico-backend/internal/store/agent/singleagent/repository"
-	projectrepo "sico-backend/internal/store/project/repository"
 	"sico-backend/internal/transport/http/dto/agent/single_agent"
-	projectdto "sico-backend/internal/transport/http/dto/project"
 	"sico-backend/pkg/logger"
 )
 
@@ -107,10 +105,6 @@ func (s *Service) createSingleAgentInstance(
 		return 0, apperr.New(errcode.CommonInvalidParam, "instance is required")
 	}
 
-	if err := s.ensureOperatorProjectMembership(ctx, instance); err != nil {
-		return 0, err
-	}
-
 	if s.DB == nil {
 		agent, err := s.SingleAgentRepo.Get(ctx, instance.AgentId)
 		if err != nil {
@@ -148,40 +142,6 @@ func (s *Service) createSingleAgentInstance(
 	return createdID, nil
 }
 
-func (s *Service) ensureOperatorProjectMembership(
-	ctx context.Context, instance *entity.SingleAgentInstance,
-) error {
-	if s == nil || s.ProjectRepo == nil || instance == nil {
-		return nil
-	}
-
-	if instance.ProjectId == 0 || instance.OperatorUsername == "" {
-		return nil
-	}
-
-	const memberRole = int32(projectdto.MemberType_MEMBER_TYPE_MEMBER)
-	newMembership := &projectrepo.ProjectUserModel{
-		ProjectID: instance.ProjectId,
-		Username:  instance.OperatorUsername,
-		RoleType:  memberRole,
-	}
-
-	if err := s.ProjectRepo.AddProjectUser(ctx, newMembership); err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return nil
-		}
-
-		logger.CtxError(
-			ctx,
-			"ensureOperatorProjectMembership failed: projectId=%d operator=%s err=%v",
-			instance.ProjectId, instance.OperatorUsername, err,
-		)
-		return err
-	}
-
-	return nil
-}
-
 func (s *Service) getSingleAgentInstance(
 	ctx context.Context, instanceID int64,
 ) (*entity.SingleAgentInstance, error) {
@@ -198,10 +158,6 @@ func (s *Service) getSingleAgentInstance(
 func (s *Service) updateSingleAgentInstance(
 	ctx context.Context, instance *entity.SingleAgentInstance,
 ) error {
-	if err := s.ensureOperatorProjectMembership(ctx, instance); err != nil {
-		return err
-	}
-
 	return s.SingleAgentInstanceRepo.Update(ctx, instance)
 }
 
@@ -242,29 +198,4 @@ func (s *Service) deleteSingleAgentInstance(
 
 		return s.SingleAgentInstanceRepo.Delete(ctx, instanceID)
 	})
-}
-
-func (s *Service) listSingleAgentInstancesByCondition(
-	ctx context.Context, req *single_agent.ListSingleAgentInstancesRequest,
-) ([]*entity.SingleAgentInstance, int64, bool, error) {
-	offset := int(req.Page-1) * int(req.PageSize)
-	limit := int(req.PageSize)
-
-	instances, err := s.SingleAgentInstanceRepo.ListByCondition(
-		ctx, req.IsEmployer, req.Username,
-		offset, limit,
-	)
-	if err != nil {
-		return nil, 0, false, err
-	}
-
-	total, err := s.SingleAgentInstanceRepo.CountByCondition(
-		ctx, req.IsEmployer, req.Username,
-	)
-	if err != nil {
-		return nil, 0, false, err
-	}
-
-	hasNext := int64(offset+len(instances)) < total
-	return instances, total, hasNext, nil
 }

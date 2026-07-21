@@ -82,3 +82,41 @@ message NamedTypeInfo {
     string name = 1; // @gotag: json:"name" binding:"required"
     TypeInfo type = 2; // @gotag: json:"type" binding:"required"
 }
+
+// SortOrder specifies the sort direction for list queries.
+enum SortOrder {
+    SORT_ORDER_UNSPECIFIED = 0; // Default: DESC
+    SORT_ORDER_ASC = 1;
+    SORT_ORDER_DESC = 2;
+}
+
+// AgentInstanceDigest holds display information about an agent instance.
+message AgentInstanceDigest {
+    string agent_name = 1;        // @gotag: json:"agentName"
+    string agent_icon_url = 2;    // @gotag: json:"agentIconUrl"
+    string operator_username = 3; // @gotag: json:"operatorUsername"
+    int64 id = 4;                 // @gotag: json:"id"
+}
+
+// UserDigest holds summary information about a user.
+message UserDigest {
+    int64 id = 1;          // @gotag: json:"id"
+    string alias = 2;      // @gotag: json:"alias"
+    string username = 3;   // @gotag: json:"username"
+    string email = 4;      // @gotag: json:"email"
+    string icon_url = 5;   // @gotag: json:"iconUrl"
+}
+
+// SandboxDigest holds summary information about a sandbox.
+message SandboxDigest {
+    string sandbox_id = 1;      // @gotag: json:"sandboxId"
+    string type = 2;            // @gotag: json:"type"
+    string status = 3;          // @gotag: json:"status"
+    string endpoint = 4;        // @gotag: json:"endpoint"
+    string vnc_url = 5;         // @gotag: json:"vncUrl"
+    string docs_url = 6;        // @gotag: json:"docsUrl"
+    string display_name = 7;    // @gotag: json:"displayName"
+    int64 instance_id = 8;      // @gotag: json:"instanceId"
+    int64 project_id = 9;       // @gotag: json:"projectId"
+    int64 organization_id = 10; // @gotag: json:"organizationId"
+}

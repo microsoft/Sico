@@ -21,9 +21,14 @@
 package impl
 
 import (
+	"context"
+
+	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/store/knowledge/repository"
 	"sico-backend/internal/transport/http/dto/common"
 	"sico-backend/internal/transport/http/dto/knowledge"
+	projectdto "sico-backend/internal/transport/http/dto/project"
+	"sico-backend/pkg/logger"
 )
 
 func knowledgeTagModelToDTO(tag *repository.KnowledgeTagModel) *knowledge.KnowledgeTag {
@@ -88,5 +93,93 @@ func playbookModelToDTO(
 		CreatedAt:       pb.CreatedAt,
 		UpdatedAt:       pb.UpdatedAt,
 		Tags:            tags,
+	}
+}
+
+// populatePlaybookExtraInfo fills ExtraInfo (agent name and icon) for a slice of playbook DTOs.
+func (s *Service) populatePlaybookExtraInfo(ctx context.Context, playbooks []*knowledge.KnowledgePlaybook) {
+	if s.AgentInstanceRepo == nil || len(playbooks) == 0 {
+		return
+	}
+
+	ids := make([]int64, 0, len(playbooks))
+	seen := make(map[int64]bool)
+	for _, pb := range playbooks {
+		if pb.AgentInstanceId != 0 && !seen[pb.AgentInstanceId] {
+			ids = append(ids, pb.AgentInstanceId)
+			seen[pb.AgentInstanceId] = true
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	instances, err := s.AgentInstanceRepo.MGet(ctx, ids)
+	if err != nil {
+		logger.CtxWarn(ctx, "populatePlaybookExtraInfo: failed to fetch agent instances: %v", err)
+		return
+	}
+
+	instanceMap := make(map[int64]*common.AgentInstanceDigest, len(instances))
+	for _, inst := range instances {
+		iconURL, _ := storage.PathToUrl(inst.IconUri)
+		instanceMap[inst.Id] = &common.AgentInstanceDigest{
+			Id:               inst.Id,
+			AgentName:        inst.Name,
+			AgentIconUrl:     iconURL,
+			OperatorUsername: inst.OperatorUsername,
+		}
+	}
+
+	for _, pb := range playbooks {
+		if info, ok := instanceMap[pb.AgentInstanceId]; ok {
+			pb.ExtraInfo = &knowledge.KnowledgePlaybookExtraInfo{
+				AgentInstance: info,
+			}
+		}
+	}
+}
+
+// populateDeliverableExtraInfo fills ExtraInfo (agent name and icon) for a slice of deliverable DTOs.
+func (s *Service) populateDeliverableExtraInfo(ctx context.Context, deliverables []*projectdto.ProjectDeliverable) {
+	if s.AgentInstanceRepo == nil || len(deliverables) == 0 {
+		return
+	}
+
+	ids := make([]int64, 0, len(deliverables))
+	seen := make(map[int64]bool)
+	for _, d := range deliverables {
+		if d.AgentInstanceId != 0 && !seen[d.AgentInstanceId] {
+			ids = append(ids, d.AgentInstanceId)
+			seen[d.AgentInstanceId] = true
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	instances, err := s.AgentInstanceRepo.MGet(ctx, ids)
+	if err != nil {
+		logger.CtxWarn(ctx, "populateDeliverableExtraInfo: failed to fetch agent instances: %v", err)
+		return
+	}
+
+	instanceMap := make(map[int64]*common.AgentInstanceDigest, len(instances))
+	for _, inst := range instances {
+		iconURL, _ := storage.PathToUrl(inst.IconUri)
+		instanceMap[inst.Id] = &common.AgentInstanceDigest{
+			Id:               inst.Id,
+			AgentName:        inst.Name,
+			AgentIconUrl:     iconURL,
+			OperatorUsername: inst.OperatorUsername,
+		}
+	}
+
+	for _, d := range deliverables {
+		if info, ok := instanceMap[d.AgentInstanceId]; ok {
+			d.ExtraInfo = &projectdto.ProjectDeliverableExtraInfo{
+				AgentInstance: info,
+			}
+		}
 	}
 }

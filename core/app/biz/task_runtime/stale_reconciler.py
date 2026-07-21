@@ -119,18 +119,7 @@ def _plan_context_for_batch(ctx: TurnContext | None, batch: BatchRecord, runs: l
 
 
 def _plan_conversation_id_for_batch(run: TaskRun, batch: BatchRecord) -> int:
-    if not batch.parent_conversation_id:
-        return 0
-    if workspace_layout().plan_exists(
-        run.agent_instance_id,
-        run.username,
-        batch.parent_turn_id,
-        conversation_id=batch.parent_conversation_id,
-    ):
-        return batch.parent_conversation_id
-    if workspace_layout().plan_exists(run.agent_instance_id, run.username, batch.parent_turn_id, conversation_id=0):
-        return 0
-    return batch.parent_conversation_id
+    return batch.parent_conversation_id or 0
 
 
 class StaleReconciler:
@@ -174,7 +163,11 @@ class StaleReconciler:
             owner = next((run for run in runs if run.username and run.agent_instance_id), None)
             if owner is None:
                 return batch.batch_id
-            workspace_root = workspace_layout().workspace_path(owner.agent_instance_id, owner.username)
+            workspace_root = workspace_layout().workspace_path(
+                owner.agent_instance_id,
+                owner.username,
+                conversation_id=getattr(batch, "parent_conversation_id", 0),
+            )
             return str(workspace_root / "results" / batch.batch_id)
 
     async def _update_parent_tool_call(self, ctx: TurnContext, batch: BatchRecord) -> None:

@@ -60,7 +60,7 @@ async def _edit_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -
         return {"error_message": "file_path must be relative and within the workspace directory"}
 
     def _impl() -> dict[str, Any]:
-        content = CHAT_FS.read_file(ctx.agent_instance_id, ctx.username, file_path)
+        content = CHAT_FS.read_file(ctx.agent_instance_id, ctx.username, file_path, conversation_id=ctx.conversation_id)
 
         if old_string not in content:
             return {"error_message": f"old_string not found in {file_path}"}
@@ -70,7 +70,7 @@ async def _edit_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -
         else:
             new_content = content.replace(old_string, new_string, 1)
 
-        CHAT_FS.write_file(ctx.agent_instance_id, ctx.username, file_path, new_content)
+        CHAT_FS.write_file(ctx.agent_instance_id, ctx.username, file_path, new_content, conversation_id=ctx.conversation_id)
         return {"error_message": "", "message": "Edit applied successfully."}
 
     try:

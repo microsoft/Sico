@@ -92,7 +92,9 @@ func getDefaultConfig() *AuthConfig {
 			},
 			ExcludedPrefixes: []string{
 				"/api/sico/docs/",
-				"/api/sico/sandbox",
+				"/api/sico/sandbox/apply",
+				"/api/sico/sandbox/release",
+				"/api/sico/sandbox/resources/",
 			},
 			JWTAuth: jwtx.New(jwtx.NewStoreWithCache(newCacheFromEnv())),
 		}

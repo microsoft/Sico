@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Sico is an open-source AI agent platform with three main services that communicate via gRPC and a bidirectional "reverse RPC" pattern. The backend handles HTTP APIs and persistence, the core handles AI/LLM orchestration, and the frontend provides a React dashboard.
 
-> **Frontend source code is not in this public repository.** In a public checkout, `frontend/` only contains packaged deployment assets (e.g. `frontend-dist.zip`, `deployments/`) — there is no `frontend/package.json` or `src/`, so any `pnpm`/`vite` workflow must be run from a separate frontend source checkout. Do not add or document `pnpm dev`/`pnpm build` instructions in this repo.
+> **The frontend lives in this repository and builds from source.** `frontend/` is a pnpm + Turborepo monorepo (`frontend/package.json`, `packages/{app,shared,ui,config}/`). The production image is built by a multi-stage Dockerfile (`frontend/deployments/docker/Dockerfile`) that runs `pnpm install --frozen-lockfile && pnpm build` and serves the resulting `packages/app/dist` with nginx. `make compose-up` and `make kind-up` build it automatically — no prebuilt archive is committed.
 
 ## Build & Run Commands
 

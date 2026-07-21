@@ -28,6 +28,7 @@ import (
 	"sico-backend/internal/biz/conversation"
 	"sico-backend/internal/biz/knowledge"
 	"sico-backend/internal/biz/llmhubs"
+	"sico-backend/internal/biz/organization"
 	"sico-backend/internal/biz/project"
 	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/biz/sandbox"
@@ -47,6 +48,7 @@ type Injector struct {
 
 	ProjectApp      project.Service
 	RBACApp         rbac.Service
+	OrganizationApp organization.Service
 	KnowledgeApp    knowledge.Service
 	AgentApp        agent.Service
 	ConversationApp conversation.Service

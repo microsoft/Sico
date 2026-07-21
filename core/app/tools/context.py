@@ -103,9 +103,10 @@ def _enrich_knowledge_summaries(knowledge_list: list[dict[str, Any]], knowledge_
             item["summary"] = summary_path.read_text(encoding="utf-8")
 
 
-def load_workspace_context(
+def load_workspace_context(  # noqa: PLR0913
     agent_instance_id: int,
     username: str,
+    conversation_id: int = 0,
     retrieve_knowledge_summary: bool = False,
     *,
     directory: str | None = None,
@@ -113,7 +114,7 @@ def load_workspace_context(
     include_skills: bool = True,
     include_knowledge: bool = True,
 ) -> dict[str, Any]:
-    workspace = CHAT_FS.get_workspace_path(agent_instance_id, username)
+    workspace = CHAT_FS.get_workspace_path(agent_instance_id, username, conversation_id)
     if not workspace.exists():
         return {
             "files": [],
@@ -123,8 +124,7 @@ def load_workspace_context(
             "knowledge": [],
         }
 
-
-    all_files = CHAT_FS.list_files(agent_instance_id, username)
+    all_files = CHAT_FS.list_files(agent_instance_id, username, conversation_id)
 
     # Scope to subdirectory if requested.
     if directory:
@@ -175,6 +175,7 @@ async def _context_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any
         context = load_workspace_context(
             ctx.agent_instance_id,
             ctx.username,
+            ctx.conversation_id,
             directory=input_data.directory,
             max_files=input_data.max_files,
             include_skills=input_data.include_skills,
@@ -240,6 +241,7 @@ CONTEXT_TOOL = FunctionTool(
         "- `history/turn-<id>/` — snapshots of prior turns (plan, conversation, reports, and prior "
         "`results/` + `case_sources/` snapshots if any). Hidden from this file listing — read explicitly when needed."
     ),
+    additional_properties={"max_output_length": 50_000},
     input_model=ContextInput,
     func=_context_func,
 )

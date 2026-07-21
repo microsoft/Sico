@@ -33,6 +33,7 @@ import pytest
 from types import SimpleNamespace
 import sys
 
+from app.biz.task_runtime import stale_reconciler as stale_reconciler_module
 from app.biz.task_runtime.stale_reconciler import StaleReconciler
 from app.biz.task_runtime.workspace import workspace_layout
 
@@ -72,3 +73,22 @@ def test_artifacts_root_falls_back_to_batch_id_without_owner() -> None:
     runs = [SimpleNamespace(username=None, agent_instance_id=None)]
 
     assert reconciler._artifacts_root(batch, runs) == "batch-abc"
+
+
+def test_plan_conversation_id_does_not_fall_back_to_legacy_plan(monkeypatch) -> None:
+    class FakeLayout:
+        def plan_exists(self, _agent_instance_id: int, _username: str, _turn_id: int, *, conversation_id: int) -> bool:
+            return conversation_id == 0
+
+    monkeypatch.setattr(stale_reconciler_module, "workspace_layout", lambda: FakeLayout())
+    run = SimpleNamespace(agent_instance_id=571, username="alice")
+    batch = SimpleNamespace(parent_conversation_id=730, parent_turn_id=14)
+
+    assert stale_reconciler_module._plan_conversation_id_for_batch(run, batch) == 730
+
+
+def test_plan_conversation_id_returns_zero_without_parent_conversation() -> None:
+    run = SimpleNamespace(agent_instance_id=571, username="alice")
+    batch = SimpleNamespace(parent_conversation_id=0, parent_turn_id=14)
+
+    assert stale_reconciler_module._plan_conversation_id_for_batch(run, batch) == 0

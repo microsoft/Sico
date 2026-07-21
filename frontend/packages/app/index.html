@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>SICO</title>
+  </head>
+  <body>
+    <div id="root">
+      <div class="shell-boot" aria-hidden="true">
+        <div class="shell-boot__logo">SICO</div>
+        <div class="shell-boot__label">Loading…</div>
+      </div>
+      <style>
+        /*
+          Inline style — renders before the JS bundle mounts Tailwind's
+          @theme variables, so we use raw values instead of CSS custom
+          properties. `#555` matches `--color-foreground-tertiary` closely enough
+          for a one-shot loading label.
+        */
+        .shell-boot { display: flex; flex-direction: column; align-items: center; justify-content: center;
+          min-height: 100vh; opacity: 0; animation: shellBootFadeIn 200ms ease-out forwards; }
+        .shell-boot__logo { font-family: Roboto, system-ui, sans-serif; font-size: 2rem; font-weight: 500; }
+        .shell-boot__label { margin-top: 0.5rem; color: #555; font-family: Roboto, system-ui, sans-serif; }
+        @keyframes shellBootFadeIn { to { opacity: 1; } }
+      </style>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -67,54 +67,51 @@ Quick Start:
 # Everything else is imported on first access via __getattr__.
 # --------------------------------------------------------------------------- #
 
-from .delta import DeltaBatch, DeltaOperation
-from .playbook import Bullet, Playbook, SimilarityDecision
+from .playbook import Bullet, ConsolidationVerdict, DeltaBatch, DeltaOperation, Playbook
 
 
-def __getattr__(name: str):                                  # PEP 562 lazy loader
+def __getattr__(name: str):  # PEP 562 lazy loader
     _lazy_map = {
         # runner (imports llm/roles chain – deferred)
-        "ExperienceRunner":    (".runner", "ExperienceRunner"),
-        "TrajectoryData":      (".runner", "TrajectoryData"),
-        "TrajectoryStep":      (".runner", "TrajectoryStep"),
-        "TrajectoryThought":   (".runner", "TrajectoryThought"),
+        "ExperienceRunner": (".runner", "ExperienceRunner"),
+        "TrajectoryData": (".runner", "TrajectoryData"),
+        "TrajectoryStep": (".runner", "TrajectoryStep"),
+        "TrajectoryThought": (".runner", "TrajectoryThought"),
         # llm
-        "LLMClient":           (".llm", "LLMClient"),
-        "HubLLMClient":        (".llm", "HubLLMClient"),
+        "LLMClient": (".llm", "LLMClient"),
+        "HubLLMClient": (".llm", "HubLLMClient"),
         # roles
-        "Reflector":           (".roles", "Reflector"),
-        "Curator":             (".roles", "Curator"),
-        "ReplayGenerator":     (".roles", "ReplayGenerator"),
-        "GeneratorOutput":     (".roles", "GeneratorOutput"),
-        "ReflectorOutput":     (".roles", "ReflectorOutput"),
-        "CuratorOutput":       (".roles", "CuratorOutput"),
-        "ExtractedLearning":   (".roles", "ExtractedLearning"),
-        "BulletTag":           (".roles", "BulletTag"),
+        "Reflector": (".roles", "Reflector"),
+        "Curator": (".roles", "Curator"),
+        "ReplayGenerator": (".roles", "ReplayGenerator"),
+        "GeneratorOutput": (".roles", "GeneratorOutput"),
+        "ReflectorOutput": (".roles", "ReflectorOutput"),
+        "CuratorOutput": (".roles", "CuratorOutput"),
+        "ExtractedLearning": (".roles", "ExtractedLearning"),
+        "BulletTag": (".roles", "BulletTag"),
         "extract_cited_bullet_ids": (".roles", "extract_cited_bullet_ids"),
-        # deduplication
-        "DeduplicationConfig": (".deduplication", "DeduplicationConfig"),
-        "DeduplicationManager":(".deduplication", "DeduplicationManager"),
-        "SimilarityDetector":  (".deduplication", "SimilarityDetector"),
-        # integrations
-        "wrap_playbook_context": (".integrations", "wrap_playbook_context"),
-        # adapter (data format conversion)
-        "convert_to_trajectory_data":  (".adapter", "convert_to_trajectory_data"),
+        # consolidation
+        "ConsolidationConfig": (".playbook", "ConsolidationConfig"),
+        "EntryConsolidator": (".playbook", "EntryConsolidator"),
+        "SimilarityScanner": (".playbook", "SimilarityScanner"),
         # service (experience learning pipeline orchestration)
-        "ExperienceService":   (".service", "ExperienceService"),
-        "EXPERIENCES_ENABLED":  (".service", "EXPERIENCES_ENABLED"),
-        "add_playbook":        (".service", "add_playbook"),
-        "read_playbook":       (".service", "read_playbook"),
+        "ExperienceService": (".service", "ExperienceService"),
+        "EXPERIENCES_ENABLED": (".service", "EXPERIENCES_ENABLED"),
+        "add_playbook": (".service", "add_playbook"),
+        "read_playbook": (".service", "read_playbook"),
         # store (playbook persistence)
-        "PlaybookStore":       (".store", "PlaybookStore"),
+        "PlaybookStore": (".playbook", "PlaybookStore"),
     }
     if name in _lazy_map:
         mod_path, attr = _lazy_map[name]
         import importlib
+
         mod = importlib.import_module(mod_path, __name__)
         val = getattr(mod, attr)
-        globals()[name] = val          # cache for next access
+        globals()[name] = val  # cache for next access
         return val
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "ExperienceRunner",
@@ -132,11 +129,9 @@ __all__ = [
     "ExtractedLearning",
     "BulletTag",
     "extract_cited_bullet_ids",
-    "DeduplicationConfig",
-    "DeduplicationManager",
-    "SimilarityDetector",
-    "wrap_playbook_context",
-    "convert_to_trajectory_data",
+    "ConsolidationConfig",
+    "EntryConsolidator",
+    "SimilarityScanner",
     "ExperienceService",
     "EXPERIENCES_ENABLED",
     "add_playbook",
@@ -146,5 +141,5 @@ __all__ = [
     "DeltaOperation",
     "Bullet",
     "Playbook",
-    "SimilarityDecision",
+    "ConsolidationVerdict",
 ]

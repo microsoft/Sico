@@ -22,6 +22,7 @@ syntax = "proto3";
 package knowledge;
 
 import "common/common.proto";
+import "project/deliverable.proto";
 
 option go_package = "sico-backend/internal/transport/http/dto/knowledge";
 
@@ -251,6 +252,11 @@ message ListKnowledgeTagData {
   bool has_next = 3;             // @gotag: json:"hasNext"
 }
 
+// KnowledgePlaybookExtraInfo holds additional display information for a playbook.
+message KnowledgePlaybookExtraInfo {
+  common.AgentInstanceDigest agent_instance = 1; // @gotag: json:"agentInstance"
+}
+
 // Knowledge Playbook entity
 message KnowledgePlaybook {
   int64 id = 1;                             // @gotag: json:"id"
@@ -260,6 +266,7 @@ message KnowledgePlaybook {
   int64 created_at = 5;                     // @gotag: json:"createdAt"
   int64 updated_at = 6;                     // @gotag: json:"updatedAt"
   repeated KnowledgeTag tags = 7;           // @gotag: json:"tags"
+  KnowledgePlaybookExtraInfo extra_info = 8; // @gotag: json:"extraInfo"
 }
 
 // Get Knowledge Playbook
@@ -285,6 +292,16 @@ message UpdateKnowledgePlaybookRequest {
 }
 
 message UpdateKnowledgePlaybookResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+// Delete Knowledge Playbook
+message DeleteKnowledgePlaybookRequest {
+  int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+message DeleteKnowledgePlaybookResponse {
   int32 code = 253; // @gotag: json:"code"
   string msg = 254; // @gotag: json:"msg"
 }
@@ -323,4 +340,40 @@ message GetKnowledgePlaybookDetailsResponse {
 message GetKnowledgePlaybookDetailsData {
   string content = 1; // @gotag: json:"content"
   string name = 2;    // @gotag: json:"name"
+}
+
+// Unified knowledge item type
+enum KnowledgeItemType {
+  KNOWLEDGE_ITEM_TYPE_UNKNOWN = 0;      // @gotag: json:"KNOWLEDGE_ITEM_TYPE_UNKNOWN"
+  KNOWLEDGE_ITEM_TYPE_DOCUMENT = 1;     // @gotag: json:"KNOWLEDGE_ITEM_TYPE_DOCUMENT"
+  KNOWLEDGE_ITEM_TYPE_PLAYBOOK = 2;     // @gotag: json:"KNOWLEDGE_ITEM_TYPE_PLAYBOOK"
+  KNOWLEDGE_ITEM_TYPE_DELIVERABLE = 3;  // @gotag: json:"KNOWLEDGE_ITEM_TYPE_DELIVERABLE"
+}
+
+// KnowledgeItem represents a unified knowledge item (document, playbook, or deliverable).
+message KnowledgeItem {
+  KnowledgeItemType type = 1;                       // @gotag: json:"type"
+  KnowledgeDocument document = 2;                   // @gotag: json:"document,omitempty"
+  KnowledgePlaybook playbook = 3;                   // @gotag: json:"playbook,omitempty"
+  project.ProjectDeliverable deliverable = 4;       // @gotag: json:"deliverable,omitempty"
+  int64 updated_at = 5;                             // @gotag: json:"updatedAt"
+}
+
+// List all knowledge items (documents, playbooks, deliverables) for a project.
+message ListKnowledgeItemsRequest {
+  int64 project_id = 1;  // @gotag: form:"projectId" binding:"required"
+  int32 page = 2;        // @gotag: form:"page" binding:"required,min=1"
+  int32 page_size = 3;   // @gotag: form:"pageSize" binding:"required,min=1,max=100"
+}
+
+message ListKnowledgeItemsResponse {
+  ListKnowledgeItemsData data = 1; // @gotag: json:"data"
+  int32 code = 253;                // @gotag: json:"code"
+  string msg = 254;                // @gotag: json:"msg"
+}
+
+message ListKnowledgeItemsData {
+  repeated KnowledgeItem items = 1; // @gotag: json:"items"
+  int32 total = 2;                  // @gotag: json:"total"
+  bool has_next = 3;                // @gotag: json:"hasNext"
 }

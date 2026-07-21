@@ -36,7 +36,8 @@ _LOGGER = logging.getLogger(__name__)
 class WriteInput(BaseModel):
     filepath: str = Field(
         description="Relative file path to write (e.g. 'script.py' or 'data/input.json'). "
-        "Will be saved under the workspace/ directory.")
+        "Will be saved under the workspace/ directory."
+    )
     content: str = Field(description="The content to write to the file.")
 
 
@@ -52,7 +53,9 @@ async def _write_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) 
 
     _LOGGER.info(
         "Write tool start agent_instance_id=%s username=%s filepath=%s",
-        agent_instance_id, username, filepath,
+        agent_instance_id,
+        username,
+        filepath,
     )
 
     if not filepath:
@@ -64,7 +67,7 @@ async def _write_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) 
         return {"error_message": "filepath must be relative and within the workspace directory"}
 
     def _impl() -> dict[str, Any]:
-        CHAT_FS.write_file(agent_instance_id, username, filepath, content)
+        CHAT_FS.write_file(agent_instance_id, username, filepath, content, conversation_id=ctx.conversation_id)
 
         return {
             "error_message": "",

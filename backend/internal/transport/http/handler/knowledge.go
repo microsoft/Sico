@@ -466,6 +466,38 @@ func ListPlaybooks(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, resp)
 }
 
+// ListKnowledgeItems .
+// @Router /api/sico/knowledge/items [GET]
+// @Tags knowledge
+// @Produce json
+// @Param request query knowledge.ListKnowledgeItemsRequest true "List Knowledge Items"
+// @Success 200 {object} knowledge.ListKnowledgeItemsResponse
+// @Security BearerAuth
+func ListKnowledgeItems(ctx *gin.Context) {
+	var (
+		err error
+		req knowledge.ListKnowledgeItemsRequest
+	)
+
+	if err = ctx.ShouldBindQuery(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	svc, ok := knowledgeService(ctx)
+	if !ok {
+		return
+	}
+
+	resp, err := svc.ListKnowledgeItems(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
 // UpdatePlaybook .
 // @Router /api/sico/knowledge/playbook [PUT]
 // @Tags knowledge
@@ -491,6 +523,38 @@ func UpdatePlaybook(ctx *gin.Context) {
 	}
 
 	resp, err := svc.UpdatePlaybook(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// DeletePlaybook .
+// @Router /api/sico/knowledge/playbook [DELETE]
+// @Tags knowledge
+// @Produce json
+// @Param request query knowledge.DeleteKnowledgePlaybookRequest true "Delete Knowledge Playbook"
+// @Success 200 {object} knowledge.DeleteKnowledgePlaybookResponse
+// @Security BearerAuth
+func DeletePlaybook(ctx *gin.Context) {
+	var (
+		err error
+		req knowledge.DeleteKnowledgePlaybookRequest
+	)
+
+	if err = ctx.ShouldBindQuery(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	svc, ok := knowledgeService(ctx)
+	if !ok {
+		return
+	}
+
+	resp, err := svc.DeletePlaybook(reqctx(ctx), &req)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
 		return

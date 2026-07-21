@@ -1,0 +1,103 @@
+import { describe, expect, it } from "vitest";
+
+import { buildSidepaneContent } from "@/features/chat/utils/build-sidepane-content";
+import { type RenderableDeliverable } from "@/features/chat/utils/deliverable";
+
+// The card→content mapping (design decision S3): one parsed deliverable becomes
+// one SidepaneContent. These cover all three deliverable kinds plus the two
+// missing-content fallbacks (`?? ""`). `kind` can never be "sandbox" (that comes
+// from the header Device button), so there is no real value to exercise the
+// `default: null` branch — TypeScript makes it unreachable.
+
+describe("buildSidepaneContent", () => {
+  it("maps a markdown deliverable to title + markdown body", () => {
+    const deliverable: RenderableDeliverable = {
+      id: "0",
+      label: "Title",
+      isPreview: false,
+      kind: "markdown",
+      markdown: "# Body",
+    };
+    expect(buildSidepaneContent(deliverable)).toEqual({
+      kind: "markdown",
+      title: "Title",
+      markdown: "# Body",
+    });
+  });
+
+  it("falls back to an empty markdown body when the deliverable has none", () => {
+    const deliverable: RenderableDeliverable = {
+      id: "0",
+      label: "Title",
+      isPreview: false,
+      kind: "markdown",
+    };
+    expect(buildSidepaneContent(deliverable)).toEqual({
+      kind: "markdown",
+      title: "Title",
+      markdown: "",
+    });
+  });
+
+  it("maps a webpage deliverable to its url", () => {
+    const deliverable: RenderableDeliverable = {
+      id: "0",
+      label: "Preview Page",
+      isPreview: true,
+      kind: "webpage",
+      url: "https://x/p",
+    };
+    expect(buildSidepaneContent(deliverable)).toEqual({
+      kind: "webpage",
+      url: "https://x/p",
+    });
+  });
+
+  it("falls back to an empty url when the webpage deliverable has none", () => {
+    const deliverable: RenderableDeliverable = {
+      id: "0",
+      label: "Preview Page",
+      isPreview: true,
+      kind: "webpage",
+    };
+    expect(buildSidepaneContent(deliverable)).toEqual({
+      kind: "webpage",
+      url: "",
+    });
+  });
+
+  it("maps a file deliverable's label to the content filename and surfaces its url", () => {
+    const deliverable: RenderableDeliverable = {
+      id: "0",
+      label: "report.pdf",
+      isPreview: false,
+      kind: "file",
+      fileUrl: "https://x/report.pdf",
+      fileUri: "default_space/0/report.pdf",
+    };
+    expect(buildSidepaneContent(deliverable)).toEqual({
+      kind: "file",
+      filename: "report.pdf",
+      fileUrl: "https://x/report.pdf",
+      fileUri: "default_space/0/report.pdf",
+      // A deliverable file can be published to the project (≠ a user attachment).
+      canAddToProject: true,
+    });
+  });
+
+  it("falls back to an empty url when the file deliverable has none", () => {
+    const deliverable: RenderableDeliverable = {
+      id: "0",
+      label: "report.pdf",
+      isPreview: false,
+      kind: "file",
+    };
+    expect(buildSidepaneContent(deliverable)).toEqual({
+      kind: "file",
+      filename: "report.pdf",
+      fileUrl: "",
+      fileUri: "",
+      canAddToProject: true,
+    });
+  });
+});

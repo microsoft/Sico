@@ -1,0 +1,24 @@
+import { type JSX, type ReactNode } from "react";
+
+export type AssetContentCardProps = {
+  children: ReactNode;
+};
+
+/**
+ * The asset-detail content card shared by all three detail pages — a
+ * `bg-surface-basic shadow-m rounded-2xl` surface that scrolls internally. It
+ * owns the card chrome only; the inner gutter is the caller's concern, because
+ * markdown bodies want a wide reading gutter (`px-34`) while a file preview must
+ * stay full-bleed (a PDF/image squeezed into a ~136px gutter reads as a sliver).
+ */
+export function AssetContentCard({
+  children,
+}: AssetContentCardProps): JSX.Element {
+  return (
+    <div className="bg-surface-basic shadow-m flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
+      <div className="scrollbar flex flex-1 flex-col overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  );
+}

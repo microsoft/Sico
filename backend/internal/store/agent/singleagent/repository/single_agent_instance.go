@@ -27,6 +27,7 @@ import (
 
 	entity "sico-backend/internal/entity/agent/singleagent"
 	"sico-backend/internal/store/agent/singleagent/internal/dal"
+	"sico-backend/internal/transport/http/dto/agent/single_agent"
 )
 
 func NewSingleAgentInstanceRepo(db *gorm.DB) SingleAgentInstanceRepository {
@@ -37,27 +38,12 @@ type SingleAgentInstanceRepository interface {
 	Create(ctx context.Context, instance *entity.SingleAgentInstance) (int64, error)
 	Get(ctx context.Context, id int64) (*entity.SingleAgentInstance, error)
 	MGet(ctx context.Context, ids []int64) ([]*entity.SingleAgentInstance, error)
-	GetNamesByIDs(ctx context.Context, ids []int64) (map[int64]string, error)
 	Update(ctx context.Context, instance *entity.SingleAgentInstance) error
 	Delete(ctx context.Context, id int64) error
-	ListByOperatorUsername(
-		ctx context.Context,
-		operatorUsername string, offset, limit int,
-	) ([]*entity.SingleAgentInstance, error)
-	CountByOperatorUsername(ctx context.Context, operatorUsername string) (int64, error)
-	ListByCondition(
-		ctx context.Context,
-		isEmployer bool, username string,
-		offset, limit int,
-	) ([]*entity.SingleAgentInstance, error)
-	CountByCondition(
-		ctx context.Context,
-		isEmployer bool, username string,
-	) (int64, error)
+	UpdateStatus(ctx context.Context, id int64, status single_agent.SingleAgentInstanceStatus) error
 	ListByFilter(
 		ctx context.Context,
 		filter *entity.ListSingleAgentInstanceFilter,
 		offset, limit int,
 	) ([]*entity.SingleAgentInstance, int64, error)
-	CountByAgentID(ctx context.Context, agentID string) (int64, error)
 }

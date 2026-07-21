@@ -31,7 +31,6 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	common "sico-backend/internal/transport/http/dto/rbac/common"
-	role "sico-backend/internal/transport/http/dto/rbac/role"
 	sync "sync"
 	unsafe "unsafe"
 )
@@ -48,11 +47,12 @@ type UserRole struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                 
 	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"userId"`           
-	RoleId        int64                  `protobuf:"varint,3,opt,name=role_id,json=roleId,proto3" json:"roleId"`           
-	CreatedAt     int64                  `protobuf:"varint,4,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`  
-	UpdatedAt     int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`  
-	Role          *role.Role             `protobuf:"bytes,6,opt,name=role,proto3" json:"role"`                              
-	User          *common.User           `protobuf:"bytes,7,opt,name=user,proto3" json:"user"`                              
+	RoleCode      string                 `protobuf:"bytes,3,opt,name=role_code,json=roleCode,proto3" json:"roleCode"`      
+	ScopeType     string                 `protobuf:"bytes,4,opt,name=scope_type,json=scopeType,proto3" json:"scopeType"`   
+	ScopeId       int64                  `protobuf:"varint,5,opt,name=scope_id,json=scopeId,proto3" json:"scopeId"`        
+	CreatedAt     int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`  
+	UpdatedAt     int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`  
+	User          *common.User           `protobuf:"bytes,8,opt,name=user,proto3" json:"user"`                              
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -101,9 +101,23 @@ func (x *UserRole) GetUserId() int64 {
 	return 0
 }
 
-func (x *UserRole) GetRoleId() int64 {
+func (x *UserRole) GetRoleCode() string {
 	if x != nil {
-		return x.RoleId
+		return x.RoleCode
+	}
+	return ""
+}
+
+func (x *UserRole) GetScopeType() string {
+	if x != nil {
+		return x.ScopeType
+	}
+	return ""
+}
+
+func (x *UserRole) GetScopeId() int64 {
+	if x != nil {
+		return x.ScopeId
 	}
 	return 0
 }
@@ -122,13 +136,6 @@ func (x *UserRole) GetUpdatedAt() int64 {
 	return 0
 }
 
-func (x *UserRole) GetRole() *role.Role {
-	if x != nil {
-		return x.Role
-	}
-	return nil
-}
-
 func (x *UserRole) GetUser() *common.User {
 	if x != nil {
 		return x.User
@@ -136,11 +143,13 @@ func (x *UserRole) GetUser() *common.User {
 	return nil
 }
 
-// Assign role to user
+// Assign role to user within a scope
 type AssignUserRoleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"userId" binding:"required"`  
-	RoleId        int64                  `protobuf:"varint,2,opt,name=role_id,json=roleId,proto3" json:"roleId" binding:"required"`  
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"userId" binding:"required"`          
+	RoleCode      string                 `protobuf:"bytes,2,opt,name=role_code,json=roleCode,proto3" json:"roleCode" binding:"required"`     
+	ScopeType     string                 `protobuf:"bytes,3,opt,name=scope_type,json=scopeType,proto3" json:"scopeType" binding:"required,oneof=platform org project"`  
+	ScopeId       int64                  `protobuf:"varint,4,opt,name=scope_id,json=scopeId,proto3" json:"scopeId"`       
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -182,9 +191,23 @@ func (x *AssignUserRoleRequest) GetUserId() int64 {
 	return 0
 }
 
-func (x *AssignUserRoleRequest) GetRoleId() int64 {
+func (x *AssignUserRoleRequest) GetRoleCode() string {
 	if x != nil {
-		return x.RoleId
+		return x.RoleCode
+	}
+	return ""
+}
+
+func (x *AssignUserRoleRequest) GetScopeType() string {
+	if x != nil {
+		return x.ScopeType
+	}
+	return ""
+}
+
+func (x *AssignUserRoleRequest) GetScopeId() int64 {
+	if x != nil {
+		return x.ScopeId
 	}
 	return 0
 }
@@ -241,11 +264,13 @@ func (x *AssignUserRoleResponse) GetMsg() string {
 	return ""
 }
 
-// Remove role from user
+// Remove role from user within a scope
 type RemoveUserRoleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"userId" binding:"required"`  
-	RoleId        int64                  `protobuf:"varint,2,opt,name=role_id,json=roleId,proto3" json:"roleId" binding:"required"`  
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"userId" binding:"required"`          
+	RoleCode      string                 `protobuf:"bytes,2,opt,name=role_code,json=roleCode,proto3" json:"roleCode" binding:"required"`     
+	ScopeType     string                 `protobuf:"bytes,3,opt,name=scope_type,json=scopeType,proto3" json:"scopeType" binding:"required,oneof=platform org project"`  
+	ScopeId       int64                  `protobuf:"varint,4,opt,name=scope_id,json=scopeId,proto3" json:"scopeId"`       
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -287,9 +312,23 @@ func (x *RemoveUserRoleRequest) GetUserId() int64 {
 	return 0
 }
 
-func (x *RemoveUserRoleRequest) GetRoleId() int64 {
+func (x *RemoveUserRoleRequest) GetRoleCode() string {
 	if x != nil {
-		return x.RoleId
+		return x.RoleCode
+	}
+	return ""
+}
+
+func (x *RemoveUserRoleRequest) GetScopeType() string {
+	if x != nil {
+		return x.ScopeType
+	}
+	return ""
+}
+
+func (x *RemoveUserRoleRequest) GetScopeId() int64 {
+	if x != nil {
+		return x.ScopeId
 	}
 	return 0
 }
@@ -409,7 +448,7 @@ func (x *ListUserRolesRequest) GetPageSize() int32 {
 
 type ListUserRolesResponseData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Roles         []*role.Role           `protobuf:"bytes,1,rep,name=roles,proto3" json:"roles"`                      
+	Roles         []*UserRole            `protobuf:"bytes,1,rep,name=roles,proto3" json:"roles"`                      
 	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`                     
 	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`  
 	unknownFields protoimpl.UnknownFields
@@ -446,7 +485,7 @@ func (*ListUserRolesResponseData) Descriptor() ([]byte, []int) {
 	return file_rbac_user_role_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *ListUserRolesResponseData) GetRoles() []*role.Role {
+func (x *ListUserRolesResponseData) GetRoles() []*UserRole {
 	if x != nil {
 		return x.Roles
 	}
@@ -527,12 +566,14 @@ func (x *ListUserRolesResponse) GetMsg() string {
 	return ""
 }
 
-// List users by role
+// List users by role within a scope
 type ListUsersByRoleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RoleId        int64                  `protobuf:"varint,1,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty" form:"roleId" binding:"required"`        
-	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`                          
-	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`  
+	RoleCode      string                 `protobuf:"bytes,1,opt,name=role_code,json=roleCode,proto3" json:"role_code,omitempty" form:"roleCode" binding:"required"`     
+	ScopeType     string                 `protobuf:"bytes,2,opt,name=scope_type,json=scopeType,proto3" json:"scope_type,omitempty" form:"scopeType" binding:"required,oneof=platform org project"`  
+	ScopeId       int64                  `protobuf:"varint,3,opt,name=scope_id,json=scopeId,proto3" json:"scope_id,omitempty" form:"scopeId"`       
+	Page          int32                  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`                            
+	PageSize      int32                  `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`    
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -567,9 +608,23 @@ func (*ListUsersByRoleRequest) Descriptor() ([]byte, []int) {
 	return file_rbac_user_role_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *ListUsersByRoleRequest) GetRoleId() int64 {
+func (x *ListUsersByRoleRequest) GetRoleCode() string {
 	if x != nil {
-		return x.RoleId
+		return x.RoleCode
+	}
+	return ""
+}
+
+func (x *ListUsersByRoleRequest) GetScopeType() string {
+	if x != nil {
+		return x.ScopeType
+	}
+	return ""
+}
+
+func (x *ListUsersByRoleRequest) GetScopeId() int64 {
+	if x != nil {
+		return x.ScopeId
 	}
 	return 0
 }
@@ -712,47 +767,56 @@ var File_rbac_user_role_proto protoreflect.FileDescriptor
 
 const file_rbac_user_role_proto_rawDesc = "" +
 	"\n" +
-	"\x14rbac/user_role.proto\x12\tuser_role\x1a\x0frbac/role.proto\x1a\x16rbac/rbac_common.proto\"\xcc\x01\n" +
+	"\x14rbac/user_role.proto\x12\tuser_role\x1a\x16rbac/rbac_common.proto\"\xea\x01\n" +
 	"\bUserRole\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x17\n" +
-	"\arole_id\x18\x03 \x01(\x03R\x06roleId\x12\x1d\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1b\n" +
+	"\trole_code\x18\x03 \x01(\tR\broleCode\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"scope_type\x18\x04 \x01(\tR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\x05 \x01(\x03R\ascopeId\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\x12\x1e\n" +
-	"\x04role\x18\x06 \x01(\v2\n" +
-	".role.RoleR\x04role\x12 \n" +
-	"\x04user\x18\a \x01(\v2\f.common.UserR\x04user\"I\n" +
+	"created_at\x18\x06 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\x03R\tupdatedAt\x12 \n" +
+	"\x04user\x18\b \x01(\v2\f.common.UserR\x04user\"\x87\x01\n" +
 	"\x15AssignUserRoleRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x17\n" +
-	"\arole_id\x18\x02 \x01(\x03R\x06roleId\"@\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1b\n" +
+	"\trole_code\x18\x02 \x01(\tR\broleCode\x12\x1d\n" +
+	"\n" +
+	"scope_type\x18\x03 \x01(\tR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\x04 \x01(\x03R\ascopeId\"@\n" +
 	"\x16AssignUserRoleResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"I\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\x87\x01\n" +
 	"\x15RemoveUserRoleRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x17\n" +
-	"\arole_id\x18\x02 \x01(\x03R\x06roleId\"@\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1b\n" +
+	"\trole_code\x18\x02 \x01(\tR\broleCode\x12\x1d\n" +
+	"\n" +
+	"scope_type\x18\x03 \x01(\tR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\x04 \x01(\x03R\ascopeId\"@\n" +
 	"\x16RemoveUserRoleResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"`\n" +
 	"\x14ListUserRolesRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
 	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\"n\n" +
-	"\x19ListUserRolesResponseData\x12 \n" +
-	"\x05roles\x18\x01 \x03(\v2\n" +
-	".role.RoleR\x05roles\x12\x14\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\"w\n" +
+	"\x19ListUserRolesResponseData\x12)\n" +
+	"\x05roles\x18\x01 \x03(\v2\x13.user_role.UserRoleR\x05roles\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x19\n" +
 	"\bhas_next\x18\x03 \x01(\bR\ahasNext\"y\n" +
 	"\x15ListUserRolesResponse\x128\n" +
 	"\x04data\x18\x01 \x01(\v2$.user_role.ListUserRolesResponseDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"b\n" +
-	"\x16ListUsersByRoleRequest\x12\x17\n" +
-	"\arole_id\x18\x01 \x01(\x03R\x06roleId\x12\x12\n" +
-	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\"r\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\xa0\x01\n" +
+	"\x16ListUsersByRoleRequest\x12\x1b\n" +
+	"\trole_code\x18\x01 \x01(\tR\broleCode\x12\x1d\n" +
+	"\n" +
+	"scope_type\x18\x02 \x01(\tR\tscopeType\x12\x19\n" +
+	"\bscope_id\x18\x03 \x01(\x03R\ascopeId\x12\x12\n" +
+	"\x04page\x18\x04 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x05 \x01(\x05R\bpageSize\"r\n" +
 	"\x1bListUsersByRoleResponseData\x12\"\n" +
 	"\x05users\x18\x01 \x03(\v2\f.common.UserR\x05users\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x19\n" +
@@ -787,21 +851,19 @@ var file_rbac_user_role_proto_goTypes = []any{
 	(*ListUsersByRoleRequest)(nil),      // 8: user_role.ListUsersByRoleRequest
 	(*ListUsersByRoleResponseData)(nil), // 9: user_role.ListUsersByRoleResponseData
 	(*ListUsersByRoleResponse)(nil),     // 10: user_role.ListUsersByRoleResponse
-	(*role.Role)(nil),                   // 11: role.Role
-	(*common.User)(nil),                 // 12: common.User
+	(*common.User)(nil),                 // 11: common.User
 }
 var file_rbac_user_role_proto_depIdxs = []int32{
-	11, // 0: user_role.UserRole.role:type_name -> role.Role
-	12, // 1: user_role.UserRole.user:type_name -> common.User
-	11, // 2: user_role.ListUserRolesResponseData.roles:type_name -> role.Role
-	6,  // 3: user_role.ListUserRolesResponse.data:type_name -> user_role.ListUserRolesResponseData
-	12, // 4: user_role.ListUsersByRoleResponseData.users:type_name -> common.User
-	9,  // 5: user_role.ListUsersByRoleResponse.data:type_name -> user_role.ListUsersByRoleResponseData
-	6,  // [6:6] is the sub-list for method output_type
-	6,  // [6:6] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	11, // 0: user_role.UserRole.user:type_name -> common.User
+	0,  // 1: user_role.ListUserRolesResponseData.roles:type_name -> user_role.UserRole
+	6,  // 2: user_role.ListUserRolesResponse.data:type_name -> user_role.ListUserRolesResponseData
+	11, // 3: user_role.ListUsersByRoleResponseData.users:type_name -> common.User
+	9,  // 4: user_role.ListUsersByRoleResponse.data:type_name -> user_role.ListUsersByRoleResponseData
+	5,  // [5:5] is the sub-list for method output_type
+	5,  // [5:5] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_rbac_user_role_proto_init() }

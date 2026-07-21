@@ -26,7 +26,6 @@ import (
 	"github.com/casbin/casbin/v2"
 
 	"sico-backend/internal/transport/http/dto/rbac/casbin_rule"
-	"sico-backend/internal/transport/http/dto/rbac/role"
 	"sico-backend/internal/transport/http/dto/rbac/token"
 	"sico-backend/internal/transport/http/dto/rbac/user"
 	"sico-backend/internal/transport/http/dto/rbac/user_role"
@@ -44,11 +43,6 @@ type Service interface {
 	Login(ctx context.Context, req *token.LoginRequest) (*token.LoginResponse, error)
 	Logout(ctx context.Context, token string) (*token.LogoutResponse, error)
 	RefreshToken(ctx context.Context, oldToken string, userInfo *jwtx.UserInfo) (*token.RefreshTokenResponse, error)
-	CreateRole(ctx context.Context, req *role.CreateRoleRequest) (*role.CreateRoleResponse, error)
-	UpdateRole(ctx context.Context, req *role.UpdateRoleRequest) (*role.UpdateRoleResponse, error)
-	DeleteRole(ctx context.Context, req *role.DeleteRoleRequest) (*role.DeleteRoleResponse, error)
-	GetRole(ctx context.Context, req *role.GetRoleRequest) (*role.GetRoleResponse, error)
-	QueryRoles(ctx context.Context, req *role.QueryRolesRequest) (*role.QueryRolesResponse, error)
 	AssignUserRole(ctx context.Context, req *user_role.AssignUserRoleRequest) (*user_role.AssignUserRoleResponse, error)
 	RemoveUserRole(ctx context.Context, req *user_role.RemoveUserRoleRequest) (*user_role.RemoveUserRoleResponse, error)
 	ListUserRoles(ctx context.Context, req *user_role.ListUserRolesRequest) (*user_role.ListUserRolesResponse, error)
@@ -58,5 +52,6 @@ type Service interface {
 	DeletePolicy(ctx context.Context, req *casbin_rule.DeletePolicyRequest) (*casbin_rule.DeletePolicyResponse, error)
 	GetPolicy(ctx context.Context, req *casbin_rule.GetPolicyRequest) (*casbin_rule.GetPolicyResponse, error)
 	QueryPolicies(ctx context.Context, req *casbin_rule.QueryPoliciesRequest) (*casbin_rule.QueryPoliciesResponse, error)
+	ReloadEnforcer(ctx context.Context) error
 	GetEnforcer() *casbin.Enforcer
 }

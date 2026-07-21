@@ -64,6 +64,7 @@ from .config import (
 )
 from .executors.command_backend import RESOURCE_KEY_DOCKER, RESOURCE_KEY_K8S_POD, backend_resource_key
 from .tool_catalog import RUN_COMMAND_TOOL_NAME
+from .playbook_retrieval import attach_playbook_hints
 from .presentation.rendering.batch_view import _planned_batch_sizes, _with_result_snapshots
 from .execution_plan import BatchExecutionPlan, SandboxTypePlan
 from .sandbox_types import SANDBOX_OSES
@@ -590,6 +591,7 @@ class Submitter:
     ) -> list[TaskRun]:
         runs: list[TaskRun] = []
         for batch_item_index, task in enumerate(prepared.batch.tasks):
+            task = attach_playbook_hints(ctx, task)
             child_tool_call_id = await self._progress.add_task_sub_call(
                 ctx,
                 parent_tool_call_id=parent_tool_call_id,

@@ -1,0 +1,18 @@
+import { type CSSProperties } from "react";
+
+// Legacy ConversationStarter entrance, staggered so the hero, composer, and
+// suggested-task block rise in sequence (0 / 120 / 240ms). The motion lives in
+// the `animate-starter-reveal` / `animate-starter-fade` utilities (keyframes +
+// 0.5s + the out-expo curve, defined in globals.css); only the per-block delay
+// is inline. The utilities MUST be applied as classes — a pure inline
+// `animation` would be tree-shaken by Tailwind's content scanner. Gated on
+// `motion-safe:` so a reduced-motion user gets the final state with no movement
+// (same accessibility contract as the login stagger).
+export const REVEAL_CLASS = "motion-safe:animate-starter-reveal";
+export const FADE_CLASS = "motion-safe:animate-starter-fade";
+
+// Per-block stagger. An inline `animationDelay` longhand reliably wins over the
+// utility's `animation` shorthand (same pattern as the login stagger).
+export function delayStyle(delayMs: number): CSSProperties {
+  return { animationDelay: `${delayMs}ms` };
+}

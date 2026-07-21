@@ -80,7 +80,7 @@ async def _read_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -
     )
 
     def _impl() -> dict[str, Any]:
-        full_content = CHAT_FS.read_file(ctx.agent_instance_id, ctx.username, file_path)
+        full_content = CHAT_FS.read_file(ctx.agent_instance_id, ctx.username, file_path, conversation_id=ctx.conversation_id)
 
         all_lines = full_content.splitlines(keepends=True)
         total_lines = len(all_lines)

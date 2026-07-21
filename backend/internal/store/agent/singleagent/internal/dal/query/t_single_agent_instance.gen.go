@@ -65,6 +65,7 @@ type tSingleAgentInstance struct {
 	EmployerIconURI  field.String // Employer Icon URI
 	ProjectID        field.Int64  // the project id this agent instance belongs to
 	Permission       field.String // Agent Permission Configuration
+	Status           field.Int32  // Instance Status
 	Attachments      field.Field  // Form Attachments
 	CreatedAt        field.Int64  // Create Time in Milliseconds
 	UpdatedAt        field.Int64  // Update Time in Milliseconds
@@ -96,6 +97,7 @@ func (t *tSingleAgentInstance) updateTableName(table string) *tSingleAgentInstan
 	t.EmployerIconURI = field.NewString(table, "employer_icon_uri")
 	t.ProjectID = field.NewInt64(table, "project_id")
 	t.Permission = field.NewString(table, "permission")
+	t.Status = field.NewInt32(table, "status")
 	t.Attachments = field.NewField(table, "attachments")
 	t.CreatedAt = field.NewInt64(table, "created_at")
 	t.UpdatedAt = field.NewInt64(table, "updated_at")
@@ -116,7 +118,7 @@ func (t *tSingleAgentInstance) GetFieldByName(fieldName string) (field.OrderExpr
 }
 
 func (t *tSingleAgentInstance) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 15)
+	t.fieldMap = make(map[string]field.Expr, 16)
 	t.fieldMap["id"] = t.ID
 	t.fieldMap["agent_id"] = t.AgentID
 	t.fieldMap["employer_username"] = t.EmployerUsername
@@ -128,6 +130,7 @@ func (t *tSingleAgentInstance) fillFieldMap() {
 	t.fieldMap["employer_icon_uri"] = t.EmployerIconURI
 	t.fieldMap["project_id"] = t.ProjectID
 	t.fieldMap["permission"] = t.Permission
+	t.fieldMap["status"] = t.Status
 	t.fieldMap["attachments"] = t.Attachments
 	t.fieldMap["created_at"] = t.CreatedAt
 	t.fieldMap["updated_at"] = t.UpdatedAt

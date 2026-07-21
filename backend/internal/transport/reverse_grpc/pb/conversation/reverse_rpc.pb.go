@@ -310,6 +310,110 @@ func (x *ListUserMessageByUserAgentTurnIDResponse) GetMsg() string {
 	return ""
 }
 
+type UpdateConversationTitleRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ConversationId int64                  `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversationId"`  
+	Title          string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title"`                                           
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *UpdateConversationTitleRequest) Reset() {
+	*x = UpdateConversationTitleRequest{}
+	mi := &file_conversation_reverse_rpc_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateConversationTitleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateConversationTitleRequest) ProtoMessage() {}
+
+func (x *UpdateConversationTitleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_reverse_rpc_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateConversationTitleRequest.ProtoReflect.Descriptor instead.
+func (*UpdateConversationTitleRequest) Descriptor() ([]byte, []int) {
+	return file_conversation_reverse_rpc_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *UpdateConversationTitleRequest) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *UpdateConversationTitleRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+type UpdateConversationTitleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateConversationTitleResponse) Reset() {
+	*x = UpdateConversationTitleResponse{}
+	mi := &file_conversation_reverse_rpc_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateConversationTitleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateConversationTitleResponse) ProtoMessage() {}
+
+func (x *UpdateConversationTitleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_reverse_rpc_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateConversationTitleResponse.ProtoReflect.Descriptor instead.
+func (*UpdateConversationTitleResponse) Descriptor() ([]byte, []int) {
+	return file_conversation_reverse_rpc_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UpdateConversationTitleResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *UpdateConversationTitleResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
 var File_conversation_reverse_rpc_proto protoreflect.FileDescriptor
 
 const file_conversation_reverse_rpc_proto_rawDesc = "" +
@@ -330,10 +434,17 @@ const file_conversation_reverse_rpc_proto_rawDesc = "" +
 	"(ListUserMessageByUserAgentTurnIDResponse\x12 \n" +
 	"\x04data\x18\x01 \x03(\v2\f.msg.MessageR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg2\x8c\x02\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"_\n" +
+	"\x1eUpdateConversationTitleRequest\x12'\n" +
+	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\"I\n" +
+	"\x1fUpdateConversationTitleResponse\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg2\x87\x03\n" +
 	"\x16ReverseConversationRPC\x12[\n" +
 	"\x10RpcCreateMessage\x12!.reverse_rpc.CreateMessageRequest\x1a\".reverse_rpc.CreateMessageResponse\"\x00\x12\x94\x01\n" +
-	"#RpcListUserMessageByUserAgentTurnID\x124.reverse_rpc.ListUserMessageByUserAgentTurnIDRequest\x1a5.reverse_rpc.ListUserMessageByUserAgentTurnIDResponse\"\x00BJZHsico-backend/internal/transport/reverse_grpc/pb/conversation/reverse_rpcb\x06proto3"
+	"#RpcListUserMessageByUserAgentTurnID\x124.reverse_rpc.ListUserMessageByUserAgentTurnIDRequest\x1a5.reverse_rpc.ListUserMessageByUserAgentTurnIDResponse\"\x00\x12y\n" +
+	"\x1aRpcUpdateConversationTitle\x12+.reverse_rpc.UpdateConversationTitleRequest\x1a,.reverse_rpc.UpdateConversationTitleResponse\"\x00BJZHsico-backend/internal/transport/reverse_grpc/pb/conversation/reverse_rpcb\x06proto3"
 
 var (
 	file_conversation_reverse_rpc_proto_rawDescOnce sync.Once
@@ -347,25 +458,29 @@ func file_conversation_reverse_rpc_proto_rawDescGZIP() []byte {
 	return file_conversation_reverse_rpc_proto_rawDescData
 }
 
-var file_conversation_reverse_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_conversation_reverse_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_conversation_reverse_rpc_proto_goTypes = []any{
 	(*CreateMessageRequest)(nil),                     // 0: reverse_rpc.CreateMessageRequest
 	(*CreateMessageData)(nil),                        // 1: reverse_rpc.CreateMessageData
 	(*CreateMessageResponse)(nil),                    // 2: reverse_rpc.CreateMessageResponse
 	(*ListUserMessageByUserAgentTurnIDRequest)(nil),  // 3: reverse_rpc.ListUserMessageByUserAgentTurnIDRequest
 	(*ListUserMessageByUserAgentTurnIDResponse)(nil), // 4: reverse_rpc.ListUserMessageByUserAgentTurnIDResponse
-	(*conversation.Message)(nil),                     // 5: msg.Message
+	(*UpdateConversationTitleRequest)(nil),           // 5: reverse_rpc.UpdateConversationTitleRequest
+	(*UpdateConversationTitleResponse)(nil),          // 6: reverse_rpc.UpdateConversationTitleResponse
+	(*conversation.Message)(nil),                     // 7: msg.Message
 }
 var file_conversation_reverse_rpc_proto_depIdxs = []int32{
-	5, // 0: reverse_rpc.CreateMessageRequest.message:type_name -> msg.Message
+	7, // 0: reverse_rpc.CreateMessageRequest.message:type_name -> msg.Message
 	1, // 1: reverse_rpc.CreateMessageResponse.data:type_name -> reverse_rpc.CreateMessageData
-	5, // 2: reverse_rpc.ListUserMessageByUserAgentTurnIDResponse.data:type_name -> msg.Message
+	7, // 2: reverse_rpc.ListUserMessageByUserAgentTurnIDResponse.data:type_name -> msg.Message
 	0, // 3: reverse_rpc.ReverseConversationRPC.RpcCreateMessage:input_type -> reverse_rpc.CreateMessageRequest
 	3, // 4: reverse_rpc.ReverseConversationRPC.RpcListUserMessageByUserAgentTurnID:input_type -> reverse_rpc.ListUserMessageByUserAgentTurnIDRequest
-	2, // 5: reverse_rpc.ReverseConversationRPC.RpcCreateMessage:output_type -> reverse_rpc.CreateMessageResponse
-	4, // 6: reverse_rpc.ReverseConversationRPC.RpcListUserMessageByUserAgentTurnID:output_type -> reverse_rpc.ListUserMessageByUserAgentTurnIDResponse
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
+	5, // 5: reverse_rpc.ReverseConversationRPC.RpcUpdateConversationTitle:input_type -> reverse_rpc.UpdateConversationTitleRequest
+	2, // 6: reverse_rpc.ReverseConversationRPC.RpcCreateMessage:output_type -> reverse_rpc.CreateMessageResponse
+	4, // 7: reverse_rpc.ReverseConversationRPC.RpcListUserMessageByUserAgentTurnID:output_type -> reverse_rpc.ListUserMessageByUserAgentTurnIDResponse
+	6, // 8: reverse_rpc.ReverseConversationRPC.RpcUpdateConversationTitle:output_type -> reverse_rpc.UpdateConversationTitleResponse
+	6, // [6:9] is the sub-list for method output_type
+	3, // [3:6] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -382,7 +497,7 @@ func file_conversation_reverse_rpc_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conversation_reverse_rpc_proto_rawDesc), len(file_conversation_reverse_rpc_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
