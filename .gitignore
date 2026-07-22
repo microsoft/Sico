@@ -22,6 +22,7 @@ scripts/acceptance-*.json
 # ignore these shared build configs and break the from-source frontend build.
 !frontend/packages/config/tsconfig.base.json
 !frontend/packages/config/vitest.config.base.ts
+!frontend/packages/config/eslint.config.base.cjs
 *_BACKUP_*.txt
 *_BASE_*.txt
 *_LOCAL_*.txt
