@@ -1,3 +1,25 @@
+/**
+ * Copyright (c) 2026 Sico Authors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 import { useQueryErrorResetBoundary } from "@tanstack/react-query";
 import type * as React from "react";
 import { Suspense, useRef } from "react";
@@ -79,7 +101,7 @@ export function AssetsTable({
           the card + sentinel never unmount. */}
       <div
         ref={scrollCardRef}
-        className="bg-surface-basic shadow-m scrollbar-none **:data-[slot=table-container]:scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl **:data-[slot=table-container]:flex-1"
+        className="scrollbar-none bg-surface-basic shadow-m **:data-[slot=table-container]:scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl **:data-[slot=table-container]:flex-1"
       >
         <ErrorBoundary
           onReset={reset}

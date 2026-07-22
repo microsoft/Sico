@@ -146,6 +146,7 @@ def test_task_workspace_profile_clears_heavy_snapshots(tmp_path: Path, monkeypat
     for name in ("knowledge", "history", "playbooks"):
         (tmp_path / name).mkdir()
 
+    monkeypatch.setattr(workspace_init.CHAT_FS, "migrate_legacy_session", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init.CHAT_FS, "get_workspace_path", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init, "_copy_skills", lambda *_args, **_kwargs: called.append("skills"))
     monkeypatch.setattr(workspace_init, "_copy_attachments", lambda *_args, **_kwargs: called.append("attachments"))
@@ -179,6 +180,7 @@ def test_workspace_init_removes_history_but_retains_results_and_case_sources(tmp
     (tmp_path / "results").mkdir()
     (tmp_path / "case_sources").mkdir()
 
+    monkeypatch.setattr(workspace_init.CHAT_FS, "migrate_legacy_session", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init.CHAT_FS, "get_workspace_path", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init, "_copy_skills", lambda *_args, **_kwargs: called.append("skills"))
     monkeypatch.setattr(workspace_init, "_copy_attachments", lambda *_args, **_kwargs: called.append("attachments"))

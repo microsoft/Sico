@@ -1,3 +1,25 @@
+/**
+ * Copyright (c) 2026 Sico Authors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type * as React from "react";
 
@@ -191,7 +213,7 @@ function FontPreview(): React.JSX.Element {
                 2 min ago
               </span>
             </div>
-            <p className="text-foreground-secondary leading-body-2 text-sm">
+            <p className="leading-body-2 text-foreground-secondary text-sm">
               Running automated browser tests on the staging environment. 12
               test cases passed, 2 warnings detected in performance metrics.
             </p>
@@ -208,13 +230,13 @@ function FontPreview(): React.JSX.Element {
           {/* Chat bubble sample */}
           <div className="flex flex-col gap-3 pt-2">
             <div className="flex flex-col items-end gap-1 pl-16">
-              <div className="bg-surface-sunken text-foreground-primary leading-body-2 max-w-xs rounded-2xl rounded-br-md px-4 py-3 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+              <div className="bg-surface-sunken leading-body-2 text-foreground-primary max-w-xs rounded-2xl rounded-br-md px-4 py-3 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                 Can you summarize the test results?
               </div>
               <span className="text-foreground-faint text-xs">12:30</span>
             </div>
             <div className="flex flex-col items-start gap-1">
-              <div className="text-foreground-secondary leading-body-2 max-w-xs text-sm">
+              <div className="leading-body-2 text-foreground-secondary max-w-xs text-sm">
                 All 12 functional tests passed. The 2 warnings are related to
                 page load time exceeding the 3s threshold on the dashboard
                 route.

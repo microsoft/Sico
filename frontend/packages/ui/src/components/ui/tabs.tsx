@@ -1,3 +1,25 @@
+/**
+ * Copyright (c) 2026 Sico Authors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ReactElement } from "react";
@@ -23,7 +45,7 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list text-muted-foreground inline-flex w-fit items-center justify-center rounded-lg p-[3px] group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-horizontal/tabs:data-[size=md]:h-10 group-data-horizontal/tabs:data-[size=sm]:h-8 data-[variant=line]:rounded-none data-[variant=line]:p-0 data-[variant=pill]:rounded-none data-[variant=pill]:p-0",
+  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-horizontal/tabs:data-[size=md]:h-10 group-data-horizontal/tabs:data-[size=sm]:h-8 data-[variant=line]:rounded-none data-[variant=line]:p-0 data-[variant=pill]:rounded-none data-[variant=pill]:p-0",
   {
     variants: {
       variant: {

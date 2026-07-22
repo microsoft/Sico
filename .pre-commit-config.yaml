@@ -85,7 +85,18 @@ repos:
           - "core/core.egg-info/**"
           # TypeScript ambient declarations
           - "-ignore"
-          - "frontend/src/**/*.d.ts"
+          - "**/*.d.ts"
+          # Minified / vendored third-party assets
+          - "-ignore"
+          - "**/*.min.js"
+          - "-ignore"
+          - "frontend/packages/app/public/**"
+          # Generated router tree (TanStack Router codegen)
+          - "-ignore"
+          - "**/routeTree.gen.ts"
+          # Generated lockfiles
+          - "-ignore"
+          - "**/pnpm-lock.yaml"
 
   # Basic hygiene — cross-language, fast.
   - repo: https://github.com/pre-commit/pre-commit-hooks
