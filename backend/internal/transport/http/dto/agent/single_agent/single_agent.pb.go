@@ -44,18 +44,18 @@ const (
 // Single Agent entity
 type SingleAgent struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`
-	CreatorUsername string                 `protobuf:"bytes,2,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`
-	Name            string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name"`
-	Desc            string                 `protobuf:"bytes,5,opt,name=desc,proto3" json:"desc"`
-	IconUri         string                 `protobuf:"bytes,6,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri"`
-	RawIconUri      string                 `protobuf:"bytes,7,opt,name=raw_icon_uri,json=rawIconUri,proto3" json:"rawIconUri"`
-	CreatedAt       int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`
-	UpdatedAt       int64                  `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`
-	Version         string                 `protobuf:"bytes,10,opt,name=version,proto3" json:"version"`
-	Role            string                 `protobuf:"bytes,11,opt,name=role,proto3" json:"role"`
-	UpdaterUsername string                 `protobuf:"bytes,23,opt,name=updater_username,json=updaterUsername,proto3" json:"updaterUsername"`
-	LlmhubConfig    *LLMHubConfig          `protobuf:"bytes,24,opt,name=llmhub_config,json=llmhubConfig,proto3" json:"llmhubConfig,omitempty"`
+	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`                           
+	CreatorUsername string                 `protobuf:"bytes,2,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`   
+	Name            string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name"`                                                
+	Desc            string                 `protobuf:"bytes,5,opt,name=desc,proto3" json:"desc"`                                                
+	IconUri         string                 `protobuf:"bytes,6,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri"`                           
+	RawIconUri      string                 `protobuf:"bytes,7,opt,name=raw_icon_uri,json=rawIconUri,proto3" json:"rawIconUri"`                
+	CreatedAt       int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                    
+	UpdatedAt       int64                  `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                    
+	Version         string                 `protobuf:"bytes,10,opt,name=version,proto3" json:"version"`                                         
+	Role            string                 `protobuf:"bytes,11,opt,name=role,proto3" json:"role"`                                               
+	UpdaterUsername string                 `protobuf:"bytes,23,opt,name=updater_username,json=updaterUsername,proto3" json:"updaterUsername"`  
+	LlmhubConfig    *LLMHubConfig          `protobuf:"bytes,24,opt,name=llmhub_config,json=llmhubConfig,proto3" json:"llmhubConfig,omitempty"`           
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -176,8 +176,8 @@ func (x *SingleAgent) GetLlmhubConfig() *LLMHubConfig {
 
 type LLMHubConfig struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
-	ModelKeys             []string               `protobuf:"bytes,1,rep,name=model_keys,json=modelKeys,proto3" json:"modelKeys,omitempty"`
-	DefaultGlobalModelKey string                 `protobuf:"bytes,2,opt,name=default_global_model_key,json=defaultGlobalModelKey,proto3" json:"defaultGlobalModelKey,omitempty"`
+	ModelKeys             []string               `protobuf:"bytes,1,rep,name=model_keys,json=modelKeys,proto3" json:"modelKeys,omitempty"`                                          
+	DefaultGlobalModelKey string                 `protobuf:"bytes,2,opt,name=default_global_model_key,json=defaultGlobalModelKey,proto3" json:"defaultGlobalModelKey,omitempty"`  
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -228,12 +228,12 @@ func (x *LLMHubConfig) GetDefaultGlobalModelKey() string {
 
 type AgentModelOption struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
-	ModelKey             string                 `protobuf:"bytes,1,opt,name=model_key,json=modelKey,proto3" json:"modelKey"`
-	DisplayName          string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"displayName"`
-	Description          string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description"`
-	IconUri              string                 `protobuf:"bytes,4,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri"`
-	ModelType            int32                  `protobuf:"varint,5,opt,name=model_type,json=modelType,proto3" json:"modelType"`
-	ProviderTemplateType int32                  `protobuf:"varint,6,opt,name=provider_template_type,json=providerTemplateType,proto3" json:"providerTemplateType"`
+	ModelKey             string                 `protobuf:"bytes,1,opt,name=model_key,json=modelKey,proto3" json:"modelKey"`                                         
+	DisplayName          string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"displayName"`                                
+	Description          string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description"`                                                   
+	IconUri              string                 `protobuf:"bytes,4,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri"`                                            
+	ModelType            int32                  `protobuf:"varint,5,opt,name=model_type,json=modelType,proto3" json:"modelType"`                                     
+	ProviderTemplateType int32                  `protobuf:"varint,6,opt,name=provider_template_type,json=providerTemplateType,proto3" json:"providerTemplateType"`  
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -312,9 +312,9 @@ func (x *AgentModelOption) GetProviderTemplateType() int32 {
 
 type GetSingleAgentModelsResponse struct {
 	state         protoimpl.MessageState    `protogen:"open.v1"`
-	Data          *GetSingleAgentModelsData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
-	Code          int32                     `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                    `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Data          *GetSingleAgentModelsData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                     `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                    `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -372,9 +372,9 @@ func (x *GetSingleAgentModelsResponse) GetMsg() string {
 
 type GetSingleAgentModelsData struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	BuiltinModels  []*AgentModelOption    `protobuf:"bytes,1,rep,name=builtin_models,json=builtinModels,proto3" json:"builtinModels"`
-	CustomModels   []*AgentModelOption    `protobuf:"bytes,2,rep,name=custom_models,json=customModels,proto3" json:"customModels"`
-	SelectedConfig *LLMHubConfig          `protobuf:"bytes,3,opt,name=selected_config,json=selectedConfig,proto3" json:"selectedConfig,omitempty"`
+	BuiltinModels  []*AgentModelOption    `protobuf:"bytes,1,rep,name=builtin_models,json=builtinModels,proto3" json:"builtinModels"`     
+	CustomModels   []*AgentModelOption    `protobuf:"bytes,2,rep,name=custom_models,json=customModels,proto3" json:"customModels"`        
+	SelectedConfig *LLMHubConfig          `protobuf:"bytes,3,opt,name=selected_config,json=selectedConfig,proto3" json:"selectedConfig,omitempty"`  
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -433,8 +433,8 @@ func (x *GetSingleAgentModelsData) GetSelectedConfig() *LLMHubConfig {
 // Agent identity for runtime
 type AgentIdentity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`
-	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`  
+	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version"`                 
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -486,15 +486,15 @@ func (x *AgentIdentity) GetVersion() string {
 // Request to create a single agent
 type CreateSingleAgentRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"-" form:"agentId" binding:"max=30"`
-	CreatorUsername string                 `protobuf:"bytes,2,opt,name=creator_username,json=creatorUsername,proto3" json:"-" form:"creatorUsername"`
-	Name            string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name" form:"name" binding:"required,max=100"`
-	Desc            string                 `protobuf:"bytes,5,opt,name=desc,proto3" json:"desc" form:"desc" binding:"max=500"`
-	IconUri         string                 `protobuf:"bytes,6,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" form:"iconUri"`
-	Role            string                 `protobuf:"bytes,7,opt,name=role,proto3" json:"role" form:"role"`
+	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"-" form:"agentId" binding:"max=30"`                          
+	CreatorUsername string                 `protobuf:"bytes,2,opt,name=creator_username,json=creatorUsername,proto3" json:"-" form:"creatorUsername"`  
+	Name            string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name" form:"name" binding:"required,max=100"`                                               
+	Desc            string                 `protobuf:"bytes,5,opt,name=desc,proto3" json:"desc" form:"desc" binding:"max=500"`                                               
+	IconUri         string                 `protobuf:"bytes,6,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" form:"iconUri"`                          
+	Role            string                 `protobuf:"bytes,7,opt,name=role,proto3" json:"role" form:"role"`                                               
 	// Optional configuration
-	UpdaterUsername string        `protobuf:"bytes,13,opt,name=updater_username,json=updaterUsername,proto3" json:"-"`
-	LlmhubConfig    *LLMHubConfig `protobuf:"bytes,14,opt,name=llmhub_config,json=llmhubConfig,proto3" json:"llmhubConfig,omitempty"`
+	UpdaterUsername string        `protobuf:"bytes,13,opt,name=updater_username,json=updaterUsername,proto3" json:"-"`  
+	LlmhubConfig    *LLMHubConfig `protobuf:"bytes,14,opt,name=llmhub_config,json=llmhubConfig,proto3" json:"llmhubConfig,omitempty"`           
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -588,9 +588,9 @@ func (x *CreateSingleAgentRequest) GetLlmhubConfig() *LLMHubConfig {
 // Response for creating a single agent
 type CreateSingleAgentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          *CreateSingleAgentData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Data          *CreateSingleAgentData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -648,7 +648,7 @@ func (x *CreateSingleAgentResponse) GetMsg() string {
 
 type CreateSingleAgentData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -693,7 +693,7 @@ func (x *CreateSingleAgentData) GetAgentId() string {
 // Request to get a single agent
 type GetSingleAgentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty" form:"agentId" binding:"required"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty" form:"agentId" binding:"required"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -738,9 +738,9 @@ func (x *GetSingleAgentRequest) GetAgentId() string {
 // Response for getting a single agent
 type GetSingleAgentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          *GetSingleAgentData    `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Data          *GetSingleAgentData    `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -798,7 +798,7 @@ func (x *GetSingleAgentResponse) GetMsg() string {
 
 type GetSingleAgentData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Agent         *SingleAgent           `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent"`
+	Agent         *SingleAgent           `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -843,14 +843,14 @@ func (x *GetSingleAgentData) GetAgent() *SingleAgent {
 // Request to update a single agent
 type UpdateSingleAgentRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId" form:"agentId" binding:"required"`
-	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name" form:"name" binding:"max=100"`
-	Desc            string                 `protobuf:"bytes,3,opt,name=desc,proto3" json:"desc" form:"desc" binding:"max=500"`
-	IconUri         string                 `protobuf:"bytes,4,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" form:"iconUri"`
-	CapabilityTags  []string               `protobuf:"bytes,5,rep,name=capability_tags,json=capabilityTags,proto3" json:"-" form:"capabilityTags"`
-	Role            string                 `protobuf:"bytes,6,opt,name=role,proto3" json:"role" form:"role"`
-	UpdaterUsername string                 `protobuf:"bytes,20,opt,name=updater_username,json=updaterUsername,proto3" json:"-"`
-	LlmhubConfig    *LLMHubConfig          `protobuf:"bytes,21,opt,name=llmhub_config,json=llmhubConfig,proto3" json:"llmhubConfig,omitempty"`
+	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId" form:"agentId" binding:"required"`                           
+	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name" form:"name" binding:"max=100"`                                                
+	Desc            string                 `protobuf:"bytes,3,opt,name=desc,proto3" json:"desc" form:"desc" binding:"max=500"`                                                
+	IconUri         string                 `protobuf:"bytes,4,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" form:"iconUri"`                           
+	CapabilityTags  []string               `protobuf:"bytes,5,rep,name=capability_tags,json=capabilityTags,proto3" json:"-" form:"capabilityTags"`      
+	Role            string                 `protobuf:"bytes,6,opt,name=role,proto3" json:"role" form:"role"`                                                
+	UpdaterUsername string                 `protobuf:"bytes,20,opt,name=updater_username,json=updaterUsername,proto3" json:"-"`  
+	LlmhubConfig    *LLMHubConfig          `protobuf:"bytes,21,opt,name=llmhub_config,json=llmhubConfig,proto3" json:"llmhubConfig,omitempty"`           
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -944,8 +944,8 @@ func (x *UpdateSingleAgentRequest) GetLlmhubConfig() *LLMHubConfig {
 // Response for updating a single agent
 type UpdateSingleAgentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -997,7 +997,7 @@ func (x *UpdateSingleAgentResponse) GetMsg() string {
 // Request to delete a single agent
 type DeleteSingleAgentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty" form:"agentId" binding:"required"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty" form:"agentId" binding:"required"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1042,8 +1042,8 @@ func (x *DeleteSingleAgentRequest) GetAgentId() string {
 // Response for deleting a single agent
 type DeleteSingleAgentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1095,9 +1095,9 @@ func (x *DeleteSingleAgentResponse) GetMsg() string {
 // Request to list single agents
 type ListSingleAgentsRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	CreatorUsername string                 `protobuf:"bytes,1,opt,name=creator_username,json=creatorUsername,proto3" json:"-" form:"creatorUsername"`
-	Page            int32                  `protobuf:"varint,3,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"required,min=1"`
-	PageSize        int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"required,min=1,max=50"`
+	CreatorUsername string                 `protobuf:"bytes,1,opt,name=creator_username,json=creatorUsername,proto3" json:"-" form:"creatorUsername"`  
+	Page            int32                  `protobuf:"varint,3,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"required,min=1"`                                              
+	PageSize        int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"required,min=1,max=50"`                      
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1156,9 +1156,9 @@ func (x *ListSingleAgentsRequest) GetPageSize() int32 {
 // Response for listing single agents
 type ListSingleAgentsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          *ListSingleAgentsData  `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Data          *ListSingleAgentsData  `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1216,9 +1216,9 @@ func (x *ListSingleAgentsResponse) GetMsg() string {
 
 type ListSingleAgentsData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Agents        []*SingleAgent         `protobuf:"bytes,1,rep,name=agents,proto3" json:"agents"`
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`
-	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`
+	Agents        []*SingleAgent         `protobuf:"bytes,1,rep,name=agents,proto3" json:"agents"`                    
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`                     
+	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1314,9 +1314,9 @@ func (*ListSingleAgentInfosRequest) Descriptor() ([]byte, []int) {
 // Response for listing single agent roles
 type ListSingleAgentInfosResponse struct {
 	state         protoimpl.MessageState    `protogen:"open.v1"`
-	Data          *ListSingleAgentInfosData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
-	Code          int32                     `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                    `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Data          *ListSingleAgentInfosData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                     `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                    `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1374,7 +1374,7 @@ func (x *ListSingleAgentInfosResponse) GetMsg() string {
 
 type ListSingleAgentInfosData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentInfos    []*SingleAgentInfo     `protobuf:"bytes,1,rep,name=agent_infos,json=agentInfos,proto3" json:"agentInfos"`
+	AgentInfos    []*SingleAgentInfo     `protobuf:"bytes,1,rep,name=agent_infos,json=agentInfos,proto3" json:"agentInfos"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1418,11 +1418,11 @@ func (x *ListSingleAgentInfosData) GetAgentInfos() []*SingleAgentInfo {
 
 type SingleAgentInfo struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`
-	Role            string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role"`
-	Name            string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name"`
-	CapabilityTags  []string               `protobuf:"bytes,4,rep,name=capability_tags,json=capabilityTags,proto3" json:"capabilityTags"`
-	CreatorUsername string                 `protobuf:"bytes,5,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`
+	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`                          
+	Role            string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role"`                                               
+	Name            string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name"`                                               
+	CapabilityTags  []string               `protobuf:"bytes,4,rep,name=capability_tags,json=capabilityTags,proto3" json:"capabilityTags"`     
+	CreatorUsername string                 `protobuf:"bytes,5,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`  
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1494,9 +1494,9 @@ func (x *SingleAgentInfo) GetCreatorUsername() string {
 
 type ListRolesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          *ListRolesData         `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Data          *ListRolesData         `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1554,7 +1554,7 @@ func (x *ListRolesResponse) GetMsg() string {
 
 type ListRolesData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Roles         []string               `protobuf:"bytes,1,rep,name=roles,proto3" json:"role"`
+	Roles         []string               `protobuf:"bytes,1,rep,name=roles,proto3" json:"role"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1599,8 +1599,8 @@ func (x *ListRolesData) GetRoles() []string {
 // Request to deploy a single agent (create an agent instance from dev page)
 type DeploySingleAgentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId" binding:"required"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name" binding:"required,max=100"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId" binding:"required"`  
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name" binding:"required,max=100"`                       
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1652,9 +1652,9 @@ func (x *DeploySingleAgentRequest) GetName() string {
 // Response for deploying a single agent
 type DeploySingleAgentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          *DeploySingleAgentData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Data          *DeploySingleAgentData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1712,9 +1712,9 @@ func (x *DeploySingleAgentResponse) GetMsg() string {
 
 type DeploySingleAgentData struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
-	AgentId          string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agentId"`
-	EmployerUsername string                 `protobuf:"bytes,3,opt,name=employer_username,json=employerUsername,proto3" json:"employerUsername"`
+	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                     
+	AgentId          string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agentId"`                             
+	EmployerUsername string                 `protobuf:"bytes,3,opt,name=employer_username,json=employerUsername,proto3" json:"employerUsername"`  
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }

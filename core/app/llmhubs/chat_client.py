@@ -165,6 +165,7 @@ class ChatClient(FunctionInvocationLayer, BaseChatClient):
         request = _chat_messages_to_llm_request(messages, self._model, options)
         async for chunk in self._hub.generate_stream(request):
             if chunk.finish_reason == "error":
+                logger.error("LLMHub streaming response error chunk=%s", chunk)
                 raise LLMHubRuntimeError(
                     chunk.delta or "LLMHub streaming response failed",
                     model=self._model,

@@ -30,6 +30,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
+	common "sico-backend/internal/transport/http/dto/common"
 	sync "sync"
 	unsafe "unsafe"
 )
@@ -97,10 +98,11 @@ func (MemberType) EnumDescriptor() ([]byte, []int) {
 // Request message for creating a project
 type CreateProjectRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name" binding:"required,min=1,max=100"`                                            
-	Description    string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description" binding:"max=500"`                              
-	IconUri        string                 `protobuf:"bytes,3,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" binding:"max=500"`                       
-	OperatorAdmins []string               `protobuf:"bytes,4,rep,name=operator_admins,json=operatorAdmins,proto3" json:"operatorAdmins" binding:"max=100"`  
+	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name" binding:"required,min=1,max=100"`                                             
+	Description    string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description" binding:"max=500"`                               
+	IconUri        string                 `protobuf:"bytes,3,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" binding:"max=500"`                        
+	OperatorAdmins []string               `protobuf:"bytes,4,rep,name=operator_admins,json=operatorAdmins,proto3" json:"operatorAdmins" binding:"max=100"`   
+	OrganizationId int64                  `protobuf:"varint,5,opt,name=organization_id,json=organizationId,proto3" json:"organizationId"`  
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -161,6 +163,13 @@ func (x *CreateProjectRequest) GetOperatorAdmins() []string {
 		return x.OperatorAdmins
 	}
 	return nil
+}
+
+func (x *CreateProjectRequest) GetOrganizationId() int64 {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return 0
 }
 
 // Response message for creating a project
@@ -792,28 +801,32 @@ func (x *GetUserProjectListData) GetHasNext() bool {
 	return false
 }
 
-type ProjectAgentInstance struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                          
-	IconUrl       string                 `protobuf:"bytes,2,opt,name=icon_url,json=iconUrl,proto3" json:"iconUrl"`  
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+// Filter for listing projects (query params for GET /project/list)
+type ListProjectFilter struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Page            int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"required,min=1"`                                                    
+	PageSize        int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"required,min=1,max=100"`                            
+	OrganizationId  *int64                 `protobuf:"varint,3,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty" form:"organizationId"`    
+	CreatorUsername *string                `protobuf:"bytes,4,opt,name=creator_username,json=creatorUsername,proto3,oneof" json:"creator_username,omitempty" form:"creatorUsername"`  
+	OwnerUsername   *string                `protobuf:"bytes,5,opt,name=owner_username,json=ownerUsername,proto3,oneof" json:"owner_username,omitempty" form:"ownerUsername"`        
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
-func (x *ProjectAgentInstance) Reset() {
-	*x = ProjectAgentInstance{}
+func (x *ListProjectFilter) Reset() {
+	*x = ListProjectFilter{}
 	mi := &file_project_project_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProjectAgentInstance) String() string {
+func (x *ListProjectFilter) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProjectAgentInstance) ProtoMessage() {}
+func (*ListProjectFilter) ProtoMessage() {}
 
-func (x *ProjectAgentInstance) ProtoReflect() protoreflect.Message {
+func (x *ListProjectFilter) ProtoReflect() protoreflect.Message {
 	mi := &file_project_project_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -825,46 +838,192 @@ func (x *ProjectAgentInstance) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProjectAgentInstance.ProtoReflect.Descriptor instead.
-func (*ProjectAgentInstance) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListProjectFilter.ProtoReflect.Descriptor instead.
+func (*ListProjectFilter) Descriptor() ([]byte, []int) {
 	return file_project_project_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *ProjectAgentInstance) GetId() int64 {
+func (x *ListProjectFilter) GetPage() int32 {
 	if x != nil {
-		return x.Id
+		return x.Page
 	}
 	return 0
 }
 
-func (x *ProjectAgentInstance) GetIconUrl() string {
+func (x *ListProjectFilter) GetPageSize() int32 {
 	if x != nil {
-		return x.IconUrl
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListProjectFilter) GetOrganizationId() int64 {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return 0
+}
+
+func (x *ListProjectFilter) GetCreatorUsername() string {
+	if x != nil && x.CreatorUsername != nil {
+		return *x.CreatorUsername
 	}
 	return ""
 }
 
+func (x *ListProjectFilter) GetOwnerUsername() string {
+	if x != nil && x.OwnerUsername != nil {
+		return *x.OwnerUsername
+	}
+	return ""
+}
+
+// Response for listing projects
+type ListProjectResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Data          *ListProjectData       `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListProjectResponse) Reset() {
+	*x = ListProjectResponse{}
+	mi := &file_project_project_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProjectResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProjectResponse) ProtoMessage() {}
+
+func (x *ListProjectResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_project_project_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProjectResponse.ProtoReflect.Descriptor instead.
+func (*ListProjectResponse) Descriptor() ([]byte, []int) {
+	return file_project_project_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListProjectResponse) GetData() *ListProjectData {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ListProjectResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ListProjectResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+type ListProjectData struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Projects      []*Project             `protobuf:"bytes,1,rep,name=projects,proto3" json:"projects"`                
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`                     
+	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListProjectData) Reset() {
+	*x = ListProjectData{}
+	mi := &file_project_project_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProjectData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProjectData) ProtoMessage() {}
+
+func (x *ListProjectData) ProtoReflect() protoreflect.Message {
+	mi := &file_project_project_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProjectData.ProtoReflect.Descriptor instead.
+func (*ListProjectData) Descriptor() ([]byte, []int) {
+	return file_project_project_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ListProjectData) GetProjects() []*Project {
+	if x != nil {
+		return x.Projects
+	}
+	return nil
+}
+
+func (x *ListProjectData) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *ListProjectData) GetHasNext() bool {
+	if x != nil {
+		return x.HasNext
+	}
+	return false
+}
+
 // Project entity message
 type Project struct {
-	state           protoimpl.MessageState  `protogen:"open.v1"`
-	Id              int64                   `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                            
-	Name            string                  `protobuf:"bytes,2,opt,name=name,proto3" json:"name"`                                                         
-	Description     string                  `protobuf:"bytes,3,opt,name=description,proto3" json:"description"`                                           
-	OwnerUsername   string                  `protobuf:"bytes,4,opt,name=owner_username,json=ownerUsername,proto3" json:"ownerUsername"`                  
-	CreatorUsername string                  `protobuf:"bytes,5,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`            
-	MemberType      MemberType              `protobuf:"varint,6,opt,name=member_type,json=memberType,proto3,enum=project.MemberType" json:"memberType"`  
-	CreatedAt       int64                   `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                             
-	UpdatedAt       int64                   `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                             
-	OperatorAdmins  []string                `protobuf:"bytes,9,rep,name=operator_admins,json=operatorAdmins,proto3" json:"operatorAdmins"`               
-	AgentInstances  []*ProjectAgentInstance `protobuf:"bytes,10,rep,name=agent_instances,json=agentInstances,proto3" json:"agentInstances"`              
-	IconSasUrl      string                  `protobuf:"bytes,12,opt,name=icon_sas_url,json=iconSasUrl,proto3" json:"iconUrl"`                        
+	state           protoimpl.MessageState        `protogen:"open.v1"`
+	Id              int64                         `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                            
+	Name            string                        `protobuf:"bytes,2,opt,name=name,proto3" json:"name"`                                                         
+	Description     string                        `protobuf:"bytes,3,opt,name=description,proto3" json:"description"`                                           
+	OwnerUsername   string                        `protobuf:"bytes,4,opt,name=owner_username,json=ownerUsername,proto3" json:"ownerUsername"`                  
+	CreatorUsername string                        `protobuf:"bytes,5,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`            
+	MemberType      MemberType                    `protobuf:"varint,6,opt,name=member_type,json=memberType,proto3,enum=project.MemberType" json:"memberType"`  
+	CreatedAt       int64                         `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                             
+	UpdatedAt       int64                         `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                             
+	OperatorAdmins  []string                      `protobuf:"bytes,9,rep,name=operator_admins,json=operatorAdmins,proto3" json:"operatorAdmins"`               
+	AgentInstances  []*common.AgentInstanceDigest `protobuf:"bytes,10,rep,name=agent_instances,json=agentInstances,proto3" json:"agentInstances"`              
+	OrganizationId  int64                         `protobuf:"varint,11,opt,name=organization_id,json=organizationId,proto3" json:"organizationId"`             
+	IconSasUrl      string                        `protobuf:"bytes,12,opt,name=icon_sas_url,json=iconSasUrl,proto3" json:"iconUrl"`                        
+	ProjectMembers  []*common.UserDigest          `protobuf:"bytes,13,rep,name=project_members,json=projectMembers,proto3" json:"projectMembers"`              
+	ProjectAdmins   []*common.UserDigest          `protobuf:"bytes,14,rep,name=project_admins,json=projectAdmins,proto3" json:"projectAdmins"`                 
+	Sandboxes       []*common.SandboxDigest       `protobuf:"bytes,15,rep,name=sandboxes,proto3" json:"sandboxes"`                                              
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Project) Reset() {
 	*x = Project{}
-	mi := &file_project_project_proto_msgTypes[13]
+	mi := &file_project_project_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -876,7 +1035,7 @@ func (x *Project) String() string {
 func (*Project) ProtoMessage() {}
 
 func (x *Project) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[13]
+	mi := &file_project_project_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -889,7 +1048,7 @@ func (x *Project) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Project.ProtoReflect.Descriptor instead.
 func (*Project) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{13}
+	return file_project_project_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Project) GetId() int64 {
@@ -955,11 +1114,18 @@ func (x *Project) GetOperatorAdmins() []string {
 	return nil
 }
 
-func (x *Project) GetAgentInstances() []*ProjectAgentInstance {
+func (x *Project) GetAgentInstances() []*common.AgentInstanceDigest {
 	if x != nil {
 		return x.AgentInstances
 	}
 	return nil
+}
+
+func (x *Project) GetOrganizationId() int64 {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return 0
 }
 
 func (x *Project) GetIconSasUrl() string {
@@ -967,6 +1133,27 @@ func (x *Project) GetIconSasUrl() string {
 		return x.IconSasUrl
 	}
 	return ""
+}
+
+func (x *Project) GetProjectMembers() []*common.UserDigest {
+	if x != nil {
+		return x.ProjectMembers
+	}
+	return nil
+}
+
+func (x *Project) GetProjectAdmins() []*common.UserDigest {
+	if x != nil {
+		return x.ProjectAdmins
+	}
+	return nil
+}
+
+func (x *Project) GetSandboxes() []*common.SandboxDigest {
+	if x != nil {
+		return x.Sandboxes
+	}
+	return nil
 }
 
 // Request message for adding a project asset
@@ -979,7 +1166,7 @@ type AddProjectAssetRequest struct {
 
 func (x *AddProjectAssetRequest) Reset() {
 	*x = AddProjectAssetRequest{}
-	mi := &file_project_project_proto_msgTypes[14]
+	mi := &file_project_project_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -991,7 +1178,7 @@ func (x *AddProjectAssetRequest) String() string {
 func (*AddProjectAssetRequest) ProtoMessage() {}
 
 func (x *AddProjectAssetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[14]
+	mi := &file_project_project_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1004,7 +1191,7 @@ func (x *AddProjectAssetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddProjectAssetRequest.ProtoReflect.Descriptor instead.
 func (*AddProjectAssetRequest) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{14}
+	return file_project_project_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AddProjectAssetRequest) GetProjectId() string {
@@ -1026,7 +1213,7 @@ type AddProjectAssetResponse struct {
 
 func (x *AddProjectAssetResponse) Reset() {
 	*x = AddProjectAssetResponse{}
-	mi := &file_project_project_proto_msgTypes[15]
+	mi := &file_project_project_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1038,7 +1225,7 @@ func (x *AddProjectAssetResponse) String() string {
 func (*AddProjectAssetResponse) ProtoMessage() {}
 
 func (x *AddProjectAssetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[15]
+	mi := &file_project_project_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1051,7 +1238,7 @@ func (x *AddProjectAssetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddProjectAssetResponse.ProtoReflect.Descriptor instead.
 func (*AddProjectAssetResponse) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{15}
+	return file_project_project_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AddProjectAssetResponse) GetData() *AddProjectAssetData {
@@ -1087,7 +1274,7 @@ type AddProjectAssetData struct {
 
 func (x *AddProjectAssetData) Reset() {
 	*x = AddProjectAssetData{}
-	mi := &file_project_project_proto_msgTypes[16]
+	mi := &file_project_project_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1099,7 +1286,7 @@ func (x *AddProjectAssetData) String() string {
 func (*AddProjectAssetData) ProtoMessage() {}
 
 func (x *AddProjectAssetData) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[16]
+	mi := &file_project_project_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1112,7 +1299,7 @@ func (x *AddProjectAssetData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddProjectAssetData.ProtoReflect.Descriptor instead.
 func (*AddProjectAssetData) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{16}
+	return file_project_project_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AddProjectAssetData) GetId() int64 {
@@ -1156,7 +1343,7 @@ type FileMetaInfo struct {
 
 func (x *FileMetaInfo) Reset() {
 	*x = FileMetaInfo{}
-	mi := &file_project_project_proto_msgTypes[17]
+	mi := &file_project_project_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1168,7 +1355,7 @@ func (x *FileMetaInfo) String() string {
 func (*FileMetaInfo) ProtoMessage() {}
 
 func (x *FileMetaInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[17]
+	mi := &file_project_project_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1181,7 +1368,7 @@ func (x *FileMetaInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileMetaInfo.ProtoReflect.Descriptor instead.
 func (*FileMetaInfo) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{17}
+	return file_project_project_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *FileMetaInfo) GetFileName() string {
@@ -1229,7 +1416,7 @@ type DeleteProjectAssetRequest struct {
 
 func (x *DeleteProjectAssetRequest) Reset() {
 	*x = DeleteProjectAssetRequest{}
-	mi := &file_project_project_proto_msgTypes[18]
+	mi := &file_project_project_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1241,7 +1428,7 @@ func (x *DeleteProjectAssetRequest) String() string {
 func (*DeleteProjectAssetRequest) ProtoMessage() {}
 
 func (x *DeleteProjectAssetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[18]
+	mi := &file_project_project_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1254,7 +1441,7 @@ func (x *DeleteProjectAssetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectAssetRequest.ProtoReflect.Descriptor instead.
 func (*DeleteProjectAssetRequest) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{18}
+	return file_project_project_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *DeleteProjectAssetRequest) GetId() int64 {
@@ -1275,7 +1462,7 @@ type DeleteProjectAssetResponse struct {
 
 func (x *DeleteProjectAssetResponse) Reset() {
 	*x = DeleteProjectAssetResponse{}
-	mi := &file_project_project_proto_msgTypes[19]
+	mi := &file_project_project_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1287,7 +1474,7 @@ func (x *DeleteProjectAssetResponse) String() string {
 func (*DeleteProjectAssetResponse) ProtoMessage() {}
 
 func (x *DeleteProjectAssetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[19]
+	mi := &file_project_project_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1300,7 +1487,7 @@ func (x *DeleteProjectAssetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectAssetResponse.ProtoReflect.Descriptor instead.
 func (*DeleteProjectAssetResponse) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{19}
+	return file_project_project_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *DeleteProjectAssetResponse) GetCode() int32 {
@@ -1327,7 +1514,7 @@ type GetProjectSASAssetRequest struct {
 
 func (x *GetProjectSASAssetRequest) Reset() {
 	*x = GetProjectSASAssetRequest{}
-	mi := &file_project_project_proto_msgTypes[20]
+	mi := &file_project_project_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1339,7 +1526,7 @@ func (x *GetProjectSASAssetRequest) String() string {
 func (*GetProjectSASAssetRequest) ProtoMessage() {}
 
 func (x *GetProjectSASAssetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[20]
+	mi := &file_project_project_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1352,7 +1539,7 @@ func (x *GetProjectSASAssetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectSASAssetRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectSASAssetRequest) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{20}
+	return file_project_project_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetProjectSASAssetRequest) GetUri() string {
@@ -1374,7 +1561,7 @@ type GetProjectSASAssetResponse struct {
 
 func (x *GetProjectSASAssetResponse) Reset() {
 	*x = GetProjectSASAssetResponse{}
-	mi := &file_project_project_proto_msgTypes[21]
+	mi := &file_project_project_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1386,7 +1573,7 @@ func (x *GetProjectSASAssetResponse) String() string {
 func (*GetProjectSASAssetResponse) ProtoMessage() {}
 
 func (x *GetProjectSASAssetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[21]
+	mi := &file_project_project_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1399,7 +1586,7 @@ func (x *GetProjectSASAssetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectSASAssetResponse.ProtoReflect.Descriptor instead.
 func (*GetProjectSASAssetResponse) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{21}
+	return file_project_project_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetProjectSASAssetResponse) GetData() *GetProjectSASAssetData {
@@ -1433,7 +1620,7 @@ type GetProjectSASAssetData struct {
 
 func (x *GetProjectSASAssetData) Reset() {
 	*x = GetProjectSASAssetData{}
-	mi := &file_project_project_proto_msgTypes[22]
+	mi := &file_project_project_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1445,7 +1632,7 @@ func (x *GetProjectSASAssetData) String() string {
 func (*GetProjectSASAssetData) ProtoMessage() {}
 
 func (x *GetProjectSASAssetData) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[22]
+	mi := &file_project_project_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1458,7 +1645,7 @@ func (x *GetProjectSASAssetData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectSASAssetData.ProtoReflect.Descriptor instead.
 func (*GetProjectSASAssetData) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{22}
+	return file_project_project_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetProjectSASAssetData) GetUri() string {
@@ -1488,7 +1675,7 @@ type GetProjectAssetListRequest struct {
 
 func (x *GetProjectAssetListRequest) Reset() {
 	*x = GetProjectAssetListRequest{}
-	mi := &file_project_project_proto_msgTypes[23]
+	mi := &file_project_project_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1500,7 +1687,7 @@ func (x *GetProjectAssetListRequest) String() string {
 func (*GetProjectAssetListRequest) ProtoMessage() {}
 
 func (x *GetProjectAssetListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[23]
+	mi := &file_project_project_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1513,7 +1700,7 @@ func (x *GetProjectAssetListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectAssetListRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectAssetListRequest) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{23}
+	return file_project_project_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetProjectAssetListRequest) GetProjectId() string {
@@ -1556,7 +1743,7 @@ type GetProjectAssetListResponse struct {
 
 func (x *GetProjectAssetListResponse) Reset() {
 	*x = GetProjectAssetListResponse{}
-	mi := &file_project_project_proto_msgTypes[24]
+	mi := &file_project_project_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1568,7 +1755,7 @@ func (x *GetProjectAssetListResponse) String() string {
 func (*GetProjectAssetListResponse) ProtoMessage() {}
 
 func (x *GetProjectAssetListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[24]
+	mi := &file_project_project_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1581,7 +1768,7 @@ func (x *GetProjectAssetListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectAssetListResponse.ProtoReflect.Descriptor instead.
 func (*GetProjectAssetListResponse) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{24}
+	return file_project_project_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *GetProjectAssetListResponse) GetData() *GetProjectAssetListData {
@@ -1615,7 +1802,7 @@ type GetProjectAssetListData struct {
 
 func (x *GetProjectAssetListData) Reset() {
 	*x = GetProjectAssetListData{}
-	mi := &file_project_project_proto_msgTypes[25]
+	mi := &file_project_project_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1627,7 +1814,7 @@ func (x *GetProjectAssetListData) String() string {
 func (*GetProjectAssetListData) ProtoMessage() {}
 
 func (x *GetProjectAssetListData) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[25]
+	mi := &file_project_project_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1640,7 +1827,7 @@ func (x *GetProjectAssetListData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectAssetListData.ProtoReflect.Descriptor instead.
 func (*GetProjectAssetListData) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{25}
+	return file_project_project_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetProjectAssetListData) GetAssets() []*ProjectAsset {
@@ -1673,7 +1860,7 @@ type ProjectAsset struct {
 
 func (x *ProjectAsset) Reset() {
 	*x = ProjectAsset{}
-	mi := &file_project_project_proto_msgTypes[26]
+	mi := &file_project_project_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1685,7 +1872,7 @@ func (x *ProjectAsset) String() string {
 func (*ProjectAsset) ProtoMessage() {}
 
 func (x *ProjectAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[26]
+	mi := &file_project_project_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1698,7 +1885,7 @@ func (x *ProjectAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectAsset.ProtoReflect.Descriptor instead.
 func (*ProjectAsset) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{26}
+	return file_project_project_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ProjectAsset) GetId() int64 {
@@ -1761,7 +1948,7 @@ type QueryProjectStatisticsRequest struct {
 
 func (x *QueryProjectStatisticsRequest) Reset() {
 	*x = QueryProjectStatisticsRequest{}
-	mi := &file_project_project_proto_msgTypes[27]
+	mi := &file_project_project_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1773,7 +1960,7 @@ func (x *QueryProjectStatisticsRequest) String() string {
 func (*QueryProjectStatisticsRequest) ProtoMessage() {}
 
 func (x *QueryProjectStatisticsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[27]
+	mi := &file_project_project_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1786,7 +1973,7 @@ func (x *QueryProjectStatisticsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryProjectStatisticsRequest.ProtoReflect.Descriptor instead.
 func (*QueryProjectStatisticsRequest) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{27}
+	return file_project_project_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *QueryProjectStatisticsRequest) GetId() int64 {
@@ -1824,7 +2011,7 @@ type ProjectStatisticsEntry struct {
 
 func (x *ProjectStatisticsEntry) Reset() {
 	*x = ProjectStatisticsEntry{}
-	mi := &file_project_project_proto_msgTypes[28]
+	mi := &file_project_project_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1836,7 +2023,7 @@ func (x *ProjectStatisticsEntry) String() string {
 func (*ProjectStatisticsEntry) ProtoMessage() {}
 
 func (x *ProjectStatisticsEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[28]
+	mi := &file_project_project_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1849,7 +2036,7 @@ func (x *ProjectStatisticsEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectStatisticsEntry.ProtoReflect.Descriptor instead.
 func (*ProjectStatisticsEntry) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{28}
+	return file_project_project_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ProjectStatisticsEntry) GetTotalTasks() int32 {
@@ -1908,7 +2095,7 @@ type ProjectSingleAgentInstanceStatisticsEntry struct {
 
 func (x *ProjectSingleAgentInstanceStatisticsEntry) Reset() {
 	*x = ProjectSingleAgentInstanceStatisticsEntry{}
-	mi := &file_project_project_proto_msgTypes[29]
+	mi := &file_project_project_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1920,7 +2107,7 @@ func (x *ProjectSingleAgentInstanceStatisticsEntry) String() string {
 func (*ProjectSingleAgentInstanceStatisticsEntry) ProtoMessage() {}
 
 func (x *ProjectSingleAgentInstanceStatisticsEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[29]
+	mi := &file_project_project_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1933,7 +2120,7 @@ func (x *ProjectSingleAgentInstanceStatisticsEntry) ProtoReflect() protoreflect.
 
 // Deprecated: Use ProjectSingleAgentInstanceStatisticsEntry.ProtoReflect.Descriptor instead.
 func (*ProjectSingleAgentInstanceStatisticsEntry) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{29}
+	return file_project_project_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ProjectSingleAgentInstanceStatisticsEntry) GetName() string {
@@ -1988,7 +2175,7 @@ type QueryProjectStatisticsData struct {
 
 func (x *QueryProjectStatisticsData) Reset() {
 	*x = QueryProjectStatisticsData{}
-	mi := &file_project_project_proto_msgTypes[30]
+	mi := &file_project_project_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2000,7 +2187,7 @@ func (x *QueryProjectStatisticsData) String() string {
 func (*QueryProjectStatisticsData) ProtoMessage() {}
 
 func (x *QueryProjectStatisticsData) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[30]
+	mi := &file_project_project_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2013,7 +2200,7 @@ func (x *QueryProjectStatisticsData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryProjectStatisticsData.ProtoReflect.Descriptor instead.
 func (*QueryProjectStatisticsData) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{30}
+	return file_project_project_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *QueryProjectStatisticsData) GetAgentInstanceStatistics() []*ProjectSingleAgentInstanceStatisticsEntry {
@@ -2041,7 +2228,7 @@ type QueryProjectStatisticsResponse struct {
 
 func (x *QueryProjectStatisticsResponse) Reset() {
 	*x = QueryProjectStatisticsResponse{}
-	mi := &file_project_project_proto_msgTypes[31]
+	mi := &file_project_project_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2053,7 +2240,7 @@ func (x *QueryProjectStatisticsResponse) String() string {
 func (*QueryProjectStatisticsResponse) ProtoMessage() {}
 
 func (x *QueryProjectStatisticsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_project_project_proto_msgTypes[31]
+	mi := &file_project_project_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2066,7 +2253,7 @@ func (x *QueryProjectStatisticsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryProjectStatisticsResponse.ProtoReflect.Descriptor instead.
 func (*QueryProjectStatisticsResponse) Descriptor() ([]byte, []int) {
-	return file_project_project_proto_rawDescGZIP(), []int{31}
+	return file_project_project_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *QueryProjectStatisticsResponse) GetData() *QueryProjectStatisticsData {
@@ -2094,12 +2281,13 @@ var File_project_project_proto protoreflect.FileDescriptor
 
 const file_project_project_proto_rawDesc = "" +
 	"\n" +
-	"\x15project/project.proto\x12\aproject\"\x90\x01\n" +
+	"\x15project/project.proto\x12\aproject\x1a\x13common/common.proto\"\xb9\x01\n" +
 	"\x14CreateProjectRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x19\n" +
 	"\bicon_uri\x18\x03 \x01(\tR\aiconUri\x12'\n" +
-	"\x0foperator_admins\x18\x04 \x03(\tR\x0eoperatorAdmins\"o\n" +
+	"\x0foperator_admins\x18\x04 \x03(\tR\x0eoperatorAdmins\x12'\n" +
+	"\x0forganization_id\x18\x05 \x01(\x03R\x0eorganizationId\"o\n" +
 	"\x15CreateProjectResponse\x12.\n" +
 	"\x04data\x18\x01 \x01(\v2\x1a.project.CreateProjectDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
@@ -2139,10 +2327,24 @@ const file_project_project_proto_rawDesc = "" +
 	"\x16GetUserProjectListData\x12,\n" +
 	"\bprojects\x18\x01 \x03(\v2\x10.project.ProjectR\bprojects\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x18\n" +
-	"\ahasNext\x18\x03 \x01(\bR\ahasNext\"A\n" +
-	"\x14ProjectAgentInstance\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
-	"\bicon_url\x18\x02 \x01(\tR\aiconUrl\"\xa8\x03\n" +
+	"\ahasNext\x18\x03 \x01(\bR\ahasNext\"\x8a\x02\n" +
+	"\x11ListProjectFilter\x12\x12\n" +
+	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12,\n" +
+	"\x0forganization_id\x18\x03 \x01(\x03H\x00R\x0eorganizationId\x88\x01\x01\x12.\n" +
+	"\x10creator_username\x18\x04 \x01(\tH\x01R\x0fcreatorUsername\x88\x01\x01\x12*\n" +
+	"\x0eowner_username\x18\x05 \x01(\tH\x02R\rownerUsername\x88\x01\x01B\x12\n" +
+	"\x10_organization_idB\x13\n" +
+	"\x11_creator_usernameB\x11\n" +
+	"\x0f_owner_username\"k\n" +
+	"\x13ListProjectResponse\x12,\n" +
+	"\x04data\x18\x01 \x01(\v2\x18.project.ListProjectDataR\x04data\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"p\n" +
+	"\x0fListProjectData\x12,\n" +
+	"\bprojects\x18\x01 \x03(\v2\x10.project.ProjectR\bprojects\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x19\n" +
+	"\bhas_next\x18\x03 \x01(\bR\ahasNext\"\xfc\x04\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -2155,11 +2357,15 @@ const file_project_project_proto_rawDesc = "" +
 	"created_at\x18\a \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\b \x01(\x03R\tupdatedAt\x12'\n" +
-	"\x0foperator_admins\x18\t \x03(\tR\x0eoperatorAdmins\x12F\n" +
+	"\x0foperator_admins\x18\t \x03(\tR\x0eoperatorAdmins\x12D\n" +
 	"\x0fagent_instances\x18\n" +
-	" \x03(\v2\x1d.project.ProjectAgentInstanceR\x0eagentInstances\x12 \n" +
+	" \x03(\v2\x1b.common.AgentInstanceDigestR\x0eagentInstances\x12'\n" +
+	"\x0forganization_id\x18\v \x01(\x03R\x0eorganizationId\x12 \n" +
 	"\ficon_sas_url\x18\f \x01(\tR\n" +
-	"iconSasUrl\"7\n" +
+	"iconSasUrl\x12;\n" +
+	"\x0fproject_members\x18\r \x03(\v2\x12.common.UserDigestR\x0eprojectMembers\x129\n" +
+	"\x0eproject_admins\x18\x0e \x03(\v2\x12.common.UserDigestR\rprojectAdmins\x123\n" +
+	"\tsandboxes\x18\x0f \x03(\v2\x15.common.SandboxDigestR\tsandboxes\"7\n" +
 	"\x16AddProjectAssetRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\"s\n" +
@@ -2266,7 +2472,7 @@ func file_project_project_proto_rawDescGZIP() []byte {
 }
 
 var file_project_project_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_project_project_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_project_project_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_project_project_proto_goTypes = []any{
 	(MemberType)(0),                                   // 0: project.MemberType
 	(*CreateProjectRequest)(nil),                      // 1: project.CreateProjectRequest
@@ -2281,49 +2487,59 @@ var file_project_project_proto_goTypes = []any{
 	(*GetUserProjectListRequest)(nil),                 // 10: project.GetUserProjectListRequest
 	(*GetUserProjectListResponse)(nil),                // 11: project.GetUserProjectListResponse
 	(*GetUserProjectListData)(nil),                    // 12: project.GetUserProjectListData
-	(*ProjectAgentInstance)(nil),                      // 13: project.ProjectAgentInstance
-	(*Project)(nil),                                   // 14: project.Project
-	(*AddProjectAssetRequest)(nil),                    // 15: project.AddProjectAssetRequest
-	(*AddProjectAssetResponse)(nil),                   // 16: project.AddProjectAssetResponse
-	(*AddProjectAssetData)(nil),                       // 17: project.AddProjectAssetData
-	(*FileMetaInfo)(nil),                              // 18: project.FileMetaInfo
-	(*DeleteProjectAssetRequest)(nil),                 // 19: project.DeleteProjectAssetRequest
-	(*DeleteProjectAssetResponse)(nil),                // 20: project.DeleteProjectAssetResponse
-	(*GetProjectSASAssetRequest)(nil),                 // 21: project.GetProjectSASAssetRequest
-	(*GetProjectSASAssetResponse)(nil),                // 22: project.GetProjectSASAssetResponse
-	(*GetProjectSASAssetData)(nil),                    // 23: project.GetProjectSASAssetData
-	(*GetProjectAssetListRequest)(nil),                // 24: project.GetProjectAssetListRequest
-	(*GetProjectAssetListResponse)(nil),               // 25: project.GetProjectAssetListResponse
-	(*GetProjectAssetListData)(nil),                   // 26: project.GetProjectAssetListData
-	(*ProjectAsset)(nil),                              // 27: project.ProjectAsset
-	(*QueryProjectStatisticsRequest)(nil),             // 28: project.QueryProjectStatisticsRequest
-	(*ProjectStatisticsEntry)(nil),                    // 29: project.ProjectStatisticsEntry
-	(*ProjectSingleAgentInstanceStatisticsEntry)(nil), // 30: project.ProjectSingleAgentInstanceStatisticsEntry
-	(*QueryProjectStatisticsData)(nil),                // 31: project.QueryProjectStatisticsData
-	(*QueryProjectStatisticsResponse)(nil),            // 32: project.QueryProjectStatisticsResponse
+	(*ListProjectFilter)(nil),                         // 13: project.ListProjectFilter
+	(*ListProjectResponse)(nil),                       // 14: project.ListProjectResponse
+	(*ListProjectData)(nil),                           // 15: project.ListProjectData
+	(*Project)(nil),                                   // 16: project.Project
+	(*AddProjectAssetRequest)(nil),                    // 17: project.AddProjectAssetRequest
+	(*AddProjectAssetResponse)(nil),                   // 18: project.AddProjectAssetResponse
+	(*AddProjectAssetData)(nil),                       // 19: project.AddProjectAssetData
+	(*FileMetaInfo)(nil),                              // 20: project.FileMetaInfo
+	(*DeleteProjectAssetRequest)(nil),                 // 21: project.DeleteProjectAssetRequest
+	(*DeleteProjectAssetResponse)(nil),                // 22: project.DeleteProjectAssetResponse
+	(*GetProjectSASAssetRequest)(nil),                 // 23: project.GetProjectSASAssetRequest
+	(*GetProjectSASAssetResponse)(nil),                // 24: project.GetProjectSASAssetResponse
+	(*GetProjectSASAssetData)(nil),                    // 25: project.GetProjectSASAssetData
+	(*GetProjectAssetListRequest)(nil),                // 26: project.GetProjectAssetListRequest
+	(*GetProjectAssetListResponse)(nil),               // 27: project.GetProjectAssetListResponse
+	(*GetProjectAssetListData)(nil),                   // 28: project.GetProjectAssetListData
+	(*ProjectAsset)(nil),                              // 29: project.ProjectAsset
+	(*QueryProjectStatisticsRequest)(nil),             // 30: project.QueryProjectStatisticsRequest
+	(*ProjectStatisticsEntry)(nil),                    // 31: project.ProjectStatisticsEntry
+	(*ProjectSingleAgentInstanceStatisticsEntry)(nil), // 32: project.ProjectSingleAgentInstanceStatisticsEntry
+	(*QueryProjectStatisticsData)(nil),                // 33: project.QueryProjectStatisticsData
+	(*QueryProjectStatisticsResponse)(nil),            // 34: project.QueryProjectStatisticsResponse
+	(*common.AgentInstanceDigest)(nil),                // 35: common.AgentInstanceDigest
+	(*common.UserDigest)(nil),                         // 36: common.UserDigest
+	(*common.SandboxDigest)(nil),                      // 37: common.SandboxDigest
 }
 var file_project_project_proto_depIdxs = []int32{
 	3,  // 0: project.CreateProjectResponse.data:type_name -> project.CreateProjectData
-	14, // 1: project.GetProjectDetailResponse.data:type_name -> project.Project
+	16, // 1: project.GetProjectDetailResponse.data:type_name -> project.Project
 	0,  // 2: project.GetUserProjectListRequest.member_type:type_name -> project.MemberType
 	12, // 3: project.GetUserProjectListResponse.data:type_name -> project.GetUserProjectListData
-	14, // 4: project.GetUserProjectListData.projects:type_name -> project.Project
-	0,  // 5: project.Project.member_type:type_name -> project.MemberType
-	13, // 6: project.Project.agent_instances:type_name -> project.ProjectAgentInstance
-	17, // 7: project.AddProjectAssetResponse.data:type_name -> project.AddProjectAssetData
-	18, // 8: project.AddProjectAssetData.meta_info:type_name -> project.FileMetaInfo
-	23, // 9: project.GetProjectSASAssetResponse.data:type_name -> project.GetProjectSASAssetData
-	26, // 10: project.GetProjectAssetListResponse.data:type_name -> project.GetProjectAssetListData
-	27, // 11: project.GetProjectAssetListData.assets:type_name -> project.ProjectAsset
-	29, // 12: project.ProjectSingleAgentInstanceStatisticsEntry.statistics:type_name -> project.ProjectStatisticsEntry
-	30, // 13: project.QueryProjectStatisticsData.agent_instance_statistics:type_name -> project.ProjectSingleAgentInstanceStatisticsEntry
-	29, // 14: project.QueryProjectStatisticsData.overall_statistics:type_name -> project.ProjectStatisticsEntry
-	31, // 15: project.QueryProjectStatisticsResponse.data:type_name -> project.QueryProjectStatisticsData
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	16, // 4: project.GetUserProjectListData.projects:type_name -> project.Project
+	15, // 5: project.ListProjectResponse.data:type_name -> project.ListProjectData
+	16, // 6: project.ListProjectData.projects:type_name -> project.Project
+	0,  // 7: project.Project.member_type:type_name -> project.MemberType
+	35, // 8: project.Project.agent_instances:type_name -> common.AgentInstanceDigest
+	36, // 9: project.Project.project_members:type_name -> common.UserDigest
+	36, // 10: project.Project.project_admins:type_name -> common.UserDigest
+	37, // 11: project.Project.sandboxes:type_name -> common.SandboxDigest
+	19, // 12: project.AddProjectAssetResponse.data:type_name -> project.AddProjectAssetData
+	20, // 13: project.AddProjectAssetData.meta_info:type_name -> project.FileMetaInfo
+	25, // 14: project.GetProjectSASAssetResponse.data:type_name -> project.GetProjectSASAssetData
+	28, // 15: project.GetProjectAssetListResponse.data:type_name -> project.GetProjectAssetListData
+	29, // 16: project.GetProjectAssetListData.assets:type_name -> project.ProjectAsset
+	31, // 17: project.ProjectSingleAgentInstanceStatisticsEntry.statistics:type_name -> project.ProjectStatisticsEntry
+	32, // 18: project.QueryProjectStatisticsData.agent_instance_statistics:type_name -> project.ProjectSingleAgentInstanceStatisticsEntry
+	31, // 19: project.QueryProjectStatisticsData.overall_statistics:type_name -> project.ProjectStatisticsEntry
+	33, // 20: project.QueryProjectStatisticsResponse.data:type_name -> project.QueryProjectStatisticsData
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_project_project_proto_init() }
@@ -2331,13 +2547,14 @@ func file_project_project_proto_init() {
 	if File_project_project_proto != nil {
 		return
 	}
+	file_project_project_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_project_project_proto_rawDesc), len(file_project_project_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   32,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -26,12 +26,14 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 
 	appresp "sico-backend/internal/biz/common/response"
+	rbac "sico-backend/internal/biz/rbac"
 	coregrpc "sico-backend/internal/infra/coregrpc"
 	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/shared/apperr"
@@ -43,6 +45,7 @@ import (
 	knowledgegrpc "sico-backend/internal/transport/grpc/pb/knowledge"
 	"sico-backend/internal/transport/http/dto/common"
 	"sico-backend/internal/transport/http/dto/knowledge"
+	projectdto "sico-backend/internal/transport/http/dto/project"
 	"sico-backend/internal/transport/http/middleware"
 	rgrpc "sico-backend/internal/transport/reverse_grpc/pb/knowledge"
 	"sico-backend/pkg/logger"
@@ -84,6 +87,15 @@ func (s *Service) CreateDocument(
 ) (*knowledge.CreateKnowledgeDocumentResponse, error) {
 	if req.ProjectId == 0 && req.AgentId == "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "projectId or agentId is required")
+	}
+
+	if req.ProjectId != 0 {
+		if err := rbac.CheckCtxAccessOrOwner(
+			ctx, rbac.ScopeProject, req.ProjectId,
+			"asset", "manage", middleware.MustGetUsernameFromCtx(ctx),
+		); err != nil {
+			return nil, err
+		}
 	}
 
 	if req.DocumentType == knowledge.KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN {
@@ -299,11 +311,21 @@ func (s *Service) syncDocumentTags(ctx context.Context, req *knowledge.UpdateKno
 func (s *Service) DeleteDocument(
 	ctx context.Context, req *knowledge.DeleteKnowledgeDocumentRequest,
 ) (*knowledge.DeleteKnowledgeDocumentResponse, error) {
-	if _, err := s.DocumentRepo.GetByID(ctx, req.Id); err != nil {
+	doc, err := s.DocumentRepo.GetByID(ctx, req.Id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.New(errcode.CommonNotFound, "knowledge document not found")
 		}
 		return nil, err
+	}
+
+	if doc.ProjectID != 0 {
+		if err := rbac.CheckCtxAccessOrOwner(
+			ctx, rbac.ScopeProject, doc.ProjectID,
+			"asset", "manage", doc.CreatorUsername,
+		); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := s.DocumentRepo.Delete(ctx, req.Id); err != nil {
@@ -930,9 +952,12 @@ func (s *Service) GetPlaybook(
 		return nil, err
 	}
 
+	pb := playbookModelToDTO(playbook, tags)
+	s.populatePlaybookExtraInfo(ctx, []*knowledge.KnowledgePlaybook{pb})
+
 	return appresp.Success(&knowledge.GetKnowledgePlaybookResponse{
 		Data: &knowledge.GetKnowledgePlaybookData{
-			Playbook: playbookModelToDTO(playbook, tags),
+			Playbook: pb,
 		},
 	}), nil
 }
@@ -966,6 +991,8 @@ func (s *Service) ListPlaybooks(
 		result = append(result, playbookModelToDTO(pb, tags))
 	}
 
+	s.populatePlaybookExtraInfo(ctx, result)
+
 	hasNext := int64(offset+len(playbooks)) < total
 	return appresp.Success(&knowledge.ListKnowledgePlaybookResponse{
 		Data: &knowledge.ListKnowledgePlaybookData{
@@ -974,6 +1001,175 @@ func (s *Service) ListPlaybooks(
 			HasNext:   hasNext,
 		},
 	}), nil
+}
+
+func (s *Service) ListKnowledgeItems(
+	ctx context.Context, req *knowledge.ListKnowledgeItemsRequest,
+) (*knowledge.ListKnowledgeItemsResponse, error) {
+	projectID := req.ProjectId
+
+	page := req.GetPage()
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := req.GetPageSize()
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	// Fetch up to page*pageSize from each source (the most that could appear
+	// on or before the requested page), while still obtaining accurate totals.
+	fetchLimit := int(page * pageSize)
+
+	docItems, docTotal, err := s.fetchDocumentItems(ctx, projectID, fetchLimit)
+	if err != nil {
+		return nil, err
+	}
+	playbookItems, pbTotal, err := s.fetchPlaybookItems(ctx, projectID, fetchLimit)
+	if err != nil {
+		return nil, err
+	}
+	deliverableItems, dlvTotal, err := s.fetchDeliverableItems(ctx, projectID, fetchLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Merge all items and sort by updated_at descending.
+	allItems := make([]*knowledge.KnowledgeItem, 0, len(docItems)+len(playbookItems)+len(deliverableItems))
+	allItems = append(allItems, docItems...)
+	allItems = append(allItems, playbookItems...)
+	allItems = append(allItems, deliverableItems...)
+
+	sort.Slice(allItems, func(i, j int) bool {
+		return allItems[i].UpdatedAt > allItems[j].UpdatedAt
+	})
+
+	// Paginate.
+	total := int(docTotal + pbTotal + dlvTotal)
+	pgOffset := int((page - 1) * pageSize)
+	end := pgOffset + int(pageSize)
+	if pgOffset > len(allItems) {
+		pgOffset = len(allItems)
+	}
+	if end > len(allItems) {
+		end = len(allItems)
+	}
+	pageItems := allItems[pgOffset:end]
+	hasNext2 := end < total
+
+	return appresp.Success(&knowledge.ListKnowledgeItemsResponse{
+		Data: &knowledge.ListKnowledgeItemsData{
+			Items:   pageItems,
+			Total:   int32(total),
+			HasNext: hasNext2,
+		},
+	}), nil
+}
+
+func (s *Service) fetchDocumentItems(
+	ctx context.Context, projectID int64, limit int,
+) ([]*knowledge.KnowledgeItem, int64, error) {
+	if s.DocumentRepo == nil {
+		return nil, 0, nil
+	}
+	docs, total, err := s.DocumentRepo.List(ctx, &repository.DocumentV2Filter{
+		ProjectID: projectID,
+		Limit:     limit,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	items := make([]*knowledge.KnowledgeItem, 0, len(docs))
+	assetCache := make(map[int64]*common.Attachment)
+	for _, doc := range docs {
+		att, ok := assetCache[doc.AssetID]
+		if !ok {
+			att, _ = s.buildAttachment(ctx, doc)
+			assetCache[doc.AssetID] = att
+		}
+		tags, _ := s.DocumentTagRepo.GetTagsByDocumentID(ctx, doc.ID)
+		var tagDTOs []*knowledge.KnowledgeTag
+		for _, t := range tags {
+			tagDTOs = append(tagDTOs, knowledgeTagModelToDTO(t))
+		}
+		iconSasURL := s.buildIconSAS(ctx, doc.IconURI)
+		items = append(items, &knowledge.KnowledgeItem{
+			Type:      knowledge.KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DOCUMENT,
+			Document:  documentModelToDTO(doc, att, tagDTOs, iconSasURL),
+			UpdatedAt: doc.UpdatedAt,
+		})
+	}
+	return items, total, nil
+}
+
+func (s *Service) fetchPlaybookItems(
+	ctx context.Context, projectID int64, limit int,
+) ([]*knowledge.KnowledgeItem, int64, error) {
+	if s.PlaybookRepo == nil {
+		return nil, 0, nil
+	}
+	playbooks, total, err := s.PlaybookRepo.List(ctx, &repository.PlaybookFilter{
+		ProjectID: projectID,
+		Limit:     limit,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	pbDTOs := make([]*knowledge.KnowledgePlaybook, 0, len(playbooks))
+	for _, pb := range playbooks {
+		tags, _ := s.fetchPlaybookTags(ctx, pb.ID)
+		pbDTOs = append(pbDTOs, playbookModelToDTO(pb, tags))
+	}
+	s.populatePlaybookExtraInfo(ctx, pbDTOs)
+	items := make([]*knowledge.KnowledgeItem, 0, len(playbooks))
+	for i, pb := range playbooks {
+		items = append(items, &knowledge.KnowledgeItem{
+			Type:      knowledge.KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_PLAYBOOK,
+			Playbook:  pbDTOs[i],
+			UpdatedAt: pb.UpdatedAt,
+		})
+	}
+	return items, total, nil
+}
+
+func (s *Service) fetchDeliverableItems(
+	ctx context.Context, projectID int64, limit int,
+) ([]*knowledge.KnowledgeItem, int64, error) {
+	if s.ProjectRepo == nil {
+		return nil, 0, nil
+	}
+	records, total, err := s.ProjectRepo.ListProjectDeliverables(ctx, projectID, 0, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	delivDTOs := make([]*projectdto.ProjectDeliverable, 0, len(records))
+	for _, r := range records {
+		var fileSasUrl string
+		if s.Storage != nil {
+			fileSasUrl, _ = storage.PathToUrl(r.FileURI)
+		}
+		delivDTOs = append(delivDTOs, &projectdto.ProjectDeliverable{
+			Id:              r.ID,
+			ProjectId:       r.ProjectID,
+			FileName:        r.FileName,
+			FileUri:         r.FileURI,
+			FileSasUrl:      fileSasUrl,
+			CreatorUsername: r.CreatorUsername,
+			AgentInstanceId: r.AgentInstanceID,
+			CreatedAt:       r.CreatedAt,
+			UpdatedAt:       r.UpdatedAt,
+		})
+	}
+	s.populateDeliverableExtraInfo(ctx, delivDTOs)
+	items := make([]*knowledge.KnowledgeItem, 0, len(records))
+	for i, r := range records {
+		items = append(items, &knowledge.KnowledgeItem{
+			Type:        knowledge.KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DELIVERABLE,
+			Deliverable: delivDTOs[i],
+			UpdatedAt:   r.UpdatedAt,
+		})
+	}
+	return items, total, nil
 }
 
 func (s *Service) UpdatePlaybook(
@@ -1015,6 +1211,33 @@ func (s *Service) UpdatePlaybook(
 	}
 
 	return appresp.Success(&knowledge.UpdateKnowledgePlaybookResponse{}), nil
+}
+
+func (s *Service) DeletePlaybook(
+	ctx context.Context, req *knowledge.DeleteKnowledgePlaybookRequest,
+) (*knowledge.DeleteKnowledgePlaybookResponse, error) {
+	if s.PlaybookRepo == nil {
+		return nil, apperr.New(errcode.CommonUnavailable, "playbook repository not initialized")
+	}
+
+	if _, err := s.PlaybookRepo.GetByID(ctx, req.Id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperr.New(errcode.CommonNotFound, "playbook not found")
+		}
+		return nil, err
+	}
+
+	if err := s.PlaybookRepo.Delete(ctx, req.Id); err != nil {
+		return nil, err
+	}
+
+	if s.PlaybookTagRepo != nil {
+		if err := s.PlaybookTagRepo.DeletePlaybookTags(ctx, req.Id); err != nil {
+			return nil, err
+		}
+	}
+
+	return appresp.Success(&knowledge.DeleteKnowledgePlaybookResponse{}), nil
 }
 
 func (s *Service) GetPlaybookDetails(

@@ -26,19 +26,21 @@ import (
 	"fmt"
 
 	"github.com/casbin/casbin/v2"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	"sico-backend/internal/shared/apperr"
 	appresp "sico-backend/internal/biz/common/response"
 	entity "sico-backend/internal/entity/rbac"
 	"sico-backend/internal/errcode"
+	"sico-backend/internal/shared/apperr"
+	"sico-backend/internal/store/rbac/enforcer"
 	rolerepo "sico-backend/internal/store/rbac/repository"
 	"sico-backend/internal/transport/http/dto/rbac/casbin_rule"
 	rbacCommon "sico-backend/internal/transport/http/dto/rbac/common"
-	"sico-backend/internal/transport/http/dto/rbac/role"
 	"sico-backend/internal/transport/http/dto/rbac/token"
 	"sico-backend/internal/transport/http/dto/rbac/user"
 	"sico-backend/internal/transport/http/dto/rbac/user_role"
+	"sico-backend/internal/transport/http/middleware"
 	"sico-backend/pkg/crypto/hash"
 	"sico-backend/pkg/jwtx"
 	"sico-backend/pkg/logger"
@@ -47,10 +49,10 @@ import (
 
 type Components struct {
 	UserRepo     rolerepo.UserRepository
-	RoleRepo     rolerepo.RoleRepository
 	UserRoleRepo rolerepo.UserRoleRepository
 	CasbinRepo   rolerepo.CasbinRuleRepository
 	Enforcer     *casbin.Enforcer
+	Redis        *redis.Client
 }
 
 type Service struct {
@@ -68,6 +70,19 @@ func NewService(c *Components, jwtAuth jwtx.Auther) *Service {
 
 // GetEnforcer exposes underlying Casbin enforcer for routing and middleware.
 func (s *Service) GetEnforcer() *casbin.Enforcer { return s.Enforcer }
+
+// ReloadEnforcer reloads all Casbin policies from the database.
+func (s *Service) ReloadEnforcer(ctx context.Context) error {
+	if s.Enforcer == nil {
+		return apperr.New(errcode.RBACCasbinNotInitialized, "casbin enforcer not initialized")
+	}
+	if err := s.Enforcer.LoadPolicy(); err != nil {
+		logger.CtxError(ctx, "failed to reload casbin policies: %v", err)
+		return err
+	}
+	logger.CtxInfo(ctx, "casbin enforcer policies reloaded successfully")
+	return nil
+}
 
 // CreateUser creates a new user.
 func (s *Service) CreateUser(ctx context.Context, req *user.CreateUserRequest) (*user.CreateUserResponse, error) {
@@ -136,9 +151,14 @@ func (s *Service) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.
 		return nil, err
 	}
 
-	for _, r := range userRoles {
-		userEntity.Roles = append(userEntity.Roles, r.Code)
-	}
+	userEntity.Roles = slicesx.Transform(userRoles, func(r *user_role.UserRole) *rbacCommon.UserRoleInfo {
+		return &rbacCommon.UserRoleInfo{
+			Id:        r.Id,
+			RoleCode:  r.RoleCode,
+			ScopeType: r.ScopeType,
+			ScopeId:   r.ScopeId,
+		}
+	})
 
 	return appresp.Success(&user.GetUserResponse{
 		Data: &user.GetUserResponseData{User: userEntity},
@@ -213,13 +233,20 @@ func (s *Service) Login(ctx context.Context, req *token.LoginRequest) (*token.Lo
 	if err != nil {
 		return nil, err
 	}
+	userEntity.Roles = slicesx.Transform(userRoles, func(r *user_role.UserRole) *rbacCommon.UserRoleInfo {
+		return &rbacCommon.UserRoleInfo{
+			Id:        r.Id,
+			RoleCode:  r.RoleCode,
+			ScopeType: r.ScopeType,
+			ScopeId:   r.ScopeId,
+		}
+	})
 
 	var roles []string
 	for _, r := range userRoles {
-		roles = append(roles, r.Name)
+		roles = append(roles, r.RoleCode)
 	}
 
-	userEntity.Roles = roles
 	userInfo := &jwtx.UserInfo{Name: userEntity.Username, Roles: roles}
 
 	tokenInfo, err := s.JWTAuth.GenerateToken(ctx, userInfo)
@@ -274,89 +301,6 @@ func (s *Service) RefreshToken(
 	}), nil
 }
 
-// CreateRole creates a role.
-func (s *Service) CreateRole(ctx context.Context, req *role.CreateRoleRequest) (*role.CreateRoleResponse, error) {
-	if req == nil {
-		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
-	}
-
-	id, err := s.doCreateRole(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	return appresp.Success(&role.CreateRoleResponse{
-		Data: &role.CreateRoleResponseData{Id: id},
-	}), nil
-}
-
-// UpdateRole updates a role.
-func (s *Service) UpdateRole(ctx context.Context, req *role.UpdateRoleRequest) (*role.UpdateRoleResponse, error) {
-	if req == nil {
-		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
-	}
-	if req.Id <= 0 {
-		return nil, apperr.New(errcode.CommonInvalidParam, "id is required")
-	}
-
-	if err := s.doUpdateRole(ctx, req); err != nil {
-		return nil, err
-	}
-
-	return appresp.Success(&role.UpdateRoleResponse{}), nil
-}
-
-// DeleteRole deletes a role.
-func (s *Service) DeleteRole(ctx context.Context, req *role.DeleteRoleRequest) (*role.DeleteRoleResponse, error) {
-	if req == nil {
-		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
-	}
-	if req.Id <= 0 {
-		return nil, apperr.New(errcode.CommonInvalidParam, "id is required")
-	}
-
-	if err := s.doDeleteRole(ctx, req.Id); err != nil {
-		return nil, err
-	}
-
-	return appresp.Success(&role.DeleteRoleResponse{}), nil
-}
-
-// GetRole fetches role details.
-func (s *Service) GetRole(ctx context.Context, req *role.GetRoleRequest) (*role.GetRoleResponse, error) {
-	if req == nil {
-		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
-	}
-	if req.Id <= 0 {
-		return nil, apperr.New(errcode.CommonInvalidParam, "id is required")
-	}
-
-	roleObj, err := s.doGetRole(ctx, req.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	return appresp.Success(&role.GetRoleResponse{
-		Data: &role.GetRoleResponseData{Role: roleObj},
-	}), nil
-}
-
-// QueryRoles lists roles.
-func (s *Service) QueryRoles(ctx context.Context, req *role.QueryRolesRequest) (*role.QueryRolesResponse, error) {
-	if req == nil {
-		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
-	}
-
-	roles, total, hasNext, err := s.doQueryRoles(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	return appresp.Success(&role.QueryRolesResponse{
-		Data: &role.QueryRolesResponseData{Roles: roles, Total: total, HasNext: hasNext},
-	}), nil
-}
-
 // AssignUserRole assigns a role to a user.
 func (s *Service) AssignUserRole(
 	ctx context.Context, req *user_role.AssignUserRoleRequest,
@@ -364,8 +308,8 @@ func (s *Service) AssignUserRole(
 	if req == nil {
 		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
 	}
-	if req.UserId <= 0 || req.RoleId <= 0 {
-		return nil, apperr.New(errcode.CommonInvalidParam, "userId and roleId are required")
+	if req.UserId <= 0 || req.RoleCode == "" {
+		return nil, apperr.New(errcode.CommonInvalidParam, "userId and roleCode are required")
 	}
 
 	if err := s.doAssignUserRole(ctx, req); err != nil {
@@ -382,8 +326,8 @@ func (s *Service) RemoveUserRole(
 	if req == nil {
 		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
 	}
-	if req.UserId <= 0 || req.RoleId <= 0 {
-		return nil, apperr.New(errcode.CommonInvalidParam, "userId and roleId are required")
+	if req.UserId <= 0 || req.RoleCode == "" {
+		return nil, apperr.New(errcode.CommonInvalidParam, "userId and roleCode are required")
 	}
 
 	if err := s.doRemoveUserRole(ctx, req); err != nil {
@@ -421,8 +365,8 @@ func (s *Service) ListUsersByRole(
 	if req == nil {
 		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
 	}
-	if req.RoleId <= 0 {
-		return nil, apperr.New(errcode.CommonInvalidParam, "roleId is required")
+	if req.RoleCode == "" {
+		return nil, apperr.New(errcode.CommonInvalidParam, "roleCode is required")
 	}
 
 	users, total, hasNext, err := s.doListUsersByRole(ctx, req)
@@ -652,8 +596,8 @@ func (s *Service) doDeleteUser(ctx context.Context, id int64) error {
 			_ = s.Enforcer.LoadPolicy()
 			groupingPolicies, _ := s.Enforcer.GetGroupingPolicy()
 			for _, gp := range groupingPolicies {
-				if len(gp) >= 2 && gp[0] == userModel.Username {
-					_, _ = s.Enforcer.RemoveGroupingPolicy(gp[0], gp[1])
+				if len(gp) >= 3 && gp[0] == userModel.Username {
+					_, _ = s.Enforcer.RemoveGroupingPolicy(gp[0], gp[1], gp[2])
 				}
 			}
 		}
@@ -720,117 +664,61 @@ func (s *Service) doQueryUsers(ctx context.Context, req *user.QueryUsersRequest)
 	return users, int32(totalCount), hasNext, nil
 }
 
-func (s *Service) doCreateRole(ctx context.Context, req *role.CreateRoleRequest) (int64, error) {
-	if existing, err := s.RoleRepo.GetRoleByCode(ctx, req.Code); err == nil {
-		if existing != nil {
-			return 0, apperr.New(errcode.RBACRoleCodeAlreadyExists, "role code already exists")
-		}
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return 0, err
-	}
-
-	po := &rolerepo.RoleModel{Code: req.Code, Name: req.Name, Description: req.Description, Status: 1}
-	if err := s.RoleRepo.CreateRole(ctx, po); err != nil {
-		logger.CtxError(ctx, "failed to create role: code=%s, name=%s, err=%v", req.Code, req.Name, err)
-		return 0, err
-	}
-
-	return po.ID, nil
-}
-
-func (s *Service) doUpdateRole(ctx context.Context, req *role.UpdateRoleRequest) error {
-	po, err := s.RoleRepo.GetRole(ctx, req.Id)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return apperr.New(errcode.CommonNotFound, "role not found")
-		}
-		return err
-	}
-
-	if req.Name != "" {
-		po.Name = req.Name
-	}
-	if req.Description != "" {
-		po.Description = req.Description
-	}
-	if req.Status == 0 || req.Status == 1 {
-		po.Status = req.Status
-	}
-
-	return s.RoleRepo.UpdateRole(ctx, po)
-}
-
-func (s *Service) doDeleteRole(ctx context.Context, id int64) error {
-	if _, err := s.RoleRepo.GetRole(ctx, id); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return apperr.New(errcode.CommonNotFound, "role not found")
-		}
-		return err
-	}
-
-	if err := s.syncEnforcerAfterRoleDelete(ctx, id); err != nil {
-		return err
-	}
-
-	return s.RoleRepo.DeleteRole(ctx, id)
-}
-
-// syncEnforcerAfterRoleDelete removes any grouping policies referencing the role being
-// deleted so Casbin state stays consistent with the database.
-func (s *Service) syncEnforcerAfterRoleDelete(ctx context.Context, id int64) error {
+// authorizeRoleChange checks that the current user has the required permission
+// to assign or remove the given role in the given scope.
+func (s *Service) authorizeRoleChange(ctx context.Context, roleCode, scopeType string, scopeID int64) error {
 	if s.Enforcer == nil {
 		return nil
 	}
-	if err := s.Enforcer.LoadPolicy(); err != nil {
-		return err
+
+	caller, ok := middleware.GetUserFromContext(ctx)
+	if !ok {
+		return apperr.New(errcode.CommonForbidden, "authentication required")
 	}
 
-	gps, _ := s.Enforcer.GetGroupingPolicy()
-	roleModel, _ := s.RoleRepo.GetRole(ctx, id)
-	if roleModel == nil {
-		return nil
-	}
+	var (
+		checkDomain   string
+		checkResource string
+		checkAction   string
+	)
 
-	for _, gp := range gps {
-		if len(gp) >= 2 && gp[1] == roleModel.Code {
-			if _, err := s.Enforcer.RemoveGroupingPolicy(gp[0], gp[1]); err != nil {
-				return err
-			}
+	switch roleCode {
+	case "platform_admin", "org_admin":
+		checkDomain = "platform"
+		checkResource = "organization"
+		checkAction = "admin"
+	case "project_admin", "project_member":
+		if scopeType != "project" || scopeID <= 0 {
+			return apperr.New(errcode.CommonInvalidParam, "project scope required for project roles")
 		}
+		checkDomain = fmt.Sprintf("project:%d", scopeID)
+		checkResource = "project"
+		checkAction = "manage"
+	default:
+		return apperr.New(errcode.CommonInvalidParam, "unknown role code: "+roleCode)
 	}
 
+	allowed, err := s.Enforcer.Enforce(caller.Name, checkDomain, checkResource, checkAction)
+	if err != nil {
+		return fmt.Errorf("casbin enforce: %w", err)
+	}
+	if !allowed {
+		return apperr.New(errcode.CommonForbidden, "insufficient permissions to manage this role")
+	}
 	return nil
 }
 
-func (s *Service) doGetRole(ctx context.Context, id int64) (*role.Role, error) {
-	po, err := s.RoleRepo.GetRole(ctx, id)
-	if err != nil {
-		logger.CtxError(ctx, "failed to get role: id=%d, err=%v", id, err)
-		return nil, err
-	}
-
-	return rolePo2Pb(po), nil
-}
-
-func (s *Service) doQueryRoles(ctx context.Context, req *role.QueryRolesRequest) ([]*role.Role, int32, bool, error) {
-	var statusPtr *int32
-	if req.Status == 0 || req.Status == 1 {
-		status := req.Status
-		statusPtr = &status
-	}
-
-	list, total, err := s.RoleRepo.QueryRoles(ctx, req.Code, req.Name, statusPtr, req.Page, req.PageSize)
-	if err != nil {
-		logger.CtxError(ctx, "failed to query roles: err=%v", err)
-		return nil, 0, false, err
-	}
-
-	roles := slicesx.Transform(list, func(po *rolerepo.RoleModel) *role.Role { return rolePo2Pb(po) })
-	hasNext := int64(req.Page*req.PageSize) < total
-	return roles, int32(total), hasNext, nil
-}
-
 func (s *Service) doAssignUserRole(ctx context.Context, req *user_role.AssignUserRoleRequest) error {
+	if err := s.authorizeRoleChange(ctx, req.RoleCode, req.ScopeType, req.ScopeId); err != nil {
+		return err
+	}
+	return s.AssignUserRoleInternal(ctx, req)
+}
+
+// AssignUserRoleInternal performs the actual role assignment without authorization checks.
+// Used by internal operations (e.g. project creation) where the caller has already
+// verified permissions or the operation is inherently authorized.
+func (s *Service) AssignUserRoleInternal(ctx context.Context, req *user_role.AssignUserRoleRequest) error {
 	userModel, err := s.UserRepo.GetUserByID(ctx, req.UserId)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -839,33 +727,37 @@ func (s *Service) doAssignUserRole(ctx context.Context, req *user_role.AssignUse
 		return err
 	}
 
-	roleModel, err := s.RoleRepo.GetRole(ctx, req.RoleId)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return apperr.New(errcode.CommonNotFound, "role not found")
-		}
-		return err
-	}
-
-	roles, _, err := s.UserRoleRepo.ListRolesByUser(ctx, req.UserId, 1, 1000)
+	_, total, err := s.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		UserID:    req.UserId,
+		RoleCode:  req.RoleCode,
+		ScopeType: req.ScopeType,
+		ScopeID:   req.ScopeId,
+		Limit:     1,
+	})
 	if err != nil {
 		return err
 	}
-	for _, existing := range roles {
-		if existing.ID == req.RoleId {
-			return apperr.New(errcode.RBACRoleAlreadyAssigned, "role already assigned to user")
-		}
+	if total > 0 {
+		return apperr.New(errcode.RBACRoleAlreadyAssigned, "role already assigned to user")
 	}
 
-	if err := s.UserRoleRepo.Assign(ctx, &rolerepo.UserRoleModel{UserID: req.UserId, RoleID: req.RoleId}); err != nil {
+	if err := s.UserRoleRepo.Assign(ctx, &rolerepo.UserRoleModel{
+		UserID:    req.UserId,
+		RoleCode:  req.RoleCode,
+		ScopeType: req.ScopeType,
+		ScopeID:   req.ScopeId,
+	}); err != nil {
 		return err
 	}
 
-	if s.Enforcer != nil {
-		if userModel != nil && roleModel != nil {
-			if added, _ := s.Enforcer.AddGroupingPolicy(userModel.Username, roleModel.Code); added {
-				logger.CtxInfo(ctx, "grouping added: %s -> %s", userModel.Username, roleModel.Code)
-			}
+	if s.Enforcer != nil && userModel != nil {
+		domain := fmt.Sprintf("%s:%d", req.ScopeType, req.ScopeId)
+		if req.ScopeType == "platform" {
+			domain = "platform"
+		}
+		if added, _ := s.Enforcer.AddGroupingPolicy(userModel.Username, req.RoleCode, domain); added {
+			logger.CtxInfo(ctx, "grouping added: %s -> %s in %s", userModel.Username, req.RoleCode, domain)
+			enforcer.NotifyPolicyChanged(s.Redis)
 		}
 	}
 
@@ -873,31 +765,59 @@ func (s *Service) doAssignUserRole(ctx context.Context, req *user_role.AssignUse
 }
 
 func (s *Service) doRemoveUserRole(ctx context.Context, req *user_role.RemoveUserRoleRequest) error {
-	if err := s.UserRoleRepo.Remove(ctx, req.UserId, req.RoleId); err != nil {
+	if err := s.authorizeRoleChange(ctx, req.RoleCode, req.ScopeType, req.ScopeId); err != nil {
+		return err
+	}
+	return s.RemoveUserRoleInternal(ctx, req)
+}
+
+// RemoveUserRoleInternal performs the actual role removal without authorization checks.
+func (s *Service) RemoveUserRoleInternal(ctx context.Context, req *user_role.RemoveUserRoleRequest) error {
+	userModel, _ := s.UserRepo.GetUserByID(ctx, req.UserId)
+
+	if err := s.UserRoleRepo.Remove(ctx, req.UserId, req.RoleCode, req.ScopeType, req.ScopeId); err != nil {
 		return err
 	}
 
-	if s.Enforcer != nil {
-		userModel, _ := s.UserRepo.GetUserByID(ctx, req.UserId)
-		roleModel, _ := s.RoleRepo.GetRole(ctx, req.RoleId)
-		if userModel != nil && roleModel != nil {
-			if removed, _ := s.Enforcer.RemoveGroupingPolicy(userModel.Username, roleModel.Code); removed {
-				logger.CtxInfo(ctx, "grouping removed: %s -> %s", userModel.Username, roleModel.Code)
-			}
+	if s.Enforcer != nil && userModel != nil {
+		domain := fmt.Sprintf("%s:%d", req.ScopeType, req.ScopeId)
+		if req.ScopeType == "platform" {
+			domain = "platform"
+		}
+		if removed, _ := s.Enforcer.RemoveGroupingPolicy(userModel.Username, req.RoleCode, domain); removed {
+			logger.CtxInfo(ctx, "grouping removed: %s -> %s in %s", userModel.Username, req.RoleCode, domain)
+			enforcer.NotifyPolicyChanged(s.Redis)
 		}
 	}
 
 	return nil
 }
 
-func (s *Service) doListUserRoles(ctx context.Context, req *user_role.ListUserRolesRequest) ([]*role.Role, int32, bool, error) {
-	list, total, err := s.UserRoleRepo.ListRolesByUser(ctx, req.UserId, req.Page, req.PageSize)
+func (s *Service) doListUserRoles(
+	ctx context.Context, req *user_role.ListUserRolesRequest,
+) ([]*user_role.UserRole, int32, bool, error) {
+	offset := int((req.Page - 1) * req.PageSize)
+	list, total, err := s.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		UserID: req.UserId,
+		Offset: offset,
+		Limit:  int(req.PageSize),
+	})
 	if err != nil {
 		logger.CtxError(ctx, "failed to list user roles: userId=%d, err=%v", req.UserId, err)
 		return nil, 0, false, err
 	}
 
-	roles := slicesx.Transform(list, func(po *rolerepo.RoleModel) *role.Role { return rolePo2Pb(po) })
+	roles := slicesx.Transform(list, func(ur *rolerepo.UserRoleModel) *user_role.UserRole {
+		return &user_role.UserRole{
+			Id:        ur.ID,
+			UserId:    ur.UserID,
+			RoleCode:  ur.RoleCode,
+			ScopeType: ur.ScopeType,
+			ScopeId:   ur.ScopeID,
+			CreatedAt: ur.CreatedAt,
+			UpdatedAt: ur.UpdatedAt,
+		}
+	})
 	hasNext := int64(req.Page*req.PageSize) < total
 	return roles, int32(total), hasNext, nil
 }
@@ -905,13 +825,32 @@ func (s *Service) doListUserRoles(ctx context.Context, req *user_role.ListUserRo
 func (s *Service) doListUsersByRole(
 	ctx context.Context, req *user_role.ListUsersByRoleRequest,
 ) ([]*entity.User, int32, bool, error) {
-	list, total, err := s.UserRoleRepo.ListUsersByRole(ctx, req.RoleId, req.Page, req.PageSize)
+	offset := int((req.Page - 1) * req.PageSize)
+	list, total, err := s.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		RoleCode:  req.RoleCode,
+		ScopeType: req.ScopeType,
+		ScopeID:   req.ScopeId,
+		Offset:    offset,
+		Limit:     int(req.PageSize),
+	})
 	if err != nil {
-		logger.CtxError(ctx, "failed to list users by role: roleId=%d, err=%v", req.RoleId, err)
+		logger.CtxError(ctx, "failed to list users by role: roleCode=%s, err=%v", req.RoleCode, err)
 		return nil, 0, false, err
 	}
 
-	users := slicesx.Transform(list, func(po *rolerepo.UserModel) *entity.User { return userPo2Do(po) })
+	var users []*entity.User
+	userIDs := make([]int64, 0, len(list))
+	for _, ur := range list {
+		userIDs = append(userIDs, ur.UserID)
+	}
+	userModels, err := s.UserRepo.GetUsersByIDs(ctx, userIDs)
+	if err != nil {
+		logger.CtxError(ctx, "failed to batch-fetch users: err=%v", err)
+		return nil, 0, false, err
+	}
+	for _, um := range userModels {
+		users = append(users, userPo2Do(um))
+	}
 	hasNext := int64(req.Page*req.PageSize) < total
 	return users, int32(total), hasNext, nil
 }
@@ -1126,18 +1065,6 @@ func equalPolicyRules(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-func rolePo2Pb(po *rolerepo.RoleModel) *role.Role {
-	return &role.Role{
-		Id:          po.ID,
-		Code:        po.Code,
-		Name:        po.Name,
-		Description: po.Description,
-		Status:      po.Status,
-		CreatedAt:   po.CreatedAt / 1000,
-		UpdatedAt:   po.UpdatedAt / 1000,
-	}
 }
 
 func casbinRulePo2Pb(po *rolerepo.PolicyModel) *casbin_rule.CasbinRule {

@@ -72,7 +72,12 @@ func (d *PlaybookDAO) List(ctx context.Context, filter *PlaybookFilter) ([]*mode
 		return nil, 0, err
 	}
 
-	list, err := do.Offset(filter.Offset).Limit(filter.Limit).Order(q.ID.Desc()).Find()
+	do = do.Offset(filter.Offset).Order(q.ID.Desc())
+	if filter.Limit > 0 {
+		do = do.Limit(filter.Limit)
+	}
+
+	list, err := do.Find()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -89,6 +94,15 @@ func (d *PlaybookDAO) Update(ctx context.Context, pb *model.TKnowledgePlaybook) 
 			q.Name.Value(pb.Name),
 			q.UpdatedAt.Value(now),
 		)
+	return err
+}
+
+// Delete soft-deletes a playbook by ID.
+func (d *PlaybookDAO) Delete(ctx context.Context, id int64) error {
+	q := d.query.TKnowledgePlaybook
+	_, err := q.WithContext(ctx).
+		Where(q.ID.Eq(id)).
+		Delete()
 	return err
 }
 

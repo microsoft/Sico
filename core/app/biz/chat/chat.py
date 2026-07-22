@@ -32,7 +32,9 @@ from typing import Any
 from agent_framework import BaseChatClient, ChatResponse, ChatResponseUpdate, Content, Message
 from pydantic import BaseModel
 
-from app.llmhubs import get_client
+from app.biz.chat.compaction import configure_compaction as _configure_compaction
+from app.biz.chat.conversation_history import complete_unfinished_tool_calls, discard_unfinished_tool_calls
+from app.biz.chat.prompt import PromptFile, read_prompt_file
 from app.memory.mem0 import get_shared_mem0
 from app.pb.conversation.chat import (
     ChatContent as PbChatContent,
@@ -40,15 +42,21 @@ from app.pb.conversation.chat import (
     ChatResponse as PbChatResponse,
 )
 from app.storage.fs import CHAT_FS
-from app.tools.common import _TOOL_CONTEXT_KWARGS_KEY, ToolCallStatusMiddleware, ToolContext
+from app.tools.common import _TOOL_CONTEXT_KWARGS_KEY, ToolCallStatusMiddleware, ToolContext, ToolOutputTruncationMiddleware
 from app.tools.plan import PlanEditor, is_plan_cancelled
 from app.utils.runner import AsyncJobRunner
 from app.utils.sanitize import sanitize_mem0_entity_id
+
+from agent_framework._compaction import CharacterEstimatorTokenizer
+from app.llmhubs import get_client, get_context_length
 
 _LOGGER = logging.getLogger(__name__)
 CHECK_CANCELLED_PLAN_INTERVAL_SECONDS = 2
 BUFFER_TEXT_MAXIMUM_LENGTH = 32
 CONTENT_TIMESTAMP_KEY = "timestamp_ms"
+
+DEFAULT_CONTEXT_LENGTH = 128_000
+HISTORY_CONTEXT_RATIO = 0.5
 
 
 def _stamp_message_timestamp(message: Message, timestamp_ms: int) -> None:
@@ -99,6 +107,7 @@ def build_error_response(message: str) -> PbChatResponse:
 class _Mem0MemoryTask:
     username: str
     agent_instance_id: str | None
+    conversation_id: int | str | None
     messages: list[dict[str, str]]
 
 
@@ -132,7 +141,7 @@ class ChatAgent:
         username: str,
         agent_instance_id: int | None,
         mem_runner: AsyncJobRunner,
-        tool_context: ToolContext | None = None,
+        tool_context: ToolContext,
     ) -> None:
         self._client = client
         self._username = username
@@ -149,7 +158,7 @@ class ChatAgent:
         options: RunOptions,
     ):
         prepared_tools = options.tools
-        conversation_id = self._tool_context.conversation_id if self._tool_context else None
+        conversation_id = self._tool_context.conversation_id
         model_name = getattr(self._client, "_model", None)
         _stamp_message_timestamp(user_message, time.time_ns() // 1_000_000)
         attempt_ctx = _AttemptContext(
@@ -162,8 +171,11 @@ class ChatAgent:
         )
         try:
             attempt = 0
+            prior_partial_messages: list[Message] = []
+            failed_attempt_messages: list[Message] = []
             while attempt < options.max_attempts:
                 attempt += 1
+                partial_updates: list[ChatResponseUpdate] = []
                 try:
                     await self._stream_one_attempt(
                         queue,
@@ -171,29 +183,41 @@ class ChatAgent:
                         system_message,
                         ctx=attempt_ctx,
                         attempt=attempt,
+                        prior_partial_messages=prior_partial_messages,
+                        partial_updates_out=partial_updates,
                     )
                     return
                 except Exception as exc:
+                    if partial_updates:
+                        partial_response = ChatResponse.from_updates(partial_updates)
+                        prior_partial_messages.extend(partial_response.messages)
+                        failed_attempt_messages.extend(partial_response.messages)
                     _LOGGER.warning(
                         "chat_client_stream_attempt_failed agent_instance_id=%s conversation_id=%s "
-                        "turn_id=%s model=%s attempt=%s/%s",
+                        "turn_id=%s model=%s attempt=%s/%s prior_partial_message_count=%d",
                         self._agent_instance_id,
                         conversation_id,
                         options.turn_id,
                         model_name,
                         attempt,
                         options.max_attempts,
+                        len(prior_partial_messages),
                         exc_info=True,
                     )
-                    await queue.put(
-                        build_error_response(f"Error with chat agent attempt {attempt}/{options.max_attempts}: {str(exc)}")
-                    )
+                    error_text = f"Error with chat agent attempt {attempt}/{options.max_attempts}: {str(exc)}"
+                    error_response = build_error_response(error_text)
+                    error_message = Message(role="assistant", contents=[Content.from_text(error_text)])
+                    _stamp_message_timestamp(error_message, error_response.timestamp)
+                    failed_attempt_messages.append(error_message)
+                    if options.save_history:
+                        await self._persist_messages([user_message, *failed_attempt_messages], options.turn_id)
+                    await queue.put(error_response)
                     if attempt >= options.max_attempts:
                         raise
         finally:
             try:
                 # mark plan items as completed if any still running
-                plan_editor = self._tool_context.plan_editor if self._tool_context else None
+                plan_editor = self._tool_context.plan_editor
                 if plan_editor:
                     await _finish_plan(plan_editor)
             except Exception as exc:
@@ -215,8 +239,17 @@ class ChatAgent:
         *,
         ctx: _AttemptContext,
         attempt: int = 1,
+        prior_partial_messages: list[Message] | None = None,
+        partial_updates_out: list[ChatResponseUpdate] | None = None,
     ) -> None:
         prepared_messages = await self._prepare_messages(user_message, system_message)
+
+        if prior_partial_messages:
+            continuation_text = read_prompt_file(PromptFile.RETRY_CONTINUATION)
+            continuation_msg = Message(role="system", contents=[continuation_text])
+            prepared_messages.insert(-1, continuation_msg)
+            for msg in prior_partial_messages:
+                prepared_messages.insert(-1, msg)
 
         _LOGGER.debug(
             "The final prepared messages for chat client: %s",
@@ -252,6 +285,7 @@ class ChatAgent:
             prepared_messages,
             stream=True,
             options=stream_options,
+            middleware=[ToolCallStatusMiddleware(), ToolOutputTruncationMiddleware()],
             function_invocation_kwargs={_TOOL_CONTEXT_KWARGS_KEY: self._tool_context},
         ):
             if first_update_ms is None:
@@ -261,8 +295,7 @@ class ChatAgent:
             if time.time() - plan_cancel_last_check_timestamp > CHECK_CANCELLED_PLAN_INTERVAL_SECONDS:
                 if is_plan_cancelled(self._agent_instance_id, self._username, ctx.turn_id, ctx.conversation_id):
                     _LOGGER.info(
-                        "chat_plan_cancel_detected agent_instance_id=%s conversation_id=%s "
-                        "turn_id=%s stopping_generation=true",
+                        "chat_plan_cancel_detected agent_instance_id=%s conversation_id=%s turn_id=%s stopping_generation=true",
                         self._agent_instance_id,
                         ctx.conversation_id,
                         ctx.turn_id,
@@ -270,18 +303,22 @@ class ChatAgent:
                     break
                 plan_cancel_last_check_timestamp = time.time()
 
+            if partial_updates_out is not None:
+                partial_updates_out.append(update)
             updates.append(update)
             text_only, update_text, added_assistant = self._process_update_contents(update, ctx.conversation_id, ctx.turn_id)
             assistant_text += added_assistant
             buffered_text = await self._emit_or_buffer(queue, update, text_only, update_text, buffered_text)
 
+            if not text_only and ctx.save_history:
+                await self._persist_turn_incremental(user_message, updates, ctx.turn_id)
+
         # if any buffered text left after stream ends, send it as an update
         if buffered_text:
             await queue.put(ChatResponseUpdate(contents=[Content.from_text(buffered_text)], role="assistant"))
 
-        response = ChatResponse.from_updates(updates)
         if ctx.save_history:
-            await self.persist_turn(user_message, response, ctx.turn_id)
+            await self._persist_turn_incremental(user_message, updates, ctx.turn_id)
         if ctx.save_memory:
             await self._enqueue_memories(
                 user_message,
@@ -412,7 +449,7 @@ class ChatAgent:
                 response = await self._client.get_response(
                     prepared_messages,
                     options=response_options,
-                    middleware=[ToolCallStatusMiddleware()],
+                    middleware=[ToolCallStatusMiddleware(), ToolOutputTruncationMiddleware()],
                     function_invocation_kwargs={_TOOL_CONTEXT_KWARGS_KEY: self._tool_context},
                 )
                 assistant_text = response.messages[-1].text if response.messages else ""
@@ -436,15 +473,50 @@ class ChatAgent:
 
     async def persist_turn(self, user_message: Message, response: ChatResponse, turn_id: int) -> None:
         """Persist user + assistant messages as conversation.json under the turn path."""
-        all_messages = [user_message] + list(response.messages)
-        serialized = "[" + ",".join(m.to_json(separators=(",", ":")) for m in all_messages) + "]"
-        await asyncio.to_thread(
-            CHAT_FS.write_conversation,
+        await self._persist_messages([user_message, *response.messages], turn_id)
+
+    async def _persist_messages(self, messages: list[Message], turn_id: int) -> None:
+        message_data = [message.to_dict() for message in messages]
+        conversation_id = self._tool_context.conversation_id
+        if CHAT_FS.plan.is_cancelled(
+            self._agent_instance_id,
+            self._username,
+            turn_id,
+            conversation_id=conversation_id,
+        ):
+            message_data, completed_count = complete_unfinished_tool_calls(message_data)
+            if completed_count:
+                _LOGGER.info(
+                    "chat_cancelled_tool_results_persisted agent_instance_id=%s conversation_id=%s turn_id=%s completed_count=%d",
+                    self._agent_instance_id,
+                    conversation_id,
+                    turn_id,
+                    completed_count,
+                )
+        serialized = json.dumps(message_data, ensure_ascii=False, separators=(",", ":"))
+        CHAT_FS.write_conversation(
             self._agent_instance_id,
             self._username,
             turn_id,
             serialized,
+            conversation_id=conversation_id,
         )
+
+    async def _persist_turn_incremental(
+        self,
+        user_message: Message,
+        updates: list[ChatResponseUpdate],
+        turn_id: int,
+    ) -> None:
+        """Persist conversation.json from the accumulated updates so far.
+
+        Called both during streaming (after each non-text update such as a tool
+        call) and at the end of a successful attempt. This keeps the on-disk
+        transcript up-to-date so a retry attempt — or a crash recovery — can
+        see what has already been produced.
+        """
+        response = ChatResponse.from_updates(updates)
+        await self.persist_turn(user_message, response, turn_id)
 
     async def _enqueue_memories(self, user_message: Message, assistant_message: Message) -> None:
         memory_messages: list[dict[str, str]] = []
@@ -469,6 +541,7 @@ class ChatAgent:
                     _Mem0MemoryTask(
                         username=self._username,
                         agent_instance_id=str(self._agent_instance_id),
+                        conversation_id=self._tool_context.conversation_id,
                         messages=memory_messages,
                     ),
                 )
@@ -484,24 +557,37 @@ class ChatAgent:
         if system_message:
             messages.append(Message(role="system", contents=[system_message]))
 
-        # Prepend text-only content from the last 3 turns of conversation history.
-        history_messages = await self._load_recent_history(num_turns=3)
+        # Prepend content from conversation history.
+        history_messages = await self._load_recent_history()
+        _LOGGER.info("Loaded history count: %d", len(history_messages))
+
+        _LOGGER.debug("========== HISTORY DEBUG ==========")
+        for i, m in enumerate(history_messages):
+            _LOGGER.debug("History[%d]: %s", i, m.to_json())
+        _LOGGER.debug("========== END HISTORY ==========")
         messages.extend(history_messages)
 
         messages.append(user_message)
 
         return messages
 
-    async def _load_recent_history(self, num_turns: int = 3) -> list[Message]:
-        """Load text-only messages from the most recent conversation turns."""
-        if self._agent_instance_id is None:
+    async def _load_recent_history(
+        self,
+        num_turns: int | None = None,
+    ) -> list[Message]:
+        _LOGGER.info("========ENTER _load_recent_history=========")
+        """Load messages from previous conversation turns."""
+        if self._agent_instance_id is None or self._tool_context is None:
             return []
+
+        conversation_id = self._tool_context.conversation_id
 
         try:
             turn_ids = await asyncio.to_thread(
                 CHAT_FS.list_turn_ids,
                 self._agent_instance_id,
                 self._username,
+                conversation_id,
             )
         except Exception:
             _LOGGER.debug("failed to list turn ids for history", exc_info=True)
@@ -510,28 +596,60 @@ class ChatAgent:
         if not turn_ids:
             return []
 
-        recent_turn_ids = turn_ids[-num_turns:]
+        if num_turns is not None:
+            turn_ids = turn_ids[-num_turns:]
+
+        tokenizer = CharacterEstimatorTokenizer()
+        context_length = get_context_length(str(getattr(self._client, "_model", None))) or DEFAULT_CONTEXT_LENGTH
+        token_budget = int(context_length * HISTORY_CONTEXT_RATIO)
+
+        used_tokens = 0
         history: list[Message] = []
 
-        for turn_id in recent_turn_ids:
+        for turn_id in reversed(turn_ids):
             try:
                 raw = await asyncio.to_thread(
                     CHAT_FS.read_conversation,
                     self._agent_instance_id,
                     self._username,
                     turn_id,
+                    conversation_id=conversation_id,
                 )
                 if not raw:
                     continue
                 turn_messages = json.loads(raw)
                 if not isinstance(turn_messages, list):
                     continue
+
+                turn_messages, discarded_count = discard_unfinished_tool_calls(turn_messages)
+                if discarded_count:
+                    _LOGGER.warning(
+                        "chat_history_discarded_unfinished_tool_calls agent_instance_id=%s conversation_id=%s "
+                        "turn_id=%s discarded_count=%d",
+                        self._agent_instance_id,
+                        conversation_id,
+                        turn_id,
+                        discarded_count,
+                    )
+
+                turn_tokens = tokenizer.count_tokens(json.dumps(turn_messages, ensure_ascii=False, separators=(",", ":")))
+                turn_history: list[Message] = []
+
                 for msg_data in turn_messages:
                     msg = Message.from_dict(msg_data)
-                    text = _extract_text_from_message(msg)
-                    if text:
-                        role = msg.role if isinstance(msg.role, str) else msg.role.value
-                        history.append(Message(role=role, contents=[text]))
+                    turn_history.append(msg)
+
+                if used_tokens + turn_tokens > token_budget:
+                    _LOGGER.info(
+                        "history_token_limit_reached used_tokens=%d turn_tokens=%d token_budget=%d",
+                        used_tokens,
+                        turn_tokens,
+                        token_budget,
+                    )
+                    break
+
+                history = turn_history + history
+                used_tokens += turn_tokens
             except Exception:
                 _LOGGER.debug("failed to load conversation for turn %s", turn_id, exc_info=True)
                 continue
@@ -544,8 +662,9 @@ async def build_agent(
     agent_id: str,
     agent_instance_id: int,
     mem_runner: AsyncJobRunner | None = None,
+    *,
+    tool_context: ToolContext,
     model: str | int | None = None,
-    tool_context: ToolContext | None = None,
 ) -> ChatAgent:
     if mem_runner is None:
         raise RuntimeError("mem_runner is required to build ChatAgent")
@@ -572,6 +691,8 @@ async def build_agent(
                     max_iterations_env,
                 )
 
+    _configure_compaction(client, model)
+
     return ChatAgent(
         client=client,
         username=username,
@@ -584,11 +705,15 @@ async def build_agent(
 async def _store_memories(task: _Mem0MemoryTask) -> None:
     try:
         memory = get_shared_mem0()
-        await memory.add(
-            messages=task.messages,
-            user_id=sanitize_mem0_entity_id(task.username),
-            agent_id=sanitize_mem0_entity_id(task.agent_instance_id),
-        )
+        add_kwargs = {
+            "messages": task.messages,
+            "user_id": sanitize_mem0_entity_id(task.username),
+            "agent_id": sanitize_mem0_entity_id(task.agent_instance_id),
+        }
+        run_id = sanitize_mem0_entity_id(str(task.conversation_id)) if task.conversation_id else None
+        if run_id:
+            add_kwargs["run_id"] = run_id
+        await memory.add(**add_kwargs)
     except Exception as exc:  # pragma: no cover - external service call
         _LOGGER.warning("failed to store mem0 memories", exc_info=exc)
 

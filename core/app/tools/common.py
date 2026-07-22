@@ -21,6 +21,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -29,6 +30,7 @@ from agent_framework._middleware import FunctionInvocationContext, FunctionMiddl
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.conversation.plan import ToolCallStatus
+from app.storage.fs import CHAT_FS
 
 from .plan import PlanEditor, begin_tool_call_status_tracking, finish_tool_call_status_tracking
 
@@ -132,3 +134,119 @@ def _payload_indicates_failure(payload: dict[str, Any]) -> bool:
         if value not in (None, "", [], {}):
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# Tool output truncation middleware
+# ---------------------------------------------------------------------------
+
+_MAX_TOOL_OUTPUT_LENGTH = 20_000  # characters before truncation
+_PREVIEW_LENGTH = 2_000  # characters of preview in truncated output
+
+
+class ToolOutputTruncationMiddleware(FunctionMiddleware):
+    """Middleware that truncates oversized tool results.
+
+    When the serialized tool result exceeds ``_MAX_TOOL_OUTPUT_LENGTH`` characters,
+    the full output is saved to ``.tmp/<uuid>.txt`` in the workspace and the result
+    is replaced with a preview plus the file path.
+
+    Per-tool ``additional_properties`` recognised by this middleware:
+
+    * ``summarize_on_truncate`` (bool) – generate an LLM summary when truncated.
+    * ``max_output_length`` (int) – override the default truncation threshold.
+    * ``skip_truncation`` (bool) – bypass truncation entirely.
+    """
+
+    async def process(
+        self,
+        context: FunctionInvocationContext,
+        call_next: Callable[[], Awaitable[None]],
+    ) -> None:
+        await call_next()
+
+        _LOGGER.info("Tool output truncation middleware processing tool=%s", context.function.name)
+
+        props = getattr(context.function, "additional_properties", None) or {}
+        if props.get("skip_truncation"):
+            return
+
+        tool_context = get_tool_context(context)
+        if tool_context is None or tool_context.agent_instance_id is None:
+            return
+
+        result = context.result
+        if result is None:
+            return
+
+        # Serialize the result to measure length
+        try:
+            serialized = result if isinstance(result, str) else json.dumps(result, default=str)
+        except (TypeError, ValueError) as e:
+            _LOGGER.warning(
+                "Failed to serialize tool result for truncation check, skipping truncation tool=%s error=%s",
+                context.function.name,
+                e,
+            )
+            return
+
+        max_length = props.get("max_output_length", _MAX_TOOL_OUTPUT_LENGTH)
+
+        if len(serialized) <= max_length:
+            return
+
+        # Save full output to .tmp/
+        tmp_filename = f".tmp/{uuid.uuid4().hex[:12]}.txt"
+        try:
+            CHAT_FS.write_file(
+                tool_context.agent_instance_id,
+                tool_context.username,
+                tmp_filename,
+                serialized,
+                conversation_id=tool_context.conversation_id,
+            )
+        except Exception:
+            _LOGGER.warning("Failed to save truncated tool output to %s", tmp_filename, exc_info=True)
+            return
+
+        total_chars = len(serialized)
+        preview = serialized[:_PREVIEW_LENGTH]
+
+        # Check if the tool opts in to summarization
+        summary = ""
+        if props.get("summarize_on_truncate"):
+            try:
+                from app.document.markitdown import _generate_summary_via_llm
+
+                summary = await _generate_summary_via_llm(serialized)
+            except Exception:
+                _LOGGER.warning("Failed to generate summary for truncated tool output", exc_info=True)
+
+        truncation_notice = (
+            f"\n\n... [Output truncated. Full output ({total_chars} chars) "
+            f"saved to: {tmp_filename} — use the read or grep tool to inspect it.]"
+        )
+
+        _LOGGER.info(
+            "tool_output_truncated tool=%s total_chars=%s preview_chars=%s full_output_path=%s",
+            context.function.name,
+            total_chars,
+            len(preview),
+            tmp_filename,
+        )
+
+        failure_hint: dict[str, Any] = {}
+        if isinstance(result, dict):
+            for key in ("success", "error_message", "errorMessage", "error"):
+                if key in result:
+                    failure_hint[key] = result.get(key)
+
+        context.result = {
+            "preview": preview + truncation_notice,
+            "full_output_path": tmp_filename,
+            "total_chars": total_chars,
+            **failure_hint,
+        }
+
+        if summary:
+            context.result["summary"] = summary

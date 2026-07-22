@@ -30,6 +30,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	singleAgentSVC "sico-backend/internal/biz/agent"
+	"sico-backend/internal/biz/rbac"
 	sandboxbiz "sico-backend/internal/biz/sandbox"
 	saEntity "sico-backend/internal/entity/agent/singleagent"
 	"sico-backend/internal/enum"
@@ -154,6 +155,7 @@ func getSandboxInstanceID(c *gin.Context) (string, bool) {
 // @Description List all sandbox resources grouped by type, with status and usage info
 // @Router /api/sico/sandbox/list [GET]
 // @Tags Sandbox-Management
+// @Param request query sandboxdto.ListSandboxResourcesFilter false "Optional filter by organization, project, or instance"
 // @Produce json
 // @Success 200 {object} commondto.StandardResponse{data=sandboxdto.SandboxResourcesByType}
 func SandboxListAll(c *gin.Context) {
@@ -621,4 +623,143 @@ func SandboxListInstances(c *gin.Context) {
 		Data: list,
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// SandboxOrgAssign assigns sandboxes to an organization
+// @Summary Assign sandboxes to organization
+// @Router /api/sico/sandbox/org/assign [POST]
+// @Tags Sandbox-Management
+// @Accept json
+// @Produce json
+// @Param request body sandboxdto.SandboxOrgAssignRequest true "Org assign request"
+// @Success 200 {object} commondto.StandardResponse
+// @Security BearerAuth
+func SandboxOrgAssign(c *gin.Context) {
+	var req sandboxdto.SandboxOrgAssignRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(c, err.Error())
+		return
+	}
+
+	if err := rbac.CheckCtxAccessOrPlatformAdmin(
+		reqctx(c), rbac.ScopeOrg, req.OrganizationId, "organization", "manage",
+	); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
+	svc := sandboxbiz.Default()
+	if err := svc.AssignSandboxToOrg(reqctx(c), req.OrganizationId, req.SandboxIds); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, commondto.StandardResponse{Code: 0, Msg: "success"})
+}
+
+// SandboxOrgUnassign unassigns sandboxes from an organization
+// @Summary Unassign sandboxes from organization
+// @Router /api/sico/sandbox/org/unassign [POST]
+// @Tags Sandbox-Management
+// @Accept json
+// @Produce json
+// @Param request body sandboxdto.SandboxOrgUnassignRequest true "Org unassign request"
+// @Success 200 {object} commondto.StandardResponse
+// @Security BearerAuth
+func SandboxOrgUnassign(c *gin.Context) {
+	var req sandboxdto.SandboxOrgUnassignRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(c, err.Error())
+		return
+	}
+
+	if err := rbac.CheckCtxAccessOrPlatformAdmin(
+		reqctx(c), rbac.ScopeOrg, req.OrganizationId, "organization", "manage",
+	); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
+	svc := sandboxbiz.Default()
+	if err := svc.UnassignSandboxFromOrg(reqctx(c), req.OrganizationId, req.SandboxIds); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, commondto.StandardResponse{Code: 0, Msg: "success"})
+}
+
+// SandboxProjectAssign assigns sandboxes to a project
+// @Summary Assign sandboxes to project
+// @Router /api/sico/sandbox/project/assign [POST]
+// @Tags Sandbox-Management
+// @Accept json
+// @Produce json
+// @Param request body sandboxdto.SandboxProjectAssignRequest true "Project assign request"
+// @Success 200 {object} commondto.StandardResponse
+// @Security BearerAuth
+func SandboxProjectAssign(c *gin.Context) {
+	var req sandboxdto.SandboxProjectAssignRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(c, err.Error())
+		return
+	}
+
+	if err := rbac.CheckCtxAccessOrPlatformAdmin(
+		reqctx(c), rbac.ScopeProject, req.ProjectId, "project", "manage",
+	); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
+	svc := sandboxbiz.Default()
+	// Look up org from the first sandbox to enforce org-project relationship.
+	orgID := int64(0)
+	if len(req.SandboxIds) > 0 {
+		var err error
+		orgID, err = svc.GetSandboxOrgID(reqctx(c), req.SandboxIds[0])
+		if err != nil {
+			internalServerErrorResponse(c, err)
+			return
+		}
+	}
+
+	if err := svc.AssignSandboxToProject(reqctx(c), req.ProjectId, orgID, req.SandboxIds); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, commondto.StandardResponse{Code: 0, Msg: "success"})
+}
+
+// SandboxProjectUnassign unassigns sandboxes from a project
+// @Summary Unassign sandboxes from project
+// @Router /api/sico/sandbox/project/unassign [POST]
+// @Tags Sandbox-Management
+// @Accept json
+// @Produce json
+// @Param request body sandboxdto.SandboxProjectUnassignRequest true "Project unassign request"
+// @Success 200 {object} commondto.StandardResponse
+// @Security BearerAuth
+func SandboxProjectUnassign(c *gin.Context) {
+	var req sandboxdto.SandboxProjectUnassignRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(c, err.Error())
+		return
+	}
+
+	if err := rbac.CheckCtxAccessOrPlatformAdmin(
+		reqctx(c), rbac.ScopeProject, req.ProjectId, "project", "manage",
+	); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
+	svc := sandboxbiz.Default()
+	if err := svc.UnassignSandboxFromProject(reqctx(c), req.ProjectId, req.SandboxIds); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, commondto.StandardResponse{Code: 0, Msg: "success"})
 }

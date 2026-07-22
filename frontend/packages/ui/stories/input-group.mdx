@@ -1,0 +1,221 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as InputGroupStories from "./input-group.stories";
+
+<Meta of={InputGroupStories} />
+
+# InputGroup
+
+Form-control shell with addon slots. Drop an `<InputGroupInput>` or
+`<InputGroupTextarea>` inside, then add `<InputGroupAddon>` slots on any side
+for icons, prefix/suffix text, action buttons, or block-aligned footers. 1:1
+port from shadcn `base-nova` — only styles diverge.
+
+Composition contract (no Context, shadcn convention):
+
+- `<InputGroup>` is the shell: border, bg, focus-visible border + shadow,
+  data-invalid bg + border. It does not own input state.
+- Children declare role via `data-slot`:
+  - `[data-slot=input-group-control]` drives focus-visible styling on the shell.
+  - `[data-slot=…][aria-invalid=true]` drives the invalid bg + border on the shell.
+- `<InputGroupAddon align="…">` positions affixes via `data-align`. The shell
+  uses `:has()` selectors to adjust its own layout and the control's padding
+  accordingly.
+
+## Examples
+
+### Default
+
+<Description of={InputGroupStories.Default} />
+<Canvas of={InputGroupStories.Default} />
+
+### States
+
+State propagation uses `data-*` + `aria-*` attributes — no Context. The shell
+reacts via `:has()` selectors targeting descendant attributes.
+
+<Description of={InputGroupStories.Disabled} />
+<Canvas of={InputGroupStories.Disabled} />
+
+<Description of={InputGroupStories.Invalid} />
+<Canvas of={InputGroupStories.Invalid} />
+
+### Addon positions
+
+`<InputGroupAddon>` defaults to `align="inline-start"`. Inline addons sit on
+either side of the control; block addons stack above or below it (textarea
+footer patterns).
+
+<Description of={InputGroupStories.LeadingIcon} />
+<Canvas of={InputGroupStories.LeadingIcon} />
+
+<Description of={InputGroupStories.TrailingIcon} />
+<Canvas of={InputGroupStories.TrailingIcon} />
+
+<Description of={InputGroupStories.LeadingText} />
+<Canvas of={InputGroupStories.LeadingText} />
+
+<Description of={InputGroupStories.TrailingText} />
+<Canvas of={InputGroupStories.TrailingText} />
+
+<Description of={InputGroupStories.TrailingButton} />
+<Canvas of={InputGroupStories.TrailingButton} />
+
+### Textarea variants
+
+<Description of={InputGroupStories.WithTextarea} />
+<Canvas of={InputGroupStories.WithTextarea} />
+
+<Description of={InputGroupStories.TextareaWithBlockFooter} />
+<Canvas of={InputGroupStories.TextareaWithBlockFooter} />
+
+### Button sizes
+
+`<InputGroupButton>` exposes its own size scale (`xs` / `sm` / `icon-xs` /
+`icon-sm`) tuned to fit inside the input shell. It defaults to the `subtle`
+Button variant (closest SICO match to shadcn's `ghost`).
+
+<Description of={InputGroupStories.ButtonSizes} />
+<Canvas of={InputGroupStories.ButtonSizes} />
+
+### Composition recipes
+
+Demonstrates every feature the legacy monolithic `<Input>` shipped with —
+label, description, error, clearable, password toggle, icon affixes, textarea
++ char counter — composed from the new primitives.
+
+<Description of={InputGroupStories.CompositionRecipes} />
+<Canvas of={InputGroupStories.CompositionRecipes} />
+
+## API
+
+<Controls of={InputGroupStories.Default} />
+
+---
+
+## Token Audit
+
+InputGroup shares the form-control tokens with `<Input>` / `<Textarea>` — the
+shell owns the border, focus, and invalid fill + border; the addon owns muted
+foreground.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Shell border"
+    subtitle="Rest border of the shell"
+    colors={{
+      "Rest · overlay-black-15": "var(--color-input-stroke-rest)",
+    }}
+  />
+  <ColorItem
+    title="Shell fill"
+    subtitle="Disabled fill on the shell when any descendant is disabled"
+    colors={{
+      "Disabled · neutral-50": "var(--color-surface-canvas)",
+    }}
+  />
+  <ColorItem
+    title="Focus border"
+    subtitle="focus-visible on [data-slot=input-group-control]"
+    colors={{
+      "Border · overlay-black-50": "var(--color-input-stroke-pressed)",
+    }}
+  />
+  <ColorItem
+    title="Invalid border"
+    subtitle="Any [data-slot][aria-invalid=true] descendant"
+    colors={{
+      "Border · danger-700": "var(--color-input-stroke-error)",
+    }}
+  />
+  <ColorItem
+    title="Invalid fill"
+    subtitle="Shell fill when invalid child exists"
+    colors={{
+      "Fill · danger-50": "var(--color-input-fill-error)",
+    }}
+  />
+  <ColorItem
+    title="Hover border"
+    subtitle="Shell hover border"
+    colors={{
+      "Border · overlay-black-30": "var(--color-input-stroke-hover)",
+    }}
+  />
+  <ColorItem
+    title="Addon foreground"
+    subtitle="Used by <InputGroupAddon> and <InputGroupText>; disabled shell uses foreground-faint"
+    colors={{
+      "Text · neutral-600": "var(--color-foreground-tertiary)",
+      "Disabled shell text · neutral-350": "var(--color-foreground-faint)",
+    }}
+  />
+</ColorPalette>
+
+### Shell sizing
+
+| Property      | Class            | Value                                      |
+| ------------- | ---------------- | ------------------------------------------ |
+| Height        | `h-8`            | 32px (auto when textarea/block addon present) |
+| Radius        | `rounded-lg`     | 8px                                        |
+| Border        | `border`         | 1px                                        |
+| Focus shadow  | `shadow-s`       | `var(--shadow-s)`                          |
+
+### Addon layout
+
+| Align           | Side / placement                | Padding             |
+| --------------- | ------------------------------- | ------------------- |
+| `inline-start`  | Left of control (default)       | `pl-2`              |
+| `inline-end`    | Right of control                | `pr-2`              |
+| `block-start`   | Above control (textarea header) | `pt-2 px-2.5`       |
+| `block-end`     | Below control (textarea footer) | `pb-2 px-2.5`       |
+
+Inline addons pull the control's padding via `:has()` so icons sit flush:
+`pl-1.5` when leading, `pr-1.5` when trailing.
+
+### Button size scale
+
+`<InputGroupButton>` is a wrapped `<Button>` with custom sizes tuned for the
+24px addon row.
+
+| Size       | Class          | Dimensions    | Use                  |
+| ---------- | -------------- | ------------- | -------------------- |
+| `xs`       | `h-6 px-1.5`   | 24px tall     | Text actions         |
+| `sm`       | inherited      | Button default| Larger text actions  |
+| `icon-xs`  | `size-6`       | 24 × 24       | Square icon actions  |
+| `icon-sm`  | `size-8`       | 32 × 32       | Larger icon actions  |
+
+---
+
+## Upstream Audit
+
+Shadcn restyle of `base-nova/input-group` (no upstream drift):
+
+### Token swaps
+
+- `border-input` → `border-input-stroke-rest`.
+- Focus styling uses `focus-visible:` on the shell's `:has()` selector for
+  the control — `border-input-stroke-pressed` + `shadow-s`, no ring.
+- Invalid styling uses `border-input-stroke-error` + `bg-input-fill-error`,
+  also no ring. The inner controls (`InputGroupInput` / `InputGroupTextarea`)
+  strip their own `aria-invalid:` border/bg/ring so error visuals come from
+  the shell only.
+- `text-muted-foreground` → `text-foreground-tertiary`.
+
+### API contract
+
+- No prop API changes — same `align` / `size` / composition contract.
+- `InputGroupButton` defaults to `variant="subtle"` as the closest SICO
+  equivalent to shadcn's `ghost`.
+- Layout cva variants are kept verbatim.
+
+### Deleted from upstream
+
+| Deleted | Reason |
+| ------- | ------ |
+| `[&>kbd]:rounded-[calc(var(--radius)-5px)]` | SICO has no `--radius` token and no `<kbd>` UI yet; use `rounded-md` |
+| `in-data-[slot=combobox-content]:*` | Combobox not yet in SICO |
+| `dark:` variants | SICO has no dark theme |
+| `InputGroupAddon` click-to-focus | SICO leaves click-to-focus to consumers |

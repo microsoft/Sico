@@ -28,9 +28,11 @@ import (
 	"github.com/casbin/casbin/v2"
 	casbinModel "github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	dalmodel "sico-backend/internal/store/rbac/internal/dal/model"
+	"sico-backend/pkg/logger"
 )
 
 // gormAdapter implements casbin persist.Adapter using internal model (within same package allowed).
@@ -280,23 +282,27 @@ func applyRuleFilter(db *gorm.DB, ptype string, fieldIndex int, fieldValues []st
 	return q
 }
 
-// ProvideCasbinEnforcer constructs an enforcer with gorm adapter and basic RBAC model.
-func ProvideCasbinEnforcer(db *gorm.DB) (*casbin.Enforcer, error) {
+const casbinPolicyChangedChannel = "casbin:policy-changed"
+
+// ProvideCasbinEnforcer constructs an enforcer with gorm adapter and domain-scoped RBAC model.
+// It also starts a Redis pub/sub subscriber that reloads policies when notified
+// by other pods, ensuring cross-pod consistency in multi-replica deployments.
+func ProvideCasbinEnforcer(db *gorm.DB, rds *redis.Client) (*casbin.Enforcer, error) {
 	mdlText := `
 [request_definition]
- r = sub, obj, act
+ r = sub, dom, obj, act
 
 [policy_definition]
- p = sub, obj, act
+ p = sub, dom, obj, act
 
 [role_definition]
- g = _, _
+ g = _, _, _
 
 [policy_effect]
  e = some(where (p.eft == allow))
 
 [matchers]
- m = r.sub == p.sub && r.obj == p.obj && r.act == p.act || g(r.sub, p.sub)
+ m = g(r.sub, p.sub, r.dom) && (r.dom == p.dom || p.dom == "*") && r.obj == p.obj && r.act == p.act
 `
 	m, err := casbinModel.NewModelFromString(mdlText)
 	if err != nil {
@@ -312,5 +318,37 @@ func ProvideCasbinEnforcer(db *gorm.DB) (*casbin.Enforcer, error) {
 		return nil, err
 	}
 
+	// Start background subscriber for cross-pod policy sync.
+	if rds != nil {
+		go subscribePolicyChanges(rds, enf)
+	}
+
 	return enf, nil
+}
+
+// NotifyPolicyChanged publishes a message to the Redis channel so all pods reload policies.
+func NotifyPolicyChanged(rds *redis.Client) {
+	if rds == nil {
+		return
+	}
+	if err := rds.Publish(context.Background(), casbinPolicyChangedChannel, "reload").Err(); err != nil {
+		logger.Error("casbin: failed to publish policy-changed notification: %v", err)
+	}
+}
+
+func subscribePolicyChanges(rds *redis.Client, enf *casbin.Enforcer) {
+	ctx := context.Background()
+	sub := rds.Subscribe(ctx, casbinPolicyChangedChannel)
+	defer func() { _ = sub.Close() }()
+
+	ch := sub.Channel()
+	logger.Info("casbin: subscribed to %s for cross-pod policy sync", casbinPolicyChangedChannel)
+
+	for range ch {
+		if err := enf.LoadPolicy(); err != nil {
+			logger.Error("casbin: failed to reload policies from subscriber: %v", err)
+		} else {
+			logger.Info("casbin: policies reloaded via pub/sub notification")
+		}
+	}
 }

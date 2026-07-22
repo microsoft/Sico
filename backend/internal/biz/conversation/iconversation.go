@@ -46,6 +46,10 @@ type Service interface {
 		ctx context.Context,
 		req *dto.ListConversationRequest,
 	) (*dto.ListConversationResponse, error)
+	DeleteConversation(
+		ctx context.Context,
+		req *dto.DeleteConversationRequest,
+	) (*dto.DeleteConversationResponse, error)
 	ListMessagesByUserAndAgent(
 		ctx context.Context,
 		req *dto.ListMessagesByUserAndAgentRequest,

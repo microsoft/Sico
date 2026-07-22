@@ -104,7 +104,7 @@ async def test_parse_document_publishes_plan_progress(tmp_path: Path, monkeypatc
     monkeypatch.setattr("app.tools.parse_document.CHAT_FS.get_workspace_path", lambda *_args: tmp_path / "workspace_7")
     monkeypatch.setattr(
         "app.tools.parse_document.CHAT_FS.write_file",
-        lambda _agent_instance_id, _username, _path, _content: None,
+        lambda _agent_instance_id, _username, _path, _content, **_kwargs: None,
     )
 
     result = await _parse_document_func(invocation_ctx, file_path="attachments/cases.xlsx")
@@ -172,7 +172,7 @@ async def test_parse_document_reuses_same_turn_result_without_duplicate_plan(tmp
     monkeypatch.setattr("app.tools.parse_document.CHAT_FS.get_workspace_path", lambda *_args: tmp_path / "workspace_8a")
     monkeypatch.setattr(
         "app.tools.parse_document.CHAT_FS.write_file",
-        lambda _agent_instance_id, _username, _path, _content: None,
+        lambda _agent_instance_id, _username, _path, _content, **_kwargs: None,
     )
 
     first, second = await asyncio.gather(
@@ -202,7 +202,7 @@ async def test_parse_document_cache_is_scoped_by_conversation(tmp_path: Path, mo
     monkeypatch.setattr("app.tools.parse_document.CHAT_FS.get_workspace_path", lambda *_args: tmp_path / "workspace_8b")
     monkeypatch.setattr(
         "app.tools.parse_document.CHAT_FS.write_file",
-        lambda _agent_instance_id, _username, _path, _content: None,
+        lambda _agent_instance_id, _username, _path, _content, **_kwargs: None,
     )
 
     first_ctx = ToolContext.model_construct(
@@ -297,7 +297,7 @@ async def test_parse_document_returns_workbook_manifest_for_multi_sheet_file(tmp
     monkeypatch.setattr("app.tools.parse_document.CHAT_FS.get_workspace_path", lambda *_args: tmp_path / "workspace_10")
     monkeypatch.setattr(
         "app.tools.parse_document.CHAT_FS.write_file",
-        lambda _agent_instance_id, _username, _path, _content: None,
+        lambda _agent_instance_id, _username, _path, _content, **_kwargs: None,
     )
 
     result = await _parse_document_func(invocation_ctx, file_path="attachments/multi_sheet_cases.xlsx")

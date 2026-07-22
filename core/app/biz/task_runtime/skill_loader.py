@@ -149,14 +149,26 @@ class SkillLoader:
         cards = self.list_cards(visibility="public")
         if not cards:
             return ""
-        lines = ["These skill capabilities are available:"]
+        lines = [
+            "These skills are available:",
+            "- Executable skill actions have an action_name and may be run by a delegated task when an adapter is appropriate.",
+            "- Instruction-only skills have no action_name. Read their SKILL.md and follow the documented "
+            "workflow directly with TASK-mode chat tools. Do not delegate an instruction-only skill; the task "
+            "runtime has no executable capability for it.",
+        ]
         for card in cards:
             lines.append(f"- skill_id: {card.skill_id}")
             lines.append(f"  skill_name: {card.skill_name}")
             if card.description:
                 lines.append(f"  description: {card.description}")
             if not card.action_name:
+                lines.append("  kind: instruction_only")
+                lines.append(f"  skill_path: skills/{card.skill_id}/SKILL.md")
+                lines.append(
+                    "  invocation: read the SKILL.md, then execute its workflow yourself using available chat tools such as curl"
+                )
                 continue
+            lines.append("  kind: executable_action")
             lines.append(f"  action_name: {card.action_name}")
             if card.action_description:
                 lines.append(f"  action_description: {card.action_description}")
@@ -164,7 +176,7 @@ class SkillLoader:
                 lines.append(f"  infra_requirements: {json.dumps(card.infra_requirements, ensure_ascii=False)}")
             if card.parameters:
                 lines.append(f"  parameters: {json.dumps(card.parameters, ensure_ascii=False)}")
-            lines.append("  invocation: invoke_skill or a delegated task")
+            lines.append("  invocation: delegated task runtime skill action")
         return "\n".join(lines)
 
     def _read_index(self) -> list[dict[str, Any]]:

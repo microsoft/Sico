@@ -32,6 +32,9 @@ class PromptFile(StrEnum):
     SYSTEM = "chat_system_prompt.md"
     INTENT_CHECK = "intent_check_system_prompt.md"
     RECOMMENDATION_TASK = "recommendation_task_gen_prompt.md"
+    SESSION_TITLE = "session_title_gen_prompt.md"
+    COMPACTION_SUMMARIZATION = "compaction_summarization_prompt.md"
+    RETRY_CONTINUATION = "retry_continuation_prompt.md"
 
 
 _PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
@@ -70,6 +73,7 @@ def compose_system_prompt(
     name: str = "",
     role_name: str = "",
     project_name: str = "",
+    skills_section: str = "",
 ) -> str:
     normalized_mode = str(prompt_mode).lower()
     fragment_files = _PROMPT_FRAGMENTS_BY_MODE.get(normalized_mode)
@@ -89,5 +93,8 @@ def compose_system_prompt(
         fragment = read_prompt_file(filename, fallback=fallback).strip()
         if fragment:
             fragments.append(_render_template(fragment, **template_vars))
+
+    if skills_section := skills_section.strip():
+        fragments.append(skills_section)
 
     return "\n\n".join(fragments).strip() + "\n"

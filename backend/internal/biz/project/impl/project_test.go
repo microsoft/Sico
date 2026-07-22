@@ -22,6 +22,8 @@ package impl
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,6 +35,11 @@ import (
 	projectdto "sico-backend/internal/transport/http/dto/project"
 )
 
+func TestMain(m *testing.M) {
+	storage.SetDefault(&mockBlobClient{})
+	os.Exit(m.Run())
+}
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -43,7 +50,11 @@ type mockProjectRepo struct {
 	users                        []*repository.ProjectUserModel
 	adminsByProj                 map[int64][]string
 	assets                       map[int64]*repository.ProjectAssetModel
+	deliverables                 []*repository.ProjectDeliverableModel
+	memberUsernames              []string
 	nextProjectID                int64
+	deliverableTotal             int64
+	nextDeliverableID            int64
 }
 
 func newMockProjectRepo() *mockProjectRepo {
@@ -136,6 +147,42 @@ func (m *mockProjectRepo) DeleteProjectAsset(_ context.Context, id int64) error 
 	return nil
 }
 
+func (m *mockProjectRepo) CreateProjectDeliverable(_ context.Context, record *repository.ProjectDeliverableModel) (int64, error) {
+	m.nextDeliverableID++
+	record.ID = m.nextDeliverableID
+	m.deliverables = append(m.deliverables, record)
+	return record.ID, nil
+}
+
+func (m *mockProjectRepo) ListProjectDeliverables(
+	_ context.Context, _ int64, _, _ int,
+) ([]*repository.ProjectDeliverableModel, int64, error) {
+	return m.deliverables, m.deliverableTotal, nil
+}
+
+func (m *mockProjectRepo) GetProjectDeliverable(_ context.Context, id int64) (*repository.ProjectDeliverableModel, error) {
+	for _, d := range m.deliverables {
+		if d.ID == id {
+			return d, nil
+		}
+	}
+	return nil, fmt.Errorf("not found")
+}
+
+func (m *mockProjectRepo) DeleteProjectDeliverable(_ context.Context, id int64) error {
+	for i, d := range m.deliverables {
+		if d.ID == id {
+			m.deliverables = append(m.deliverables[:i], m.deliverables[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *mockProjectRepo) ListProjectMemberUsernames(_ context.Context, _ int64) ([]string, error) {
+	return m.memberUsernames, nil
+}
+
 type mockBlobClient struct{}
 
 func (m *mockBlobClient) PutObject(_ context.Context, _ string, _ []byte, _ ...storage.PutOptFn) (string, error) {
@@ -193,13 +240,10 @@ func TestCreateProject(t *testing.T) {
 		assert.Equal(t, "creator1", p.OwnerUsername)
 		assert.Equal(t, "creator1", p.CreatorUsername)
 
-		// Owner membership created
-		require.Len(t, repo.users, 1)
-		assert.Equal(t, int32(projectdto.MemberType_MEMBER_TYPE_OWNER), repo.users[0].RoleType)
-		assert.Equal(t, "creator1", repo.users[0].Username)
-
-		// Admins added
-		assert.Equal(t, []string{"admin1", "admin2"}, repo.adminsByProj[projectID])
+		// Note: Owner membership and admin assignments now go through RBAC
+		// (rbac.AssignProjectRole), which is not initialized in unit tests.
+		// The RBAC service returns nil when not initialized, so no assertions
+		// on repo.users or repo.adminsByProj here.
 	})
 }
 
@@ -256,6 +300,86 @@ func TestGetProject(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		_, err := svc.GetProject(context.Background(), &projectdto.GetProjectDetailRequest{Id: 999})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Deliverable tests
+// ---------------------------------------------------------------------------
+
+func TestCreateProjectDeliverable(t *testing.T) {
+	repo := newMockProjectRepo()
+	svc := newProjectTestService(repo)
+
+	t.Run("success", func(t *testing.T) {
+		resp, err := svc.CreateProjectDeliverable(context.Background(), &projectdto.CreateProjectDeliverableRequest{
+			ProjectId:       1,
+			AgentInstanceId: 100,
+			FileUri:         "assets/report.pdf",
+			FileName:        "report.pdf",
+		}, "creator1")
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Greater(t, resp.Data.Id, int64(0))
+
+		// Verify persisted
+		require.Len(t, repo.deliverables, 1)
+		d := repo.deliverables[0]
+		assert.Equal(t, int64(1), d.ProjectID)
+		assert.Equal(t, int64(100), d.AgentInstanceID)
+		assert.Equal(t, "assets/report.pdf", d.FileURI)
+		assert.Equal(t, "report.pdf", d.FileName)
+		assert.Equal(t, "creator1", d.CreatorUsername)
+	})
+}
+
+func TestListProjectDeliverables(t *testing.T) {
+	repo := newMockProjectRepo()
+	svc := newProjectTestService(repo)
+
+	// Seed deliverables
+	repo.deliverables = []*repository.ProjectDeliverableModel{
+		{ID: 1, ProjectID: 10, FileName: "a.pdf", FileURI: "assets/a.pdf", CreatorUsername: "u1"},
+		{ID: 2, ProjectID: 10, FileName: "b.pdf", FileURI: "assets/b.pdf", CreatorUsername: "u2"},
+	}
+	repo.deliverableTotal = 2
+
+	t.Run("success", func(t *testing.T) {
+		resp, err := svc.ListProjectDeliverables(context.Background(), &projectdto.ListProjectDeliverablesRequest{
+			ProjectId: 10,
+			Page:      1,
+			PageSize:  10,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, int32(2), resp.Data.Total)
+		assert.Len(t, resp.Data.Deliverables, 2)
+		assert.Equal(t, "a.pdf", resp.Data.Deliverables[0].FileName)
+	})
+}
+
+func TestDeleteProjectDeliverable(t *testing.T) {
+	repo := newMockProjectRepo()
+	repo.deliverables = []*repository.ProjectDeliverableModel{
+		{ID: 1, ProjectID: 10, FileName: "a.pdf"},
+		{ID: 2, ProjectID: 10, FileName: "b.pdf"},
+	}
+	svc := newProjectTestService(repo)
+
+	t.Run("success", func(t *testing.T) {
+		resp, err := svc.DeleteProjectDeliverable(
+			context.Background(), &projectdto.DeleteProjectDeliverableRequest{Id: 1},
+		)
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Len(t, repo.deliverables, 1)
+		assert.Equal(t, int64(2), repo.deliverables[0].ID)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := svc.DeleteProjectDeliverable(context.Background(), &projectdto.DeleteProjectDeliverableRequest{Id: 999})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})

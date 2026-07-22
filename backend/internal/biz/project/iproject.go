@@ -74,6 +74,27 @@ type Service interface {
 		ctx context.Context,
 		req *project.QueryProjectStatisticsRequest,
 	) (*project.QueryProjectStatisticsResponse, error)
+	CreateProjectDeliverable(
+		ctx context.Context,
+		req *project.CreateProjectDeliverableRequest,
+		creator string,
+	) (*project.CreateProjectDeliverableResponse, error)
+	ListProjectDeliverables(
+		ctx context.Context,
+		req *project.ListProjectDeliverablesRequest,
+	) (*project.ListProjectDeliverablesResponse, error)
+	GetProjectDeliverable(
+		ctx context.Context,
+		req *project.GetProjectDeliverableRequest,
+	) (*project.GetProjectDeliverableResponse, error)
+	DeleteProjectDeliverable(
+		ctx context.Context,
+		req *project.DeleteProjectDeliverableRequest,
+	) (*project.DeleteProjectDeliverableResponse, error)
+	ListProjects(
+		ctx context.Context,
+		req *project.ListProjectFilter,
+	) (*project.ListProjectResponse, error)
 }
 
 // FileExtraInfo describes additional metadata persisted alongside project assets.

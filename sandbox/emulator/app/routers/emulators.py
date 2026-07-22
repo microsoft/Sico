@@ -651,14 +651,6 @@ def create_emulators(
     return {"created": created}
 
 
-@router.delete("/{index}")
-def delete_emulator(index: int, mumu=Depends(get_mumu), device_map=Depends(get_device_index_map)):
-    _ensure_index(mumu, index)
-    _select(mumu, index).core.delete()
-    device_map.refresh(mumu)
-    return {"deleted": index}
-
-
 @router.post("/{index}/clone")
 def clone_emulator(
     index: int,
@@ -1437,3 +1429,11 @@ def get_port_forward_status(
     if reconciled:
         result["reconciled"] = reconciled
     return result
+
+
+@router.delete("/{index}")
+def delete_emulator(index: int, mumu=Depends(get_mumu), device_map=Depends(get_device_index_map)):
+    _ensure_index(mumu, index)
+    _select(mumu, index).core.delete()
+    device_map.refresh(mumu)
+    return {"deleted": index}

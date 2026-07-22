@@ -1,0 +1,135 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as TextareaStories from "./textarea.stories";
+
+<Meta of={TextareaStories} />
+
+# Textarea
+
+Bare native `<textarea>` styled with SICO tokens. Shadcn restyle of
+`base-nova` — only styles diverge from upstream, no upstream drift.
+
+`field-sizing-content` lets the textarea auto-grow with its value — no JS
+measurement required. Falls back to `min-h-16` on browsers that don't support
+it (Safari < 17.4 / Firefox < 124).
+
+For a char-counter footer, surrounding label, or affix slots, compose with
+`<InputGroup>` (via `<InputGroupTextarea>`) and `<Field>` rather than
+extending this file.
+
+## Examples
+
+### States
+
+`aria-invalid="true"` switches the fill to `input-fill-error` and the border
+to `input-stroke-error` — same attribute used by `<Field>` and `<InputGroup>`
+to propagate invalid state. No focus ring.
+
+<Description of={TextareaStories.Default} />
+<Canvas of={TextareaStories.Default} />
+
+<Description of={TextareaStories.WithValue} />
+<Canvas of={TextareaStories.WithValue} />
+
+<Description of={TextareaStories.Disabled} />
+<Canvas of={TextareaStories.Disabled} />
+
+<Description of={TextareaStories.Invalid} />
+<Canvas of={TextareaStories.Invalid} />
+
+### Sizing
+
+`rows` + `min-h-*` opts out of auto-grow and lets the user drag-resize
+manually.
+
+<Description of={TextareaStories.FixedRows} />
+<Canvas of={TextareaStories.FixedRows} />
+
+## API
+
+<Controls of={TextareaStories.Default} />
+
+---
+
+## Token Audit
+
+All design tokens consumed by Textarea — identical to `<Input>` since both
+are leaf form-control primitives sharing the same shell style.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Border"
+    subtitle="Rest border"
+    colors={{
+      "Rest · neutral-150": "var(--color-input-stroke-rest)",
+    }}
+  />
+  <ColorItem
+    title="Fill"
+    subtitle="Disabled + invalid fills — rest is transparent (inherits parent)"
+    colors={{
+      "Disabled · neutral-50": "var(--color-surface-canvas)",
+      "Invalid · danger-50": "var(--color-input-fill-error)",
+    }}
+  />
+  <ColorItem
+    title="Foreground"
+    subtitle="Value text + placeholder/disabled text"
+    colors={{
+      "Value · neutral-800": "var(--color-foreground-primary)",
+      "Placeholder/Disabled · neutral-350": "var(--color-foreground-faint)",
+    }}
+  />
+  <ColorItem
+    title="Focus border"
+    subtitle="focus-visible border"
+    colors={{
+      "Border · overlay-black-50": "var(--color-input-stroke-pressed)",
+    }}
+  />
+  <ColorItem
+    title="Invalid border"
+    subtitle="aria-invalid=true border"
+    colors={{
+      "Border · danger-700": "var(--color-input-stroke-error)",
+    }}
+  />
+  <ColorItem
+    title="Hover border"
+    subtitle="Hover state border"
+    colors={{
+      "Border · overlay-black-30": "var(--color-input-stroke-hover)",
+    }}
+  />
+</ColorPalette>
+
+### Sizing & spacing
+
+| Property        | Class                  | Value                                  |
+| --------------- | ---------------------- | -------------------------------------- |
+| Min height      | `min-h-16`             | 64px                                   |
+| Padding (X)     | `px-3`                 | 12px                                   |
+| Padding (Y)     | `py-2`                 | 8px                                    |
+| Radius          | `rounded-lg`           | 8px                                    |
+| Border          | `border`               | 1px                                    |
+| Focus shadow    | `shadow-s`             | `var(--shadow-s)`                      |
+| Font size       | `text-sm`              | 14px                                   |
+| Auto-grow       | `field-sizing-content` | Native CSS — no JS required            |
+
+---
+
+## Upstream Audit
+
+Shadcn restyle of `base-nova/textarea` (no upstream drift):
+
+- **Styles only** — `border-input` → `border-input-stroke-rest`,
+  `bg-background` → `bg-transparent`. Focus uses
+  `focus-visible:border-input-stroke-pressed` + `focus-visible:shadow-s`
+  (keyboard-only, no ring). Invalid uses
+  `aria-invalid:border-input-stroke-error` + `aria-invalid:bg-input-fill-error`.
+  Logic and structure untouched.
+- **Deleted** — `dark:` variants (SICO has no dark theme yet),
+  `md:text-sm` responsive override (SICO uses 14px everywhere).
+- **No prop API changes** — accepts all native `<textarea>` props.

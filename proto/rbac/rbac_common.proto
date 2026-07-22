@@ -35,9 +35,16 @@ message User {
   string raw_icon_uri = 9;      // @gotag: json:"rawIconUri"
   UserStatus status = 10;       // @gotag: json:"status"
   string description = 11;      // @gotag: json:"description"
-  repeated string roles = 12;   // @gotag: json:"roles"
+  repeated UserRoleInfo roles = 12;   // @gotag: json:"roles"
   int64 created_at = 13;        // @gotag: json:"createdAt"
   int64 updated_at = 14;        // @gotag: json:"updatedAt"
+}
+
+message UserRoleInfo {
+  int64 id = 1;              // @gotag: json:"id"
+  string role_code = 2;      // @gotag: json:"roleCode"
+  string scope_type = 3;     // @gotag: json:"scopeType"
+  int64 scope_id = 4;        // @gotag: json:"scopeId"
 }
 
 enum UserStatus {

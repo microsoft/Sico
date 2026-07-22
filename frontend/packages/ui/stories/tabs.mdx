@@ -1,0 +1,191 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as TabsStories from "./tabs.stories";
+
+<Meta of={TabsStories} />
+
+# Tabs
+
+A restyle of [`base-nova/tabs`](https://ui.shadcn.com/) built on
+[`@base-ui/react/tabs`](https://base-ui.com/react/components/tabs). Compose
+`<TabsList>` with `<TabsTrigger>` children plus one `<TabsContent>` per tab.
+`<TabsList variant>` switches between the segmented `default` pill, the
+underlined `line`, and the standalone `pill`; `size` (`sm` 32px / `md` 40px)
+sizes every variant; `orientation` on `<Tabs>` flows through to the Base UI root.
+
+## Examples
+
+### Variants
+
+<Description of={TabsStories.Default} />
+<Canvas of={TabsStories.Default} />
+
+<Description of={TabsStories.Line} />
+<Canvas of={TabsStories.Line} />
+
+<Description of={TabsStories.Pill} />
+<Canvas of={TabsStories.Pill} />
+
+### Sizes
+
+<Description of={TabsStories.Medium} />
+<Canvas of={TabsStories.Medium} />
+
+<Description of={TabsStories.LineMedium} />
+<Canvas of={TabsStories.LineMedium} />
+
+<Description of={TabsStories.PillMedium} />
+<Canvas of={TabsStories.PillMedium} />
+
+### States
+
+<Description of={TabsStories.DisabledTab} />
+<Canvas of={TabsStories.DisabledTab} />
+
+Hover states (the `line` underline reveal and the `pill` fill) are pointer-only
+and aren't captured as static stories — hover a trigger in any canvas above to
+see `tabs-indicator-fill-hover` / `tabs-pill-fill-hover`.
+
+### With icons
+
+<Description of={TabsStories.WithIcon} />
+<Canvas of={TabsStories.WithIcon} />
+
+### Orientation
+
+<Description of={TabsStories.Vertical} />
+<Canvas of={TabsStories.Vertical} />
+
+## API
+
+<Controls of={TabsStories.Default} />
+
+---
+
+## Token Audit
+
+The `default` variant's *surfaces* (track, active-tab fill, focus ring) stay a
+pure passthrough on the shadcn bridge variables (`--color-muted`,
+`--color-background`, `--color-ring`); its trigger *text*, like every variant,
+flows through the shared `tabs-foreground-*` tokens. The `line` and `pill`
+variants additionally paint through dedicated component tokens in the
+**Components / Tabs** group, each mapping down to a SICO semantic/brand token.
+(`<TabsList>` itself carries an inherited `text-muted-foreground` default, but
+every trigger overrides it with `tabs-foreground-rest` / `-selected`.)
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Trigger text"
+    subtitle="rest text-tabs-foreground-rest, selected text-tabs-foreground-selected"
+    colors={{
+      "tabs-foreground-rest": "var(--color-tabs-foreground-rest)",
+      "tabs-foreground-selected": "var(--color-tabs-foreground-selected)",
+    }}
+  />
+  <ColorItem
+    title="Line indicator"
+    subtitle="hover after:bg-tabs-indicator-fill-hover, selected after:bg-tabs-indicator-fill-selected"
+    colors={{
+      "tabs-indicator-fill-hover": "var(--color-tabs-indicator-fill-hover)",
+      "tabs-indicator-fill-selected": "var(--color-tabs-indicator-fill-selected)",
+    }}
+  />
+  <ColorItem
+    title="Pill fill"
+    subtitle="hover bg-tabs-pill-fill-hover, selected bg-tabs-pill-fill-selected"
+    colors={{
+      "tabs-pill-fill-hover": "var(--color-tabs-pill-fill-hover)",
+      "tabs-pill-fill-selected": "var(--color-tabs-pill-fill-selected)",
+    }}
+  />
+  <ColorItem
+    title="List track (default)"
+    subtitle="bg-muted → --color-muted"
+    colors={{ "muted": "var(--color-muted)" }}
+  />
+  <ColorItem
+    title="Active tab (default)"
+    subtitle="data-active:bg-background → --color-background"
+    colors={{ "background": "var(--color-background)" }}
+  />
+  <ColorItem
+    title="Focus ring"
+    subtitle="focus-visible:ring-ring → --color-ring"
+    colors={{ "ring": "var(--color-ring)" }}
+  />
+</ColorPalette>
+
+### Sizing & shape
+
+| Property | Class | Value |
+|----------|-------|-------|
+| List height (sm) | `group-data-horizontal/tabs:data-[size=sm]:h-8` | 32px |
+| List height (md) | `group-data-horizontal/tabs:data-[size=md]:h-10` | 40px |
+| Default track shape | `rounded-lg p-[3px]` | 8px radius, 3px inset |
+| Default trigger padding | `px-1.5 py-0.5` | 6 / 2px |
+| Line gap | `gap-4` | 16px |
+| Line trigger padding-y | `py-1` / `py-2` | 4 / 8px |
+| Underline thickness | `after:h-0.5` | 2px |
+| Pill gap | `gap-2` | 8px |
+| Pill trigger padding | `px-3 py-2` | 12 / 8px |
+| Pill radius | `rounded-md` | 6px |
+
+---
+
+## Upstream Audit
+
+Restyle of `base-nova/tabs`. `npx shadcn@latest diff tabs` reports **no updates**
+— the file is in sync with the registry; the `pill` variant, `size` prop, and
+token swaps below are intentional SICO additions.
+
+### Token swaps
+
+| Upstream class | SICO token |
+|----------------|-----------|
+| `text-foreground/60` | `text-tabs-foreground-rest` |
+| `hover:text-foreground` | `text-tabs-foreground-selected` |
+| `data-active:text-foreground` | `text-tabs-foreground-selected` |
+| `after:bg-foreground` | `after:bg-tabs-indicator-fill-hover` / `-selected` |
+| — (new pill fill) | `bg-tabs-pill-fill-hover` / `-selected` |
+
+### Interaction additions
+
+Beyond token swaps, the `line` variant adds one interaction upstream
+`base-nova/tabs` does not ship: the underline indicator now reveals on
+**hover** (`hover:after:opacity-100`), not only on the active tab. This
+realises the `Hovered` state in the Figma spec (#265) and is intentional,
+not a 1:1 restyle.
+
+### Geometry & type divergences
+
+Restyling to the Figma spec (#265) also moved several `line`-variant dimensions
+off their upstream values. These are style-only (no structure / prop / a11y
+change), within restyle latitude. List-level classes sit on `<TabsList>`;
+the rest reset the trigger's default chrome for the bare underline look:
+
+| Property | Upstream | SICO | Why |
+|----------|----------|------|-----|
+| Line gap (list) | `gap-1` (4px) | `gap-4` (16px) | wider header-nav rhythm |
+| Line trigger text | `text-sm` (14px) | `text-base` (16px) | larger nav labels |
+| Line trigger box | `rounded-md border px-1.5` | `rounded-none border-0 px-0` | strip the pill chrome to a bare label |
+| Line trigger height | `h-[calc(100%-1px)]` | `h-auto` | height comes from the label + `py`, not the list |
+| Indicator offset | `after:bottom-[-5px]` | `after:bottom-0` | underline sits on the row edge |
+
+### API contract
+
+Prop surface extends upstream additively. `TabsList` adds `pill` to `variant`
+and a new `size` (`sm` | `md`, default `sm`); all four parts still forward
+`Tabs.Root` / `List` / `Tab` / `Panel` props untouched.
+
+### Deleted from upstream
+
+| Deleted | Reason |
+|---------|--------|
+| `"use client"` directive | SICO is not RSC (`components.json` → `"rsc": false`); the shadcn CLI strips it on add |
+| All `dark:` variants | SICO has no dark theme yet — matches the deletion in every sibling (`input`, `textarea`, `field`, `input-group`) |
+
+The only other divergence is the `cn` import path
+(`@/lib/utils` → `../../lib/utils`), matching every sibling component in
+`@sico/ui`.

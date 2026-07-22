@@ -1,0 +1,51 @@
+{
+  "name": "@sico/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "npm run lint:tsc && npm run lint:oxlint && npm run lint:eslint:fix && npm run lint:fmt:fix",
+    "lint:tsc": "tsgo --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsgo/.tsbuildinfo",
+    "lint:oxlint": "oxlint -c ../../packages/config/.oxlintrc.json --disable-nested-config --type-aware --max-warnings 0",
+    "lint:eslint": "eslint . --cache --cache-location node_modules/.cache/eslint/ --max-warnings 0 --concurrency auto",
+    "lint:eslint:fix": "npm run lint:eslint -- --fix",
+    "lint:fmt": "oxfmt --config ../../packages/config/.oxfmtrc.json --check .",
+    "lint:fmt:fix": "oxfmt --config ../../packages/config/.oxfmtrc.json .",
+    "test": "vitest run --silent=true",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:build": "vite build && vitest run --config vitest.config.build.ts",
+    "e2e": "vite build && playwright test"
+  },
+  "dependencies": {
+    "@sico/shared": "workspace:*",
+    "@sico/ui": "workspace:*",
+    "@tanstack/react-query": "^5.100.9",
+    "@tanstack/react-router": "^1.169.2",
+    "axios": "^1.16.0",
+    "immer": "^11.1.8",
+    "jotai": "^2.20.0",
+    "lucide-react": "^1.11.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-error-boundary": "^6.1.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
+    "@playwright/test": "^1.60.0",
+    "@sico/config": "workspace:*",
+    "@tanstack/react-router-devtools": "^1.166.13",
+    "@tanstack/router-plugin": "^1.167.35",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "msw": "^2.14.6",
+    "pdfjs-dist": "^6.0.227",
+    "prettier": "^3.9.5",
+    "vite-plugin-static-copy": "^4.1.1"
+  }
+}

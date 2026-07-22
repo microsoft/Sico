@@ -81,10 +81,18 @@ type Service interface {
 		ctx context.Context,
 		req *knowledge.ListKnowledgePlaybookRequest,
 	) (*knowledge.ListKnowledgePlaybookResponse, error)
+	ListKnowledgeItems(
+		ctx context.Context,
+		req *knowledge.ListKnowledgeItemsRequest,
+	) (*knowledge.ListKnowledgeItemsResponse, error)
 	UpdatePlaybook(
 		ctx context.Context,
 		req *knowledge.UpdateKnowledgePlaybookRequest,
 	) (*knowledge.UpdateKnowledgePlaybookResponse, error)
+	DeletePlaybook(
+		ctx context.Context,
+		req *knowledge.DeleteKnowledgePlaybookRequest,
+	) (*knowledge.DeleteKnowledgePlaybookResponse, error)
 	GetPlaybookDetails(
 		ctx context.Context,
 		req *knowledge.GetKnowledgePlaybookDetailsRequest,

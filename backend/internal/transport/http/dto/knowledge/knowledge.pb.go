@@ -31,6 +31,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	common "sico-backend/internal/transport/http/dto/common"
+	project "sico-backend/internal/transport/http/dto/project"
 	sync "sync"
 	unsafe "unsafe"
 )
@@ -143,6 +144,59 @@ func (x KnowledgeDocumentStatus) Number() protoreflect.EnumNumber {
 // Deprecated: Use KnowledgeDocumentStatus.Descriptor instead.
 func (KnowledgeDocumentStatus) EnumDescriptor() ([]byte, []int) {
 	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{1}
+}
+
+// Unified knowledge item type
+type KnowledgeItemType int32
+
+const (
+	KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_UNKNOWN     KnowledgeItemType = 0 // @gotag: json:"KNOWLEDGE_ITEM_TYPE_UNKNOWN"
+	KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DOCUMENT    KnowledgeItemType = 1 // @gotag: json:"KNOWLEDGE_ITEM_TYPE_DOCUMENT"
+	KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_PLAYBOOK    KnowledgeItemType = 2 // @gotag: json:"KNOWLEDGE_ITEM_TYPE_PLAYBOOK"
+	KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DELIVERABLE KnowledgeItemType = 3 // @gotag: json:"KNOWLEDGE_ITEM_TYPE_DELIVERABLE"
+)
+
+// Enum value maps for KnowledgeItemType.
+var (
+	KnowledgeItemType_name = map[int32]string{
+		0: "KNOWLEDGE_ITEM_TYPE_UNKNOWN",
+		1: "KNOWLEDGE_ITEM_TYPE_DOCUMENT",
+		2: "KNOWLEDGE_ITEM_TYPE_PLAYBOOK",
+		3: "KNOWLEDGE_ITEM_TYPE_DELIVERABLE",
+	}
+	KnowledgeItemType_value = map[string]int32{
+		"KNOWLEDGE_ITEM_TYPE_UNKNOWN":     0,
+		"KNOWLEDGE_ITEM_TYPE_DOCUMENT":    1,
+		"KNOWLEDGE_ITEM_TYPE_PLAYBOOK":    2,
+		"KNOWLEDGE_ITEM_TYPE_DELIVERABLE": 3,
+	}
+)
+
+func (x KnowledgeItemType) Enum() *KnowledgeItemType {
+	p := new(KnowledgeItemType)
+	*p = x
+	return p
+}
+
+func (x KnowledgeItemType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (KnowledgeItemType) Descriptor() protoreflect.EnumDescriptor {
+	return file_knowledge_knowledge_proto_enumTypes[2].Descriptor()
+}
+
+func (KnowledgeItemType) Type() protoreflect.EnumType {
+	return &file_knowledge_knowledge_proto_enumTypes[2]
+}
+
+func (x KnowledgeItemType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use KnowledgeItemType.Descriptor instead.
+func (KnowledgeItemType) EnumDescriptor() ([]byte, []int) {
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{2}
 }
 
 // Knowledge Tag entity
@@ -2114,23 +2168,69 @@ func (x *ListKnowledgeTagData) GetHasNext() bool {
 	return false
 }
 
+// KnowledgePlaybookExtraInfo holds additional display information for a playbook.
+type KnowledgePlaybookExtraInfo struct {
+	state         protoimpl.MessageState      `protogen:"open.v1"`
+	AgentInstance *common.AgentInstanceDigest `protobuf:"bytes,1,opt,name=agent_instance,json=agentInstance,proto3" json:"agentInstance"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KnowledgePlaybookExtraInfo) Reset() {
+	*x = KnowledgePlaybookExtraInfo{}
+	mi := &file_knowledge_knowledge_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KnowledgePlaybookExtraInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KnowledgePlaybookExtraInfo) ProtoMessage() {}
+
+func (x *KnowledgePlaybookExtraInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_knowledge_knowledge_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KnowledgePlaybookExtraInfo.ProtoReflect.Descriptor instead.
+func (*KnowledgePlaybookExtraInfo) Descriptor() ([]byte, []int) {
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *KnowledgePlaybookExtraInfo) GetAgentInstance() *common.AgentInstanceDigest {
+	if x != nil {
+		return x.AgentInstance
+	}
+	return nil
+}
+
 // Knowledge Playbook entity
 type KnowledgePlaybook struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                     
-	ProjectId       int64                  `protobuf:"varint,2,opt,name=project_id,json=projectId,proto3" json:"projectId"`                      
-	AgentInstanceId int64                  `protobuf:"varint,3,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId"`  
-	Name            string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name"`                                                  
-	CreatedAt       int64                  `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                      
-	UpdatedAt       int64                  `protobuf:"varint,6,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                      
-	Tags            []*KnowledgeTag        `protobuf:"bytes,7,rep,name=tags,proto3" json:"tags"`                                                  
+	state           protoimpl.MessageState      `protogen:"open.v1"`
+	Id              int64                       `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                     
+	ProjectId       int64                       `protobuf:"varint,2,opt,name=project_id,json=projectId,proto3" json:"projectId"`                      
+	AgentInstanceId int64                       `protobuf:"varint,3,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId"`  
+	Name            string                      `protobuf:"bytes,4,opt,name=name,proto3" json:"name"`                                                  
+	CreatedAt       int64                       `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                      
+	UpdatedAt       int64                       `protobuf:"varint,6,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                      
+	Tags            []*KnowledgeTag             `protobuf:"bytes,7,rep,name=tags,proto3" json:"tags"`                                                  
+	ExtraInfo       *KnowledgePlaybookExtraInfo `protobuf:"bytes,8,opt,name=extra_info,json=extraInfo,proto3" json:"extraInfo"`                       
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
 func (x *KnowledgePlaybook) Reset() {
 	*x = KnowledgePlaybook{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[31]
+	mi := &file_knowledge_knowledge_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2142,7 +2242,7 @@ func (x *KnowledgePlaybook) String() string {
 func (*KnowledgePlaybook) ProtoMessage() {}
 
 func (x *KnowledgePlaybook) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[31]
+	mi := &file_knowledge_knowledge_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2155,7 +2255,7 @@ func (x *KnowledgePlaybook) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KnowledgePlaybook.ProtoReflect.Descriptor instead.
 func (*KnowledgePlaybook) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{31}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *KnowledgePlaybook) GetId() int64 {
@@ -2207,6 +2307,13 @@ func (x *KnowledgePlaybook) GetTags() []*KnowledgeTag {
 	return nil
 }
 
+func (x *KnowledgePlaybook) GetExtraInfo() *KnowledgePlaybookExtraInfo {
+	if x != nil {
+		return x.ExtraInfo
+	}
+	return nil
+}
+
 // Get Knowledge Playbook
 type GetKnowledgePlaybookRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2217,7 +2324,7 @@ type GetKnowledgePlaybookRequest struct {
 
 func (x *GetKnowledgePlaybookRequest) Reset() {
 	*x = GetKnowledgePlaybookRequest{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[32]
+	mi := &file_knowledge_knowledge_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2229,7 +2336,7 @@ func (x *GetKnowledgePlaybookRequest) String() string {
 func (*GetKnowledgePlaybookRequest) ProtoMessage() {}
 
 func (x *GetKnowledgePlaybookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[32]
+	mi := &file_knowledge_knowledge_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2242,7 +2349,7 @@ func (x *GetKnowledgePlaybookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKnowledgePlaybookRequest.ProtoReflect.Descriptor instead.
 func (*GetKnowledgePlaybookRequest) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{32}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetKnowledgePlaybookRequest) GetId() int64 {
@@ -2263,7 +2370,7 @@ type GetKnowledgePlaybookResponse struct {
 
 func (x *GetKnowledgePlaybookResponse) Reset() {
 	*x = GetKnowledgePlaybookResponse{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[33]
+	mi := &file_knowledge_knowledge_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2275,7 +2382,7 @@ func (x *GetKnowledgePlaybookResponse) String() string {
 func (*GetKnowledgePlaybookResponse) ProtoMessage() {}
 
 func (x *GetKnowledgePlaybookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[33]
+	mi := &file_knowledge_knowledge_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2288,7 +2395,7 @@ func (x *GetKnowledgePlaybookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKnowledgePlaybookResponse.ProtoReflect.Descriptor instead.
 func (*GetKnowledgePlaybookResponse) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{33}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *GetKnowledgePlaybookResponse) GetData() *GetKnowledgePlaybookData {
@@ -2321,7 +2428,7 @@ type GetKnowledgePlaybookData struct {
 
 func (x *GetKnowledgePlaybookData) Reset() {
 	*x = GetKnowledgePlaybookData{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[34]
+	mi := &file_knowledge_knowledge_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2333,7 +2440,7 @@ func (x *GetKnowledgePlaybookData) String() string {
 func (*GetKnowledgePlaybookData) ProtoMessage() {}
 
 func (x *GetKnowledgePlaybookData) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[34]
+	mi := &file_knowledge_knowledge_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2346,7 +2453,7 @@ func (x *GetKnowledgePlaybookData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKnowledgePlaybookData.ProtoReflect.Descriptor instead.
 func (*GetKnowledgePlaybookData) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{34}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetKnowledgePlaybookData) GetPlaybook() *KnowledgePlaybook {
@@ -2368,7 +2475,7 @@ type UpdateKnowledgePlaybookRequest struct {
 
 func (x *UpdateKnowledgePlaybookRequest) Reset() {
 	*x = UpdateKnowledgePlaybookRequest{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[35]
+	mi := &file_knowledge_knowledge_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2380,7 +2487,7 @@ func (x *UpdateKnowledgePlaybookRequest) String() string {
 func (*UpdateKnowledgePlaybookRequest) ProtoMessage() {}
 
 func (x *UpdateKnowledgePlaybookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[35]
+	mi := &file_knowledge_knowledge_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2393,7 +2500,7 @@ func (x *UpdateKnowledgePlaybookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateKnowledgePlaybookRequest.ProtoReflect.Descriptor instead.
 func (*UpdateKnowledgePlaybookRequest) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{35}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *UpdateKnowledgePlaybookRequest) GetId() int64 {
@@ -2427,7 +2534,7 @@ type UpdateKnowledgePlaybookResponse struct {
 
 func (x *UpdateKnowledgePlaybookResponse) Reset() {
 	*x = UpdateKnowledgePlaybookResponse{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[36]
+	mi := &file_knowledge_knowledge_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2439,7 +2546,7 @@ func (x *UpdateKnowledgePlaybookResponse) String() string {
 func (*UpdateKnowledgePlaybookResponse) ProtoMessage() {}
 
 func (x *UpdateKnowledgePlaybookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[36]
+	mi := &file_knowledge_knowledge_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2452,7 +2559,7 @@ func (x *UpdateKnowledgePlaybookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateKnowledgePlaybookResponse.ProtoReflect.Descriptor instead.
 func (*UpdateKnowledgePlaybookResponse) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{36}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *UpdateKnowledgePlaybookResponse) GetCode() int32 {
@@ -2463,6 +2570,103 @@ func (x *UpdateKnowledgePlaybookResponse) GetCode() int32 {
 }
 
 func (x *UpdateKnowledgePlaybookResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+// Delete Knowledge Playbook
+type DeleteKnowledgePlaybookRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty" form:"id" binding:"required"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteKnowledgePlaybookRequest) Reset() {
+	*x = DeleteKnowledgePlaybookRequest{}
+	mi := &file_knowledge_knowledge_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteKnowledgePlaybookRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteKnowledgePlaybookRequest) ProtoMessage() {}
+
+func (x *DeleteKnowledgePlaybookRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_knowledge_knowledge_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteKnowledgePlaybookRequest.ProtoReflect.Descriptor instead.
+func (*DeleteKnowledgePlaybookRequest) Descriptor() ([]byte, []int) {
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *DeleteKnowledgePlaybookRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type DeleteKnowledgePlaybookResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteKnowledgePlaybookResponse) Reset() {
+	*x = DeleteKnowledgePlaybookResponse{}
+	mi := &file_knowledge_knowledge_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteKnowledgePlaybookResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteKnowledgePlaybookResponse) ProtoMessage() {}
+
+func (x *DeleteKnowledgePlaybookResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_knowledge_knowledge_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteKnowledgePlaybookResponse.ProtoReflect.Descriptor instead.
+func (*DeleteKnowledgePlaybookResponse) Descriptor() ([]byte, []int) {
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *DeleteKnowledgePlaybookResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *DeleteKnowledgePlaybookResponse) GetMsg() string {
 	if x != nil {
 		return x.Msg
 	}
@@ -2482,7 +2686,7 @@ type ListKnowledgePlaybookRequest struct {
 
 func (x *ListKnowledgePlaybookRequest) Reset() {
 	*x = ListKnowledgePlaybookRequest{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[37]
+	mi := &file_knowledge_knowledge_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2494,7 +2698,7 @@ func (x *ListKnowledgePlaybookRequest) String() string {
 func (*ListKnowledgePlaybookRequest) ProtoMessage() {}
 
 func (x *ListKnowledgePlaybookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[37]
+	mi := &file_knowledge_knowledge_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2507,7 +2711,7 @@ func (x *ListKnowledgePlaybookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKnowledgePlaybookRequest.ProtoReflect.Descriptor instead.
 func (*ListKnowledgePlaybookRequest) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{37}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListKnowledgePlaybookRequest) GetProjectId() int64 {
@@ -2549,7 +2753,7 @@ type ListKnowledgePlaybookResponse struct {
 
 func (x *ListKnowledgePlaybookResponse) Reset() {
 	*x = ListKnowledgePlaybookResponse{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[38]
+	mi := &file_knowledge_knowledge_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2561,7 +2765,7 @@ func (x *ListKnowledgePlaybookResponse) String() string {
 func (*ListKnowledgePlaybookResponse) ProtoMessage() {}
 
 func (x *ListKnowledgePlaybookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[38]
+	mi := &file_knowledge_knowledge_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2574,7 +2778,7 @@ func (x *ListKnowledgePlaybookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKnowledgePlaybookResponse.ProtoReflect.Descriptor instead.
 func (*ListKnowledgePlaybookResponse) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{38}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ListKnowledgePlaybookResponse) GetData() *ListKnowledgePlaybookData {
@@ -2609,7 +2813,7 @@ type ListKnowledgePlaybookData struct {
 
 func (x *ListKnowledgePlaybookData) Reset() {
 	*x = ListKnowledgePlaybookData{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[39]
+	mi := &file_knowledge_knowledge_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2621,7 +2825,7 @@ func (x *ListKnowledgePlaybookData) String() string {
 func (*ListKnowledgePlaybookData) ProtoMessage() {}
 
 func (x *ListKnowledgePlaybookData) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[39]
+	mi := &file_knowledge_knowledge_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2634,7 +2838,7 @@ func (x *ListKnowledgePlaybookData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListKnowledgePlaybookData.ProtoReflect.Descriptor instead.
 func (*ListKnowledgePlaybookData) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{39}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListKnowledgePlaybookData) GetPlaybooks() []*KnowledgePlaybook {
@@ -2668,7 +2872,7 @@ type GetKnowledgePlaybookDetailsRequest struct {
 
 func (x *GetKnowledgePlaybookDetailsRequest) Reset() {
 	*x = GetKnowledgePlaybookDetailsRequest{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[40]
+	mi := &file_knowledge_knowledge_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2680,7 +2884,7 @@ func (x *GetKnowledgePlaybookDetailsRequest) String() string {
 func (*GetKnowledgePlaybookDetailsRequest) ProtoMessage() {}
 
 func (x *GetKnowledgePlaybookDetailsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[40]
+	mi := &file_knowledge_knowledge_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2693,7 +2897,7 @@ func (x *GetKnowledgePlaybookDetailsRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use GetKnowledgePlaybookDetailsRequest.ProtoReflect.Descriptor instead.
 func (*GetKnowledgePlaybookDetailsRequest) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{40}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *GetKnowledgePlaybookDetailsRequest) GetId() int64 {
@@ -2714,7 +2918,7 @@ type GetKnowledgePlaybookDetailsResponse struct {
 
 func (x *GetKnowledgePlaybookDetailsResponse) Reset() {
 	*x = GetKnowledgePlaybookDetailsResponse{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[41]
+	mi := &file_knowledge_knowledge_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2726,7 +2930,7 @@ func (x *GetKnowledgePlaybookDetailsResponse) String() string {
 func (*GetKnowledgePlaybookDetailsResponse) ProtoMessage() {}
 
 func (x *GetKnowledgePlaybookDetailsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[41]
+	mi := &file_knowledge_knowledge_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2739,7 +2943,7 @@ func (x *GetKnowledgePlaybookDetailsResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use GetKnowledgePlaybookDetailsResponse.ProtoReflect.Descriptor instead.
 func (*GetKnowledgePlaybookDetailsResponse) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{41}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetKnowledgePlaybookDetailsResponse) GetData() *GetKnowledgePlaybookDetailsData {
@@ -2773,7 +2977,7 @@ type GetKnowledgePlaybookDetailsData struct {
 
 func (x *GetKnowledgePlaybookDetailsData) Reset() {
 	*x = GetKnowledgePlaybookDetailsData{}
-	mi := &file_knowledge_knowledge_proto_msgTypes[42]
+	mi := &file_knowledge_knowledge_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2785,7 +2989,7 @@ func (x *GetKnowledgePlaybookDetailsData) String() string {
 func (*GetKnowledgePlaybookDetailsData) ProtoMessage() {}
 
 func (x *GetKnowledgePlaybookDetailsData) ProtoReflect() protoreflect.Message {
-	mi := &file_knowledge_knowledge_proto_msgTypes[42]
+	mi := &file_knowledge_knowledge_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2798,7 +3002,7 @@ func (x *GetKnowledgePlaybookDetailsData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetKnowledgePlaybookDetailsData.ProtoReflect.Descriptor instead.
 func (*GetKnowledgePlaybookDetailsData) Descriptor() ([]byte, []int) {
-	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{42}
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GetKnowledgePlaybookDetailsData) GetContent() string {
@@ -2815,11 +3019,269 @@ func (x *GetKnowledgePlaybookDetailsData) GetName() string {
 	return ""
 }
 
+// KnowledgeItem represents a unified knowledge item (document, playbook, or deliverable).
+type KnowledgeItem struct {
+	state         protoimpl.MessageState      `protogen:"open.v1"`
+	Type          KnowledgeItemType           `protobuf:"varint,1,opt,name=type,proto3,enum=knowledge.KnowledgeItemType" json:"type"`  
+	Document      *KnowledgeDocument          `protobuf:"bytes,2,opt,name=document,proto3" json:"document,omitempty"`                            
+	Playbook      *KnowledgePlaybook          `protobuf:"bytes,3,opt,name=playbook,proto3" json:"playbook,omitempty"`                            
+	Deliverable   *project.ProjectDeliverable `protobuf:"bytes,4,opt,name=deliverable,proto3" json:"deliverable,omitempty"`                      
+	UpdatedAt     int64                       `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`        
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KnowledgeItem) Reset() {
+	*x = KnowledgeItem{}
+	mi := &file_knowledge_knowledge_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KnowledgeItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KnowledgeItem) ProtoMessage() {}
+
+func (x *KnowledgeItem) ProtoReflect() protoreflect.Message {
+	mi := &file_knowledge_knowledge_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KnowledgeItem.ProtoReflect.Descriptor instead.
+func (*KnowledgeItem) Descriptor() ([]byte, []int) {
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *KnowledgeItem) GetType() KnowledgeItemType {
+	if x != nil {
+		return x.Type
+	}
+	return KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_UNKNOWN
+}
+
+func (x *KnowledgeItem) GetDocument() *KnowledgeDocument {
+	if x != nil {
+		return x.Document
+	}
+	return nil
+}
+
+func (x *KnowledgeItem) GetPlaybook() *KnowledgePlaybook {
+	if x != nil {
+		return x.Playbook
+	}
+	return nil
+}
+
+func (x *KnowledgeItem) GetDeliverable() *project.ProjectDeliverable {
+	if x != nil {
+		return x.Deliverable
+	}
+	return nil
+}
+
+func (x *KnowledgeItem) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+// List all knowledge items (documents, playbooks, deliverables) for a project.
+type ListKnowledgeItemsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     int64                  `protobuf:"varint,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty" form:"projectId" binding:"required"`  
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"required,min=1"`                             
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"required,min=1,max=100"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListKnowledgeItemsRequest) Reset() {
+	*x = ListKnowledgeItemsRequest{}
+	mi := &file_knowledge_knowledge_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListKnowledgeItemsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListKnowledgeItemsRequest) ProtoMessage() {}
+
+func (x *ListKnowledgeItemsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_knowledge_knowledge_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListKnowledgeItemsRequest.ProtoReflect.Descriptor instead.
+func (*ListKnowledgeItemsRequest) Descriptor() ([]byte, []int) {
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ListKnowledgeItemsRequest) GetProjectId() int64 {
+	if x != nil {
+		return x.ProjectId
+	}
+	return 0
+}
+
+func (x *ListKnowledgeItemsRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListKnowledgeItemsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type ListKnowledgeItemsResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Data          *ListKnowledgeItemsData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
+	Code          int32                   `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                  `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListKnowledgeItemsResponse) Reset() {
+	*x = ListKnowledgeItemsResponse{}
+	mi := &file_knowledge_knowledge_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListKnowledgeItemsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListKnowledgeItemsResponse) ProtoMessage() {}
+
+func (x *ListKnowledgeItemsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_knowledge_knowledge_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListKnowledgeItemsResponse.ProtoReflect.Descriptor instead.
+func (*ListKnowledgeItemsResponse) Descriptor() ([]byte, []int) {
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *ListKnowledgeItemsResponse) GetData() *ListKnowledgeItemsData {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ListKnowledgeItemsResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ListKnowledgeItemsResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+type ListKnowledgeItemsData struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*KnowledgeItem       `protobuf:"bytes,1,rep,name=items,proto3" json:"items"`                      
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`                     
+	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListKnowledgeItemsData) Reset() {
+	*x = ListKnowledgeItemsData{}
+	mi := &file_knowledge_knowledge_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListKnowledgeItemsData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListKnowledgeItemsData) ProtoMessage() {}
+
+func (x *ListKnowledgeItemsData) ProtoReflect() protoreflect.Message {
+	mi := &file_knowledge_knowledge_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListKnowledgeItemsData.ProtoReflect.Descriptor instead.
+func (*ListKnowledgeItemsData) Descriptor() ([]byte, []int) {
+	return file_knowledge_knowledge_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *ListKnowledgeItemsData) GetItems() []*KnowledgeItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *ListKnowledgeItemsData) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *ListKnowledgeItemsData) GetHasNext() bool {
+	if x != nil {
+		return x.HasNext
+	}
+	return false
+}
+
 var File_knowledge_knowledge_proto protoreflect.FileDescriptor
 
 const file_knowledge_knowledge_proto_rawDesc = "" +
 	"\n" +
-	"\x19knowledge/knowledge.proto\x12\tknowledge\x1a\x13common/common.proto\"\xdc\x01\n" +
+	"\x19knowledge/knowledge.proto\x12\tknowledge\x1a\x13common/common.proto\x1a\x19project/deliverable.proto\"\xdc\x01\n" +
 	"\fKnowledgeTag\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
 	"\n" +
@@ -2972,7 +3434,9 @@ const file_knowledge_knowledge_proto_rawDesc = "" +
 	"\x14ListKnowledgeTagData\x12+\n" +
 	"\x04tags\x18\x01 \x03(\v2\x17.knowledge.KnowledgeTagR\x04tags\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x19\n" +
-	"\bhas_next\x18\x03 \x01(\bR\ahasNext\"\xed\x01\n" +
+	"\bhas_next\x18\x03 \x01(\bR\ahasNext\"`\n" +
+	"\x1aKnowledgePlaybookExtraInfo\x12B\n" +
+	"\x0eagent_instance\x18\x01 \x01(\v2\x1b.common.AgentInstanceDigestR\ragentInstance\"\xb3\x02\n" +
 	"\x11KnowledgePlaybook\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
 	"\n" +
@@ -2983,7 +3447,9 @@ const file_knowledge_knowledge_proto_rawDesc = "" +
 	"created_at\x18\x05 \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x06 \x01(\x03R\tupdatedAt\x12+\n" +
-	"\x04tags\x18\a \x03(\v2\x17.knowledge.KnowledgeTagR\x04tags\"-\n" +
+	"\x04tags\x18\a \x03(\v2\x17.knowledge.KnowledgeTagR\x04tags\x12D\n" +
+	"\n" +
+	"extra_info\x18\b \x01(\v2%.knowledge.KnowledgePlaybookExtraInfoR\textraInfo\"-\n" +
 	"\x1bGetKnowledgePlaybookRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x7f\n" +
 	"\x1cGetKnowledgePlaybookResponse\x127\n" +
@@ -2997,6 +3463,11 @@ const file_knowledge_knowledge_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
 	"\atag_ids\x18\x03 \x03(\x03R\x06tagIds\"I\n" +
 	"\x1fUpdateKnowledgePlaybookResponse\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"0\n" +
+	"\x1eDeleteKnowledgePlaybookRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"I\n" +
+	"\x1fDeleteKnowledgePlaybookResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\x9a\x01\n" +
 	"\x1cListKnowledgePlaybookRequest\x12\x1d\n" +
@@ -3021,7 +3492,27 @@ const file_knowledge_knowledge_proto_rawDesc = "" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"O\n" +
 	"\x1fGetKnowledgePlaybookDetailsData\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name*\x80\x01\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\x93\x02\n" +
+	"\rKnowledgeItem\x120\n" +
+	"\x04type\x18\x01 \x01(\x0e2\x1c.knowledge.KnowledgeItemTypeR\x04type\x128\n" +
+	"\bdocument\x18\x02 \x01(\v2\x1c.knowledge.KnowledgeDocumentR\bdocument\x128\n" +
+	"\bplaybook\x18\x03 \x01(\v2\x1c.knowledge.KnowledgePlaybookR\bplaybook\x12=\n" +
+	"\vdeliverable\x18\x04 \x01(\v2\x1b.project.ProjectDeliverableR\vdeliverable\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\"k\n" +
+	"\x19ListKnowledgeItemsRequest\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\x03R\tprojectId\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\"{\n" +
+	"\x1aListKnowledgeItemsResponse\x125\n" +
+	"\x04data\x18\x01 \x01(\v2!.knowledge.ListKnowledgeItemsDataR\x04data\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"y\n" +
+	"\x16ListKnowledgeItemsData\x12.\n" +
+	"\x05items\x18\x01 \x03(\v2\x18.knowledge.KnowledgeItemR\x05items\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x19\n" +
+	"\bhas_next\x18\x03 \x01(\bR\ahasNext*\x80\x01\n" +
 	"\x15KnowledgeDocumentType\x12#\n" +
 	"\x1fKNOWLEDGE_DOCUMENT_TYPE_UNKNOWN\x10\x00\x12 \n" +
 	"\x1cKNOWLEDGE_DOCUMENT_TYPE_FILE\x10\x01\x12 \n" +
@@ -3030,7 +3521,12 @@ const file_knowledge_knowledge_proto_rawDesc = "" +
 	"!KNOWLEDGE_DOCUMENT_STATUS_UNKNOWN\x10\x00\x12$\n" +
 	" KNOWLEDGE_DOCUMENT_STATUS_FAILED\x10\x01\x12&\n" +
 	"\"KNOWLEDGE_DOCUMENT_STATUS_UPLOADED\x10\x02\x12&\n" +
-	"\"KNOWLEDGE_DOCUMENT_STATUS_INGESTED\x10\x03B4Z2sico-backend/internal/transport/http/dto/knowledgeb\x06proto3"
+	"\"KNOWLEDGE_DOCUMENT_STATUS_INGESTED\x10\x03*\x9d\x01\n" +
+	"\x11KnowledgeItemType\x12\x1f\n" +
+	"\x1bKNOWLEDGE_ITEM_TYPE_UNKNOWN\x10\x00\x12 \n" +
+	"\x1cKNOWLEDGE_ITEM_TYPE_DOCUMENT\x10\x01\x12 \n" +
+	"\x1cKNOWLEDGE_ITEM_TYPE_PLAYBOOK\x10\x02\x12#\n" +
+	"\x1fKNOWLEDGE_ITEM_TYPE_DELIVERABLE\x10\x03B4Z2sico-backend/internal/transport/http/dto/knowledgeb\x06proto3"
 
 var (
 	file_knowledge_knowledge_proto_rawDescOnce sync.Once
@@ -3044,88 +3540,106 @@ func file_knowledge_knowledge_proto_rawDescGZIP() []byte {
 	return file_knowledge_knowledge_proto_rawDescData
 }
 
-var file_knowledge_knowledge_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_knowledge_knowledge_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_knowledge_knowledge_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_knowledge_knowledge_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
 var file_knowledge_knowledge_proto_goTypes = []any{
 	(KnowledgeDocumentType)(0),                  // 0: knowledge.KnowledgeDocumentType
 	(KnowledgeDocumentStatus)(0),                // 1: knowledge.KnowledgeDocumentStatus
-	(*KnowledgeTag)(nil),                        // 2: knowledge.KnowledgeTag
-	(*KnowledgeDocument)(nil),                   // 3: knowledge.KnowledgeDocument
-	(*CreateKnowledgeDocumentRequest)(nil),      // 4: knowledge.CreateKnowledgeDocumentRequest
-	(*CreateKnowledgeDocumentResponse)(nil),     // 5: knowledge.CreateKnowledgeDocumentResponse
-	(*CreateKnowledgeDocumentData)(nil),         // 6: knowledge.CreateKnowledgeDocumentData
-	(*UpdateKnowledgeDocumentRequest)(nil),      // 7: knowledge.UpdateKnowledgeDocumentRequest
-	(*UpdateKnowledgeDocumentResponse)(nil),     // 8: knowledge.UpdateKnowledgeDocumentResponse
-	(*GetKnowledgeDocumentRequest)(nil),         // 9: knowledge.GetKnowledgeDocumentRequest
-	(*GetKnowledgeDocumentResponse)(nil),        // 10: knowledge.GetKnowledgeDocumentResponse
-	(*GetKnowledgeDocumentData)(nil),            // 11: knowledge.GetKnowledgeDocumentData
-	(*DeleteKnowledgeDocumentRequest)(nil),      // 12: knowledge.DeleteKnowledgeDocumentRequest
-	(*DeleteKnowledgeDocumentResponse)(nil),     // 13: knowledge.DeleteKnowledgeDocumentResponse
-	(*ListKnowledgeDocumentRequest)(nil),        // 14: knowledge.ListKnowledgeDocumentRequest
-	(*ListKnowledgeDocumentResponse)(nil),       // 15: knowledge.ListKnowledgeDocumentResponse
-	(*ListKnowledgeDocumentData)(nil),           // 16: knowledge.ListKnowledgeDocumentData
-	(*CreateKnowledgeTagRequest)(nil),           // 17: knowledge.CreateKnowledgeTagRequest
-	(*CreateKnowledgeTagResponse)(nil),          // 18: knowledge.CreateKnowledgeTagResponse
-	(*CreateKnowledgeTagData)(nil),              // 19: knowledge.CreateKnowledgeTagData
-	(*UpdateKnowledgeTagRequest)(nil),           // 20: knowledge.UpdateKnowledgeTagRequest
-	(*UpdateKnowledgeTagResponse)(nil),          // 21: knowledge.UpdateKnowledgeTagResponse
-	(*DeleteKnowledgeTagRequest)(nil),           // 22: knowledge.DeleteKnowledgeTagRequest
-	(*DeleteKnowledgeTagResponse)(nil),          // 23: knowledge.DeleteKnowledgeTagResponse
-	(*GetKnowledgeTagRequest)(nil),              // 24: knowledge.GetKnowledgeTagRequest
-	(*GetKnowledgeTagResponse)(nil),             // 25: knowledge.GetKnowledgeTagResponse
-	(*GetKnowledgeTagData)(nil),                 // 26: knowledge.GetKnowledgeTagData
-	(*GetKnowledgeDocumentDetailsRequest)(nil),  // 27: knowledge.GetKnowledgeDocumentDetailsRequest
-	(*GetKnowledgeDocumentDetailsResponse)(nil), // 28: knowledge.GetKnowledgeDocumentDetailsResponse
-	(*GetKnowledgeDocumentDetailsData)(nil),     // 29: knowledge.GetKnowledgeDocumentDetailsData
-	(*ListKnowledgeTagRequest)(nil),             // 30: knowledge.ListKnowledgeTagRequest
-	(*ListKnowledgeTagResponse)(nil),            // 31: knowledge.ListKnowledgeTagResponse
-	(*ListKnowledgeTagData)(nil),                // 32: knowledge.ListKnowledgeTagData
-	(*KnowledgePlaybook)(nil),                   // 33: knowledge.KnowledgePlaybook
-	(*GetKnowledgePlaybookRequest)(nil),         // 34: knowledge.GetKnowledgePlaybookRequest
-	(*GetKnowledgePlaybookResponse)(nil),        // 35: knowledge.GetKnowledgePlaybookResponse
-	(*GetKnowledgePlaybookData)(nil),            // 36: knowledge.GetKnowledgePlaybookData
-	(*UpdateKnowledgePlaybookRequest)(nil),      // 37: knowledge.UpdateKnowledgePlaybookRequest
-	(*UpdateKnowledgePlaybookResponse)(nil),     // 38: knowledge.UpdateKnowledgePlaybookResponse
-	(*ListKnowledgePlaybookRequest)(nil),        // 39: knowledge.ListKnowledgePlaybookRequest
-	(*ListKnowledgePlaybookResponse)(nil),       // 40: knowledge.ListKnowledgePlaybookResponse
-	(*ListKnowledgePlaybookData)(nil),           // 41: knowledge.ListKnowledgePlaybookData
-	(*GetKnowledgePlaybookDetailsRequest)(nil),  // 42: knowledge.GetKnowledgePlaybookDetailsRequest
-	(*GetKnowledgePlaybookDetailsResponse)(nil), // 43: knowledge.GetKnowledgePlaybookDetailsResponse
-	(*GetKnowledgePlaybookDetailsData)(nil),     // 44: knowledge.GetKnowledgePlaybookDetailsData
-	(*common.Attachment)(nil),                   // 45: common.Attachment
+	(KnowledgeItemType)(0),                      // 2: knowledge.KnowledgeItemType
+	(*KnowledgeTag)(nil),                        // 3: knowledge.KnowledgeTag
+	(*KnowledgeDocument)(nil),                   // 4: knowledge.KnowledgeDocument
+	(*CreateKnowledgeDocumentRequest)(nil),      // 5: knowledge.CreateKnowledgeDocumentRequest
+	(*CreateKnowledgeDocumentResponse)(nil),     // 6: knowledge.CreateKnowledgeDocumentResponse
+	(*CreateKnowledgeDocumentData)(nil),         // 7: knowledge.CreateKnowledgeDocumentData
+	(*UpdateKnowledgeDocumentRequest)(nil),      // 8: knowledge.UpdateKnowledgeDocumentRequest
+	(*UpdateKnowledgeDocumentResponse)(nil),     // 9: knowledge.UpdateKnowledgeDocumentResponse
+	(*GetKnowledgeDocumentRequest)(nil),         // 10: knowledge.GetKnowledgeDocumentRequest
+	(*GetKnowledgeDocumentResponse)(nil),        // 11: knowledge.GetKnowledgeDocumentResponse
+	(*GetKnowledgeDocumentData)(nil),            // 12: knowledge.GetKnowledgeDocumentData
+	(*DeleteKnowledgeDocumentRequest)(nil),      // 13: knowledge.DeleteKnowledgeDocumentRequest
+	(*DeleteKnowledgeDocumentResponse)(nil),     // 14: knowledge.DeleteKnowledgeDocumentResponse
+	(*ListKnowledgeDocumentRequest)(nil),        // 15: knowledge.ListKnowledgeDocumentRequest
+	(*ListKnowledgeDocumentResponse)(nil),       // 16: knowledge.ListKnowledgeDocumentResponse
+	(*ListKnowledgeDocumentData)(nil),           // 17: knowledge.ListKnowledgeDocumentData
+	(*CreateKnowledgeTagRequest)(nil),           // 18: knowledge.CreateKnowledgeTagRequest
+	(*CreateKnowledgeTagResponse)(nil),          // 19: knowledge.CreateKnowledgeTagResponse
+	(*CreateKnowledgeTagData)(nil),              // 20: knowledge.CreateKnowledgeTagData
+	(*UpdateKnowledgeTagRequest)(nil),           // 21: knowledge.UpdateKnowledgeTagRequest
+	(*UpdateKnowledgeTagResponse)(nil),          // 22: knowledge.UpdateKnowledgeTagResponse
+	(*DeleteKnowledgeTagRequest)(nil),           // 23: knowledge.DeleteKnowledgeTagRequest
+	(*DeleteKnowledgeTagResponse)(nil),          // 24: knowledge.DeleteKnowledgeTagResponse
+	(*GetKnowledgeTagRequest)(nil),              // 25: knowledge.GetKnowledgeTagRequest
+	(*GetKnowledgeTagResponse)(nil),             // 26: knowledge.GetKnowledgeTagResponse
+	(*GetKnowledgeTagData)(nil),                 // 27: knowledge.GetKnowledgeTagData
+	(*GetKnowledgeDocumentDetailsRequest)(nil),  // 28: knowledge.GetKnowledgeDocumentDetailsRequest
+	(*GetKnowledgeDocumentDetailsResponse)(nil), // 29: knowledge.GetKnowledgeDocumentDetailsResponse
+	(*GetKnowledgeDocumentDetailsData)(nil),     // 30: knowledge.GetKnowledgeDocumentDetailsData
+	(*ListKnowledgeTagRequest)(nil),             // 31: knowledge.ListKnowledgeTagRequest
+	(*ListKnowledgeTagResponse)(nil),            // 32: knowledge.ListKnowledgeTagResponse
+	(*ListKnowledgeTagData)(nil),                // 33: knowledge.ListKnowledgeTagData
+	(*KnowledgePlaybookExtraInfo)(nil),          // 34: knowledge.KnowledgePlaybookExtraInfo
+	(*KnowledgePlaybook)(nil),                   // 35: knowledge.KnowledgePlaybook
+	(*GetKnowledgePlaybookRequest)(nil),         // 36: knowledge.GetKnowledgePlaybookRequest
+	(*GetKnowledgePlaybookResponse)(nil),        // 37: knowledge.GetKnowledgePlaybookResponse
+	(*GetKnowledgePlaybookData)(nil),            // 38: knowledge.GetKnowledgePlaybookData
+	(*UpdateKnowledgePlaybookRequest)(nil),      // 39: knowledge.UpdateKnowledgePlaybookRequest
+	(*UpdateKnowledgePlaybookResponse)(nil),     // 40: knowledge.UpdateKnowledgePlaybookResponse
+	(*DeleteKnowledgePlaybookRequest)(nil),      // 41: knowledge.DeleteKnowledgePlaybookRequest
+	(*DeleteKnowledgePlaybookResponse)(nil),     // 42: knowledge.DeleteKnowledgePlaybookResponse
+	(*ListKnowledgePlaybookRequest)(nil),        // 43: knowledge.ListKnowledgePlaybookRequest
+	(*ListKnowledgePlaybookResponse)(nil),       // 44: knowledge.ListKnowledgePlaybookResponse
+	(*ListKnowledgePlaybookData)(nil),           // 45: knowledge.ListKnowledgePlaybookData
+	(*GetKnowledgePlaybookDetailsRequest)(nil),  // 46: knowledge.GetKnowledgePlaybookDetailsRequest
+	(*GetKnowledgePlaybookDetailsResponse)(nil), // 47: knowledge.GetKnowledgePlaybookDetailsResponse
+	(*GetKnowledgePlaybookDetailsData)(nil),     // 48: knowledge.GetKnowledgePlaybookDetailsData
+	(*KnowledgeItem)(nil),                       // 49: knowledge.KnowledgeItem
+	(*ListKnowledgeItemsRequest)(nil),           // 50: knowledge.ListKnowledgeItemsRequest
+	(*ListKnowledgeItemsResponse)(nil),          // 51: knowledge.ListKnowledgeItemsResponse
+	(*ListKnowledgeItemsData)(nil),              // 52: knowledge.ListKnowledgeItemsData
+	(*common.Attachment)(nil),                   // 53: common.Attachment
+	(*common.AgentInstanceDigest)(nil),          // 54: common.AgentInstanceDigest
+	(*project.ProjectDeliverable)(nil),          // 55: project.ProjectDeliverable
 }
 var file_knowledge_knowledge_proto_depIdxs = []int32{
 	0,  // 0: knowledge.KnowledgeDocument.document_type:type_name -> knowledge.KnowledgeDocumentType
 	1,  // 1: knowledge.KnowledgeDocument.status:type_name -> knowledge.KnowledgeDocumentStatus
-	45, // 2: knowledge.KnowledgeDocument.attachment:type_name -> common.Attachment
-	2,  // 3: knowledge.KnowledgeDocument.tags:type_name -> knowledge.KnowledgeTag
+	53, // 2: knowledge.KnowledgeDocument.attachment:type_name -> common.Attachment
+	3,  // 3: knowledge.KnowledgeDocument.tags:type_name -> knowledge.KnowledgeTag
 	0,  // 4: knowledge.CreateKnowledgeDocumentRequest.document_type:type_name -> knowledge.KnowledgeDocumentType
-	6,  // 5: knowledge.CreateKnowledgeDocumentResponse.data:type_name -> knowledge.CreateKnowledgeDocumentData
+	7,  // 5: knowledge.CreateKnowledgeDocumentResponse.data:type_name -> knowledge.CreateKnowledgeDocumentData
 	0,  // 6: knowledge.UpdateKnowledgeDocumentRequest.document_type:type_name -> knowledge.KnowledgeDocumentType
 	1,  // 7: knowledge.UpdateKnowledgeDocumentRequest.status:type_name -> knowledge.KnowledgeDocumentStatus
-	11, // 8: knowledge.GetKnowledgeDocumentResponse.data:type_name -> knowledge.GetKnowledgeDocumentData
-	3,  // 9: knowledge.GetKnowledgeDocumentData.document:type_name -> knowledge.KnowledgeDocument
+	12, // 8: knowledge.GetKnowledgeDocumentResponse.data:type_name -> knowledge.GetKnowledgeDocumentData
+	4,  // 9: knowledge.GetKnowledgeDocumentData.document:type_name -> knowledge.KnowledgeDocument
 	0,  // 10: knowledge.ListKnowledgeDocumentRequest.document_type:type_name -> knowledge.KnowledgeDocumentType
 	1,  // 11: knowledge.ListKnowledgeDocumentRequest.status:type_name -> knowledge.KnowledgeDocumentStatus
-	16, // 12: knowledge.ListKnowledgeDocumentResponse.data:type_name -> knowledge.ListKnowledgeDocumentData
-	3,  // 13: knowledge.ListKnowledgeDocumentData.documents:type_name -> knowledge.KnowledgeDocument
-	19, // 14: knowledge.CreateKnowledgeTagResponse.data:type_name -> knowledge.CreateKnowledgeTagData
-	26, // 15: knowledge.GetKnowledgeTagResponse.data:type_name -> knowledge.GetKnowledgeTagData
-	2,  // 16: knowledge.GetKnowledgeTagData.tag:type_name -> knowledge.KnowledgeTag
-	29, // 17: knowledge.GetKnowledgeDocumentDetailsResponse.data:type_name -> knowledge.GetKnowledgeDocumentDetailsData
-	32, // 18: knowledge.ListKnowledgeTagResponse.data:type_name -> knowledge.ListKnowledgeTagData
-	2,  // 19: knowledge.ListKnowledgeTagData.tags:type_name -> knowledge.KnowledgeTag
-	2,  // 20: knowledge.KnowledgePlaybook.tags:type_name -> knowledge.KnowledgeTag
-	36, // 21: knowledge.GetKnowledgePlaybookResponse.data:type_name -> knowledge.GetKnowledgePlaybookData
-	33, // 22: knowledge.GetKnowledgePlaybookData.playbook:type_name -> knowledge.KnowledgePlaybook
-	41, // 23: knowledge.ListKnowledgePlaybookResponse.data:type_name -> knowledge.ListKnowledgePlaybookData
-	33, // 24: knowledge.ListKnowledgePlaybookData.playbooks:type_name -> knowledge.KnowledgePlaybook
-	44, // 25: knowledge.GetKnowledgePlaybookDetailsResponse.data:type_name -> knowledge.GetKnowledgePlaybookDetailsData
-	26, // [26:26] is the sub-list for method output_type
-	26, // [26:26] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	17, // 12: knowledge.ListKnowledgeDocumentResponse.data:type_name -> knowledge.ListKnowledgeDocumentData
+	4,  // 13: knowledge.ListKnowledgeDocumentData.documents:type_name -> knowledge.KnowledgeDocument
+	20, // 14: knowledge.CreateKnowledgeTagResponse.data:type_name -> knowledge.CreateKnowledgeTagData
+	27, // 15: knowledge.GetKnowledgeTagResponse.data:type_name -> knowledge.GetKnowledgeTagData
+	3,  // 16: knowledge.GetKnowledgeTagData.tag:type_name -> knowledge.KnowledgeTag
+	30, // 17: knowledge.GetKnowledgeDocumentDetailsResponse.data:type_name -> knowledge.GetKnowledgeDocumentDetailsData
+	33, // 18: knowledge.ListKnowledgeTagResponse.data:type_name -> knowledge.ListKnowledgeTagData
+	3,  // 19: knowledge.ListKnowledgeTagData.tags:type_name -> knowledge.KnowledgeTag
+	54, // 20: knowledge.KnowledgePlaybookExtraInfo.agent_instance:type_name -> common.AgentInstanceDigest
+	3,  // 21: knowledge.KnowledgePlaybook.tags:type_name -> knowledge.KnowledgeTag
+	34, // 22: knowledge.KnowledgePlaybook.extra_info:type_name -> knowledge.KnowledgePlaybookExtraInfo
+	38, // 23: knowledge.GetKnowledgePlaybookResponse.data:type_name -> knowledge.GetKnowledgePlaybookData
+	35, // 24: knowledge.GetKnowledgePlaybookData.playbook:type_name -> knowledge.KnowledgePlaybook
+	45, // 25: knowledge.ListKnowledgePlaybookResponse.data:type_name -> knowledge.ListKnowledgePlaybookData
+	35, // 26: knowledge.ListKnowledgePlaybookData.playbooks:type_name -> knowledge.KnowledgePlaybook
+	48, // 27: knowledge.GetKnowledgePlaybookDetailsResponse.data:type_name -> knowledge.GetKnowledgePlaybookDetailsData
+	2,  // 28: knowledge.KnowledgeItem.type:type_name -> knowledge.KnowledgeItemType
+	4,  // 29: knowledge.KnowledgeItem.document:type_name -> knowledge.KnowledgeDocument
+	35, // 30: knowledge.KnowledgeItem.playbook:type_name -> knowledge.KnowledgePlaybook
+	55, // 31: knowledge.KnowledgeItem.deliverable:type_name -> project.ProjectDeliverable
+	52, // 32: knowledge.ListKnowledgeItemsResponse.data:type_name -> knowledge.ListKnowledgeItemsData
+	49, // 33: knowledge.ListKnowledgeItemsData.items:type_name -> knowledge.KnowledgeItem
+	34, // [34:34] is the sub-list for method output_type
+	34, // [34:34] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_knowledge_knowledge_proto_init() }
@@ -3138,8 +3652,8 @@ func file_knowledge_knowledge_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_knowledge_knowledge_proto_rawDesc), len(file_knowledge_knowledge_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   43,
+			NumEnums:      3,
+			NumMessages:   50,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

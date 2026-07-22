@@ -26,6 +26,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.biz.chat import workspace_init
+from app.biz.chat.prompt import compose_system_prompt
 from app.biz.chat.service import ChatService
 from app.biz.task_runtime.skill_loader import SkillLoader
 from app.pb.conversation.api import ChatRequest
@@ -69,7 +70,6 @@ def test_copy_attachments_retains_previous_turn_files_when_requested(tmp_path: P
         "path": "attachments/cases.xlsx",
         "url_path": "attachments/cases.xlsx_url.txt",
         "type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "source_turn_id": 7,
     }
 
 
@@ -146,6 +146,7 @@ def test_task_workspace_profile_clears_heavy_snapshots(tmp_path: Path, monkeypat
     for name in ("knowledge", "history", "playbooks"):
         (tmp_path / name).mkdir()
 
+    monkeypatch.setattr(workspace_init.CHAT_FS, "migrate_legacy_session", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init.CHAT_FS, "get_workspace_path", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init, "_copy_skills", lambda *_args, **_kwargs: called.append("skills"))
     monkeypatch.setattr(workspace_init, "_copy_attachments", lambda *_args, **_kwargs: called.append("attachments"))
@@ -179,6 +180,7 @@ def test_workspace_init_removes_history_but_retains_results_and_case_sources(tmp
     (tmp_path / "results").mkdir()
     (tmp_path / "case_sources").mkdir()
 
+    monkeypatch.setattr(workspace_init.CHAT_FS, "migrate_legacy_session", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init.CHAT_FS, "get_workspace_path", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init, "_copy_skills", lambda *_args, **_kwargs: called.append("skills"))
     monkeypatch.setattr(workspace_init, "_copy_attachments", lambda *_args, **_kwargs: called.append("attachments"))
@@ -228,11 +230,11 @@ def test_copy_history_includes_rerun_sources(tmp_path: Path, monkeypatch) -> Non
     monkeypatch.setattr(workspace_init.CHAT_FS, "list_turn_ids", lambda *_args: [7, 8])
     monkeypatch.setattr(
         workspace_init.CHAT_FS,
-        "_get_turn_path",
-        lambda _agent_instance_id, _username, tid: user_root / "turn" / str(tid),
+        "get_turn_path",
+        lambda _agent_instance_id, _username, tid, _conversation_id: user_root / "turn" / str(tid),
     )
 
-    workspace_init._copy_history(workspace, agent_instance_id=1, username="alice", current_turn_id=8)
+    workspace_init._copy_history(workspace, agent_instance_id=1, username="alice", current_turn_id=8, conversation_id=22)
 
     copied = workspace / "history" / "turn-7" / "rerun_sources" / "batch-1.json"
     assert copied.exists()
@@ -261,11 +263,17 @@ def test_copy_history_scans_older_rerun_sources(tmp_path: Path, monkeypatch) -> 
     monkeypatch.setattr(workspace_init.CHAT_FS, "list_turn_ids", lambda *_args: list(range(1, 8)))
     monkeypatch.setattr(
         workspace_init.CHAT_FS,
-        "_get_turn_path",
-        lambda _agent_instance_id, _username, tid: user_root / "turn" / str(tid),
+        "get_turn_path",
+        lambda _agent_instance_id, _username, tid, _conversation_id: user_root / "turn" / str(tid),
     )
 
-    workspace_init._copy_history(tmp_path / "workspace", agent_instance_id=1, username="alice", current_turn_id=8)
+    workspace_init._copy_history(
+        tmp_path / "workspace",
+        agent_instance_id=1,
+        username="alice",
+        current_turn_id=8,
+        conversation_id=22,
+    )
 
     copied = tmp_path / "workspace" / "history" / "turn-1" / "rerun_sources" / "batch-old.json"
     assert copied.exists()
@@ -318,8 +326,8 @@ def test_repeat_user_message_injects_prior_rerun_source_without_attachments(tmp_
             ),
         )
     )
-    assert "Prior delegated task sources" in message.text
-    assert "Launch Copilot" in message.text
+    assert "Prior delegated task sources" not in message.text
+    assert "Launch Copilot" not in message.text
     assert "Workspace attachments available:" not in message.text
 
 
@@ -342,21 +350,26 @@ def test_case_source_user_message_injects_bounded_source_context(tmp_path: Path,
     service = object.__new__(ChatService)
     service._logger = SimpleNamespace(info=lambda *_args, **_kwargs: None, warning=lambda *_args, **_kwargs: None)
 
-    message = asyncio.run(
-        service._build_user_message(
-            ChatRequest(
-                username="alice",
-                agent_instance_id=1,
-                message=ChatContent(type=ChatContentType.TEXT, content="STCAQA-567鐨勫唴瀹规槸浠€涔堬紵"),
-            ),
-        )
+    request = ChatRequest(
+        username="alice",
+        agent_instance_id=1,
+        message=ChatContent(type=ChatContentType.TEXT, content="STCAQA-567鐨勫唴瀹规槸浠€涔堬紵"),
     )
+    sections = service._build_context_sections(request, SkillLoader(workspace))
+    case_section = sections["case_source_resolution"]
 
-    assert "Case source resolver context" in message.text
-    assert "history/turn-7/case_sources/parsed_documents/cases.md" in message.text
-    assert "Project Knowledge" in message.text
-    assert "knowledge/1/original/cases.xlsx" in message.text
-    assert "Do not call parse_document for historical attachments" in message.text
+    assert "Case source resolver context" in case_section
+    assert "history/turn-7/case_sources/parsed_documents/cases.md" in case_section
+    assert "Project Knowledge" in case_section
+    assert "knowledge/1/original/cases.xlsx" in case_section
+    assert "Do not call parse_document for historical attachments" in case_section
+
+    message = asyncio.run(service._build_user_message(request))
+
+    assert "Case source resolver context" not in message.text
+    assert "history/turn-7/case_sources/parsed_documents/cases.md" not in message.text
+    assert "Project Knowledge" not in message.text
+    assert "knowledge/1/original/cases.xlsx" not in message.text
 
 
 def test_capability_cards_read_actions_from_skill_storage(tmp_path: Path, monkeypatch) -> None:
@@ -393,23 +406,36 @@ def test_capability_cards_read_actions_from_skill_storage(tmp_path: Path, monkey
     service = object.__new__(ChatService)
     service._logger = SimpleNamespace(info=lambda *_args, **_kwargs: None, warning=lambda *_args, **_kwargs: None)
 
-    message = asyncio.run(
-        service._build_user_message(
-            ChatRequest(
-                username="alice",
-                agent_id="agent",
-                agent_instance_id=1,
-                project_id=1,
-                message=ChatContent(type=ChatContentType.TEXT, content="Run it"),
-            ),
-        )
+    request = ChatRequest(
+        username="alice",
+        agent_id="agent",
+        agent_instance_id=1,
+        project_id=1,
+        message=ChatContent(type=ChatContentType.TEXT, content="Run it"),
     )
+    sections = service._build_context_sections(request, SkillLoader(workspace, project_id=1, agent_id="agent"))
+    skills_section = sections["skills"]
 
     assert not (workspace / "skills" / "7" / "resolved" / "actions.json").exists()
-    assert "These skill capabilities are available" in message.text
-    assert "action_name: run_from_storage" in message.text
-    assert "requires_sandbox:" not in message.text
-    assert "parameters:" in message.text
+    assert "These skills are available" in skills_section
+    assert "kind: executable_action" in skills_section
+    assert "action_name: run_from_storage" in skills_section
+    assert "requires_sandbox:" not in skills_section
+    assert "parameters:" in skills_section
+
+    system_prompt = compose_system_prompt(prompt_mode="task", skills_section=skills_section)
+
+    assert "These skills are available" in system_prompt
+    assert "kind: executable_action" in system_prompt
+    assert "action_name: run_from_storage" in system_prompt
+    assert "parameters:" in system_prompt
+
+    message = asyncio.run(service._build_user_message(request))
+
+    assert "These skills are available" not in message.text
+    assert "kind: executable_action" not in message.text
+    assert "action_name: run_from_storage" not in message.text
+    assert "parameters:" not in message.text
 
 
 def test_manifest_only_skill_snapshot_uses_staged_runtime(tmp_path: Path, monkeypatch) -> None:

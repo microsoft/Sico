@@ -42,14 +42,22 @@ _shared_memory: AsyncMemory | None = None
 _SENSITIVE_CONFIG_KEY_PARTS = ("api_key", "apikey", "api-key", "secret", "token", "password", "authorization")
 
 
-def build_memory_filters(*, username: str | None = None, agent_id: str | None = None) -> dict[str, str]:
+def build_memory_filters(
+    *,
+    username: str | None = None,
+    agent_id: str | None = None,
+    conversation_id: int | str | None = None,
+) -> dict[str, str]:
     filters: dict[str, str] = {}
     user_id = sanitize_mem0_entity_id(username)
     sanitized_agent_id = sanitize_mem0_entity_id(agent_id)
+    run_id = sanitize_mem0_entity_id(str(conversation_id)) if conversation_id else None
     if user_id:
         filters["user_id"] = user_id
     if sanitized_agent_id:
         filters["agent_id"] = sanitized_agent_id
+    if run_id:
+        filters["run_id"] = run_id
     return filters
 
 

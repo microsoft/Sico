@@ -1,0 +1,92 @@
+/**
+ * Copyright (c) 2026 Sico Authors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+import { type createStore } from "jotai";
+
+import { logger } from "../../../utils/logger";
+import {
+  activeConversationAtom,
+  type Conversation,
+  isStreamingAiMessage,
+  type Part,
+} from "../atoms/chat-atom";
+
+type Store = ReturnType<typeof createStore>;
+
+// Generic non-fatal connection-error toast. A failed `POST /plan/cancel`
+// leaves the turn running, so the user keeps the "try again" affordance.
+const STOP_FAILED_COPY =
+  "There's been a connection error. Please try again later.";
+
+export type StopTurnContext = {
+  // Injected to keep the orchestration a pure, testable fn. Takes the numeric
+  // turnId (= Number(planId)).
+  cancelPlan: (turnId: number) => Promise<void>;
+  // The reconnect manager's hard idle exit. Stop routes through it on EVERY
+  // path: a bare `abort()` reads as a transport close → backoff → reopen, so
+  // the loop would fight the user's Stop. `stop()` flips the exiting flag first.
+  reconnectStop: () => void;
+  toastError: (message: string) => void;
+};
+
+// The `plan` Part of the in-flight turn, if any — the plan-vs-text
+// discriminator for Stop. The SSE stream stays open for the whole plan
+// execution, so a RUNNING plan's turn is always still `streaming` here.
+function streamingPlanPart(
+  conv: Conversation | undefined,
+): Extract<Part, { type: "plan" }> | undefined {
+  const ai = conv?.history.find(isStreamingAiMessage);
+  return ai?.content.find(
+    (p): p is Extract<Part, { type: "plan" }> => p.type === "plan",
+  );
+}
+
+// Stop the active turn. Plan in progress → `POST /plan/cancel` FIRST (aborting
+// the stream before the backend cancels would orphan a running plan); on
+// failure toast and leave the turn running. Teardown order is load-bearing:
+// `reconnectStop()` BEFORE `abort()`, so the abort echo resolves to a clean
+// idle and then drives `sendMessage` to mark the partial turn done.
+//
+// Settling the AI message to `done` is NOT done here — it is event-driven by the
+// stream's own lifecycle: a normal send's `sendMessage` closure marks it on the
+// abort echo, and a reconnect-resumed turn is marked by the reconnect machine's
+// terminal `settle` command (use-reconnect). Stop just tears the transport down.
+export async function stopTurn(
+  store: Store,
+  ctx: StopTurnContext,
+): Promise<void> {
+  const conv = store.get(activeConversationAtom);
+  const planPart = streamingPlanPart(conv);
+
+  if (planPart) {
+    try {
+      await ctx.cancelPlan(Number(planPart.planId));
+    } catch (err) {
+      logger.warn("chat: plan cancel failed on stop", { err });
+      ctx.toastError(STOP_FAILED_COPY);
+      return;
+    }
+  }
+
+  ctx.reconnectStop();
+  conv?.sendHandle?.abort();
+}

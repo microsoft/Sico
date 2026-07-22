@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="100" viewBox="0 0 180 100" fill="none">
+  <title>Something went wrong</title>
+  <defs>
+    <linearGradient id="error-cardbg" x1="0" y1="0.06" x2="0" y2="0.51">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="error-thumbbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F5F5FA"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <linearGradient id="error-tri" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#DDDBFF"/>
+      <stop offset="100%" stop-color="#A8A4D9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background card -->
+  <g transform="translate(27 0)">
+    <rect width="128" height="108" rx="8" fill="url(#error-cardbg)" stroke="#0E10141A" stroke-width="0.5"/>
+    <!-- Title bar -->
+    <rect x="16" y="16" width="96" height="8" rx="4" fill="#DDDBFF"/>
+    <!-- Subtitle bar -->
+    <rect x="16" y="28" width="53" height="8" rx="4" fill="#DDDBFF" opacity="0.6"/>
+    <!-- Thumbnail -->
+    <rect x="16" y="44" width="96" height="48" rx="6" fill="url(#error-thumbbg)"/>
+  </g>
+
+  <!-- Warning triangle overlay (bottom-right of card) -->
+  <g transform="translate(107 33)">
+    <path d="M36.18 4 L70.18 62 Q72 65.5 68.18 65.5 L4.18 65.5 Q0.36 65.5 2.18 62 L36.18 4 Z"
+          fill="url(#error-tri)" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>
+    <!-- Exclamation mark -->
+    <rect x="34.2" y="26" width="4" height="20" rx="2" fill="#FFFFFF"/>
+    <circle cx="36.2" cy="54" r="2.4" fill="#FFFFFF"/>
+  </g>
+</svg>

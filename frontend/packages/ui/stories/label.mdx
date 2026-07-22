@@ -1,0 +1,90 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as LabelStories from "./label.stories";
+
+<Meta of={LabelStories} />
+
+# Label
+
+Native `<label>` with shadcn `base-nova` styling. Shadcn restyle — only styles
+diverge from upstream, no upstream drift.
+
+Mirrors `peer-disabled:*` and `group-data-[disabled=true]:*` from upstream so
+a parent `<Field data-disabled>` or sibling `<input disabled>` dims the label
+automatically — no Context required.
+
+Always pair with `htmlFor` pointing at the input's `id`. Clicking the label
+focuses the input and screen readers announce them as one control.
+
+## Examples
+
+### Default
+
+<Description of={LabelStories.Default} />
+<Canvas of={LabelStories.Default} />
+
+### Peer interaction
+
+The `peer-disabled:opacity-50` selector dims the label when a sibling input
+is disabled. Tailwind's `peer-*` only matches a *previous* sibling — the
+input MUST precede the label in the DOM.
+
+<Description of={LabelStories.PairedWithPeerInput} />
+<Canvas of={LabelStories.PairedWithPeerInput} />
+
+## API
+
+<Controls of={LabelStories.Default} />
+
+---
+
+## Token Audit
+
+Label is a pure typography primitive — it owns no color tokens of its own and
+inherits foreground from the surrounding `<Field>` context. The dim treatment
+is opacity-based, not token-based.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Foreground (inherited)"
+    subtitle="Text color comes from the surrounding Field — Label has no color of its own"
+    colors={{
+      "Default · foreground-primary": "var(--color-foreground-primary)",
+      "Invalid · danger-700": "var(--color-danger-700)",
+      "Disabled · opacity-50": "var(--color-foreground-primary)",
+    }}
+  />
+</ColorPalette>
+
+### Typography & layout
+
+| Property      | Class             | Value      |
+| ------------- | ----------------- | ---------- |
+| Font size     | `text-sm`         | 14px       |
+| Line height   | `leading-none`    | 1          |
+| Font weight   | `font-medium`     | 500        |
+| User select   | `select-none`     | Disabled   |
+| Display       | `flex items-center` | Inline-aligned |
+| Gap           | `gap-2`           | 8px (for icon labels) |
+
+### State propagation
+
+| Trigger                                     | Effect                                |
+| ------------------------------------------- | ------------------------------------- |
+| `<Field data-disabled="true">`              | `opacity-50` via `group-data-` selector |
+| Sibling `<input disabled class="peer">`     | `opacity-50` via `peer-disabled:` selector |
+
+---
+
+## Upstream Audit
+
+Shadcn restyle of `base-nova/label` (no upstream drift):
+
+- **Styles only** — no token replacements were needed (upstream uses
+  `text-sm`, `font-medium`, `peer-disabled:opacity-50` which are all
+  framework-level utilities, not theme colors).
+- **No prop API changes** — accepts all native `<label>` props.
+- **A11y verbatim** — `htmlFor` is the standard native association; no extra
+  ARIA needed.

@@ -48,15 +48,21 @@ message ToolDeliverableAcquiredSandbox {
     string vnc_url = 7; // @gotag: json:"vncUrl,omitempty"
 }
 
+message ToolDeliverableFile {
+    string file_sas_url = 1; // @gotag: json:"fileSasUrl,omitempty"
+    string file_name = 2; // @gotag: json:"fileName,omitempty"
+    string file_uri = 3; // @gotag: json:"fileUri,omitempty"
+}
+
 message ToolDeliverable {
     ToolDeliverableType type = 1; // @gotag: json:"type,omitempty"
     string markdown_content = 2; // @gotag: json:"markdownContent,omitempty"
+    string file_url = 3 [deprecated = true]; // @gotag: json:"fileUrl,omitempty"
+    string file_name = 4 [deprecated = true]; // @gotag: json:"fileName,omitempty"
     string markdown_title = 5; // @gotag: json:"markdownTitle,omitempty"
-    string file_url = 3; // @gotag: json:"fileUrl,omitempty"
-    string file_name = 4; // @gotag: json:"fileName,omitempty"
+    ToolDeliverableFile file = 8; // @gotag: json:"file,omitempty"
     string web_preview_sas_url = 6; // @gotag: json:"webPreviewSasUrl,omitempty"
     ToolDeliverableAcquiredSandbox acquired_sandbox = 7; // @gotag: json:"acquiredSandbox,omitempty"
-    // ... more
 }
 
 message TaskRuntimeExecutionInfo {

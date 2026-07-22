@@ -12,12 +12,14 @@ const TableNameTUserRole = "t_user_role"
 
 // TUserRole User roles for RBAC
 type TUserRole struct {
-	ID        int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:Primary Key" json:"id"`                                 // Primary Key
-	UserID    int64          `gorm:"column:user_id;not null;comment:From User.ID" json:"user_id"`                                           // From User.ID
-	RoleID    int64          `gorm:"column:role_id;not null;comment:From Role.ID" json:"role_id"`                                           // From Role.ID
-	CreatedAt int64          `gorm:"column:created_at;not null;autoCreateTime:milli;comment:Create Time in Milliseconds" json:"created_at"` // Create Time in Milliseconds
-	UpdatedAt int64          `gorm:"column:updated_at;not null;autoUpdateTime:milli;comment:Update Time in Milliseconds" json:"updated_at"` // Update Time in Milliseconds
-	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;comment:Delete Time" json:"deleted_at"`                                               // Delete Time
+	ID        int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:Primary Key" json:"id"`                                                  // Primary Key
+	UserID    int64          `gorm:"column:user_id;not null;comment:From User.ID" json:"user_id"`                                                            // From User.ID
+	RoleCode  string         `gorm:"column:role_code;not null;comment:Role code: platform_admin, org_admin, project_admin, project_member" json:"role_code"` // Role code: platform_admin, org_admin, project_admin, project_member
+	ScopeType string         `gorm:"column:scope_type;not null;comment:platform|org|project" json:"scope_type"`                                              // platform|org|project
+	ScopeID   int64          `gorm:"column:scope_id;not null;comment:Organization or Project ID (0 for platform scope)" json:"scope_id"`                     // Organization or Project ID (0 for platform scope)
+	CreatedAt int64          `gorm:"column:created_at;not null;autoCreateTime:milli;comment:Create Time in Milliseconds" json:"created_at"`                  // Create Time in Milliseconds
+	UpdatedAt int64          `gorm:"column:updated_at;not null;autoUpdateTime:milli;comment:Update Time in Milliseconds" json:"updated_at"`                  // Update Time in Milliseconds
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;comment:Delete Time" json:"deleted_at"`                                                                // Delete Time
 }
 
 // TableName TUserRole's table name

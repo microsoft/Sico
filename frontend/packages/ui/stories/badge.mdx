@@ -1,0 +1,177 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as BadgeStories from "./badge.stories";
+
+<Meta of={BadgeStories} />
+
+# Badge
+
+Compact status and category indicator. Shadcn `base-nova` restyle — upstream
+reference: [shadcn/ui badge](https://ui.shadcn.com/docs/components/badge)
+(Base UI `useRender`).
+
+Two variants combine with five semantic colors:
+
+- **default** — filled pill with a tinted background; for categorical labels
+  and status chips.
+- **secondary** — text-only; pair with a consumer-composed dot child for
+  status indicators in tables and lists.
+
+Colors (`green`, `red`, `orange`, `blue`, `gray`) map to SICO Status semantic
+tokens via the `badgeColorClasses` map. Dot indicators are not baked in — the
+consumer composes them as children.
+
+## Examples
+
+### Default
+
+<Description of={BadgeStories.Default} />
+<Canvas of={BadgeStories.Default} />
+
+### All colors
+
+<Description of={BadgeStories.AllColors} />
+<Canvas of={BadgeStories.AllColors} />
+
+### Secondary
+
+<Description of={BadgeStories.Secondary} />
+<Canvas of={BadgeStories.Secondary} />
+
+### With dot
+
+<Description of={BadgeStories.WithDot} />
+<Canvas of={BadgeStories.WithDot} />
+
+## API
+
+<Controls of={BadgeStories.Default} />
+
+---
+
+## Token Audit
+
+Badge owns no per-component token family — it consumes the shared SICO Status
+semantic tokens (plus surface/fg fallbacks for the neutral `gray`). Every color
+below is scanned from the `badgeColorClasses` map in `badge.tsx`.
+
+### Default fill
+
+Tinted background for the filled `default` variant.
+
+<ColorPalette>
+  <ColorItem
+    title="Default fill"
+    subtitle="Background tint per color — default variant"
+    colors={{
+      "green · status-success-fill": "var(--color-status-success-fill)",
+      "red · status-error-fill": "var(--color-status-error-fill)",
+      "orange · status-warning-fill": "var(--color-status-warning-fill)",
+      "blue · status-info-fill": "var(--color-status-info-fill)",
+      "gray · surface-sunken": "var(--color-surface-sunken)",
+    }}
+  />
+</ColorPalette>
+
+### Default text
+
+Foreground color paired with the tinted fill on the `default` variant —
+the deeper `on-fill` tone (warning reuses its single `foreground`).
+
+<ColorPalette>
+  <ColorItem
+    title="Default text"
+    subtitle="Text color per color — default variant"
+    colors={{
+      "green · status-success-on-fill-foreground": "var(--color-status-success-on-fill-foreground)",
+      "red · status-error-on-fill-foreground": "var(--color-status-error-on-fill-foreground)",
+      "orange · status-warning-foreground": "var(--color-status-warning-foreground)",
+      "blue · status-info-on-fill-foreground": "var(--color-status-info-on-fill-foreground)",
+      "gray · foreground-secondary": "var(--color-foreground-secondary)",
+    }}
+  />
+</ColorPalette>
+
+### Secondary text
+
+Saturated standalone text color for the `secondary` variant — each status
+color's base `foreground`. Orange has no separate on-fill tier, so its single
+`status-warning-foreground` covers both variants; gray steps down to
+`foreground-tertiary`.
+
+<ColorPalette>
+  <ColorItem
+    title="Secondary text"
+    subtitle="Text-only color per color — secondary variant"
+    colors={{
+      "green · status-success-foreground": "var(--color-status-success-foreground)",
+      "red · status-error-foreground": "var(--color-status-error-foreground)",
+      "orange · status-warning-foreground": "var(--color-status-warning-foreground)",
+      "blue · status-info-foreground": "var(--color-status-info-foreground)",
+      "gray · foreground-tertiary": "var(--color-foreground-tertiary)",
+    }}
+  />
+</ColorPalette>
+
+### Sizing & shape
+
+| Variant     | Height | Class | Padding   | Radius                 |
+| ----------- | ------ | ----- | --------- | ---------------------- |
+| `default`   | 24px   | `h-6` | `px-2 py-1` | `rounded-sm` (4px)    |
+| `secondary` | 20px   | `h-5` | —         | — (text-only)          |
+
+Both variants share `gap-1.5` for the optional dot/label spacing.
+
+### Typography
+
+| Property    | Class            | Value  |
+| ----------- | ---------------- | ------ |
+| Font size   | `text-xs`        | 12px   |
+| Weight      | `font-medium`    | 500    |
+| Tracking    | `tracking-wider` | 0.05em |
+| Line height | `leading-body`   | 1.3    |
+
+---
+
+## Upstream Audit
+
+Shadcn restyle of `shadcn/ui badge`: styles are swapped for SICO Status tokens
+and a `color` prop is added; every non-style divergence is enumerated below.
+
+### Token swaps
+
+| Upstream class                            | SICO replacement                                            |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| `bg-primary text-primary-foreground` (default)   | Per-color Status tokens via the `badgeColorClasses` map (`bg-status-*-fill` + `text-status-*-on-fill-foreground`, warning reusing its single `text-status-warning-foreground`; gray falls back to `bg-surface-sunken` + `text-foreground-secondary`) |
+| `bg-secondary text-secondary-foreground` (secondary) | Per-color text-only Status tokens via `badgeColorClasses` (`text-status-*-foreground`; orange has no on-fill tier so its single `text-status-warning-foreground` covers both variants, gray steps to `text-foreground-tertiary`) |
+| `rounded-4xl`                             | `rounded-sm` (4px) on the `default` badge                    |
+
+### API contract
+
+`variant` is narrowed to `default | secondary`; a SICO-specific `color` prop
+(`green | red | orange | blue | gray`) selects the Status token set. The prop
+type is `HTMLAttributes<HTMLSpanElement>` — a **deliberate fork** of upstream's
+`useRender.ComponentProps<"span">`. SICO repositions Badge as a static status
+label (the `color` axis replaces the interactive `ghost`/`link`/`destructive`
+variants), so it drops the Base UI `render` prop and always renders a plain
+`<span>`. Because the badge can no longer become an interactive host, the
+focus-ring (`focus-visible:*`) and form-validation (`aria-invalid:*`)
+affordances are dropped with it — a `<span>` takes no `ref`, focus, or
+polymorphic element. The rendered `<span>` emits `data-slot="badge"`, matching
+upstream.
+
+### Deleted from upstream
+
+| Deleted                          | Reason                                                       |
+| -------------------------------- | ----------------------------------------------------------- |
+| `destructive` / `outline` / `ghost` / `link` variants | SICO expresses intent through the `color` prop instead       |
+| `border border-transparent`      | SICO badges are borderless — tinted fill or text-only         |
+| `render` prop (Base UI `useRender`) | SICO badge always renders a `<span>` — no polymorphic host    |
+| Interactive + layout primitives (`group/badge`, `w-fit`, `overflow-hidden`, `transition-all`, `focus-visible:*` ring, `aria-invalid:*`, `has-data-[icon=*]`, `[&>svg]:pointer-events-none`, `[&>svg]:size-3!`) | SICO badge is a static label — sizing/gap/radius move into the `variant` cva, and the focus/invalid/icon affordances are dropped |
+
+### Added to SICO
+
+| Added | Reason |
+| ----- | ------ |
+| `color` prop (`green \| red \| orange \| blue \| gray`) | Selects the SICO Status token set per badge |
+| `BadgeColor` type | Public type for the `color` axis (upstream exports only `Badge`, `badgeVariants`) |

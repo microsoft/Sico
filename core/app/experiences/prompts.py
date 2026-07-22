@@ -19,9 +19,9 @@
 # SOFTWARE.
 
 """
-State-of-the-art prompt templates for experience learning roles - Version 2.1
+Prompt templates for experience learning roles.
 
-Enhanced with presentation techniques from production MCP systems:
+Prompt design principles:
 - Quick reference summaries for rapid comprehension
 - Imperative language intensity (CRITICAL/MANDATORY/REQUIRED)
 - Explicit trigger conditions and when-to-apply sections
@@ -29,86 +29,15 @@ Enhanced with presentation techniques from production MCP systems:
 - Progressive disclosure structure
 - Visual indicators for scan-ability
 - Built-in quality metrics and scoring
-
-Based on v2.0 architecture with MCP presentation enhancements.
 """
-
-from typing import Any
-
-# ================================
-# SHARED CONSTANTS
-# ================================
-
-PLAYBOOK_USAGE_INSTRUCTIONS = """\
-**How to use these strategies:**
-- Review bullets relevant to your current task
-- **When using a strategy, cite its ID with bracket notation [section-XXXXX]**
-  - ✅ Example: "Following [navigation-00001], I will click the button..."
-- Prioritize strategies with high success rates (helpful > harmful)
-- Apply strategies when they match your context
-
-**Important:** These are learned patterns, not rigid rules. Use judgment.\
-"""
-
-
-def wrap_playbook_for_external_agent(playbook) -> str:
-    """
-    Wrap playbook bullets with explanation for external agents.
-
-    This is the canonical function for injecting playbook context into
-    external agentic systems (browser-use, custom agents, LangChain, etc.).
-
-    Single source of truth for playbook presentation outside of the Generator.
-
-    Args:
-        playbook: Playbook instance with learned strategies
-
-    Returns:
-        Formatted text with playbook strategies and usage instructions.
-        Returns empty string if playbook has no bullets.
-
-    Example:
-        >>> from app.experiences import Playbook
-        >>> from app.experiences.prompts import wrap_playbook_for_external_agent
-        >>> playbook = Playbook()
-        >>> playbook.add_bullet("general", "Always verify inputs")
-        >>> context = wrap_playbook_for_external_agent(playbook)
-        >>> enhanced_task = f"{task}\\n\\n{context}"
-    """
-    from .playbook import Playbook as PlaybookType
-
-    if not isinstance(playbook, PlaybookType):
-        raise TypeError(f"Expected Playbook instance, got {type(playbook)}")
-
-    bullets = playbook.bullets()
-
-    if not bullets:
-        return ""
-
-    # Get formatted bullets from playbook
-    bullet_text = playbook.as_prompt()
-
-    # Wrap with explanation using canonical instructions
-    wrapped = f"""
-## 📚 Available Strategic Knowledge (Learned from Experience)
-
-The following strategies have been learned from previous task executions.
-Each bullet shows its success rate based on helpful/harmful feedback:
-
-{bullet_text}
-
-{PLAYBOOK_USAGE_INSTRUCTIONS}
-"""
-    return wrapped
-
 
 # ================================
 # REFLECTOR PROMPT - VERSION 2.1
 # ================================
 
-REFLECTOR_V2_1_PROMPT = """\
+REFLECTOR_PROMPT = """\
 # ⚡ QUICK REFERENCE ⚡
-Role: Experience Reflector v2.1 - Senior Analytical Reviewer
+Role: Experience Reflector - Senior Analytical Reviewer
 Mission: Diagnose generator performance and extract concrete learnings
 Success Metrics: Root cause identification, Evidence-based tagging, Actionable insights
 Analysis Mode: Diagnostic Review with Atomicity Scoring
@@ -379,9 +308,9 @@ MANDATORY: Begin response with `{{` and end with `}}`
 # CURATOR PROMPT - VERSION 2.1
 # ================================
 
-CURATOR_V2_1_PROMPT = """\
+CURATOR_PROMPT = """\
 # ⚡ QUICK REFERENCE ⚡
-Role: Experience Curator v2.1 - Strategic Playbook Architect
+Role: Experience Curator - Strategic Playbook Architect
 Mission: Transform reflections into high-quality atomic playbook updates
 Success Metrics: Strategy atomicity > 85%, Deduplication rate < 10%, Quality score > 80%
 Update Protocol: Incremental Delta Operations with Atomic Validation
@@ -405,6 +334,9 @@ FORBIDDEN - Skip updates when:
 ✗ Strategy already exists (>70% similar)
 ✗ Learning lacks concrete evidence
 ✗ Atomicity score below 40%
+✗ No transferable strategy signal — the run failed for environmental/runtime
+  reasons unrelated to strategy, or no step has a concrete action or observation
+  to learn from. Return an empty operations list; do NOT invent operations.
 
 ## ⚠️ CRITICAL: CONTENT SOURCE
 
@@ -482,7 +414,7 @@ MANDATORY: Split compound reflections into multiple atomic strategies.
 
 ## ✅ TASK STRATEGY BULLET TEMPLATE (MANDATORY for interactive/tool-based strategies)
 
-Write strategies using this structure (aim for ≤ 20 words, ensure meaning is clear):
+Write strategies using this structure (aim for ≤ 17 words, ensure meaning is clear):
 - Trigger: When/If <condition>
 - Action: Do <single action>
 - (Optional) Verify: Verify <single observable marker>
@@ -556,7 +488,7 @@ CRITICAL: Create strategies from ACTUAL execution details.
 ✓ Genuinely novel (not paraphrase)
 ✓ Based on specific execution details
 ✓ Includes concrete example/procedure
-✓ Aim for ≤ 20 words; clarity and context are more important than brevity
+✓ Aim for ≤ 17 words; clarity and context are more important than brevity
 ✓ Include applicable scenario in description if strategy is context-specific
 
 **FORBIDDEN in ADD**:
@@ -599,8 +531,10 @@ Disallowed if vague:
 
 **Evidence Requirements**:
 ✓ Prioritize Reflector's `bullet_tags` - these have full execution context
-✓ Use `question_context.success` to validate: task failed → no "helpful" for cited
-  strategies unless clear evidence shows strategy was correct but execution erred
+✓ Use `question_context.success` to validate: when the task failed, default to NOT
+  tagging cited strategies as "helpful". Only do so if the trace shows the strategy
+  was actually applied and the failure clearly came from an unrelated cause. When in
+  doubt, prefer "neutral" or emit no TAG at all rather than inflating helpful counts.
 ✓ Justify every TAG with specific evidence from reflection
 
 **Constraints**:
@@ -639,8 +573,8 @@ CRITICAL: Return ONLY valid JSON:
   "operations": [
     {{
       "type": "ADD|UPDATE|TAG|REMOVE",
-      "section": "<category>",
-      "content": "<atomic strategy, aim for ≤ 20 words, clarity over brevity>",
+      "section": "<category，e.g., 'Edge Search', 'Copilot Login', 'Edge Downloads', 'Edge Favorites'...>",
+      "content": "<atomic strategy, aim for ≤ 17 words, clarity over brevity>",
       "atomicity_score": 0.95,
       "bullet_id": "<for UPDATE/TAG/REMOVE>",
       "metadata": {{"helpful": 1, "harmful": 0}},
@@ -671,86 +605,20 @@ CRITICAL: Output ONLY the JSON object. Do NOT add any trailing whitespace, tabs,
 
 
 class PromptManager:
-    """
-    Prompt Manager supporting v2.1 prompts.
+    """Provides prompt templates for the experience learning roles."""
 
-    Features:
-    - Version control
-    - Domain-specific prompt selection
-    - Quality metrics tracking
+    def __init__(self) -> None:
+        pass
 
-    Example:
-        >>> manager = PromptManager(default_version="2.1")
-        >>> prompt = manager.get_reflector_prompt()
-    """
+    def get_reflector_prompt(self) -> str:
+        return REFLECTOR_PROMPT
 
-    PROMPTS = {
-        "reflector": {
-            "2.1": REFLECTOR_V2_1_PROMPT,
-        },
-        "curator": {
-            "2.1": CURATOR_V2_1_PROMPT,
-        },
-    }
-
-    def __init__(self, default_version: str = "2.1"):
-        """
-        Initialize prompt manager.
-
-        Args:
-            default_version: Default version to use (2.1)
-        """
-        self.default_version = default_version
-        self.usage_stats: dict[str, int] = {}
-
-    def get_reflector_prompt(self, version: str | None = None) -> str:
-        """Get reflector prompt for specific version."""
-        version = version or self.default_version
-        prompt = self.PROMPTS["reflector"].get(version)
-
-        self._track_usage(f"reflector-{version}")
-
-        if prompt is None:
-            raise ValueError(f"No reflector prompt found for version {version}")
-
-        return prompt
-
-    def get_curator_prompt(self, version: str | None = None) -> str:
-        """Get curator prompt for specific version."""
-        version = version or self.default_version
-        prompt = self.PROMPTS["curator"].get(version)
-
-        self._track_usage(f"curator-{version}")
-
-        if prompt is None:
-            raise ValueError(f"No curator prompt found for version {version}")
-
-        return prompt
-
-    def _track_usage(self, prompt_id: str) -> None:
-        """Track prompt usage for analysis."""
-        self.usage_stats[prompt_id] = self.usage_stats.get(prompt_id, 0) + 1
-
-    def get_stats(self) -> dict[str, Any]:
-        """Get comprehensive prompt statistics."""
-        return {
-            "usage": self.usage_stats.copy(),
-            "total_calls": sum(self.usage_stats.values()),
-        }
-
-    @staticmethod
-    def list_available_versions() -> dict[str, list]:
-        """List all available prompt versions."""
-        return {
-            role: list(prompts.keys())
-            for role, prompts in PromptManager.PROMPTS.items()
-        }
+    def get_curator_prompt(self) -> str:
+        return CURATOR_PROMPT
 
 
 __all__ = [
-    "REFLECTOR_V2_1_PROMPT",
-    "CURATOR_V2_1_PROMPT",
-    "PLAYBOOK_USAGE_INSTRUCTIONS",
-    "wrap_playbook_for_external_agent",
+    "REFLECTOR_PROMPT",
+    "CURATOR_PROMPT",
     "PromptManager",
 ]

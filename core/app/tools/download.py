@@ -42,11 +42,7 @@ _MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 _DEFAULT_TIMEOUT = 60  # seconds
 _MAX_TIMEOUT = 300  # seconds
 
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/143.0.0.0 Safari/537.36"
-)
+_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
 
 _extractor = None
 
@@ -86,11 +82,7 @@ async def _download_func(invocation_ctx: FunctionInvocationContext, **kwargs: An
     download_rel_path = f"download/{file_name}"
 
     tool_call_id = await ctx.plan_editor.create_tool_call(
-        "Download", f"Downloading file: {url}",
-        ToolExecutionInfo(
-            tool_type=ToolType.BUILTIN,
-            builtin_tool_name="download"
-        )
+        "Download", f"Downloading file: {url}", ToolExecutionInfo(tool_type=ToolType.BUILTIN, builtin_tool_name="download")
     )
 
     extractor = _get_extractor()
@@ -118,7 +110,7 @@ async def _download_func(invocation_ctx: FunctionInvocationContext, **kwargs: An
         file_bytes = b"".join(chunks)
 
         # Write the file to workspace
-        workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id, ctx.username)
+        workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id, ctx.username, ctx.conversation_id)
         target = workspace / download_rel_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(file_bytes)
@@ -139,13 +131,20 @@ async def _download_func(invocation_ctx: FunctionInvocationContext, **kwargs: An
         # Extract content using the configured document extractor (async)
         if extractor is not None:
             try:
-                abs_path = CHAT_FS.resolve_workspace_file(ctx.agent_instance_id, ctx.username, download_rel_path)
+                abs_path = CHAT_FS.resolve_workspace_file(
+                    ctx.agent_instance_id,
+                    ctx.username,
+                    download_rel_path,
+                    ctx.conversation_id,
+                )
                 full_text, summary = await extractor.extract(str(abs_path))
 
                 md_name = Path(file_name).stem + ".md"
                 full_md_path = f"download/{md_name}"
 
-                CHAT_FS.write_file(ctx.agent_instance_id, ctx.username, full_md_path, full_text)
+                CHAT_FS.write_file(
+                    ctx.agent_instance_id, ctx.username, full_md_path, full_text, conversation_id=ctx.conversation_id
+                )
 
                 result["summary"] = summary
                 result["full_markdown_path"] = full_md_path

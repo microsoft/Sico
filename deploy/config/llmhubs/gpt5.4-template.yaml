@@ -36,6 +36,7 @@ config:
   api_version: preview
   timeout_ms: 60000
   max_tokens: 128000
+  context_length: 1048576
   # OpenAI introduced the "original" image detail level with gpt-5.4, but
   # support is deployment-specific. This template opts in because current
   # GPT-5.4 mainline deployments accept it; remove ``original`` if your

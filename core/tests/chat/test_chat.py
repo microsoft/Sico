@@ -20,14 +20,18 @@
 
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
 import pytest_mock
-from agent_framework import ChatResponse, ChatResponseUpdate, Content
+from agent_framework import ChatResponse, ChatResponseUpdate, Content, Message as AgentFrameworkMessage
 
+from app.biz.chat import chat as chat_agent_module
 from app.biz.chat import service as chat_service_module
+from app.biz.chat.chat import ChatAgent, RunOptions, _extract_text_from_message
+from app.biz.chat.conversation_history import complete_unfinished_tool_calls, discard_unfinished_tool_calls
 from app.biz.chat.service import ChatService
 from app.pb.common.common import Attachment
 from app.pb.conversation.chat import ChatContent, ChatContentType
@@ -36,6 +40,8 @@ from app.schemas.common.common import Attachment as SchemaAttachment
 from app.schemas.conversation.chat import TopicMessage
 from app.schemas.conversation import Message
 from app.storage import redis
+from app.tools.common import ToolContext
+from app.tools.plan import PlanEditor
 from app.utils.runner import AsyncJobRunner
 
 
@@ -56,6 +62,38 @@ async def build_fake_agent(*args, **kwargs):
     return FakeChatAgent()
 
 
+class FailingStreamingClient:
+    _model = "gpt-test"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def get_response(self, *args, **kwargs):
+        self.calls += 1
+        raise RuntimeError("dns down")
+        yield ChatResponseUpdate(role="assistant", contents=[Content.from_text("unreachable")])
+
+
+class PausingToolStreamingClient:
+    _model = "gpt-test"
+
+    def __init__(self):
+        self.call_processed = asyncio.Event()
+        self.release_result = asyncio.Event()
+
+    async def get_response(self, *args, **kwargs):
+        yield ChatResponseUpdate(
+            role="assistant",
+            contents=[Content(type="function_call", call_id="call-1", name="read", arguments="{}")],
+        )
+        self.call_processed.set()
+        await self.release_result.wait()
+        yield ChatResponseUpdate(
+            role="tool",
+            contents=[Content(type="function_result", call_id="call-1", result="done")],
+        )
+
+
 class FakeConversationService:
     _instance = None
 
@@ -73,6 +111,43 @@ class FakeConversationService:
     def create_message(self, message: Message):
         self.created_messages.append(message)
         return message
+
+
+@asynccontextmanager
+async def _unlocked_plan(*_args, **_kwargs):
+    yield
+
+
+def test_conversation_history_normalizes_unfinished_tool_calls():
+    messages = [
+        {"role": "user", "contents": [{"type": "text", "text": "run both"}]},
+        {
+            "role": "assistant",
+            "contents": [
+                {"type": "text", "text": "starting"},
+                {"type": "function_call", "call_id": "call-1", "name": "read"},
+                {"type": "function_call", "call_id": "call-2", "name": "write"},
+            ],
+        },
+        {"role": "tool", "contents": [{"type": "function_result", "call_id": "call-1", "result": "done"}]},
+    ]
+
+    completed, completed_count = complete_unfinished_tool_calls(messages)
+    completed_again, completed_again_count = complete_unfinished_tool_calls(completed)
+    discarded, discarded_count = discard_unfinished_tool_calls(messages)
+
+    assert completed_count == 1
+    assert completed[-1] == {
+        "role": "tool",
+        "contents": [{"type": "function_result", "call_id": "call-2", "result": "Cancelled by user"}],
+    }
+    assert completed_again_count == 0
+    assert completed_again == completed
+    assert discarded_count == 1
+    assert discarded[1]["contents"] == [
+        {"type": "text", "text": "starting"},
+        {"type": "function_call", "call_id": "call-1", "name": "read"},
+    ]
 
 
 class TestChat:
@@ -174,57 +249,6 @@ class TestChat:
         assert captured["model"] == "gpt-fast-test"
 
     @pytest.mark.asyncio
-    async def test_experience_ingestion_skips_without_plan(self, mocker: pytest_mock.MockerFixture):
-        mocker.patch("app.experiences.service.EXPERIENCES_ENABLED", True)
-        read_plan_mock = mocker.patch("app.biz.chat.service.read_plan", return_value=None)
-        read_conversation_mock = mocker.patch("app.biz.chat.service.CHAT_FS.read_conversation")
-
-        chat_service = ChatService.get_instance()
-        await chat_service._try_experience_playbook_ingestion(
-            agent_instance_id=1,
-            username="alice@example.com",
-            turn_id=100,
-            project_id=10,
-            conversation_id=1000,
-        )
-
-        read_plan_mock.assert_awaited_once_with(
-            agent_instance_id=1,
-            turn_id=100,
-            conversation_id=1000,
-            username="alice@example.com",
-        )
-        read_conversation_mock.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_experience_ingestion_runs_with_plan(self, mocker: pytest_mock.MockerFixture):
-        trajectory = SimpleNamespace(task="Do the thing", total_steps=1, success=True)
-
-        mocker.patch("app.experiences.service.EXPERIENCES_ENABLED", True)
-        mocker.patch("app.biz.chat.service.read_plan", return_value=object())
-        mocker.patch("app.biz.chat.service.CHAT_FS.read_conversation", return_value="{}")
-        convert_mock = mocker.patch("app.experiences.adapter.convert_to_trajectory_data", return_value=trajectory)
-        add_playbook_mock = mocker.patch("app.experiences.service.add_playbook", return_value={"skipped": False})
-
-        chat_service = ChatService.get_instance()
-        await chat_service._try_experience_playbook_ingestion(
-            agent_instance_id=1,
-            username="alice@example.com",
-            turn_id=100,
-            project_id=10,
-            conversation_id=1000,
-        )
-
-        convert_mock.assert_awaited_once_with("{}")
-        add_playbook_mock.assert_awaited_once_with(
-            trajectory_data=trajectory,
-            project_id=10,
-            agent_instance_id=1,
-            conversation_id=1000,
-            turn_id=100,
-        )
-
-    @pytest.mark.asyncio
     async def test_generate_onboard_recommendation_tasks_accepts_array_payload(self, mocker: pytest_mock.MockerFixture):
         payload = (
             "```json\n"
@@ -316,6 +340,327 @@ class TestChat:
         assert response.msg == "Failed to validate LLM response"
 
 
+@pytest.mark.asyncio
+async def test_chat_agent_persists_conversation_json_for_pre_stream_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(chat_agent_module.CHAT_FS, "_root", tmp_path)
+    monkeypatch.setattr(chat_agent_module, "get_context_length", lambda _model: 128_000)
+    client = FailingStreamingClient()
+    agent = ChatAgent(
+        client=client,
+        username="alice@example.com",
+        agent_instance_id=7,
+        mem_runner=SimpleNamespace(),
+        tool_context=ToolContext(
+            username="alice@example.com",
+            agent_id="agent-1",
+            agent_instance_id=7,
+            turn_id=33,
+            project_id=1,
+            conversation_id=44,
+            response_queue=asyncio.Queue(),
+            plan_editor=PlanEditor(7, "alice@example.com", 33, conversation_id=44),
+        ),
+    )
+    queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None] = asyncio.Queue()
+
+    with pytest.raises(RuntimeError, match="dns down"):
+        await agent.run_stream(
+            queue,
+            AgentFrameworkMessage(role="user", contents=[Content.from_text("Help me run this demo case")]),
+            "",
+            options=RunOptions(turn_id=33, max_attempts=2, save_history=True),
+        )
+
+    responses = []
+    while not queue.empty():
+        responses.append(queue.get_nowait())
+
+    assert client.calls == 2
+    assert responses[-1] is None
+    assert responses[0].content.content == "Error with chat agent attempt 1/2: dns down"
+    assert responses[1].content.content == "Error with chat agent attempt 2/2: dns down"
+
+    conversation_json = chat_agent_module.CHAT_FS.read_conversation(7, "alice@example.com", 33, conversation_id=44)
+    assert conversation_json is not None
+    messages = json.loads(conversation_json)
+    assert [message["role"] for message in messages] == ["user", "assistant", "assistant"]
+    assert messages[0]["contents"][0]["text"] == "Help me run this demo case"
+    assert messages[1]["contents"][0]["text"] == "Error with chat agent attempt 1/2: dns down"
+    assert messages[2]["contents"][0]["text"] == "Error with chat agent attempt 2/2: dns down"
+
+
+@pytest.mark.asyncio
+async def test_cancel_plan_leaves_tool_call_completion_to_chat_writer(tmp_path, mocker: pytest_mock.MockerFixture):
+    from app.storage.fs import ChatFS
+    from app.tools import plan as plan_module
+
+    chat_fs = ChatFS(tmp_path)
+    mocker.patch.object(chat_agent_module, "CHAT_FS", chat_fs)
+    mocker.patch.object(plan_module, "CHAT_FS", chat_fs)
+    mocker.patch.object(plan_module, "_plan_lock", _unlocked_plan)
+
+    tool_call = AgentFrameworkMessage(
+        role="assistant",
+        contents=[Content(type="function_call", call_id="call-1", name="read", arguments="{}")],
+    )
+    agent = ChatAgent(
+        client=FailingStreamingClient(),
+        username="alice@example.com",
+        agent_instance_id=7,
+        mem_runner=SimpleNamespace(),
+        tool_context=ToolContext(
+            username="alice@example.com",
+            agent_id="agent-1",
+            agent_instance_id=7,
+            turn_id=33,
+            project_id=1,
+            conversation_id=44,
+            response_queue=asyncio.Queue(),
+            plan_editor=PlanEditor(7, "alice@example.com", 33, conversation_id=44),
+        ),
+    )
+    user_message = AgentFrameworkMessage(role="user", contents=[Content.from_text("read")])
+    dangling_response = ChatResponse(messages=[tool_call])
+
+    await agent.persist_turn(user_message, dangling_response, 33)
+    before_cancel = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
+    await plan_module.cancel_plan(7, "alice@example.com", 33, 44)
+    after_cancel = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
+
+    assert after_cancel == before_cancel
+    assert not any(
+        content.get("type") == "function_result"
+        for message in json.loads(after_cancel)
+        for content in message.get("contents", [])
+    )
+
+    await agent.persist_turn(user_message, dangling_response, 33)
+
+    raw = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
+    contents = [content for message in json.loads(raw) for content in message.get("contents", [])]
+    matching_results = [
+        content for content in contents if content.get("type") == "function_result" and content.get("call_id") == "call-1"
+    ]
+    assert matching_results == [{"type": "function_result", "call_id": "call-1", "result": "Cancelled by user"}]
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_persists_and_completes_tool_call_after_cancel(tmp_path, mocker: pytest_mock.MockerFixture):
+    from app.storage.fs import ChatFS
+    from app.tools import plan as plan_module
+
+    chat_fs = ChatFS(tmp_path)
+    mocker.patch.object(chat_agent_module, "CHAT_FS", chat_fs)
+    mocker.patch.object(plan_module, "CHAT_FS", chat_fs)
+    mocker.patch.object(chat_agent_module, "CHECK_CANCELLED_PLAN_INTERVAL_SECONDS", -1)
+    client = PausingToolStreamingClient()
+    agent = ChatAgent(
+        client=client,
+        username="alice@example.com",
+        agent_instance_id=7,
+        mem_runner=SimpleNamespace(),
+        tool_context=ToolContext(
+            username="alice@example.com",
+            agent_id="agent-1",
+            agent_instance_id=7,
+            turn_id=33,
+            project_id=1,
+            conversation_id=44,
+            response_queue=asyncio.Queue(),
+            plan_editor=PlanEditor(7, "alice@example.com", 33, conversation_id=44),
+        ),
+    )
+    queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None] = asyncio.Queue()
+    stream_task = asyncio.create_task(
+        agent.run_stream(
+            queue,
+            AgentFrameworkMessage(role="user", contents=[Content.from_text("read")]),
+            "",
+            options=RunOptions(turn_id=33, save_history=True),
+        )
+    )
+
+    await asyncio.wait_for(client.call_processed.wait(), timeout=1)
+    raw = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
+    contents = [content for message in json.loads(raw) for content in message.get("contents", [])]
+    assert any(content.get("type") == "function_call" and content.get("call_id") == "call-1" for content in contents)
+    assert not any(content.get("type") == "function_result" for content in contents)
+
+    chat_fs.plan.write_cancelled_marker(7, "alice@example.com", 33, conversation_id=44)
+    client.release_result.set()
+    await stream_task
+
+    raw = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
+    contents = [content for message in json.loads(raw) for content in message.get("contents", [])]
+    matching_results = [
+        content for content in contents if content.get("type") == "function_result" and content.get("call_id") == "call-1"
+    ]
+    assert matching_results == [{"type": "function_result", "call_id": "call-1", "result": "Cancelled by user"}]
+
+
+@pytest.mark.asyncio
+async def test_chat_agent_loads_recent_history_from_conversation_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(chat_agent_module.CHAT_FS, "_root", tmp_path)
+    monkeypatch.setattr(chat_agent_module, "get_context_length", lambda _model: 128_000)
+    chat_agent_module.CHAT_FS.write_conversation(
+        7,
+        "alice@example.com",
+        1,
+        json.dumps(
+            [
+                {"role": "user", "contents": [{"type": "text", "text": "my favorite food is pizza"}]},
+                {"role": "assistant", "contents": [{"type": "text", "text": "noted pizza"}]},
+            ]
+        ),
+        conversation_id=44,
+    )
+    chat_agent_module.CHAT_FS.write_conversation(
+        7,
+        "alice@example.com",
+        1,
+        json.dumps(
+            [
+                {"role": "user", "contents": [{"type": "text", "text": "my favorite food is sushi"}]},
+                {"role": "assistant", "contents": [{"type": "text", "text": "noted sushi"}]},
+            ]
+        ),
+        conversation_id=0,
+    )
+    agent = ChatAgent(
+        client=FailingStreamingClient(),
+        username="alice@example.com",
+        agent_instance_id=7,
+        mem_runner=SimpleNamespace(),
+        tool_context=ToolContext(
+            username="alice@example.com",
+            agent_id="agent-1",
+            agent_instance_id=7,
+            turn_id=2,
+            project_id=1,
+            conversation_id=44,
+            response_queue=asyncio.Queue(),
+            plan_editor=PlanEditor(7, "alice@example.com", 2, conversation_id=44),
+        ),
+    )
+
+    history = await agent._load_recent_history()
+    history_text = "\n".join(_extract_text_from_message(message) for message in history)
+
+    assert "my favorite food is pizza" in history_text
+    assert "noted pizza" in history_text
+    assert "sushi" not in history_text
+
+
+@pytest.mark.asyncio
+async def test_chat_agent_discards_unfinished_tool_calls_from_history(tmp_path, mocker: pytest_mock.MockerFixture):
+    from app.storage.fs import ChatFS
+
+    chat_fs = ChatFS(tmp_path)
+    mocker.patch.object(chat_agent_module, "CHAT_FS", chat_fs)
+    mocker.patch.object(chat_agent_module, "get_context_length", return_value=128_000)
+    chat_fs.write_conversation(
+        7,
+        "alice@example.com",
+        1,
+        json.dumps(
+            [
+                {"role": "user", "contents": [{"type": "text", "text": "run both"}]},
+                {
+                    "role": "assistant",
+                    "contents": [
+                        {"type": "text", "text": "starting"},
+                        {"type": "function_call", "call_id": "call-1", "name": "read"},
+                        {"type": "function_call", "call_id": "call-2", "name": "write"},
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "contents": [{"type": "function_result", "call_id": "call-1", "result": "done"}],
+                },
+            ]
+        ),
+        conversation_id=44,
+    )
+    agent = ChatAgent(
+        client=FailingStreamingClient(),
+        username="alice@example.com",
+        agent_instance_id=7,
+        mem_runner=SimpleNamespace(),
+        tool_context=ToolContext(
+            username="alice@example.com",
+            agent_id="agent-1",
+            agent_instance_id=7,
+            turn_id=2,
+            project_id=1,
+            conversation_id=44,
+            response_queue=asyncio.Queue(),
+            plan_editor=PlanEditor(7, "alice@example.com", 2, conversation_id=44),
+        ),
+    )
+
+    history = await agent._load_recent_history()
+    contents = [content for message in history for content in message.contents or []]
+
+    assert any(content.type == "text" and content.text == "starting" for content in contents)
+    assert any(content.type == "function_call" and content.call_id == "call-1" for content in contents)
+    assert not any(content.type == "function_call" and content.call_id == "call-2" for content in contents)
+
+
+def test_normalize_generated_conversation_title():
+    assert ChatService._normalize_generated_title('```json\n{"title": " Run Demo Case "}\n```') == "Run Demo Case"
+    assert ChatService._normalize_generated_title('"   Multi step Android validation   "') == "Multi step Android validation"
+
+
+@pytest.mark.asyncio
+async def test_generate_conversation_title_uses_prompt_file(mocker):
+    captured = {}
+
+    async def fake_generate(request):
+        captured["instructions"] = request.instructions
+        return SimpleNamespace(outputs=[SimpleNamespace(json=None, text="Complete Edge Android Regression Testing")])
+
+    mocker.patch("app.llmhubs.generate", side_effect=fake_generate)
+    runner = AsyncJobRunner(workers=1, max_queue=1)
+    chat_service = ChatService(runner, runner, runner)
+
+    try:
+        title = await chat_service._generate_conversation_title("[]", model="gpt-test")
+
+        assert title == "Complete Edge Android Regression Testing"
+        assert "Generate a concise and professional task title" in captured["instructions"]
+    finally:
+        ChatService._instance = None
+
+
+@pytest.mark.asyncio
+async def test_try_update_conversation_title_calls_reverse_service(tmp_path, mocker):
+    class FakeReverseConversationService:
+        def __init__(self):
+            self.calls = []
+
+        def update_conversation_title(self, conversation_id: int, title: str) -> None:
+            self.calls.append((conversation_id, title))
+
+    runner = AsyncJobRunner(workers=1, max_queue=1)
+    chat_service = ChatService(runner, runner, runner)
+    fake_reverse = FakeReverseConversationService()
+    mocker.patch("app.biz.reverse_grpc.conversation.ReverseConversationService.get_instance", return_value=fake_reverse)
+    generate_mock = mocker.patch.object(chat_service, "_generate_conversation_title", return_value="Generated Demo Title")
+
+    try:
+        await chat_service._try_update_conversation_title(
+            conversation_id=44,
+            turn_id=33,
+            user_prompt="Run the demo",
+            model="gpt-test",
+        )
+
+        generate_mock.assert_awaited_once()
+        assert fake_reverse.calls == [(44, "Generated Demo Title")]
+    finally:
+        ChatService._instance = None
+
+
 def test_build_prior_conversation_section_uses_last_three_text_only_turns(monkeypatch):
     conversations = {
         1: json.dumps(
@@ -331,9 +676,13 @@ def test_build_prior_conversation_section_uses_last_three_text_only_turns(monkey
         4: json.dumps([{"role": "user", "contents": [{"type": "text", "text": "Run it"}]}]),
     }
     monkeypatch.setattr(chat_service_module.CHAT_FS, "list_turn_ids", lambda *_args: [1, 2, 3, 4, 5])
-    monkeypatch.setattr(chat_service_module.CHAT_FS, "read_conversation", lambda _aid, _user, turn_id: conversations[turn_id])
+    monkeypatch.setattr(
+        chat_service_module.CHAT_FS,
+        "read_conversation",
+        lambda _aid, _user, turn_id, **_kwargs: conversations[turn_id],
+    )
 
-    section = chat_service_module._build_prior_conversation_section(1, "alice", 5)
+    section = chat_service_module._build_prior_conversation_section(1, "alice", 5, conversation_id=22)
 
     assert "Turn 1" not in section
     assert "Turn 2" in section

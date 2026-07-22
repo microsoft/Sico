@@ -30,7 +30,9 @@ func newTUserRole(db *gorm.DB, opts ...gen.DOOption) tUserRole {
 	_tUserRole.ALL = field.NewAsterisk(tableName)
 	_tUserRole.ID = field.NewInt64(tableName, "id")
 	_tUserRole.UserID = field.NewInt64(tableName, "user_id")
-	_tUserRole.RoleID = field.NewInt64(tableName, "role_id")
+	_tUserRole.RoleCode = field.NewString(tableName, "role_code")
+	_tUserRole.ScopeType = field.NewString(tableName, "scope_type")
+	_tUserRole.ScopeID = field.NewInt64(tableName, "scope_id")
 	_tUserRole.CreatedAt = field.NewInt64(tableName, "created_at")
 	_tUserRole.UpdatedAt = field.NewInt64(tableName, "updated_at")
 	_tUserRole.DeletedAt = field.NewField(tableName, "deleted_at")
@@ -45,12 +47,14 @@ type tUserRole struct {
 	tUserRoleDo
 
 	ALL       field.Asterisk
-	ID        field.Int64 // Primary Key
-	UserID    field.Int64 // From User.ID
-	RoleID    field.Int64 // From Role.ID
-	CreatedAt field.Int64 // Create Time in Milliseconds
-	UpdatedAt field.Int64 // Update Time in Milliseconds
-	DeletedAt field.Field // Delete Time
+	ID        field.Int64  // Primary Key
+	UserID    field.Int64  // From User.ID
+	RoleCode  field.String // Role code: platform_admin, org_admin, project_admin, project_member
+	ScopeType field.String // platform|org|project
+	ScopeID   field.Int64  // Organization or Project ID (0 for platform scope)
+	CreatedAt field.Int64  // Create Time in Milliseconds
+	UpdatedAt field.Int64  // Update Time in Milliseconds
+	DeletedAt field.Field  // Delete Time
 
 	fieldMap map[string]field.Expr
 }
@@ -69,7 +73,9 @@ func (t *tUserRole) updateTableName(table string) *tUserRole {
 	t.ALL = field.NewAsterisk(table)
 	t.ID = field.NewInt64(table, "id")
 	t.UserID = field.NewInt64(table, "user_id")
-	t.RoleID = field.NewInt64(table, "role_id")
+	t.RoleCode = field.NewString(table, "role_code")
+	t.ScopeType = field.NewString(table, "scope_type")
+	t.ScopeID = field.NewInt64(table, "scope_id")
 	t.CreatedAt = field.NewInt64(table, "created_at")
 	t.UpdatedAt = field.NewInt64(table, "updated_at")
 	t.DeletedAt = field.NewField(table, "deleted_at")
@@ -89,10 +95,12 @@ func (t *tUserRole) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (t *tUserRole) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 6)
+	t.fieldMap = make(map[string]field.Expr, 8)
 	t.fieldMap["id"] = t.ID
 	t.fieldMap["user_id"] = t.UserID
-	t.fieldMap["role_id"] = t.RoleID
+	t.fieldMap["role_code"] = t.RoleCode
+	t.fieldMap["scope_type"] = t.ScopeType
+	t.fieldMap["scope_id"] = t.ScopeID
 	t.fieldMap["created_at"] = t.CreatedAt
 	t.fieldMap["updated_at"] = t.UpdatedAt
 	t.fieldMap["deleted_at"] = t.DeletedAt

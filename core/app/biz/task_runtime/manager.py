@@ -244,7 +244,11 @@ async def cancel_turn_task_runtime_once(
 
             store = DBRunStore()
         else:
-            workspace_root = workspace_layout().workspace_path(ctx.agent_instance_id, ctx.username)
+            workspace_root = workspace_layout().workspace_path(
+                ctx.agent_instance_id,
+                ctx.username,
+                conversation_id=ctx.conversation_id,
+            )
             store = FileRunStore(workspace_root / "results")
     manager = TaskManager(store, _ReconcileOnlyExecutor(), sandbox_lease_manager=sandbox_lease_manager)
     return await manager.cancel_turn(ctx, reason)

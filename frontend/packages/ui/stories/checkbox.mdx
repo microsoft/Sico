@@ -1,0 +1,137 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as CheckboxStories from "./checkbox.stories";
+
+<Meta of={CheckboxStories} />
+
+# Checkbox
+
+Toggle input for boolean values. 1:1 port from shadcn `base-nova`
+([`@base-ui/react/checkbox`](https://base-ui.com/react/components/checkbox)) —
+only styles diverge. The checked fill is driven entirely by CSS state
+selectors (`data-checked:`), so it works in both controlled and uncontrolled
+mode.
+
+## Examples
+
+### Default
+
+<Description of={CheckboxStories.Default} />
+<Canvas of={CheckboxStories.Default} />
+
+<Description of={CheckboxStories.Checked} />
+<Canvas of={CheckboxStories.Checked} />
+
+### States
+
+<Description of={CheckboxStories.Disabled} />
+<Canvas of={CheckboxStories.Disabled} />
+
+<Description of={CheckboxStories.Invalid} />
+<Canvas of={CheckboxStories.Invalid} />
+
+## API
+
+<Controls of={CheckboxStories.Default} />
+
+---
+
+## Token Audit
+
+Checkbox shares its **rest** and **invalid border** tokens with `<Input>` /
+`<Textarea>` (`input-stroke-rest` / `input-stroke-error`) and reuses the Button
+primary fill for its checked state. Its **focus / invalid rings**
+(`focus-rest` / `focus-error`) are the base-nova ring model kept verbatim — the
+text inputs focus with a border + shadow instead, so the rings are not borrowed
+from them.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Rest border"
+    subtitle="border-input-stroke-rest on the unchecked box"
+    colors={{
+      "Rest · overlay-black-15": "var(--color-input-stroke-rest)",
+    }}
+  />
+  <ColorItem
+    title="Checked fill & border"
+    subtitle="data-checked:bg / border-button-primary-fill-rest"
+    colors={{
+      "Fill · neutral-800": "var(--color-button-primary-fill-rest)",
+    }}
+  />
+  <ColorItem
+    title="Checkmark"
+    subtitle="data-checked:text-foreground-on-inverted on the indicator"
+    colors={{
+      "Icon · neutral-0": "var(--color-foreground-on-inverted)",
+    }}
+  />
+  <ColorItem
+    title="Focus ring"
+    subtitle="focus-visible border + ring"
+    colors={{
+      "Border · neutral-800": "var(--color-focus-rest)",
+    }}
+  />
+  <ColorItem
+    title="Invalid border + ring"
+    subtitle="aria-invalid border (danger-700) + ring (danger-500)"
+    colors={{
+      "Border · danger-700": "var(--color-input-stroke-error)",
+      "Ring · danger-500": "var(--color-focus-error)",
+    }}
+  />
+</ColorPalette>
+
+### Sizing & shape
+
+| Property | Class        | Value   |
+| -------- | ------------ | ------- |
+| Size     | `size-4`     | 16×16px |
+| Radius   | `rounded-sm` | 4px     |
+| Checkmark| `[&>svg]:size-3.5` | 14×14px |
+
+---
+
+## Upstream Audit
+
+Shadcn restyle of `base-nova/checkbox` (no upstream drift):
+
+- **Styles only** — every shadcn theme-bridge alias is swapped to the matching
+  SICO semantic token (same convention as `input.tsx` / `textarea.tsx`).
+  Every pair is runtime-identical through the bridge in `globals.css` except
+  `border-destructive` → `input-stroke-error`, which deepens the invalid border
+  from danger-500 (#D14454) to danger-700 (#AC1922) to match the sibling
+  input/textarea error stroke.
+- **No prop API changes** — same `@base-ui/react/checkbox` Root prop surface
+  (`checked` / `defaultChecked` / `onCheckedChange` / `disabled` /
+  `aria-invalid`), no SICO-specific props.
+- **Icon** — lucide `CheckIcon` indicator, matching upstream's
+  `IconPlaceholder lucide="CheckIcon"`.
+
+### Token swaps
+
+| Upstream class | SICO replacement |
+|----------------|------------------|
+| `rounded-[4px]` | `rounded-sm` (4px — SICO forbids arbitrary values) |
+| `border-input` | `border-input-stroke-rest` |
+| `border-ring` / `ring-ring` | `border-focus-rest` / `ring-focus-rest` |
+| `border-destructive` | `border-input-stroke-error` (danger-500 → danger-700) |
+| `ring-destructive` | `ring-focus-error` |
+| `bg-primary` / `border-primary` | `bg-button-primary-fill-rest` / `border-button-primary-fill-rest` |
+| `text-primary-foreground` | `text-foreground-on-inverted` |
+
+### API contract
+
+Prop surface matches upstream verbatim — `Checkbox` spreads
+`CheckboxPrimitive.Root.Props` and adds nothing. No `variant`, `size`, or
+`color` props.
+
+### Deleted from upstream
+
+| Deleted | Reason |
+|---------|--------|
+| `dark:bg-input/30` · `dark:aria-invalid:border-destructive/50` · `dark:aria-invalid:ring-destructive/40` · `dark:data-checked:bg-primary` | SICO has no dark theme yet |

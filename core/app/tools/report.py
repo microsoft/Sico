@@ -50,7 +50,7 @@ from agent_framework import FunctionTool
 from agent_framework._middleware import FunctionInvocationContext
 from pydantic import BaseModel, Field
 
-from app.schemas.conversation.plan import ToolDeliverable, ToolDeliverableType, ToolExecutionInfo, ToolType
+from app.schemas.conversation.plan import ToolDeliverable, ToolDeliverableFile, ToolDeliverableType, ToolExecutionInfo, ToolType
 from app.storage.fs import CHAT_FS
 from app.tools.common import ToolContext, get_tool_context
 from app.utils.uploads import post_file
@@ -207,7 +207,7 @@ async def _report_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any)
     async def _impl() -> dict[str, Any]:
         uploaded_files: list[dict[str, Any]] = []
         failures: list[dict[str, str]] = []
-        workspace_dir = CHAT_FS.get_workspace_path(agent_instance_id, username)
+        workspace_dir = CHAT_FS.get_workspace_path(agent_instance_id, username, ctx.conversation_id)
         workspace_root = workspace_dir.resolve()
 
         for entry in entries:
@@ -233,8 +233,11 @@ async def _report_func(invocation_ctx: FunctionInvocationContext, **kwargs: Any)
                 if entry.as_deliverable:
                     file_deliverable = ToolDeliverable(
                         type=ToolDeliverableType.FILE,
-                        file_url=upload_result["cdn_url"],
-                        file_name=upload_result["file_name"],
+                        file=ToolDeliverableFile(
+                            file_sas_url=upload_result["cdn_url"],
+                            file_name=upload_result["file_name"],
+                            file_uri=upload_result["blob_path"],
+                        ),
                     )
                     await ctx.plan_editor.update_tool_call_deliverable(tool_call_id, file_deliverable)
 

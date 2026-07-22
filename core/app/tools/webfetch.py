@@ -174,11 +174,13 @@ WEBFETCH_TOOL = FunctionTool(
         "- The URL must be a fully-formed valid URL starting with http:// or https://\n"
         "- HTTP URLs will be automatically upgraded to HTTPS\n"
         "- HTML content is automatically converted to markdown\n"
-        "- This tool is read-only and does not modify any files\n"
-        "- Results may be summarized if the content is very large\n"
         "- Maximum response size: 5MB\n"
-        "- Default timeout: 30s, maximum: 120s"
+        "- Default timeout: 30s, maximum: 120s\n"
+        "- If the fetched content is very large, it will be automatically truncated. The full\n"
+        "  content is saved to a temporary file in the workspace. An AI-generated summary may be\n"
+        "  included in the tool response. Use the read or grep tool to inspect the full content."
     ),
+    additional_properties={"summarize_on_truncate": True},
     input_model=WebFetchInput,
     func=_webfetch_func,
 )

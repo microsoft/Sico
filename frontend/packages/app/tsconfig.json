@@ -1,0 +1,7 @@
+{
+  "extends": "@sico/config/tsconfig.react.json",
+  "compilerOptions": {
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src", "test", "e2e"]
+}

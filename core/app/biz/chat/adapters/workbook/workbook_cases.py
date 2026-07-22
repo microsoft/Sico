@@ -128,7 +128,7 @@ def extract_workbook_cases(
     suffix = path.suffix.lower()
     if suffix not in SUPPORTED_WORKBOOK_SUFFIXES:
         return {
-            "error_message": "file is not a supported workbook (.xlsx/.xlsm/.csv)",
+            "error_message": "file is not a supported workbook (.xlsx/.xlsm/.xls/.csv)",
             "cases": [],
         }
     if suffix in EXCEL_WORKBOOK_SUFFIXES:

@@ -1,0 +1,149 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { DesignTokenDocBlock } from "storybook-design-token/doc-blocks";
+
+<Meta title="Theme/DesignTokens" />
+
+# Design Tokens
+
+Every value in `@sico/ui` flows from one source of truth — the `@theme {}`
+block in `globals.css`. These tables are generated from it directly, so the
+page can never drift from the tokens the components actually consume.
+
+Tokens are layered. Each layer references the one below it through `var()`,
+never the reverse:
+
+**Component → Shadcn Theme → Semantic → Brand → Foundation**
+
+A value that resolves to another token is shown as an **alias** — follow the
+chain down to the Foundation hex it ultimately paints.
+
+---
+
+## Foundation
+
+Raw, context-free values. Foundation tokens are the only layer that holds
+literal hex, gradient, shadow, and typography values; everything above
+references them.
+
+### Neutrals
+
+The greyscale ramp that backs surfaces, text, and borders.
+
+<DesignTokenDocBlock categoryName="Foundation / Neutrals" viewType="card" />
+
+### Overlay
+
+Semi-transparent black and white tints for dividers, scrims, and layering
+over arbitrary backgrounds.
+
+<DesignTokenDocBlock categoryName="Foundation / Overlay" viewType="card" />
+
+### Support
+
+Status and data-visualization hues — danger, warning, running, pass, and the
+graph accent set.
+
+<DesignTokenDocBlock categoryName="Foundation / Support" viewType="card" />
+
+### Gradient
+
+Page and decorative gradients, surfaced through the `bg-gradient-*` utility.
+
+<DesignTokenDocBlock categoryName="Foundation / Gradient" viewType="card" />
+
+### Shadow
+
+Elevation ramp from resting cards (`s`) to floating panels (`xl`).
+
+<DesignTokenDocBlock categoryName="Foundation / Shadow" viewType="card" />
+
+### Typography
+
+Font family, line-height, the `2xs` step, and letter-spacing overrides.
+Sizes and weights that match Tailwind defaults emit no token by design.
+
+<DesignTokenDocBlock categoryName="Foundation / Typography" />
+
+---
+
+## Brand
+
+The SICO accent ramp. Brand sits above Foundation so product surfaces can
+reference "primary" without hard-coding a neutral.
+
+### Primary
+
+<DesignTokenDocBlock categoryName="Brand / Primary" viewType="card" />
+
+---
+
+## Semantic
+
+Purpose-based tokens — the layer product code should reach for first. Names
+describe intent (`surface-canvas`, `foreground-secondary`) not appearance,
+so a Foundation reswatch reflows everything above automatically.
+
+### Surface
+
+<DesignTokenDocBlock categoryName="Semantic / Surface" viewType="card" />
+
+### Foreground
+
+Text and on-surface vector colors, including the link and on-inverted slots.
+
+<DesignTokenDocBlock categoryName="Semantic / Foreground" viewType="card" />
+
+### Stroke
+
+Dividers and card borders across rest / hover / pressed.
+
+<DesignTokenDocBlock categoryName="Semantic / Stroke" viewType="card" />
+
+### Icon
+
+<DesignTokenDocBlock categoryName="Semantic / Icon" viewType="card" />
+
+### Focus
+
+The keyboard focus ring, plus its error variant.
+
+<DesignTokenDocBlock categoryName="Semantic / Focus" viewType="card" />
+
+### Status
+
+Paired fill + foreground tokens for success, warning, and info messaging.
+
+<DesignTokenDocBlock categoryName="Semantic / Status" viewType="card" />
+
+---
+
+## Components
+
+Per-component state tokens. These exist only where a component needs a value
+its Semantic layer can't express generically — every entry still resolves
+down to a Semantic, Brand, or Foundation token.
+
+### Button
+
+Fill, foreground, stroke, and shadow across all six variants and their
+rest / hover / pressed / disabled states.
+
+<DesignTokenDocBlock categoryName="Components / Button" />
+
+### Input
+
+<DesignTokenDocBlock categoryName="Components / Input" />
+
+### Link
+
+<DesignTokenDocBlock categoryName="Components / Link" viewType="card" />
+
+---
+
+## Shadcn Theme
+
+The bridge layer. shadcn/ui components consume generic names (`background`,
+`primary`, `ring`); each is mapped here to a SICO token so restyled
+components inherit the system without touching upstream markup.
+
+<DesignTokenDocBlock categoryName="Shadcn Theme" />

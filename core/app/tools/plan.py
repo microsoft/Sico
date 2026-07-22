@@ -265,12 +265,38 @@ async def write_plan(wplan: PlanWriteInput, plan_extra: PlanExtra) -> Plan:
             plan.extra.project_id = plan_extra.project_id
             plan.extra.conversation_id = plan_extra.conversation_id
             plan.title = wplan.title
+            _FINISHED_STATUSES = frozenset({
+                PlanStepStatus.COMPLETED,
+                PlanStepStatus.FAILED,
+                PlanStepStatus.REQUIRE_HUMAN_INPUT,
+                PlanStepStatus.CANCELLED,
+            })
+            _RUNNING_STATUSES = frozenset({
+                PlanStepStatus.PENDING,
+                PlanStepStatus.IN_PROGRESS,
+            })
             for i, item in enumerate(wplan.items):
+                new_status = PlanStepStatus.from_string(item.status)
                 if i < len(plan.steps):
-                    plan.steps[i].title = item.title
-                    plan.steps[i].status = PlanStepStatus.from_string(item.status)
+                    old_step = plan.steps[i]
+                    if old_step.title != item.title:
+                        if old_step.status in _RUNNING_STATUSES:
+                            old_step.title = item.title
+                        else:
+                            raise ValueError(
+                                f"Cannot change title of existing step {i} "
+                                f"('{old_step.title}' -> '{item.title}'). "
+                                f"Only running steps can be renamed."
+                            )
+                    if old_step.status in _FINISHED_STATUSES and new_status in _RUNNING_STATUSES:
+                        raise ValueError(
+                            f"Cannot change status of step {i} ('{old_step.title}') "
+                            f"from '{old_step.status.to_string()}' to '{item.status}'. "
+                            f"A finished step cannot be reverted to a running status."
+                        )
+                    plan.steps[i].status = new_status
                 else:
-                    plan.steps.append(PlanStep(title=item.title, status=PlanStepStatus.from_string(item.status)))
+                    plan.steps.append(PlanStep(title=item.title, status=new_status))
 
         plan.extra.updated_at = int(time.time() * 1000)
         CHAT_FS.plan.write(
@@ -810,6 +836,7 @@ PLAN_READ_TOOL = FunctionTool(
     name="plan_read",
     description=PLAN_READ_DESC,
     input_model=PlanReadInput,
+    additional_properties={"skip_truncation": True},
     func=_plan_read_func,
 )
 
@@ -818,6 +845,7 @@ PLAN_WRITE_TOOL = FunctionTool(
     name="plan_write",
     description=PLAN_WRITE_DESC,
     input_model=PlanWriteInput,
+    additional_properties={"skip_truncation": True},
     func=_plan_write_func,
 )
 

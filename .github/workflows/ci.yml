@@ -118,11 +118,6 @@ jobs:
         working-directory: frontend
         run: pnpm lint
 
-      - name: Type-check (tsc --noEmit)
-        if: steps.frontend.outputs.present == 'true'
-        working-directory: frontend
-        run: pnpm exec tsc --noEmit
-
   license-check:
     name: License Headers
     runs-on: ubuntu-latest

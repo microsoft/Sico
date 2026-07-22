@@ -87,6 +87,11 @@ def get_client(model: str | None = None):
     return ChatClient(hub, model or hub._default_model_key)
 
 
+def get_context_length(model: str | None = None) -> int | None:
+    """Return the context window size (in tokens) for a model, or None if not configured."""
+    return _hub().get_context_length(model)
+
+
 def get_computer_use_session(model: str | None = None, **kwargs):
     """Return a ComputerUseSession for the Responses API computer-use flow."""
     from app.llmhubs.computer_use import ComputerUseSession

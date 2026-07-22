@@ -41,6 +41,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	ReverseConversationRPC_RpcCreateMessage_FullMethodName                    = "/reverse_rpc.ReverseConversationRPC/RpcCreateMessage"
 	ReverseConversationRPC_RpcListUserMessageByUserAgentTurnID_FullMethodName = "/reverse_rpc.ReverseConversationRPC/RpcListUserMessageByUserAgentTurnID"
+	ReverseConversationRPC_RpcUpdateConversationTitle_FullMethodName          = "/reverse_rpc.ReverseConversationRPC/RpcUpdateConversationTitle"
 )
 
 // ReverseConversationRPCClient is the client API for ReverseConversationRPC service.
@@ -49,6 +50,7 @@ const (
 type ReverseConversationRPCClient interface {
 	RpcCreateMessage(ctx context.Context, in *CreateMessageRequest, opts ...grpc.CallOption) (*CreateMessageResponse, error)
 	RpcListUserMessageByUserAgentTurnID(ctx context.Context, in *ListUserMessageByUserAgentTurnIDRequest, opts ...grpc.CallOption) (*ListUserMessageByUserAgentTurnIDResponse, error)
+	RpcUpdateConversationTitle(ctx context.Context, in *UpdateConversationTitleRequest, opts ...grpc.CallOption) (*UpdateConversationTitleResponse, error)
 }
 
 type reverseConversationRPCClient struct {
@@ -79,12 +81,23 @@ func (c *reverseConversationRPCClient) RpcListUserMessageByUserAgentTurnID(ctx c
 	return out, nil
 }
 
+func (c *reverseConversationRPCClient) RpcUpdateConversationTitle(ctx context.Context, in *UpdateConversationTitleRequest, opts ...grpc.CallOption) (*UpdateConversationTitleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateConversationTitleResponse)
+	err := c.cc.Invoke(ctx, ReverseConversationRPC_RpcUpdateConversationTitle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReverseConversationRPCServer is the server API for ReverseConversationRPC service.
 // All implementations must embed UnimplementedReverseConversationRPCServer
 // for forward compatibility.
 type ReverseConversationRPCServer interface {
 	RpcCreateMessage(context.Context, *CreateMessageRequest) (*CreateMessageResponse, error)
 	RpcListUserMessageByUserAgentTurnID(context.Context, *ListUserMessageByUserAgentTurnIDRequest) (*ListUserMessageByUserAgentTurnIDResponse, error)
+	RpcUpdateConversationTitle(context.Context, *UpdateConversationTitleRequest) (*UpdateConversationTitleResponse, error)
 	mustEmbedUnimplementedReverseConversationRPCServer()
 }
 
@@ -100,6 +113,9 @@ func (UnimplementedReverseConversationRPCServer) RpcCreateMessage(context.Contex
 }
 func (UnimplementedReverseConversationRPCServer) RpcListUserMessageByUserAgentTurnID(context.Context, *ListUserMessageByUserAgentTurnIDRequest) (*ListUserMessageByUserAgentTurnIDResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RpcListUserMessageByUserAgentTurnID not implemented")
+}
+func (UnimplementedReverseConversationRPCServer) RpcUpdateConversationTitle(context.Context, *UpdateConversationTitleRequest) (*UpdateConversationTitleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RpcUpdateConversationTitle not implemented")
 }
 func (UnimplementedReverseConversationRPCServer) mustEmbedUnimplementedReverseConversationRPCServer() {
 }
@@ -159,6 +175,24 @@ func _ReverseConversationRPC_RpcListUserMessageByUserAgentTurnID_Handler(srv int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReverseConversationRPC_RpcUpdateConversationTitle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateConversationTitleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReverseConversationRPCServer).RpcUpdateConversationTitle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReverseConversationRPC_RpcUpdateConversationTitle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReverseConversationRPCServer).RpcUpdateConversationTitle(ctx, req.(*UpdateConversationTitleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReverseConversationRPC_ServiceDesc is the grpc.ServiceDesc for ReverseConversationRPC service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -173,6 +207,10 @@ var ReverseConversationRPC_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RpcListUserMessageByUserAgentTurnID",
 			Handler:    _ReverseConversationRPC_RpcListUserMessageByUserAgentTurnID_Handler,
+		},
+		{
+			MethodName: "RpcUpdateConversationTitle",
+			Handler:    _ReverseConversationRPC_RpcUpdateConversationTitle_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

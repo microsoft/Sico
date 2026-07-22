@@ -1,0 +1,74 @@
+/**
+ * Copyright (c) 2026 Sico Authors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { DwInitialAvatar } from "@/features/studio/components/dw-initial-avatar";
+
+describe("DwInitialAvatar", () => {
+  it("renders the uppercased first initial of the name", () => {
+    render(<DwInitialAvatar name="atlas" />);
+    expect(screen.getByText("A")).toBeInTheDocument();
+  });
+
+  it("applies the J-R palette (initial 74-82)", () => {
+    render(<DwInitialAvatar name="Nova" />);
+    const el = screen.getByText("N");
+    expect(el).toHaveStyle({
+      background: "#F5F3FF",
+      borderColor: "#BCB8FF",
+      color: "#3B32B3",
+    });
+  });
+
+  it("applies the A-I palette (initial 65-73, default fallback)", () => {
+    render(<DwInitialAvatar name="Atlas" />);
+    const el = screen.getByText("A");
+    expect(el).toHaveStyle({
+      background: "#F3F4F6",
+      borderColor: "#C6D0DA",
+      color: "#424A52",
+    });
+  });
+
+  it("applies the S-Z palette (initial 83-90)", () => {
+    render(<DwInitialAvatar name="Sol" />);
+    const el = screen.getByText("S");
+    expect(el).toHaveStyle({
+      background: "#EBF5FF",
+      borderColor: "#C6D0DA",
+      color: "#004C8E",
+    });
+  });
+
+  it("honours custom size and fontSize", () => {
+    render(<DwInitialAvatar name="Sol" size={24} fontSize={12} />);
+    const el = screen.getByText("S");
+    expect(el).toHaveStyle({ width: "24px", height: "24px", fontSize: "12px" });
+  });
+
+  it("is hidden from the a11y tree when decorative", () => {
+    render(<DwInitialAvatar name="Atlas" decorative />);
+    expect(screen.getByText("A")).toHaveAttribute("aria-hidden", "true");
+  });
+});

@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "sortPackageJson": false,
+  "sortTailwindcss": {
+    "functions": [
+      "cn",
+      "tw"
+    ]
+  },
+  "ignorePatterns": [
+    "dist",
+    "eslint.config.cjs",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "vitest.config.build.ts",
+    "playwright.config.ts",
+    "playwright-report/",
+    "test-results/",
+    "src/routeTree.gen.ts",
+    "storybook-static",
+    ".storybook/",
+    "**/node_modules/**",
+    "**/dist/**",
+    "test/fixtures/**",
+    "**/public/**",
+    "*.md",
+    "*.mdx",
+    "*.json",
+    "*.css",
+    "*.scss",
+    "*.html",
+    "*.yml",
+    "*.yaml",
+    "*.svg",
+    "*.webmanifest"
+  ]
+}

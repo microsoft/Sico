@@ -1,0 +1,156 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as FieldStories from "./field.stories";
+
+<Meta of={FieldStories} />
+
+# Field
+
+Form-control wrapper that propagates `data-orientation` / `data-invalid` /
+`data-disabled` to its descendants — `data-invalid` via CSS color
+inheritance from the ancestor tint, `data-disabled` via `group-data-*`
+selectors. No Context, no prop wiring. Shadcn restyle of `base-nova` — only
+styles diverge, no upstream drift.
+
+Composition contract (no Context, shadcn convention):
+
+- `<Field>` emits `role="group"` + `data-orientation` + optional
+  `data-invalid` / `data-disabled`.
+- Children declare their own `htmlFor` / `id` / `aria-invalid` / `disabled`.
+  Field never forwards state via props.
+- State stays in the DOM so any control (third-party or native) integrates
+  without adapter code, and CSS-only theming keeps working.
+
+## Examples
+
+### Orientation
+
+Three layout options. `responsive` requires a sized `<FieldGroup>` ancestor —
+flips at the `@md/field-group` breakpoint (≥ 448px container width).
+
+<Description of={FieldStories.Vertical} />
+<Canvas of={FieldStories.Vertical} />
+
+<Description of={FieldStories.Horizontal} />
+<Canvas of={FieldStories.Horizontal} />
+
+<Description of={FieldStories.Responsive} />
+<Canvas of={FieldStories.Responsive} />
+
+### States
+
+`data-invalid` tints the entire subtree via the ancestor
+`data-[invalid=true]:text-danger-700` selector — Label, Description, and Error
+all inherit the error color through CSS. `data-disabled` dims the label via
+`group-data-[disabled=true]/field:opacity-50`. No prop wiring either way.
+
+<Description of={FieldStories.InvalidState} />
+<Canvas of={FieldStories.InvalidState} />
+
+<Description of={FieldStories.ErrorFromArray} />
+<Canvas of={FieldStories.ErrorFromArray} />
+
+<Description of={FieldStories.DisabledField} />
+<Canvas of={FieldStories.DisabledField} />
+
+### Groups
+
+`<FieldGroup>` stacks multiple fields and sets `@container/field-group` so
+`responsive` orientation works inside it.
+
+<Description of={FieldStories.FieldGroupVertical} />
+<Canvas of={FieldStories.FieldGroupVertical} />
+
+<Description of={FieldStories.FieldGroupResponsive} />
+<Canvas of={FieldStories.FieldGroupResponsive} />
+
+### Fieldset & legend
+
+`<FieldSet>` is a semantic `<fieldset>` with a `<FieldLegend>` heading. Use
+when a group of fields share a single conceptual label.
+
+<Description of={FieldStories.FieldSetWithLegend} />
+<Canvas of={FieldStories.FieldSetWithLegend} />
+
+<Description of={FieldStories.FieldSetLegendAsLabel} />
+<Canvas of={FieldStories.FieldSetLegendAsLabel} />
+
+## API
+
+<Controls of={FieldStories.Vertical} />
+
+---
+
+## Token Audit
+
+Field is mostly layout + state propagation; it owns very few color tokens of
+its own. Most surface/foreground decisions live in the wrapped control
+(`Input` / `Textarea` / `InputGroup`).
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Error foreground"
+    subtitle="Used by <FieldError> and <Field data-invalid> ancestor tint"
+    colors={{
+      "Text · danger-700": "var(--color-danger-700)",
+    }}
+  />
+  <ColorItem
+    title="Tertiary foreground"
+    subtitle="Used by <FieldDescription>"
+    colors={{
+      "Text · neutral-500": "var(--color-foreground-tertiary)",
+    }}
+  />
+</ColorPalette>
+
+### Layout & spacing
+
+| Element              | Class                                         | Value                       |
+| -------------------- | --------------------------------------------- | --------------------------- |
+| `<Field>` gap        | `gap-2`                                       | 8px between label/control/error |
+| `<FieldGroup>` gap   | `gap-5`                                       | 20px between fields         |
+| `<FieldSet>` gap     | `gap-4`                                       | 16px                        |
+| `<FieldLegend>` (legend) | `text-base font-medium`                   | 16px                        |
+| `<FieldLegend>` (label)  | `text-sm font-medium`                     | 14px (matches FieldLabel)   |
+| `<FieldLabel>`       | `text-sm font-medium leading-snug`            | 14px                        |
+| `<FieldDescription>` | `text-sm font-normal leading-normal`          | 14px                        |
+| `<FieldError>`       | `text-sm font-normal`                         | 14px                        |
+| `responsive` breakpoint | `@md/field-group`                          | 448px (container query)     |
+
+### State propagation
+
+| Trigger                       | Selector                                     | Effect                                  |
+| ----------------------------- | -------------------------------------------- | --------------------------------------- |
+| `<Field data-invalid="true">` | `data-[invalid=true]:text-danger-700` on Field | Tints whole subtree via CSS inheritance |
+| `<Field data-disabled="true">`| `group-data-[disabled=true]/field:opacity-50`| Dims FieldLabel                         |
+| `role="alert"` on FieldError  | Native                                       | Screen-reader announces error           |
+
+---
+
+## Upstream Audit
+
+Shadcn restyle of `base-nova/field` (no upstream drift):
+
+### Token swaps
+
+- `text-destructive` → `text-danger-700`
+  (direct foundation color reference — no semantic indirection).
+- `text-muted-foreground` → `text-foreground-tertiary`.
+
+### API contract
+
+- No prop API changes — same `orientation`, `errors`, and `FieldLegend`
+  `variant` API.
+- Layout cva variants are kept verbatim.
+
+### Deleted from upstream
+
+| Deleted | Reason |
+| ------- | ------ |
+| `FieldTitle` / `FieldSeparator` / `FieldContent` | No consumer in SICO yet; used by Checkbox/Radio card patterns |
+| Card-mode `has-data-checked:*` styles | Re-introduce with explicit brand tokens when Checkbox lands |
+| `dark:` variants | SICO has no dark theme yet |
+| `FieldDescription [&>a]:text-primary` | Would resolve to `neutral-800`, not a link color |

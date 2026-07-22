@@ -30,6 +30,7 @@ import (
 
 	singleAgentSVC "sico-backend/internal/biz/agent"
 	llmhubsSVC "sico-backend/internal/biz/llmhubs"
+	saEntity "sico-backend/internal/entity/agent/singleagent"
 	"sico-backend/internal/transport/http/dto/agent/single_agent"
 	llmhubsDTO "sico-backend/internal/transport/http/dto/llmhubs"
 	"sico-backend/internal/transport/http/middleware"
@@ -278,11 +279,21 @@ func DeploySingleAgent(ctx *gin.Context) {
 // @Success 200 {object} single_agent.CreateSingleAgentInstanceResponse
 // @Security BearerAuth
 func CreateSingleAgentInstance(ctx *gin.Context) {
-	var req single_agent.CreateSingleAgentInstanceRequest
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	userInfo, ok := middleware.GetUserFromContext(ctx)
+	if !ok {
+		unauthorizedResponse(ctx, "Authentication required")
 		return
+	}
+
+	var req single_agent.CreateSingleAgentInstanceRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	req.OperatorUsername = userInfo.Name
+	if req.EmployerUsername == "" {
+		req.EmployerUsername = userInfo.Name
 	}
 
 	resp, err := singleAgentSVC.DefaultFull().CreateSingleAgentInstance(reqctx(ctx), &req)
@@ -392,24 +403,90 @@ func DeleteSingleAgentInstance(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, resp)
 }
 
+// DismissSingleAgentInstance sets a single agent instance to inactive
+// @Router /api/sico/agent/single_agent_instance/dismiss [POST]
+// @Tags SingleAgentInstance
+// @Accept json
+// @Produce json
+// @Param request body single_agent.DismissSingleAgentInstanceRequest true "Dismiss request"
+// @Success 200 {object} single_agent.DismissSingleAgentInstanceResponse
+// @Security BearerAuth
+func DismissSingleAgentInstance(ctx *gin.Context) {
+	var req single_agent.DismissSingleAgentInstanceRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	resp, err := singleAgentSVC.DefaultFull().DismissSingleAgentInstance(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// UpdateSingleAgentInstanceStatus updates the status of a single agent instance
+// @Router /api/sico/agent/single_agent_instance/status [PUT]
+// @Tags SingleAgentInstance
+// @Accept json
+// @Produce json
+// @Param request body single_agent.UpdateSingleAgentInstanceStatusRequest true "Status update request"
+// @Success 200 {object} single_agent.UpdateSingleAgentInstanceStatusResponse
+// @Security BearerAuth
+func UpdateSingleAgentInstanceStatus(ctx *gin.Context) {
+	var req single_agent.UpdateSingleAgentInstanceStatusRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	resp, err := singleAgentSVC.DefaultFull().UpdateSingleAgentInstanceStatus(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// ReassignSingleAgentInstance reassigns a single agent instance to a new operator
+// @Router /api/sico/agent/single_agent_instance/reassign [POST]
+// @Tags SingleAgentInstance
+// @Accept json
+// @Produce json
+// @Param request body single_agent.ReassignSingleAgentInstanceRequest true "Reassign request"
+// @Success 200 {object} single_agent.ReassignSingleAgentInstanceResponse
+// @Security BearerAuth
+func ReassignSingleAgentInstance(ctx *gin.Context) {
+	var req single_agent.ReassignSingleAgentInstanceRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	resp, err := singleAgentSVC.DefaultFull().ReassignSingleAgentInstance(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
 // ListSingleAgentInstances lists single agent instances
 // @Router /api/sico/agent/single_agent_instances [GET]
 // @Tags SingleAgentInstance
 // @Accept json
 // @Produce json
-// @Param request query single_agent.ListSingleAgentInstancesRequest true "Query parameters"
+// @Param request query single_agent.ListSingleAgentInstancesFilter true "Query parameters"
 // @Success 200 {object} single_agent.ListSingleAgentInstancesResponse
 // @Security BearerAuth
 func ListSingleAgentInstances(ctx *gin.Context) {
-	userInfo, ok := middleware.GetUserFromContext(ctx)
-	if !ok {
-		unauthorizedResponse(ctx, "Authentication required")
-		return
-	}
-
 	var (
 		err error
-		req single_agent.ListSingleAgentInstancesRequest
+		req single_agent.ListSingleAgentInstancesFilter
 	)
 
 	err = ctx.ShouldBindQuery(&req)
@@ -417,21 +494,62 @@ func ListSingleAgentInstances(ctx *gin.Context) {
 		invalidParamRequestResponse(ctx, err.Error())
 		return
 	}
-	req.Username = userInfo.Name
 
-	resp, err := singleAgentSVC.DefaultFull().ListSingleAgentInstances(reqctx(ctx), &req)
+	statusParts := strings.Split(req.GetStatusList(), ",")
+	for _, part := range statusParts {
+		part = strings.TrimSpace(part)
+		if v, ok := single_agent.SingleAgentInstanceStatus_value[part]; ok {
+			req.StatusArr = append(req.StatusArr, single_agent.SingleAgentInstanceStatus(v))
+		}
+	}
+	if len(req.StatusArr) == 1 && req.StatusArr[0] == single_agent.SingleAgentInstanceStatus(0) {
+		req.StatusArr = nil
+	}
+
+	// Build filter from request
+	filter := &saEntity.ListSingleAgentInstanceFilter{
+		FilterByStatus:   len(req.StatusArr) > 0,
+		StatusArr:        req.StatusArr,
+		OrderBy:          req.OrderBy,
+		SortOrder:        req.SortOrder,
+		ProjectId:        req.ProjectId,
+		EmployerUsername: req.EmployerUsername,
+		OperatorUsername: req.OperatorUsername,
+	}
+
+	offset := int(req.Page-1) * int(req.PageSize)
+	limit := int(req.PageSize)
+
+	instances, total, err := singleAgentSVC.Default().ListSingleAgentInstancesByFilter(
+		reqctx(ctx), filter, offset, limit,
+	)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
 		return
 	}
-	if resp != nil && resp.Data != nil {
-		for _, instance := range resp.Data.Instances {
-			if instance == nil {
-				continue
-			}
-			instanceID := strconv.FormatInt(instance.Id, 10)
-			instance.Sandboxes = getInstanceSandboxes(reqctx(ctx), instanceID)
+
+	// Build response
+	pbInstances := make([]*single_agent.SingleAgentInstance, len(instances))
+	for i, inst := range instances {
+		pbInstances[i] = inst.SingleAgentInstance
+	}
+
+	hasNext := int64(offset+len(instances)) < total
+	resp := &single_agent.ListSingleAgentInstancesResponse{
+		Data: &single_agent.ListSingleAgentInstancesData{
+			Instances: pbInstances,
+			Total:     int32(total),
+			HasNext:   hasNext,
+		},
+	}
+
+	// Enrich each instance with assigned sandboxes from Redis
+	for _, inst := range resp.Data.Instances {
+		if inst == nil {
+			continue
 		}
+		instanceID := strconv.FormatInt(inst.Id, 10)
+		inst.Sandboxes = getInstanceSandboxes(reqctx(ctx), instanceID)
 	}
 
 	ctx.JSON(http.StatusOK, resp)

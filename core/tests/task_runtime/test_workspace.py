@@ -42,11 +42,17 @@ class _FakeChatFs:
     def root(self) -> Path:
         return self._root
 
-    def get_turn_path(self, agent_instance_id: int, user_id: str, turn_id: int) -> Path:
-        return self._root / "ai" / str(agent_instance_id) / user_id / "turn" / str(turn_id)
+    def get_turn_path(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int = 0) -> Path:
+        base = self._root / "ai" / str(agent_instance_id) / user_id
+        if conversation_id:
+            base = base / "conversation" / str(conversation_id)
+        return base / "turn" / str(turn_id)
 
-    def get_workspace_path(self, agent_instance_id: int, user_id: str) -> Path:
-        return self._root / "ai" / str(agent_instance_id) / user_id / "workspace"
+    def get_workspace_path(self, agent_instance_id: int, user_id: str, conversation_id: int = 0) -> Path:
+        base = self._root / "ai" / str(agent_instance_id) / user_id
+        if conversation_id:
+            base = base / "conversation" / str(conversation_id)
+        return base / "workspace"
 
 
 class _FakePlanStore:

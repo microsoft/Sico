@@ -302,7 +302,7 @@ func TestListAllResourcesKeepsRecentlyMissingAssignedResourceAssignedDuringGrace
 	emulatorResources := result[enum.SandboxTypeEmulator.String()].([]map[string]interface{})
 	require.Len(t, emulatorResources, 1)
 	require.Equal(t, string(ResourceStatusAssigned), emulatorResources[0]["status"])
-	require.Equal(t, "123", emulatorResources[0]["instance_id"])
+	require.Equal(t, string("123"), emulatorResources[0]["instance_id"])
 	require.Equal(t, "74.179.80.110:16480", emulatorResources[0]["endpoint"])
 
 	storedLease := loadLease(t, ctx, rds, testEmulatorLease().SandboxID)
@@ -973,7 +973,7 @@ func TestRefreshResourcesMarksExplicitlyUnhealthyAssignedResourceUnhealthy(t *te
 	emulatorResources := result[enum.SandboxTypeEmulator.String()].([]map[string]interface{})
 	require.Len(t, emulatorResources, 1)
 	require.Equal(t, string(ResourceStatusUnhealthy), emulatorResources[0]["status"])
-	require.Equal(t, testEmulatorLease().User, emulatorResources[0]["instance_id"])
+	require.Equal(t, string("123"), emulatorResources[0]["instance_id"])
 }
 
 func TestListAllResourcesHidesUnavailableResourceAfterGracePeriod(t *testing.T) {
@@ -1539,7 +1539,7 @@ func TestListAllResourcesShowsRecentMissingAssignmentAcrossPodRestart(t *testing
 	emulatorResources := result[enum.SandboxTypeEmulator.String()].([]map[string]interface{})
 	require.Len(t, emulatorResources, 1)
 	require.Equal(t, string(ResourceStatusUnhealthy), emulatorResources[0]["status"])
-	require.Equal(t, lease.User, emulatorResources[0]["instance_id"])
+	require.Equal(t, string("123"), emulatorResources[0]["instance_id"])
 	require.Equal(t, 0, provider.calls)
 }
 
@@ -1786,7 +1786,7 @@ func TestRefreshResourcesKeepsPreviousSnapshotWhenProviderRefreshFails(t *testin
 	emulatorResources := result[enum.SandboxTypeEmulator.String()].([]map[string]interface{})
 	require.Len(t, emulatorResources, 1)
 	require.Equal(t, string(ResourceStatusAssigned), emulatorResources[0]["status"])
-	require.Equal(t, lease.User, emulatorResources[0]["instance_id"])
+	require.Equal(t, string("123"), emulatorResources[0]["instance_id"])
 }
 
 func TestApplySandboxDoesNotAcquireLeaseOwnedByAnotherInstance(t *testing.T) {

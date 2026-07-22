@@ -4,13 +4,17 @@
 # This file has been @generated
 
 __all__ = (
+    "AgentInstanceDigest",
     "Attachment",
     "ColumnType",
     "DocTableColumn",
     "DocTableSheet",
     "FileType",
     "NamedTypeInfo",
+    "SandboxDigest",
+    "SortOrder",
     "TypeInfo",
+    "UserDigest",
 )
 
 from dataclasses import dataclass
@@ -118,6 +122,69 @@ class FileType(betterproto2.Enum):
             "FILE_TYPE_TYPE_FILE": 4,
             "FILE_TYPE_TYPE_ARCHIVE": 5,
         }
+
+
+class SortOrder(betterproto2.Enum):
+    """
+    SortOrder specifies the sort direction for list queries.
+    """
+
+    UNSPECIFIED = 0
+    """
+    Default: DESC
+    """
+
+    ASC = 1
+
+    DESC = 2
+
+    @classmethod
+    def betterproto_value_to_renamed_proto_names(cls) -> dict[int, str]:
+        return {
+            0: "SORT_ORDER_UNSPECIFIED",
+            1: "SORT_ORDER_ASC",
+            2: "SORT_ORDER_DESC",
+        }
+
+    @classmethod
+    def betterproto_renamed_proto_names_to_value(cls) -> dict[str, int]:
+        return {
+            "SORT_ORDER_UNSPECIFIED": 0,
+            "SORT_ORDER_ASC": 1,
+            "SORT_ORDER_DESC": 2,
+        }
+
+
+@dataclass(eq=False, repr=False)
+class AgentInstanceDigest(betterproto2.Message):
+    """
+    AgentInstanceDigest holds display information about an agent instance.
+    """
+
+    agent_name: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"agentName"
+    """
+
+    agent_icon_url: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"agentIconUrl"
+    """
+
+    operator_username: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"operatorUsername"
+    """
+
+    id: "int" = betterproto2.field(4, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"id"
+    """
+
+
+default_message_pool.register_message(
+    "common", "AgentInstanceDigest", AgentInstanceDigest
+)
 
 
 @dataclass(eq=False, repr=False)
@@ -241,6 +308,66 @@ default_message_pool.register_message("common", "NamedTypeInfo", NamedTypeInfo)
 
 
 @dataclass(eq=False, repr=False)
+class SandboxDigest(betterproto2.Message):
+    """
+    SandboxDigest holds summary information about a sandbox.
+    """
+
+    sandbox_id: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"sandboxId"
+    """
+
+    type: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"type"
+    """
+
+    status: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"status"
+    """
+
+    endpoint: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"endpoint"
+    """
+
+    vnc_url: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"vncUrl"
+    """
+
+    docs_url: "str" = betterproto2.field(6, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"docsUrl"
+    """
+
+    display_name: "str" = betterproto2.field(7, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"displayName"
+    """
+
+    instance_id: "int" = betterproto2.field(8, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"instanceId"
+    """
+
+    project_id: "int" = betterproto2.field(9, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"projectId"
+    """
+
+    organization_id: "int" = betterproto2.field(10, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"organizationId"
+    """
+
+
+default_message_pool.register_message("common", "SandboxDigest", SandboxDigest)
+
+
+@dataclass(eq=False, repr=False)
 class TypeInfo(betterproto2.Message):
     data_type: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
     """
@@ -284,3 +411,38 @@ class TypeInfo(betterproto2.Message):
 
 
 default_message_pool.register_message("common", "TypeInfo", TypeInfo)
+
+
+@dataclass(eq=False, repr=False)
+class UserDigest(betterproto2.Message):
+    """
+    UserDigest holds summary information about a user.
+    """
+
+    id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"id"
+    """
+
+    alias: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"alias"
+    """
+
+    username: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"username"
+    """
+
+    email: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"email"
+    """
+
+    icon_url: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"iconUrl"
+    """
+
+
+default_message_pool.register_message("common", "UserDigest", UserDigest)

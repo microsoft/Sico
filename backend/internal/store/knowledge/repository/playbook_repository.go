@@ -43,6 +43,7 @@ type PlaybookRepository interface {
 	List(ctx context.Context, filter *PlaybookFilter) ([]*KnowledgePlaybookModel, int64, error)
 	Create(ctx context.Context, pb *KnowledgePlaybookModel) (int64, error)
 	Update(ctx context.Context, pb *KnowledgePlaybookModel) error
+	Delete(ctx context.Context, id int64) error
 }
 
 // PlaybookTagRepository defines mapping operations between playbooks and tags.

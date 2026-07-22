@@ -62,6 +62,7 @@ func RegisterAPIs(router *gin.Engine) {
 	registerAgentsRoutes(r)
 	registerKnowledgeRoutes(r)
 	registerSkillsRoutes(r)
+	registerOrganizationRoutes(r)
 
 	// Swagger documentation route (public)
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -80,6 +81,12 @@ func registerSandboxRoutes(r *gin.RouterGroup) {
 	sandboxApi.POST("/assign", handler.SandboxAssign)          // Assign sandbox to instance
 	sandboxApi.POST("/unassign", handler.SandboxUnassign)      // Unassign sandbox from instance
 	sandboxApi.GET("/instances", handler.SandboxListInstances) // List instances for assignment dropdown
+
+	// Organization / Project sandbox assignment
+	sandboxApi.POST("/org/assign", handler.SandboxOrgAssign)
+	sandboxApi.POST("/org/unassign", handler.SandboxOrgUnassign)
+	sandboxApi.POST("/project/assign", handler.SandboxProjectAssign)
+	sandboxApi.POST("/project/unassign", handler.SandboxProjectUnassign)
 
 	// VNC View APIs
 	sandboxApi.GET("/instance/:instanceId/vnc", handler.GetInstanceVNC) // Get VNC URLs for instance
@@ -106,12 +113,6 @@ func registerRBACRoutes(r *gin.RouterGroup) {
 	rbacApi.GET("/user", handler.GetUser)
 	rbacApi.GET("/users", handler.QueryUsers)
 	rbacApi.PUT("/user/password", handler.ResetPassword)
-	// role endpoints
-	rbacApi.POST("/role", handler.CreateRole)
-	rbacApi.PUT("/role", handler.UpdateRole)
-	rbacApi.DELETE("/role", handler.DeleteRole)
-	rbacApi.GET("/role", handler.GetRole)
-	rbacApi.GET("/roles", handler.QueryRoles)
 	// user-role assignments
 	rbacApi.POST("/user_role", handler.AssignUserRole)
 	rbacApi.DELETE("/user_role", handler.RemoveUserRole)
@@ -123,6 +124,8 @@ func registerRBACRoutes(r *gin.RouterGroup) {
 	rbacApi.DELETE("/policy", handler.DeletePolicy)
 	rbacApi.GET("/policy", handler.GetPolicy)
 	rbacApi.GET("/policies", handler.QueryPolicies)
+	// enforcer management
+	rbacApi.POST("/enforcer/reload", handler.ReloadEnforcer)
 
 	rbacApi.POST("/login", handler.Login)
 	rbacApi.POST("/logout", handler.Logout)
@@ -135,6 +138,7 @@ func registerConversationRoutes(r *gin.RouterGroup) {
 	conversation.POST("", handler.CreateConversation)
 	conversation.GET("", handler.GetConversation)
 	conversation.PUT("", handler.UpdateConversation)
+	conversation.DELETE("", handler.DeleteConversation)
 	conversation.POST("/chat", handler.Chat)
 	conversation.POST("/chat/reconnect", handler.Reconnect)
 	conversation.GET("/messages", handler.ListMessagesByUserAndAgent)
@@ -166,6 +170,7 @@ func registerLLMRoutes(r *gin.RouterGroup) {
 func registerProjectRoutes(r *gin.RouterGroup) {
 	projectApi := r.Group("/project")
 
+	projectApi.GET("/list", handler.ListProjects)
 	projectApi.GET("/user_projects", handler.GetUserProjectList)
 	projectApi.GET("", handler.GetProject)
 	projectApi.POST("", handler.CreateProject)
@@ -176,6 +181,10 @@ func registerProjectRoutes(r *gin.RouterGroup) {
 	projectApi.GET("/assets", handler.GetProjectAssetList)
 	projectApi.DELETE("/asset", handler.DeleteProjectAsset)
 	projectApi.GET("/statistics", handler.QueryProjectStatistics)
+	projectApi.POST("/deliverable", handler.CreateProjectDeliverable)
+	projectApi.GET("/deliverable", handler.GetProjectDeliverable)
+	projectApi.DELETE("/deliverable", handler.DeleteProjectDeliverable)
+	projectApi.GET("/deliverables", handler.ListProjectDeliverables)
 }
 
 func registerAgentRoutes(r *gin.RouterGroup) {
@@ -190,10 +199,13 @@ func registerAgentRoutes(r *gin.RouterGroup) {
 	agentApi.GET("/roles", handler.ListRoles)
 	agentApi.POST("/single_agent/deploy", handler.DeploySingleAgent)
 
-	//agentApi.POST("/single_agent_instance", handler.CreateSingleAgentInstance)
+	agentApi.POST("/single_agent_instance", handler.CreateSingleAgentInstance)
 	agentApi.GET("/single_agent_instance", handler.GetSingleAgentInstance)
 	agentApi.PUT("/single_agent_instance", handler.UpdateSingleAgentInstance)
 	agentApi.DELETE("/single_agent_instance", handler.DeleteSingleAgentInstance)
+	agentApi.POST("/single_agent_instance/dismiss", handler.DismissSingleAgentInstance)
+	agentApi.PUT("/single_agent_instance/status", handler.UpdateSingleAgentInstanceStatus)
+	agentApi.POST("/single_agent_instance/reassign", handler.ReassignSingleAgentInstance)
 	agentApi.GET("/single_agent_instances", handler.ListSingleAgentInstances)
 }
 
@@ -222,8 +234,10 @@ func registerKnowledgeRoutes(r *gin.RouterGroup) {
 	playbookApi := knowledgeApi.Group("/playbook")
 	playbookApi.GET("", handler.GetPlaybook)
 	playbookApi.PUT("", handler.UpdatePlaybook)
+	playbookApi.DELETE("", handler.DeletePlaybook)
 	playbookApi.GET("/details", handler.GetPlaybookDetails)
 	knowledgeApi.GET("/playbooks", handler.ListPlaybooks)
+	knowledgeApi.GET("/items", handler.ListKnowledgeItems)
 }
 
 func registerSkillsRoutes(r *gin.RouterGroup) {
@@ -234,4 +248,15 @@ func registerSkillsRoutes(r *gin.RouterGroup) {
 	skillsApi.PUT("", handler.UpdateSkill)
 	skillsApi.DELETE("", handler.DeleteSkill)
 	skillsApi.GET("/list", handler.ListSkills)
+}
+
+func registerOrganizationRoutes(r *gin.RouterGroup) {
+	orgApi := r.Group("/organization")
+	{
+		orgApi.POST("", handler.CreateOrganization)
+		orgApi.PUT("", handler.UpdateOrganization)
+		orgApi.DELETE("", handler.DeleteOrganization)
+		orgApi.GET("", handler.GetOrganization)
+	}
+	r.GET("/organizations", handler.ListOrganizations)
 }

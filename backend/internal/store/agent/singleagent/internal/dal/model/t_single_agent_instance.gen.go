@@ -25,6 +25,7 @@ type TSingleAgentInstance struct {
 	EmployerIconURI  string               `gorm:"column:employer_icon_uri;not null;comment:Employer Icon URI" json:"employer_icon_uri"`                  // Employer Icon URI
 	ProjectID        int64                `gorm:"column:project_id;not null;comment:the project id this agent instance belongs to" json:"project_id"`    // the project id this agent instance belongs to
 	Permission       *string              `gorm:"column:permission;comment:Agent Permission Configuration" json:"permission"`                            // Agent Permission Configuration
+	Status           int32                `gorm:"column:status;not null;comment:Instance Status" json:"status"`                                          // Instance Status
 	Attachments      []*common.Attachment `gorm:"column:attachments;comment:Form Attachments;serializer:json" json:"attachments"`                        // Form Attachments
 	CreatedAt        int64                `gorm:"column:created_at;not null;autoCreateTime:milli;comment:Create Time in Milliseconds" json:"created_at"` // Create Time in Milliseconds
 	UpdatedAt        int64                `gorm:"column:updated_at;not null;autoUpdateTime:milli;comment:Update Time in Milliseconds" json:"updated_at"` // Update Time in Milliseconds

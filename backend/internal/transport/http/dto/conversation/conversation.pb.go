@@ -209,18 +209,85 @@ func (x *ConversationData) GetAgentInstanceInfo() *AgentInstanceInfo {
 	return nil
 }
 
+type ConversationListItem struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                  
+	CreatedAt       int64                  `protobuf:"varint,2,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                   
+	CreatorUsername string                 `protobuf:"bytes,3,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`  
+	Title           string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title"`                                             
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ConversationListItem) Reset() {
+	*x = ConversationListItem{}
+	mi := &file_conversation_conversation_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConversationListItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConversationListItem) ProtoMessage() {}
+
+func (x *ConversationListItem) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_conversation_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConversationListItem.ProtoReflect.Descriptor instead.
+func (*ConversationListItem) Descriptor() ([]byte, []int) {
+	return file_conversation_conversation_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ConversationListItem) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *ConversationListItem) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *ConversationListItem) GetCreatorUsername() string {
+	if x != nil {
+		return x.CreatorUsername
+	}
+	return ""
+}
+
+func (x *ConversationListItem) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
 type CreateConversationRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	MetaData        map[string]string      `protobuf:"bytes,1,rep,name=meta_data,json=metaData,proto3" json:"metaData" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`  
-	Title           string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title"`                                                                                                  
-	AgentInstanceId int64                  `protobuf:"varint,3,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId" binding:"required"`                                                    
+	Title           string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title"`                                                
+	AgentInstanceId int64                  `protobuf:"varint,2,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId" binding:"required"`  
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CreateConversationRequest) Reset() {
 	*x = CreateConversationRequest{}
-	mi := &file_conversation_conversation_proto_msgTypes[2]
+	mi := &file_conversation_conversation_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -232,7 +299,7 @@ func (x *CreateConversationRequest) String() string {
 func (*CreateConversationRequest) ProtoMessage() {}
 
 func (x *CreateConversationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_conversation_proto_msgTypes[2]
+	mi := &file_conversation_conversation_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -245,14 +312,7 @@ func (x *CreateConversationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateConversationRequest.ProtoReflect.Descriptor instead.
 func (*CreateConversationRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_conversation_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *CreateConversationRequest) GetMetaData() map[string]string {
-	if x != nil {
-		return x.MetaData
-	}
-	return nil
+	return file_conversation_conversation_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CreateConversationRequest) GetTitle() string {
@@ -280,7 +340,7 @@ type CreateConversationResponse struct {
 
 func (x *CreateConversationResponse) Reset() {
 	*x = CreateConversationResponse{}
-	mi := &file_conversation_conversation_proto_msgTypes[3]
+	mi := &file_conversation_conversation_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -292,7 +352,7 @@ func (x *CreateConversationResponse) String() string {
 func (*CreateConversationResponse) ProtoMessage() {}
 
 func (x *CreateConversationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_conversation_proto_msgTypes[3]
+	mi := &file_conversation_conversation_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -305,7 +365,7 @@ func (x *CreateConversationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateConversationResponse.ProtoReflect.Descriptor instead.
 func (*CreateConversationResponse) Descriptor() ([]byte, []int) {
-	return file_conversation_conversation_proto_rawDescGZIP(), []int{3}
+	return file_conversation_conversation_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CreateConversationResponse) GetData() *ConversationData {
@@ -352,14 +412,16 @@ const file_conversation_conversation_proto_rawDesc = "" +
 	"\x13agent_instance_info\x18\b \x01(\v2\x1f.conversation.AgentInstanceInfoR\x11agentInstanceInfo\x1a;\n" +
 	"\rMetaDataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xee\x01\n" +
-	"\x19CreateConversationRequest\x12R\n" +
-	"\tmeta_data\x18\x01 \x03(\v25.conversation.CreateConversationRequest.MetaDataEntryR\bmetaData\x12\x14\n" +
-	"\x05title\x18\x02 \x01(\tR\x05title\x12*\n" +
-	"\x11agent_instance_id\x18\x03 \x01(\x03R\x0fagentInstanceId\x1a;\n" +
-	"\rMetaDataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"x\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x86\x01\n" +
+	"\x14ConversationListItem\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x02 \x01(\x03R\tcreatedAt\x12)\n" +
+	"\x10creator_username\x18\x03 \x01(\tR\x0fcreatorUsername\x12\x14\n" +
+	"\x05title\x18\x04 \x01(\tR\x05title\"]\n" +
+	"\x19CreateConversationRequest\x12\x14\n" +
+	"\x05title\x18\x01 \x01(\tR\x05title\x12*\n" +
+	"\x11agent_instance_id\x18\x02 \x01(\x03R\x0fagentInstanceId\"x\n" +
 	"\x1aCreateConversationResponse\x122\n" +
 	"\x04data\x18\x01 \x01(\v2\x1e.conversation.ConversationDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
@@ -381,21 +443,20 @@ var file_conversation_conversation_proto_msgTypes = make([]protoimpl.MessageInfo
 var file_conversation_conversation_proto_goTypes = []any{
 	(*AgentInstanceInfo)(nil),          // 0: conversation.AgentInstanceInfo
 	(*ConversationData)(nil),           // 1: conversation.ConversationData
-	(*CreateConversationRequest)(nil),  // 2: conversation.CreateConversationRequest
-	(*CreateConversationResponse)(nil), // 3: conversation.CreateConversationResponse
-	nil,                                // 4: conversation.ConversationData.MetaDataEntry
-	nil,                                // 5: conversation.CreateConversationRequest.MetaDataEntry
+	(*ConversationListItem)(nil),       // 2: conversation.ConversationListItem
+	(*CreateConversationRequest)(nil),  // 3: conversation.CreateConversationRequest
+	(*CreateConversationResponse)(nil), // 4: conversation.CreateConversationResponse
+	nil,                                // 5: conversation.ConversationData.MetaDataEntry
 }
 var file_conversation_conversation_proto_depIdxs = []int32{
-	4, // 0: conversation.ConversationData.meta_data:type_name -> conversation.ConversationData.MetaDataEntry
+	5, // 0: conversation.ConversationData.meta_data:type_name -> conversation.ConversationData.MetaDataEntry
 	0, // 1: conversation.ConversationData.agent_instance_info:type_name -> conversation.AgentInstanceInfo
-	5, // 2: conversation.CreateConversationRequest.meta_data:type_name -> conversation.CreateConversationRequest.MetaDataEntry
-	1, // 3: conversation.CreateConversationResponse.data:type_name -> conversation.ConversationData
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	1, // 2: conversation.CreateConversationResponse.data:type_name -> conversation.ConversationData
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_conversation_conversation_proto_init() }

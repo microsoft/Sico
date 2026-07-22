@@ -22,6 +22,7 @@ package impl
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,15 +87,19 @@ func (m *mockDocumentRepo) List(
 		}
 		result = append(result, d)
 	}
+	// Sort by UpdatedAt descending to match DAO behavior.
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].UpdatedAt > result[j].UpdatedAt
+	})
 	total := int64(len(result))
-	end := filter.Offset + filter.Limit
-	if end > len(result) {
-		end = len(result)
-	}
 	if filter.Offset >= len(result) {
 		return nil, total, nil
 	}
-	return result[filter.Offset:end], total, nil
+	result = result[filter.Offset:]
+	if filter.Limit > 0 && filter.Limit < len(result) {
+		result = result[:filter.Limit]
+	}
+	return result, total, nil
 }
 
 type mockTagRepo struct {

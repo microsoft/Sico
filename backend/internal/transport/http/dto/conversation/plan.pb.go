@@ -426,13 +426,76 @@ func (x *ToolDeliverableAcquiredSandbox) GetVncUrl() string {
 	return ""
 }
 
+type ToolDeliverableFile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FileSasUrl    string                 `protobuf:"bytes,1,opt,name=file_sas_url,json=fileSasUrl,proto3" json:"fileSasUrl,omitempty"`  
+	FileName      string                 `protobuf:"bytes,2,opt,name=file_name,json=fileName,proto3" json:"fileName,omitempty"`          
+	FileUri       string                 `protobuf:"bytes,3,opt,name=file_uri,json=fileUri,proto3" json:"fileUri,omitempty"`             
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ToolDeliverableFile) Reset() {
+	*x = ToolDeliverableFile{}
+	mi := &file_conversation_plan_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ToolDeliverableFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToolDeliverableFile) ProtoMessage() {}
+
+func (x *ToolDeliverableFile) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_plan_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToolDeliverableFile.ProtoReflect.Descriptor instead.
+func (*ToolDeliverableFile) Descriptor() ([]byte, []int) {
+	return file_conversation_plan_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ToolDeliverableFile) GetFileSasUrl() string {
+	if x != nil {
+		return x.FileSasUrl
+	}
+	return ""
+}
+
+func (x *ToolDeliverableFile) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *ToolDeliverableFile) GetFileUri() string {
+	if x != nil {
+		return x.FileUri
+	}
+	return ""
+}
+
 type ToolDeliverable struct {
-	state            protoimpl.MessageState          `protogen:"open.v1"`
-	Type             ToolDeliverableType             `protobuf:"varint,1,opt,name=type,proto3,enum=plan.ToolDeliverableType" json:"type,omitempty"`                       
-	MarkdownContent  string                          `protobuf:"bytes,2,opt,name=markdown_content,json=markdownContent,proto3" json:"markdownContent,omitempty"`         
-	MarkdownTitle    string                          `protobuf:"bytes,5,opt,name=markdown_title,json=markdownTitle,proto3" json:"markdownTitle,omitempty"`               
-	FileUrl          string                          `protobuf:"bytes,3,opt,name=file_url,json=fileUrl,proto3" json:"fileUrl,omitempty"`                                 
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Type            ToolDeliverableType    `protobuf:"varint,1,opt,name=type,proto3,enum=plan.ToolDeliverableType" json:"type,omitempty"`                
+	MarkdownContent string                 `protobuf:"bytes,2,opt,name=markdown_content,json=markdownContent,proto3" json:"markdownContent,omitempty"`  
+	// Deprecated: Marked as deprecated in conversation/plan.proto.
+	FileUrl string `protobuf:"bytes,3,opt,name=file_url,json=fileUrl,proto3" json:"fileUrl,omitempty"`  
+	// Deprecated: Marked as deprecated in conversation/plan.proto.
 	FileName         string                          `protobuf:"bytes,4,opt,name=file_name,json=fileName,proto3" json:"fileName,omitempty"`                              
+	MarkdownTitle    string                          `protobuf:"bytes,5,opt,name=markdown_title,json=markdownTitle,proto3" json:"markdownTitle,omitempty"`               
+	File             *ToolDeliverableFile            `protobuf:"bytes,8,opt,name=file,proto3" json:"file,omitempty"`                                                      
 	WebPreviewSasUrl string                          `protobuf:"bytes,6,opt,name=web_preview_sas_url,json=webPreviewSasUrl,proto3" json:"webPreviewSasUrl,omitempty"`  
 	AcquiredSandbox  *ToolDeliverableAcquiredSandbox `protobuf:"bytes,7,opt,name=acquired_sandbox,json=acquiredSandbox,proto3" json:"acquiredSandbox,omitempty"`         
 	unknownFields    protoimpl.UnknownFields
@@ -441,7 +504,7 @@ type ToolDeliverable struct {
 
 func (x *ToolDeliverable) Reset() {
 	*x = ToolDeliverable{}
-	mi := &file_conversation_plan_proto_msgTypes[1]
+	mi := &file_conversation_plan_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -453,7 +516,7 @@ func (x *ToolDeliverable) String() string {
 func (*ToolDeliverable) ProtoMessage() {}
 
 func (x *ToolDeliverable) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[1]
+	mi := &file_conversation_plan_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -466,7 +529,7 @@ func (x *ToolDeliverable) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolDeliverable.ProtoReflect.Descriptor instead.
 func (*ToolDeliverable) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{1}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ToolDeliverable) GetType() ToolDeliverableType {
@@ -483,13 +546,7 @@ func (x *ToolDeliverable) GetMarkdownContent() string {
 	return ""
 }
 
-func (x *ToolDeliverable) GetMarkdownTitle() string {
-	if x != nil {
-		return x.MarkdownTitle
-	}
-	return ""
-}
-
+// Deprecated: Marked as deprecated in conversation/plan.proto.
 func (x *ToolDeliverable) GetFileUrl() string {
 	if x != nil {
 		return x.FileUrl
@@ -497,11 +554,26 @@ func (x *ToolDeliverable) GetFileUrl() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in conversation/plan.proto.
 func (x *ToolDeliverable) GetFileName() string {
 	if x != nil {
 		return x.FileName
 	}
 	return ""
+}
+
+func (x *ToolDeliverable) GetMarkdownTitle() string {
+	if x != nil {
+		return x.MarkdownTitle
+	}
+	return ""
+}
+
+func (x *ToolDeliverable) GetFile() *ToolDeliverableFile {
+	if x != nil {
+		return x.File
+	}
+	return nil
 }
 
 func (x *ToolDeliverable) GetWebPreviewSasUrl() string {
@@ -534,7 +606,7 @@ type TaskRuntimeExecutionInfo struct {
 
 func (x *TaskRuntimeExecutionInfo) Reset() {
 	*x = TaskRuntimeExecutionInfo{}
-	mi := &file_conversation_plan_proto_msgTypes[2]
+	mi := &file_conversation_plan_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -546,7 +618,7 @@ func (x *TaskRuntimeExecutionInfo) String() string {
 func (*TaskRuntimeExecutionInfo) ProtoMessage() {}
 
 func (x *TaskRuntimeExecutionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[2]
+	mi := &file_conversation_plan_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -559,7 +631,7 @@ func (x *TaskRuntimeExecutionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskRuntimeExecutionInfo.ProtoReflect.Descriptor instead.
 func (*TaskRuntimeExecutionInfo) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{2}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *TaskRuntimeExecutionInfo) GetCurrentStage() string {
@@ -622,7 +694,7 @@ type ToolExecutionInfo struct {
 
 func (x *ToolExecutionInfo) Reset() {
 	*x = ToolExecutionInfo{}
-	mi := &file_conversation_plan_proto_msgTypes[3]
+	mi := &file_conversation_plan_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -634,7 +706,7 @@ func (x *ToolExecutionInfo) String() string {
 func (*ToolExecutionInfo) ProtoMessage() {}
 
 func (x *ToolExecutionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[3]
+	mi := &file_conversation_plan_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -647,7 +719,7 @@ func (x *ToolExecutionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolExecutionInfo.ProtoReflect.Descriptor instead.
 func (*ToolExecutionInfo) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{3}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ToolExecutionInfo) GetToolType() ToolType {
@@ -695,7 +767,7 @@ type ToolCall struct {
 
 func (x *ToolCall) Reset() {
 	*x = ToolCall{}
-	mi := &file_conversation_plan_proto_msgTypes[4]
+	mi := &file_conversation_plan_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -707,7 +779,7 @@ func (x *ToolCall) String() string {
 func (*ToolCall) ProtoMessage() {}
 
 func (x *ToolCall) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[4]
+	mi := &file_conversation_plan_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -720,7 +792,7 @@ func (x *ToolCall) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolCall.ProtoReflect.Descriptor instead.
 func (*ToolCall) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{4}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ToolCall) GetToolName() string {
@@ -805,7 +877,7 @@ type PlanStep struct {
 
 func (x *PlanStep) Reset() {
 	*x = PlanStep{}
-	mi := &file_conversation_plan_proto_msgTypes[5]
+	mi := &file_conversation_plan_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -817,7 +889,7 @@ func (x *PlanStep) String() string {
 func (*PlanStep) ProtoMessage() {}
 
 func (x *PlanStep) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[5]
+	mi := &file_conversation_plan_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -830,7 +902,7 @@ func (x *PlanStep) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlanStep.ProtoReflect.Descriptor instead.
 func (*PlanStep) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{5}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PlanStep) GetTitle() string {
@@ -876,7 +948,7 @@ type PlanExtra struct {
 
 func (x *PlanExtra) Reset() {
 	*x = PlanExtra{}
-	mi := &file_conversation_plan_proto_msgTypes[6]
+	mi := &file_conversation_plan_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -888,7 +960,7 @@ func (x *PlanExtra) String() string {
 func (*PlanExtra) ProtoMessage() {}
 
 func (x *PlanExtra) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[6]
+	mi := &file_conversation_plan_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -901,7 +973,7 @@ func (x *PlanExtra) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlanExtra.ProtoReflect.Descriptor instead.
 func (*PlanExtra) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{6}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PlanExtra) GetUsername() string {
@@ -964,7 +1036,7 @@ type Plan struct {
 
 func (x *Plan) Reset() {
 	*x = Plan{}
-	mi := &file_conversation_plan_proto_msgTypes[7]
+	mi := &file_conversation_plan_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -976,7 +1048,7 @@ func (x *Plan) String() string {
 func (*Plan) ProtoMessage() {}
 
 func (x *Plan) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_plan_proto_msgTypes[7]
+	mi := &file_conversation_plan_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -989,7 +1061,7 @@ func (x *Plan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Plan.ProtoReflect.Descriptor instead.
 func (*Plan) Descriptor() ([]byte, []int) {
-	return file_conversation_plan_proto_rawDescGZIP(), []int{7}
+	return file_conversation_plan_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Plan) GetTitle() string {
@@ -1026,13 +1098,19 @@ const file_conversation_plan_proto_rawDesc = "" +
 	"\x11provider_base_url\x18\x04 \x01(\tR\x0fproviderBaseUrl\x12\x1b\n" +
 	"\tdevice_id\x18\x05 \x01(\tR\bdeviceId\x12!\n" +
 	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\x12\x17\n" +
-	"\avnc_url\x18\a \x01(\tR\x06vncUrl\"\xca\x02\n" +
+	"\avnc_url\x18\a \x01(\tR\x06vncUrl\"o\n" +
+	"\x13ToolDeliverableFile\x12 \n" +
+	"\ffile_sas_url\x18\x01 \x01(\tR\n" +
+	"fileSasUrl\x12\x1b\n" +
+	"\tfile_name\x18\x02 \x01(\tR\bfileName\x12\x19\n" +
+	"\bfile_uri\x18\x03 \x01(\tR\afileUri\"\x81\x03\n" +
 	"\x0fToolDeliverable\x12-\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x19.plan.ToolDeliverableTypeR\x04type\x12)\n" +
-	"\x10markdown_content\x18\x02 \x01(\tR\x0fmarkdownContent\x12%\n" +
-	"\x0emarkdown_title\x18\x05 \x01(\tR\rmarkdownTitle\x12\x19\n" +
-	"\bfile_url\x18\x03 \x01(\tR\afileUrl\x12\x1b\n" +
-	"\tfile_name\x18\x04 \x01(\tR\bfileName\x12-\n" +
+	"\x10markdown_content\x18\x02 \x01(\tR\x0fmarkdownContent\x12\x1d\n" +
+	"\bfile_url\x18\x03 \x01(\tB\x02\x18\x01R\afileUrl\x12\x1f\n" +
+	"\tfile_name\x18\x04 \x01(\tB\x02\x18\x01R\bfileName\x12%\n" +
+	"\x0emarkdown_title\x18\x05 \x01(\tR\rmarkdownTitle\x12-\n" +
+	"\x04file\x18\b \x01(\v2\x19.plan.ToolDeliverableFileR\x04file\x12-\n" +
 	"\x13web_preview_sas_url\x18\x06 \x01(\tR\x10webPreviewSasUrl\x12O\n" +
 	"\x10acquired_sandbox\x18\a \x01(\v2$.plan.ToolDeliverableAcquiredSandboxR\x0facquiredSandbox\"\xa1\x02\n" +
 	"\x18TaskRuntimeExecutionInfo\x12#\n" +
@@ -1137,7 +1215,7 @@ func file_conversation_plan_proto_rawDescGZIP() []byte {
 }
 
 var file_conversation_plan_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_conversation_plan_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_conversation_plan_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_conversation_plan_proto_goTypes = []any{
 	(ToolType)(0),                          // 0: plan.ToolType
 	(ToolDeliverableType)(0),               // 1: plan.ToolDeliverableType
@@ -1145,34 +1223,36 @@ var file_conversation_plan_proto_goTypes = []any{
 	(PlanStepStatus)(0),                    // 3: plan.PlanStepStatus
 	(PlanStatus)(0),                        // 4: plan.PlanStatus
 	(*ToolDeliverableAcquiredSandbox)(nil), // 5: plan.ToolDeliverableAcquiredSandbox
-	(*ToolDeliverable)(nil),                // 6: plan.ToolDeliverable
-	(*TaskRuntimeExecutionInfo)(nil),       // 7: plan.TaskRuntimeExecutionInfo
-	(*ToolExecutionInfo)(nil),              // 8: plan.ToolExecutionInfo
-	(*ToolCall)(nil),                       // 9: plan.ToolCall
-	(*PlanStep)(nil),                       // 10: plan.PlanStep
-	(*PlanExtra)(nil),                      // 11: plan.PlanExtra
-	(*Plan)(nil),                           // 12: plan.Plan
-	nil,                                    // 13: plan.ToolCall.DisplayEntry
+	(*ToolDeliverableFile)(nil),            // 6: plan.ToolDeliverableFile
+	(*ToolDeliverable)(nil),                // 7: plan.ToolDeliverable
+	(*TaskRuntimeExecutionInfo)(nil),       // 8: plan.TaskRuntimeExecutionInfo
+	(*ToolExecutionInfo)(nil),              // 9: plan.ToolExecutionInfo
+	(*ToolCall)(nil),                       // 10: plan.ToolCall
+	(*PlanStep)(nil),                       // 11: plan.PlanStep
+	(*PlanExtra)(nil),                      // 12: plan.PlanExtra
+	(*Plan)(nil),                           // 13: plan.Plan
+	nil,                                    // 14: plan.ToolCall.DisplayEntry
 }
 var file_conversation_plan_proto_depIdxs = []int32{
 	1,  // 0: plan.ToolDeliverable.type:type_name -> plan.ToolDeliverableType
-	5,  // 1: plan.ToolDeliverable.acquired_sandbox:type_name -> plan.ToolDeliverableAcquiredSandbox
-	0,  // 2: plan.ToolExecutionInfo.tool_type:type_name -> plan.ToolType
-	7,  // 3: plan.ToolExecutionInfo.task_runtime:type_name -> plan.TaskRuntimeExecutionInfo
-	8,  // 4: plan.ToolCall.execution_info:type_name -> plan.ToolExecutionInfo
-	6,  // 5: plan.ToolCall.deliverables:type_name -> plan.ToolDeliverable
-	9,  // 6: plan.ToolCall.sub_calls:type_name -> plan.ToolCall
-	13, // 7: plan.ToolCall.display:type_name -> plan.ToolCall.DisplayEntry
-	2,  // 8: plan.ToolCall.tool_call_status:type_name -> plan.ToolCallStatus
-	9,  // 9: plan.PlanStep.tool_calls:type_name -> plan.ToolCall
-	3,  // 10: plan.PlanStep.status:type_name -> plan.PlanStepStatus
-	10, // 11: plan.Plan.steps:type_name -> plan.PlanStep
-	11, // 12: plan.Plan.extra:type_name -> plan.PlanExtra
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	6,  // 1: plan.ToolDeliverable.file:type_name -> plan.ToolDeliverableFile
+	5,  // 2: plan.ToolDeliverable.acquired_sandbox:type_name -> plan.ToolDeliverableAcquiredSandbox
+	0,  // 3: plan.ToolExecutionInfo.tool_type:type_name -> plan.ToolType
+	8,  // 4: plan.ToolExecutionInfo.task_runtime:type_name -> plan.TaskRuntimeExecutionInfo
+	9,  // 5: plan.ToolCall.execution_info:type_name -> plan.ToolExecutionInfo
+	7,  // 6: plan.ToolCall.deliverables:type_name -> plan.ToolDeliverable
+	10, // 7: plan.ToolCall.sub_calls:type_name -> plan.ToolCall
+	14, // 8: plan.ToolCall.display:type_name -> plan.ToolCall.DisplayEntry
+	2,  // 9: plan.ToolCall.tool_call_status:type_name -> plan.ToolCallStatus
+	10, // 10: plan.PlanStep.tool_calls:type_name -> plan.ToolCall
+	3,  // 11: plan.PlanStep.status:type_name -> plan.PlanStepStatus
+	11, // 12: plan.Plan.steps:type_name -> plan.PlanStep
+	12, // 13: plan.Plan.extra:type_name -> plan.PlanExtra
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_conversation_plan_proto_init() }
@@ -1186,7 +1266,7 @@ func file_conversation_plan_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conversation_plan_proto_rawDesc), len(file_conversation_plan_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

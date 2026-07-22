@@ -61,3 +61,46 @@ func (dao *ProjectDAO) GetProjectByIDs(ctx context.Context, projectIDs []int64) 
 		dao.query.TProject.ID.In(projectIDs...),
 	).Find()
 }
+
+// ProjectFilter defines fields for filtering projects.
+type ProjectFilter struct {
+	OrganizationID  *int64
+	CreatorUsername *string
+	OwnerUsername   *string
+}
+
+func (dao *ProjectDAO) ListProjects(
+	ctx context.Context, filter *ProjectFilter, offset, limit int,
+) ([]*model.TProject, int64, error) {
+	t := dao.query.TProject
+	q := t.WithContext(ctx)
+
+	if filter != nil {
+		if filter.OrganizationID != nil {
+			q = q.Where(t.OrganizationID.Eq(*filter.OrganizationID))
+		}
+		if filter.CreatorUsername != nil {
+			q = q.Where(t.CreatorUsername.Eq(*filter.CreatorUsername))
+		}
+		if filter.OwnerUsername != nil {
+			q = q.Where(t.OwnerUsername.Eq(*filter.OwnerUsername))
+		}
+	}
+
+	count, err := q.Count()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	q = q.Order(t.ID.Desc()).Offset(offset)
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+
+	projects, err := q.Find()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return projects, count, nil
+}

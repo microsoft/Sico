@@ -51,7 +51,7 @@ from app.biz.chat.workspace_init_hooks import (
     iter_history_subdirs,
 )
 from app.biz.reverse_grpc.knowledge import ReverseKnowledgeService
-from app.experiences.store import PlaybookStore
+from app.experiences.playbook import PlaybookStore
 from app.storage.fs import (
     CHAT_FS,
     KNOWLEDGE_DOCUMENT_FS,
@@ -64,6 +64,10 @@ _LOGGER = logging.getLogger(__name__)
 
 _HISTORY_TURN_COUNT = 3
 
+CLEAN_TMP_ON_WORKSPACE_INIT = True
+"""When ``True``, the ``.tmp/`` directory (used by tool output truncation)
+is cleared at the start of each turn during workspace initialization."""
+
 
 @dataclass(frozen=True)
 class WorkspaceInitOptions:
@@ -73,7 +77,7 @@ class WorkspaceInitOptions:
     retain_previous_attachments: bool = True
 
 
-async def init_workspace(
+async def init_workspace(  # noqa: PLR0913
     agent_instance_id: int,
     username: str,
     turn_id: int,
@@ -81,6 +85,7 @@ async def init_workspace(
     agent_id: str,
     attachments: list[Any] | None = None,
     options: WorkspaceInitOptions | None = None,
+    conversation_id: int = 0,
 ) -> None:
     """Initialize the workspace directory for a chat session.
 
@@ -88,8 +93,9 @@ async def init_workspace(
     unified workspace so that all LLM tools operate on a single directory.
     """
     _LOGGER.info(
-        "init_workspace start agent_instance_id=%s turn_id=%s project_id=%s agent_id=%s",
+        "init_workspace start agent_instance_id=%s conversation_id=%s turn_id=%s project_id=%s agent_id=%s",
         agent_instance_id,
+        conversation_id,
         turn_id,
         project_id,
         agent_id,
@@ -104,12 +110,18 @@ async def init_workspace(
         agent_id,
         attachments,
         options or WorkspaceInitOptions(),
+        conversation_id,
     )
 
-    _LOGGER.info("init_workspace completed agent_instance_id=%s turn_id=%s", agent_instance_id, turn_id)
+    _LOGGER.info(
+        "init_workspace completed agent_instance_id=%s conversation_id=%s turn_id=%s",
+        agent_instance_id,
+        conversation_id,
+        turn_id,
+    )
 
 
-def _init_workspace_sync(
+def _init_workspace_sync(  # noqa: PLR0913
     agent_instance_id: int,
     username: str,
     turn_id: int,
@@ -117,8 +129,10 @@ def _init_workspace_sync(
     agent_id: str,
     attachments: list[Any] | None,
     options: WorkspaceInitOptions,
+    conversation_id: int = 0,
 ) -> None:
-    workspace = CHAT_FS.get_workspace_path(agent_instance_id, username)
+    CHAT_FS.migrate_legacy_session(agent_instance_id, username, conversation_id)
+    workspace = CHAT_FS.get_workspace_path(agent_instance_id, username, conversation_id)
     workspace.mkdir(parents=True, exist_ok=True)
 
     _copy_skills(workspace, project_id, agent_id)
@@ -127,6 +141,9 @@ def _init_workspace_sync(
     else:
         _clear_workspace_subdir(workspace, "knowledge")
     _clear_workspace_subdir(workspace, "history")
+
+    if CLEAN_TMP_ON_WORKSPACE_INIT:
+        _clear_workspace_subdir(workspace, ".tmp")
     # ``results/`` (delegate_* task runtime artifacts) and ``case_sources/``
     # (parsed workbook manifests) are retained across turns. Their filenames are
     # content-/UUID-addressed (batch_id, run_id, ``<file>-<hash>.json``) so
@@ -143,6 +160,7 @@ def _init_workspace_sync(
         retain_previous=options.retain_previous_attachments,
         agent_instance_id=agent_instance_id,
         username=username,
+        conversation_id=conversation_id,
     )
 
 
@@ -345,19 +363,19 @@ def _copy_knowledge(workspace: Path, project_id: int, agent_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _copy_history(workspace: Path, agent_instance_id: int, username: str, current_turn_id: int) -> None:
+def _copy_history(workspace: Path, agent_instance_id: int, username: str, current_turn_id: int, conversation_id: int) -> None:
     history_dir = workspace / "history"
     if history_dir.exists():
         shutil.rmtree(history_dir)
     history_dir.mkdir(parents=True, exist_ok=True)
 
-    turn_ids = CHAT_FS.list_turn_ids(agent_instance_id, username)
+    turn_ids = CHAT_FS.list_turn_ids(agent_instance_id, username, conversation_id)
     # Exclude current turn, take last N
     past_turns = [t for t in turn_ids if t < current_turn_id]
     recent_turns = past_turns[-_HISTORY_TURN_COUNT:]
 
     for tid in recent_turns:
-        turn_path = CHAT_FS._get_turn_path(agent_instance_id, username, tid)
+        turn_path = CHAT_FS.get_turn_path(agent_instance_id, username, tid, conversation_id)
         if not turn_path.exists():
             continue
         dest = history_dir / f"turn-{tid}"
@@ -379,8 +397,12 @@ def _copy_history(workspace: Path, agent_instance_id: int, username: str, curren
             dest_report = dest / "report"
             shutil.copytree(report_dir, dest_report, dirs_exist_ok=True)
 
-    rerun_source_turns = _copy_rerun_sources_history(workspace, agent_instance_id, username, turn_ids, current_turn_id)
-    extra_history_turns = _copy_registered_history_subdirs(workspace, agent_instance_id, username, turn_ids, current_turn_id)
+    rerun_source_turns = _copy_rerun_sources_history(
+        workspace, agent_instance_id, username, conversation_id, turn_ids, current_turn_id
+    )
+    extra_history_turns = _copy_registered_history_subdirs(
+        workspace, agent_instance_id, username, conversation_id, turn_ids, current_turn_id
+    )
 
     _LOGGER.info(
         "Copied %d history turns, %d rerun source turns, and %d adapter history turns to workspace",
@@ -394,12 +416,13 @@ def _copy_rerun_sources_history(
     workspace: Path,
     agent_instance_id: int,
     username: str,
+    conversation_id: int,
     turn_ids: list[int],
     current_turn_id: int,
 ) -> int:
     copied = 0
     for tid in sorted((turn_id for turn_id in turn_ids if turn_id < current_turn_id), reverse=True):
-        source_dir = CHAT_FS._get_turn_path(agent_instance_id, username, tid) / RERUN_SOURCES_DIR
+        source_dir = CHAT_FS.get_turn_path(agent_instance_id, username, tid, conversation_id) / RERUN_SOURCES_DIR
         if not source_dir.exists():
             continue
         dest = workspace / "history" / f"turn-{tid}" / RERUN_SOURCES_DIR
@@ -412,6 +435,7 @@ def _copy_registered_history_subdirs(
     workspace: Path,
     agent_instance_id: int,
     username: str,
+    conversation_id: int,
     turn_ids: list[int],
     current_turn_id: int,
 ) -> int:
@@ -420,7 +444,7 @@ def _copy_registered_history_subdirs(
         return 0
     copied = 0
     for tid in sorted((turn_id for turn_id in turn_ids if turn_id < current_turn_id), reverse=True):
-        turn_root = CHAT_FS._get_turn_path(agent_instance_id, username, tid)
+        turn_root = CHAT_FS.get_turn_path(agent_instance_id, username, tid, conversation_id)
         copied_turn = False
         for subdir in subdirs:
             source_dir = turn_root / subdir
@@ -490,6 +514,7 @@ def _copy_attachments(
     retain_previous: bool = False,
     agent_instance_id: int = 0,
     username: str = "",
+    conversation_id: int = 0,
 ) -> None:
     attach_dir = workspace / "attachments"
     if not attachments:
@@ -529,6 +554,7 @@ def _copy_attachments(
                     attachment_type=att_type,
                     agent_instance_id=agent_instance_id,
                     username=username,
+                    conversation_id=conversation_id,
                     turn_id=turn_id,
                 )
             )
@@ -540,7 +566,6 @@ def _copy_attachments(
                 "path": f"attachments/{name}",
                 "url_path": f"attachments/{name}_url.txt",
                 "type": att_type,
-                "source_turn_id": turn_id,
                 "downloaded_at": int(time.time() * 1000),
             }
             copied += 1

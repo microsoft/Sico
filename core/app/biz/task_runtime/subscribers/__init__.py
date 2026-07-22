@@ -51,13 +51,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from . import audit_log, metrics
+from . import audit_log, experience_learning, metrics
 
 if TYPE_CHECKING:
     from ..event_bus import RuntimeEventBus, Unsubscribe
 
 __all__ = [
     "audit_log",
+    "experience_learning",
     "metrics",
     "register_default_subscribers",
 ]
@@ -77,4 +78,5 @@ def register_default_subscribers(bus: "RuntimeEventBus | None" = None) -> list["
     return [
         audit_log.register(target),
         metrics.register(target),
+        experience_learning.register(target),
     ]

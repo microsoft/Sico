@@ -130,6 +130,18 @@ func TestCreateConversation(t *testing.T) {
 		require.NotNil(t, resp.Data)
 		require.Greater(t, resp.Data.Id, int64(0))
 	})
+
+	t.Run("default title", func(t *testing.T) {
+		ctx := ctxWithUser("alice")
+		resp, err := service.CreateConversation(ctx, &convdto.CreateConversationRequest{
+			AgentInstanceId: 42,
+		})
+		require.NoError(t, err)
+
+		conv, err := service.conversationRepo.GetByID(ctx, resp.Data.Id)
+		require.NoError(t, err)
+		require.Equal(t, DefaultConversationTitle, conv.Title)
+	})
 }
 
 func TestUpdateConversation(t *testing.T) {
@@ -159,6 +171,91 @@ func TestUpdateConversation(t *testing.T) {
 		})
 		require.Error(t, err)
 	})
+}
+
+func TestListConversationFiltersByAgentInstance(t *testing.T) {
+	service := newTestConversationService()
+	ctx := ctxWithUser("alice")
+	_, err := service.conversationRepo.Create(ctx, &convEntity.Conversation{
+		CreatorUsername: "alice",
+		AgentInstanceID: 42,
+		Title:           "first",
+	})
+	require.NoError(t, err)
+	_, err = service.conversationRepo.Create(ctx, &convEntity.Conversation{
+		CreatorUsername: "alice",
+		AgentInstanceID: 43,
+		Title:           "other instance",
+	})
+	require.NoError(t, err)
+	_, err = service.conversationRepo.Create(ctx, &convEntity.Conversation{
+		CreatorUsername: "bob",
+		AgentInstanceID: 42,
+		Title:           "other user",
+	})
+	require.NoError(t, err)
+
+	resp, err := service.ListConversation(ctx, &convdto.ListConversationRequest{
+		AgentInstanceId: 42,
+		Page:            1,
+		PageSize:        10,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, resp.Data.Conversations, 1)
+	require.Equal(t, "first", resp.Data.Conversations[0].Title)
+}
+
+func TestDeleteConversation(t *testing.T) {
+	service := newTestConversationService()
+	ctx := ctxWithUser("alice")
+	createResp, err := service.CreateConversation(ctx, &convdto.CreateConversationRequest{
+		Title:           "delete me",
+		AgentInstanceId: 42,
+	})
+	require.NoError(t, err)
+
+	_, err = service.DeleteConversation(ctx, &convdto.DeleteConversationRequest{Id: createResp.Data.Id})
+	require.NoError(t, err)
+
+	conv, err := service.conversationRepo.GetByID(ctx, createResp.Data.Id)
+	require.NoError(t, err)
+	require.Nil(t, conv)
+}
+
+func TestRpcUpdateConversationTitleOnlyUpdatesDefaultTitle(t *testing.T) {
+	service := newTestConversationService()
+	ctx := context.Background()
+	defaultConv, err := service.conversationRepo.Create(ctx, &convEntity.Conversation{
+		CreatorUsername: "alice",
+		AgentInstanceID: 42,
+		Title:           DefaultConversationTitle,
+	})
+	require.NoError(t, err)
+	customConv, err := service.conversationRepo.Create(ctx, &convEntity.Conversation{
+		CreatorUsername: "alice",
+		AgentInstanceID: 42,
+		Title:           "My Custom Title",
+	})
+	require.NoError(t, err)
+
+	_, err = service.RpcUpdateConversationTitle(ctx, &rgrpc.UpdateConversationTitleRequest{
+		ConversationId: defaultConv.ID,
+		Title:          "Generated Summary",
+	})
+	require.NoError(t, err)
+	_, err = service.RpcUpdateConversationTitle(ctx, &rgrpc.UpdateConversationTitleRequest{
+		ConversationId: customConv.ID,
+		Title:          "Should Not Win",
+	})
+	require.NoError(t, err)
+
+	updatedDefault, err := service.conversationRepo.GetByID(ctx, defaultConv.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Generated Summary", updatedDefault.Title)
+	unchangedCustom, err := service.conversationRepo.GetByID(ctx, customConv.ID)
+	require.NoError(t, err)
+	require.Equal(t, "My Custom Title", unchangedCustom.Title)
 }
 
 func TestListConversationsStatusCount(t *testing.T) {
@@ -440,8 +537,8 @@ func TestRpcCreateMessage(t *testing.T) {
 			AgentInstanceId: 42,
 			Role:            "assistant",
 			ContentType:     convdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT,
-			Content:         "The task did not run.\n\nExecution summary: "+
-			"http://localhost:8080/storage/task-runtime/batch/summary.html",
+			Content: "The task did not run.\n\nExecution summary: " +
+				"http://localhost:8080/storage/task-runtime/batch/summary.html",
 		})
 		require.NoError(t, err)
 
@@ -729,6 +826,48 @@ func TestListMessagesByUserAndAgent(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, resp.Data)
 		require.Len(t, resp.Data.Messages, 2)
+	})
+
+	t.Run("explicit conversation id selects requested conversation", func(t *testing.T) {
+		otherConv, err := service.conversationRepo.Create(ctx, &convEntity.Conversation{
+			CreatorUsername: "alice",
+			AgentID:         "agent1",
+			AgentInstanceID: 42,
+		})
+		require.NoError(t, err)
+		_, err = service.messageRepo.Create(ctx, &msgEntity.Message{
+			ConversationId:  otherConv.ID,
+			TurnId:          2,
+			Username:        "alice",
+			AgentInstanceId: 42,
+			Role:            "user",
+			ContentType:     convdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT,
+			Content:         "second conversation",
+		})
+		require.NoError(t, err)
+
+		resp, err := service.ListMessagesByUserAndAgent(ctx, &convdto.ListMessagesByUserAndAgentRequest{
+			AgentInstanceId: 42,
+			AgentId:         "agent1",
+			ConversationId:  otherConv.ID,
+			Page:            1,
+			PageSize:        10,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, resp.Data)
+		require.Len(t, resp.Data.Messages, 1)
+		require.Equal(t, otherConv.ID, resp.Data.Messages[0].ConversationId)
+	})
+
+	t.Run("missing conversation id with multiple conversations returns error", func(t *testing.T) {
+		_, err := service.ListMessagesByUserAndAgent(ctx, &convdto.ListMessagesByUserAndAgentRequest{
+			AgentInstanceId: 42,
+			AgentId:         "agent1",
+			Page:            1,
+			PageSize:        10,
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "conversationId is required")
 	})
 
 	t.Run("zero agent instance id returns empty", func(t *testing.T) {

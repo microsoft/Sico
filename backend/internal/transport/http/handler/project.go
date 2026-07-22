@@ -124,6 +124,35 @@ func DeleteProject(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, resp)
 }
 
+// ListProjects lists projects with optional filters
+// @Router /api/sico/project/list [GET]
+// @Tags Project
+// @Accept json
+// @Produce json
+// @Param request query project.ListProjectFilter true "List projects filter"
+// @Success 200 {object} project.ListProjectResponse
+// @Security BearerAuth
+func ListProjects(ctx *gin.Context) {
+	var (
+		err error
+		req project.ListProjectFilter
+	)
+
+	err = ctx.ShouldBindQuery(&req)
+	if err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	resp, err := projectSVC.Default().ListProjects(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
 // GetUserProjectList gets the user's project list
 // @Router /api/sico/project/user_projects [GET]
 // @Tags Project

@@ -57,14 +57,15 @@ async def _search_memory_func(invocation_ctx: FunctionInvocationContext, **kwarg
         return {"error": "missing tool context"}
 
     agent_id = str(ctx.agent_instance_id) if ctx.agent_instance_id is not None else None
-    filters = build_memory_filters(username=ctx.username, agent_id=agent_id)
+    filters = build_memory_filters(username=ctx.username, agent_id=agent_id, conversation_id=ctx.conversation_id)
     if not filters:
         _LOGGER.warning("Search memory tool missing mem0 filters")
         return {"error": "missing mem0 filters"}
 
     _LOGGER.info(
-        "Search memory tool start agent_instance_id=%s username=%s query_len=%d threshold=%s",
+        "Search memory tool start agent_instance_id=%s conversation_id=%s username=%s query_len=%d threshold=%s",
         ctx.agent_instance_id,
+        ctx.conversation_id,
         ctx.username,
         len(query),
         _DEFAULT_THRESHOLD,

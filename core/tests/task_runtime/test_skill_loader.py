@@ -36,10 +36,10 @@ class _FakeWorkspaceLayout:
     def __init__(self, skills_root: Path) -> None:
         self._skills_root = skills_root
 
-    def turn_path(self, agent_instance_id: int, username: str, turn_id: int) -> Path:
+    def turn_path(self, agent_instance_id: int, username: str, turn_id: int, *, conversation_id: int = 0) -> Path:
         return self._skills_root / "turns" / str(agent_instance_id) / username / str(turn_id)
 
-    def workspace_path(self, agent_instance_id: int, username: str) -> Path:
+    def workspace_path(self, agent_instance_id: int, username: str, *, conversation_id: int = 0) -> Path:
         return self._skills_root / "workspace" / str(agent_instance_id) / username
 
     @property
@@ -95,10 +95,11 @@ def test_skill_resolver_projects_actions_json_as_cards(tmp_path: Path) -> None:
     assert card.requires_sandbox == "android"
     assert card.parameters == [{"name": "instructions", "description": "Test instructions.", "required": True}]
     section = SkillLoader(workspace).render_cards_section()
-    assert "These skill capabilities are available" in section
+    assert "These skills are available" in section
+    assert "kind: executable_action" in section
     assert "infra_requirements:" in section
     assert "requires_sandbox:" not in section
-    assert "invocation: invoke_skill" in section
+    assert "invocation: delegated task runtime skill action" in section
 
 
 def test_skill_loader_reads_latest_persisted_skill_version(tmp_path: Path, request) -> None:
@@ -181,8 +182,11 @@ def test_skill_resolver_includes_no_action_skill_as_capability_card(tmp_path: Pa
     assert card.description == "Test skill."
     assert "skill_name: docs-only" in section
     assert "description: Test skill." in section
+    assert "kind: instruction_only" in section
+    assert "skill_path: skills/100/SKILL.md" in section
+    assert "available chat tools such as curl" in section
     assert "action_name:" not in section
-    assert "invocation:" not in section
+    assert "delegated task runtime skill action" not in section
 
 
 def test_resolved_action_step_rejects_llm_supplied_env() -> None:

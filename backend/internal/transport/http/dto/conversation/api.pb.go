@@ -117,6 +117,7 @@ type ChatRequest struct {
 	Model             string                 `protobuf:"bytes,14,opt,name=model,proto3" json:"model,omitempty"`                                                     
 	AgentRole         string                 `protobuf:"bytes,15,opt,name=agent_role,json=agentRole,proto3" json:"agentRole,omitempty"`                            
 	ProjectName       string                 `protobuf:"bytes,16,opt,name=project_name,json=projectName,proto3" json:"projectName,omitempty"`                      
+	NeedUpdateTitle   bool                   `protobuf:"varint,17,opt,name=need_update_title,json=needUpdateTitle,proto3" json:"needUpdateTitle,omitempty"`       
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -256,6 +257,13 @@ func (x *ChatRequest) GetProjectName() string {
 	return ""
 }
 
+func (x *ChatRequest) GetNeedUpdateTitle() bool {
+	if x != nil {
+		return x.NeedUpdateTitle
+	}
+	return false
+}
+
 type ChatDirectResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
@@ -315,6 +323,7 @@ type ListMessagesByUserAndAgentRequest struct {
 	Page            int32                  `protobuf:"varint,3,opt,name=page,proto3" json:"page" form:"page" binding:"min=1" default:"1"`                                                 
 	PageSize        int32                  `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"pageSize" form:"pageSize" binding:"min=1,max=50" default:"10"`                         
 	TurnId          *int64                 `protobuf:"varint,5,opt,name=turn_id,json=turnId,proto3,oneof" json:"turnId,omitempty" form:"turnId"`                         
+	ConversationId  int64                  `protobuf:"varint,6,opt,name=conversation_id,json=conversationId,proto3" json:"conversationId,omitempty" form:"conversationId"`       
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -380,6 +389,13 @@ func (x *ListMessagesByUserAndAgentRequest) GetPageSize() int32 {
 func (x *ListMessagesByUserAndAgentRequest) GetTurnId() int64 {
 	if x != nil && x.TurnId != nil {
 		return *x.TurnId
+	}
+	return 0
+}
+
+func (x *ListMessagesByUserAndAgentRequest) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
 	}
 	return 0
 }
@@ -618,10 +634,8 @@ func (x *GetUserMessageByUserAgentTurnIDResponse) GetMsg() string {
 
 type UpdateConversationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id" binding:"required"`                                                                                                       
-	MetaData      map[string]string      `protobuf:"bytes,2,rep,name=meta_data,json=metaData,proto3" json:"metaData" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`  
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title"`                                                                                                  
-	Status        int32                  `protobuf:"varint,4,opt,name=status,proto3" json:"status"`                                                                                               
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id" binding:"required"`       
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -663,25 +677,11 @@ func (x *UpdateConversationRequest) GetId() int64 {
 	return 0
 }
 
-func (x *UpdateConversationRequest) GetMetaData() map[string]string {
-	if x != nil {
-		return x.MetaData
-	}
-	return nil
-}
-
 func (x *UpdateConversationRequest) GetTitle() string {
 	if x != nil {
 		return x.Title
 	}
 	return ""
-}
-
-func (x *UpdateConversationRequest) GetStatus() int32 {
-	if x != nil {
-		return x.Status
-	}
-	return 0
 }
 
 type UpdateConversationResponse struct {
@@ -737,11 +737,12 @@ func (x *UpdateConversationResponse) GetMsg() string {
 }
 
 type ListConversationRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page" form:"page" binding:"min=0" default:"1"`                          
-	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"10"`  
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AgentInstanceId int64                  `protobuf:"varint,1,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId" form:"agentInstanceId" binding:"required"`  
+	Page            int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page" form:"page" binding:"min=0" default:"1"`                                                 
+	PageSize        int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"10"`                         
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ListConversationRequest) Reset() {
@@ -772,6 +773,13 @@ func (x *ListConversationRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListConversationRequest.ProtoReflect.Descriptor instead.
 func (*ListConversationRequest) Descriptor() ([]byte, []int) {
 	return file_conversation_api_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListConversationRequest) GetAgentInstanceId() int64 {
+	if x != nil {
+		return x.AgentInstanceId
+	}
+	return 0
 }
 
 func (x *ListConversationRequest) GetPage() int32 {
@@ -849,9 +857,9 @@ func (x *ListConversationResponse) GetMsg() string {
 }
 
 type ListConversationData struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Conversations []*ConversationData    `protobuf:"bytes,1,rep,name=conversations,proto3" json:"conversations"`      
-	HasMore       bool                   `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"hasMore"`  
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Conversations []*ConversationListItem `protobuf:"bytes,1,rep,name=conversations,proto3" json:"conversations"`      
+	HasMore       bool                    `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"hasMore"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -886,7 +894,7 @@ func (*ListConversationData) Descriptor() ([]byte, []int) {
 	return file_conversation_api_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *ListConversationData) GetConversations() []*ConversationData {
+func (x *ListConversationData) GetConversations() []*ConversationListItem {
 	if x != nil {
 		return x.Conversations
 	}
@@ -900,6 +908,102 @@ func (x *ListConversationData) GetHasMore() bool {
 	return false
 }
 
+type DeleteConversationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id" form:"id" binding:"required"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteConversationRequest) Reset() {
+	*x = DeleteConversationRequest{}
+	mi := &file_conversation_api_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteConversationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteConversationRequest) ProtoMessage() {}
+
+func (x *DeleteConversationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_api_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteConversationRequest.ProtoReflect.Descriptor instead.
+func (*DeleteConversationRequest) Descriptor() ([]byte, []int) {
+	return file_conversation_api_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DeleteConversationRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type DeleteConversationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteConversationResponse) Reset() {
+	*x = DeleteConversationResponse{}
+	mi := &file_conversation_api_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteConversationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteConversationResponse) ProtoMessage() {}
+
+func (x *DeleteConversationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_api_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteConversationResponse.ProtoReflect.Descriptor instead.
+func (*DeleteConversationResponse) Descriptor() ([]byte, []int) {
+	return file_conversation_api_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DeleteConversationResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *DeleteConversationResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
 type GetConversationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty" form:"id" binding:"required"`  
@@ -909,7 +1013,7 @@ type GetConversationRequest struct {
 
 func (x *GetConversationRequest) Reset() {
 	*x = GetConversationRequest{}
-	mi := &file_conversation_api_proto_msgTypes[12]
+	mi := &file_conversation_api_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -921,7 +1025,7 @@ func (x *GetConversationRequest) String() string {
 func (*GetConversationRequest) ProtoMessage() {}
 
 func (x *GetConversationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[12]
+	mi := &file_conversation_api_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -934,7 +1038,7 @@ func (x *GetConversationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConversationRequest.ProtoReflect.Descriptor instead.
 func (*GetConversationRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{12}
+	return file_conversation_api_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetConversationRequest) GetId() int64 {
@@ -955,7 +1059,7 @@ type GetConversationResponse struct {
 
 func (x *GetConversationResponse) Reset() {
 	*x = GetConversationResponse{}
-	mi := &file_conversation_api_proto_msgTypes[13]
+	mi := &file_conversation_api_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -967,7 +1071,7 @@ func (x *GetConversationResponse) String() string {
 func (*GetConversationResponse) ProtoMessage() {}
 
 func (x *GetConversationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[13]
+	mi := &file_conversation_api_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -980,7 +1084,7 @@ func (x *GetConversationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConversationResponse.ProtoReflect.Descriptor instead.
 func (*GetConversationResponse) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{13}
+	return file_conversation_api_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetConversationResponse) GetData() *GetConversationData {
@@ -1013,7 +1117,7 @@ type GetConversationData struct {
 
 func (x *GetConversationData) Reset() {
 	*x = GetConversationData{}
-	mi := &file_conversation_api_proto_msgTypes[14]
+	mi := &file_conversation_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1025,7 +1129,7 @@ func (x *GetConversationData) String() string {
 func (*GetConversationData) ProtoMessage() {}
 
 func (x *GetConversationData) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[14]
+	mi := &file_conversation_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1038,7 +1142,7 @@ func (x *GetConversationData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConversationData.ProtoReflect.Descriptor instead.
 func (*GetConversationData) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{14}
+	return file_conversation_api_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetConversationData) GetConversation() *ConversationData {
@@ -1058,7 +1162,7 @@ type ListConversationStatusCountRequest struct {
 
 func (x *ListConversationStatusCountRequest) Reset() {
 	*x = ListConversationStatusCountRequest{}
-	mi := &file_conversation_api_proto_msgTypes[15]
+	mi := &file_conversation_api_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1070,7 +1174,7 @@ func (x *ListConversationStatusCountRequest) String() string {
 func (*ListConversationStatusCountRequest) ProtoMessage() {}
 
 func (x *ListConversationStatusCountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[15]
+	mi := &file_conversation_api_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1083,7 +1187,7 @@ func (x *ListConversationStatusCountRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListConversationStatusCountRequest.ProtoReflect.Descriptor instead.
 func (*ListConversationStatusCountRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{15}
+	return file_conversation_api_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListConversationStatusCountRequest) GetAgentId() string {
@@ -1111,7 +1215,7 @@ type ListConversationStatusCountResponse struct {
 
 func (x *ListConversationStatusCountResponse) Reset() {
 	*x = ListConversationStatusCountResponse{}
-	mi := &file_conversation_api_proto_msgTypes[16]
+	mi := &file_conversation_api_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1123,7 +1227,7 @@ func (x *ListConversationStatusCountResponse) String() string {
 func (*ListConversationStatusCountResponse) ProtoMessage() {}
 
 func (x *ListConversationStatusCountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[16]
+	mi := &file_conversation_api_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1136,7 +1240,7 @@ func (x *ListConversationStatusCountResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ListConversationStatusCountResponse.ProtoReflect.Descriptor instead.
 func (*ListConversationStatusCountResponse) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{16}
+	return file_conversation_api_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListConversationStatusCountResponse) GetData() *ListConversationStatusCountData {
@@ -1169,7 +1273,7 @@ type ListConversationStatusCountData struct {
 
 func (x *ListConversationStatusCountData) Reset() {
 	*x = ListConversationStatusCountData{}
-	mi := &file_conversation_api_proto_msgTypes[17]
+	mi := &file_conversation_api_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1181,7 +1285,7 @@ func (x *ListConversationStatusCountData) String() string {
 func (*ListConversationStatusCountData) ProtoMessage() {}
 
 func (x *ListConversationStatusCountData) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[17]
+	mi := &file_conversation_api_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1194,7 +1298,7 @@ func (x *ListConversationStatusCountData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConversationStatusCountData.ProtoReflect.Descriptor instead.
 func (*ListConversationStatusCountData) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{17}
+	return file_conversation_api_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListConversationStatusCountData) GetStatusCountMap() map[int32]int64 {
@@ -1216,7 +1320,7 @@ type GetPlanRequest struct {
 
 func (x *GetPlanRequest) Reset() {
 	*x = GetPlanRequest{}
-	mi := &file_conversation_api_proto_msgTypes[18]
+	mi := &file_conversation_api_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1228,7 +1332,7 @@ func (x *GetPlanRequest) String() string {
 func (*GetPlanRequest) ProtoMessage() {}
 
 func (x *GetPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[18]
+	mi := &file_conversation_api_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1241,7 +1345,7 @@ func (x *GetPlanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlanRequest.ProtoReflect.Descriptor instead.
 func (*GetPlanRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{18}
+	return file_conversation_api_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetPlanRequest) GetAgentInstanceId() int64 {
@@ -1282,7 +1386,7 @@ type GetPlanData struct {
 
 func (x *GetPlanData) Reset() {
 	*x = GetPlanData{}
-	mi := &file_conversation_api_proto_msgTypes[19]
+	mi := &file_conversation_api_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1294,7 +1398,7 @@ func (x *GetPlanData) String() string {
 func (*GetPlanData) ProtoMessage() {}
 
 func (x *GetPlanData) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[19]
+	mi := &file_conversation_api_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1307,7 +1411,7 @@ func (x *GetPlanData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlanData.ProtoReflect.Descriptor instead.
 func (*GetPlanData) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{19}
+	return file_conversation_api_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetPlanData) GetPlan() *Plan {
@@ -1335,7 +1439,7 @@ type GetPlanResponse struct {
 
 func (x *GetPlanResponse) Reset() {
 	*x = GetPlanResponse{}
-	mi := &file_conversation_api_proto_msgTypes[20]
+	mi := &file_conversation_api_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1347,7 +1451,7 @@ func (x *GetPlanResponse) String() string {
 func (*GetPlanResponse) ProtoMessage() {}
 
 func (x *GetPlanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[20]
+	mi := &file_conversation_api_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1360,7 +1464,7 @@ func (x *GetPlanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlanResponse.ProtoReflect.Descriptor instead.
 func (*GetPlanResponse) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{20}
+	return file_conversation_api_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetPlanResponse) GetData() *GetPlanData {
@@ -1396,7 +1500,7 @@ type CancelPlanRequest struct {
 
 func (x *CancelPlanRequest) Reset() {
 	*x = CancelPlanRequest{}
-	mi := &file_conversation_api_proto_msgTypes[21]
+	mi := &file_conversation_api_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1408,7 +1512,7 @@ func (x *CancelPlanRequest) String() string {
 func (*CancelPlanRequest) ProtoMessage() {}
 
 func (x *CancelPlanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[21]
+	mi := &file_conversation_api_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1421,7 +1525,7 @@ func (x *CancelPlanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelPlanRequest.ProtoReflect.Descriptor instead.
 func (*CancelPlanRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{21}
+	return file_conversation_api_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CancelPlanRequest) GetAgentInstanceId() int64 {
@@ -1462,7 +1566,7 @@ type CancelPlanResponse struct {
 
 func (x *CancelPlanResponse) Reset() {
 	*x = CancelPlanResponse{}
-	mi := &file_conversation_api_proto_msgTypes[22]
+	mi := &file_conversation_api_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1474,7 +1578,7 @@ func (x *CancelPlanResponse) String() string {
 func (*CancelPlanResponse) ProtoMessage() {}
 
 func (x *CancelPlanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[22]
+	mi := &file_conversation_api_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1487,7 +1591,7 @@ func (x *CancelPlanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelPlanResponse.ProtoReflect.Descriptor instead.
 func (*CancelPlanResponse) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{22}
+	return file_conversation_api_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CancelPlanResponse) GetCode() int32 {
@@ -1515,7 +1619,7 @@ type GenerateOnboardRoleScopeResponse struct {
 
 func (x *GenerateOnboardRoleScopeResponse) Reset() {
 	*x = GenerateOnboardRoleScopeResponse{}
-	mi := &file_conversation_api_proto_msgTypes[23]
+	mi := &file_conversation_api_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1527,7 +1631,7 @@ func (x *GenerateOnboardRoleScopeResponse) String() string {
 func (*GenerateOnboardRoleScopeResponse) ProtoMessage() {}
 
 func (x *GenerateOnboardRoleScopeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[23]
+	mi := &file_conversation_api_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1540,7 +1644,7 @@ func (x *GenerateOnboardRoleScopeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateOnboardRoleScopeResponse.ProtoReflect.Descriptor instead.
 func (*GenerateOnboardRoleScopeResponse) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{23}
+	return file_conversation_api_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GenerateOnboardRoleScopeResponse) GetRoleScope() string {
@@ -1576,7 +1680,7 @@ type GenerateOnboardRecommendationTasksRequest struct {
 
 func (x *GenerateOnboardRecommendationTasksRequest) Reset() {
 	*x = GenerateOnboardRecommendationTasksRequest{}
-	mi := &file_conversation_api_proto_msgTypes[24]
+	mi := &file_conversation_api_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1588,7 +1692,7 @@ func (x *GenerateOnboardRecommendationTasksRequest) String() string {
 func (*GenerateOnboardRecommendationTasksRequest) ProtoMessage() {}
 
 func (x *GenerateOnboardRecommendationTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[24]
+	mi := &file_conversation_api_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1601,7 +1705,7 @@ func (x *GenerateOnboardRecommendationTasksRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use GenerateOnboardRecommendationTasksRequest.ProtoReflect.Descriptor instead.
 func (*GenerateOnboardRecommendationTasksRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{24}
+	return file_conversation_api_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *GenerateOnboardRecommendationTasksRequest) GetAgentInstanceId() int64 {
@@ -1642,7 +1746,7 @@ type RecommendationTask struct {
 
 func (x *RecommendationTask) Reset() {
 	*x = RecommendationTask{}
-	mi := &file_conversation_api_proto_msgTypes[25]
+	mi := &file_conversation_api_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1654,7 +1758,7 @@ func (x *RecommendationTask) String() string {
 func (*RecommendationTask) ProtoMessage() {}
 
 func (x *RecommendationTask) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[25]
+	mi := &file_conversation_api_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1667,7 +1771,7 @@ func (x *RecommendationTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecommendationTask.ProtoReflect.Descriptor instead.
 func (*RecommendationTask) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{25}
+	return file_conversation_api_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RecommendationTask) GetMessage() string {
@@ -1693,7 +1797,7 @@ type GenerateOnboardRecommendationTasksData struct {
 
 func (x *GenerateOnboardRecommendationTasksData) Reset() {
 	*x = GenerateOnboardRecommendationTasksData{}
-	mi := &file_conversation_api_proto_msgTypes[26]
+	mi := &file_conversation_api_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1705,7 +1809,7 @@ func (x *GenerateOnboardRecommendationTasksData) String() string {
 func (*GenerateOnboardRecommendationTasksData) ProtoMessage() {}
 
 func (x *GenerateOnboardRecommendationTasksData) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[26]
+	mi := &file_conversation_api_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1718,7 +1822,7 @@ func (x *GenerateOnboardRecommendationTasksData) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use GenerateOnboardRecommendationTasksData.ProtoReflect.Descriptor instead.
 func (*GenerateOnboardRecommendationTasksData) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{26}
+	return file_conversation_api_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *GenerateOnboardRecommendationTasksData) GetTasks() []*RecommendationTask {
@@ -1739,7 +1843,7 @@ type GenerateOnboardRecommendationTasksResponse struct {
 
 func (x *GenerateOnboardRecommendationTasksResponse) Reset() {
 	*x = GenerateOnboardRecommendationTasksResponse{}
-	mi := &file_conversation_api_proto_msgTypes[27]
+	mi := &file_conversation_api_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1751,7 +1855,7 @@ func (x *GenerateOnboardRecommendationTasksResponse) String() string {
 func (*GenerateOnboardRecommendationTasksResponse) ProtoMessage() {}
 
 func (x *GenerateOnboardRecommendationTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_api_proto_msgTypes[27]
+	mi := &file_conversation_api_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1764,7 +1868,7 @@ func (x *GenerateOnboardRecommendationTasksResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use GenerateOnboardRecommendationTasksResponse.ProtoReflect.Descriptor instead.
 func (*GenerateOnboardRecommendationTasksResponse) Descriptor() ([]byte, []int) {
-	return file_conversation_api_proto_rawDescGZIP(), []int{27}
+	return file_conversation_api_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *GenerateOnboardRecommendationTasksResponse) GetData() *GenerateOnboardRecommendationTasksData {
@@ -1792,7 +1896,7 @@ var File_conversation_api_proto protoreflect.FileDescriptor
 
 const file_conversation_api_proto_rawDesc = "" +
 	"\n" +
-	"\x16conversation/api.proto\x12\x03api\x1a\x16conversation/msg.proto\x1a\x17conversation/plan.proto\x1a\x17conversation/chat.proto\x1a\x1fconversation/conversation.proto\x1a\x13common/common.proto\"\xae\x04\n" +
+	"\x16conversation/api.proto\x12\x03api\x1a\x16conversation/msg.proto\x1a\x17conversation/plan.proto\x1a\x17conversation/chat.proto\x1a\x1fconversation/conversation.proto\x1a\x13common/common.proto\"\xda\x04\n" +
 	"\vChatRequest\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12+\n" +
 	"\amessage\x18\x02 \x01(\v2\x11.chat.ChatContentR\amessage\x12\x19\n" +
@@ -1812,16 +1916,18 @@ const file_conversation_api_proto_rawDesc = "" +
 	"\x05model\x18\x0e \x01(\tR\x05model\x12\x1d\n" +
 	"\n" +
 	"agent_role\x18\x0f \x01(\tR\tagentRole\x12!\n" +
-	"\fproject_name\x18\x10 \x01(\tR\vprojectName\"<\n" +
+	"\fproject_name\x18\x10 \x01(\tR\vprojectName\x12*\n" +
+	"\x11need_update_title\x18\x11 \x01(\bR\x0fneedUpdateTitle\"<\n" +
 	"\x12ChatDirectResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\xc5\x01\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\xee\x01\n" +
 	"!ListMessagesByUserAndAgentRequest\x12*\n" +
 	"\x11agent_instance_id\x18\x01 \x01(\x03R\x0fagentInstanceId\x12\x19\n" +
 	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x12\n" +
 	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\x12\x1c\n" +
-	"\aturn_id\x18\x05 \x01(\x03H\x00R\x06turnId\x88\x01\x01B\n" +
+	"\aturn_id\x18\x05 \x01(\x03H\x00R\x06turnId\x88\x01\x01\x12'\n" +
+	"\x0fconversation_id\x18\x06 \x01(\x03R\x0econversationIdB\n" +
 	"\n" +
 	"\b_turn_id\"i\n" +
 	"\x1eListMessagesByUserAndAgentData\x12,\n" +
@@ -1839,28 +1945,29 @@ const file_conversation_api_proto_rawDesc = "" +
 	"\x04data\x18\x01 \x01(\v2\x10.msg.MessageItemH\x00R\x04data\x88\x01\x01\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msgB\a\n" +
-	"\x05_data\"\xe1\x01\n" +
+	"\x05_data\"A\n" +
 	"\x19UpdateConversationRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\x12I\n" +
-	"\tmeta_data\x18\x02 \x03(\v2,.api.UpdateConversationRequest.MetaDataEntryR\bmetaData\x12\x14\n" +
-	"\x05title\x18\x03 \x01(\tR\x05title\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\x05R\x06status\x1a;\n" +
-	"\rMetaDataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\"D\n" +
 	"\x1aUpdateConversationResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"J\n" +
-	"\x17ListConversationRequest\x12\x12\n" +
-	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"q\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"v\n" +
+	"\x17ListConversationRequest\x12*\n" +
+	"\x11agent_instance_id\x18\x01 \x01(\x03R\x0fagentInstanceId\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\"q\n" +
 	"\x18ListConversationResponse\x12-\n" +
 	"\x04data\x18\x01 \x01(\v2\x19.api.ListConversationDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"w\n" +
-	"\x14ListConversationData\x12D\n" +
-	"\rconversations\x18\x01 \x03(\v2\x1e.conversation.ConversationDataR\rconversations\x12\x19\n" +
-	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"(\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"{\n" +
+	"\x14ListConversationData\x12H\n" +
+	"\rconversations\x18\x01 \x03(\v2\".conversation.ConversationListItemR\rconversations\x12\x19\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"+\n" +
+	"\x19DeleteConversationRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"D\n" +
+	"\x1aDeleteConversationResponse\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"(\n" +
 	"\x16GetConversationRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"o\n" +
 	"\x17GetConversationResponse\x12,\n" +
@@ -1943,7 +2050,7 @@ func file_conversation_api_proto_rawDescGZIP() []byte {
 }
 
 var file_conversation_api_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_conversation_api_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_conversation_api_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_conversation_api_proto_goTypes = []any{
 	(RecommendationTaskIcon)(0),                        // 0: api.RecommendationTaskIcon
 	(*ChatRequest)(nil),                                // 1: api.ChatRequest
@@ -1958,55 +2065,56 @@ var file_conversation_api_proto_goTypes = []any{
 	(*ListConversationRequest)(nil),                    // 10: api.ListConversationRequest
 	(*ListConversationResponse)(nil),                   // 11: api.ListConversationResponse
 	(*ListConversationData)(nil),                       // 12: api.ListConversationData
-	(*GetConversationRequest)(nil),                     // 13: api.GetConversationRequest
-	(*GetConversationResponse)(nil),                    // 14: api.GetConversationResponse
-	(*GetConversationData)(nil),                        // 15: api.GetConversationData
-	(*ListConversationStatusCountRequest)(nil),         // 16: api.ListConversationStatusCountRequest
-	(*ListConversationStatusCountResponse)(nil),        // 17: api.ListConversationStatusCountResponse
-	(*ListConversationStatusCountData)(nil),            // 18: api.ListConversationStatusCountData
-	(*GetPlanRequest)(nil),                             // 19: api.GetPlanRequest
-	(*GetPlanData)(nil),                                // 20: api.GetPlanData
-	(*GetPlanResponse)(nil),                            // 21: api.GetPlanResponse
-	(*CancelPlanRequest)(nil),                          // 22: api.CancelPlanRequest
-	(*CancelPlanResponse)(nil),                         // 23: api.CancelPlanResponse
-	(*GenerateOnboardRoleScopeResponse)(nil),           // 24: api.GenerateOnboardRoleScopeResponse
-	(*GenerateOnboardRecommendationTasksRequest)(nil),  // 25: api.GenerateOnboardRecommendationTasksRequest
-	(*RecommendationTask)(nil),                         // 26: api.RecommendationTask
-	(*GenerateOnboardRecommendationTasksData)(nil),     // 27: api.GenerateOnboardRecommendationTasksData
-	(*GenerateOnboardRecommendationTasksResponse)(nil), // 28: api.GenerateOnboardRecommendationTasksResponse
-	nil,                       // 29: api.UpdateConversationRequest.MetaDataEntry
-	nil,                       // 30: api.ListConversationStatusCountData.StatusCountMapEntry
-	(*ChatContent)(nil),       // 31: chat.ChatContent
-	(*common.Attachment)(nil), // 32: common.Attachment
-	(*MessageItem)(nil),       // 33: msg.MessageItem
-	(*ConversationData)(nil),  // 34: conversation.ConversationData
-	(*Plan)(nil),              // 35: plan.Plan
-	(PlanStatus)(0),           // 36: plan.PlanStatus
+	(*DeleteConversationRequest)(nil),                  // 13: api.DeleteConversationRequest
+	(*DeleteConversationResponse)(nil),                 // 14: api.DeleteConversationResponse
+	(*GetConversationRequest)(nil),                     // 15: api.GetConversationRequest
+	(*GetConversationResponse)(nil),                    // 16: api.GetConversationResponse
+	(*GetConversationData)(nil),                        // 17: api.GetConversationData
+	(*ListConversationStatusCountRequest)(nil),         // 18: api.ListConversationStatusCountRequest
+	(*ListConversationStatusCountResponse)(nil),        // 19: api.ListConversationStatusCountResponse
+	(*ListConversationStatusCountData)(nil),            // 20: api.ListConversationStatusCountData
+	(*GetPlanRequest)(nil),                             // 21: api.GetPlanRequest
+	(*GetPlanData)(nil),                                // 22: api.GetPlanData
+	(*GetPlanResponse)(nil),                            // 23: api.GetPlanResponse
+	(*CancelPlanRequest)(nil),                          // 24: api.CancelPlanRequest
+	(*CancelPlanResponse)(nil),                         // 25: api.CancelPlanResponse
+	(*GenerateOnboardRoleScopeResponse)(nil),           // 26: api.GenerateOnboardRoleScopeResponse
+	(*GenerateOnboardRecommendationTasksRequest)(nil),  // 27: api.GenerateOnboardRecommendationTasksRequest
+	(*RecommendationTask)(nil),                         // 28: api.RecommendationTask
+	(*GenerateOnboardRecommendationTasksData)(nil),     // 29: api.GenerateOnboardRecommendationTasksData
+	(*GenerateOnboardRecommendationTasksResponse)(nil), // 30: api.GenerateOnboardRecommendationTasksResponse
+	nil,                          // 31: api.ListConversationStatusCountData.StatusCountMapEntry
+	(*ChatContent)(nil),          // 32: chat.ChatContent
+	(*common.Attachment)(nil),    // 33: common.Attachment
+	(*MessageItem)(nil),          // 34: msg.MessageItem
+	(*ConversationListItem)(nil), // 35: conversation.ConversationListItem
+	(*ConversationData)(nil),     // 36: conversation.ConversationData
+	(*Plan)(nil),                 // 37: plan.Plan
+	(PlanStatus)(0),              // 38: plan.PlanStatus
 }
 var file_conversation_api_proto_depIdxs = []int32{
-	31, // 0: api.ChatRequest.message:type_name -> chat.ChatContent
-	32, // 1: api.ChatRequest.agent_attachments:type_name -> common.Attachment
-	33, // 2: api.ListMessagesByUserAndAgentData.messages:type_name -> msg.MessageItem
+	32, // 0: api.ChatRequest.message:type_name -> chat.ChatContent
+	33, // 1: api.ChatRequest.agent_attachments:type_name -> common.Attachment
+	34, // 2: api.ListMessagesByUserAndAgentData.messages:type_name -> msg.MessageItem
 	4,  // 3: api.ListMessagesByUserAndAgentResponse.data:type_name -> api.ListMessagesByUserAndAgentData
-	33, // 4: api.GetUserMessageByUserAgentTurnIDResponse.data:type_name -> msg.MessageItem
-	29, // 5: api.UpdateConversationRequest.meta_data:type_name -> api.UpdateConversationRequest.MetaDataEntry
-	12, // 6: api.ListConversationResponse.data:type_name -> api.ListConversationData
-	34, // 7: api.ListConversationData.conversations:type_name -> conversation.ConversationData
-	15, // 8: api.GetConversationResponse.data:type_name -> api.GetConversationData
-	34, // 9: api.GetConversationData.conversation:type_name -> conversation.ConversationData
-	18, // 10: api.ListConversationStatusCountResponse.data:type_name -> api.ListConversationStatusCountData
-	30, // 11: api.ListConversationStatusCountData.status_count_map:type_name -> api.ListConversationStatusCountData.StatusCountMapEntry
-	35, // 12: api.GetPlanData.plan:type_name -> plan.Plan
-	36, // 13: api.GetPlanData.status:type_name -> plan.PlanStatus
-	20, // 14: api.GetPlanResponse.data:type_name -> api.GetPlanData
-	0,  // 15: api.RecommendationTask.icon:type_name -> api.RecommendationTaskIcon
-	26, // 16: api.GenerateOnboardRecommendationTasksData.tasks:type_name -> api.RecommendationTask
-	27, // 17: api.GenerateOnboardRecommendationTasksResponse.data:type_name -> api.GenerateOnboardRecommendationTasksData
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	34, // 4: api.GetUserMessageByUserAgentTurnIDResponse.data:type_name -> msg.MessageItem
+	12, // 5: api.ListConversationResponse.data:type_name -> api.ListConversationData
+	35, // 6: api.ListConversationData.conversations:type_name -> conversation.ConversationListItem
+	17, // 7: api.GetConversationResponse.data:type_name -> api.GetConversationData
+	36, // 8: api.GetConversationData.conversation:type_name -> conversation.ConversationData
+	20, // 9: api.ListConversationStatusCountResponse.data:type_name -> api.ListConversationStatusCountData
+	31, // 10: api.ListConversationStatusCountData.status_count_map:type_name -> api.ListConversationStatusCountData.StatusCountMapEntry
+	37, // 11: api.GetPlanData.plan:type_name -> plan.Plan
+	38, // 12: api.GetPlanData.status:type_name -> plan.PlanStatus
+	22, // 13: api.GetPlanResponse.data:type_name -> api.GetPlanData
+	0,  // 14: api.RecommendationTask.icon:type_name -> api.RecommendationTaskIcon
+	28, // 15: api.GenerateOnboardRecommendationTasksData.tasks:type_name -> api.RecommendationTask
+	29, // 16: api.GenerateOnboardRecommendationTasksResponse.data:type_name -> api.GenerateOnboardRecommendationTasksData
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_conversation_api_proto_init() }
@@ -2026,7 +2134,7 @@ func file_conversation_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conversation_api_proto_rawDesc), len(file_conversation_api_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   30,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

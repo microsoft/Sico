@@ -95,7 +95,7 @@ class TestTrajectoryDataSchema:
         expected = {
             "task", "success", "total_steps", "chronological_steps",
             "final_output", "error", "duration_seconds", "agent_type",
-            "all_cited_bullet_ids", "metadata", "judge_result",
+            "all_cited_bullet_ids", "metadata", "judge_result", "raw_trace",
         }
         assert set(props.keys()) == expected
 

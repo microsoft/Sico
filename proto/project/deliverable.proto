@@ -1,0 +1,111 @@
+// Copyright (c) 2026 Sico Authors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+syntax = "proto3";
+package project;
+
+import "common/common.proto";
+
+option go_package = "sico-backend/internal/transport/http/dto/project";
+
+// ProjectDeliverableExtraInfo holds additional display information for a deliverable.
+message ProjectDeliverableExtraInfo {
+    common.AgentInstanceDigest agent_instance = 1; // @gotag: json:"agentInstance"
+}
+
+// ProjectDeliverable represents a file deliverable published to a project.
+message ProjectDeliverable {
+    int64 id = 1; // @gotag: json:"id"
+    int64 project_id = 2; // @gotag: json:"projectId"
+    string file_name = 3; // @gotag: json:"fileName"
+    string file_uri = 4; // @gotag: json:"fileUri"
+    string file_sas_url = 5; // @gotag: json:"fileSasUrl"
+    string creator_username = 6; // @gotag: json:"creatorUsername"
+    int64 agent_instance_id = 7; // @gotag: json:"agentInstanceId"
+    int64 created_at = 8; // @gotag: json:"createdAt"
+    int64 updated_at = 9; // @gotag: json:"updatedAt"
+    ProjectDeliverableExtraInfo extra_info = 10; // @gotag: json:"extraInfo"
+}
+
+// Request message for creating a project deliverable
+message CreateProjectDeliverableRequest {
+    int64 project_id = 1; // @gotag: json:"projectId" binding:"required"
+    int64 agent_instance_id = 2; // @gotag: json:"agentInstanceId" binding:"required"
+    string file_uri = 3; // @gotag: json:"fileUri" binding:"required"
+    string file_name = 4; // @gotag: json:"fileName" binding:"required"
+}
+
+// Response message for creating a project deliverable
+message CreateProjectDeliverableResponse {
+    CreateProjectDeliverableData data = 1; // @gotag: json:"data"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message CreateProjectDeliverableData {
+    int64 id = 1; // @gotag: json:"id"
+}
+
+// Request message for listing project deliverables
+message ListProjectDeliverablesRequest {
+    int64 project_id = 1; // @gotag: form:"projectId" binding:"required"
+    int32 page = 2; // @gotag: form:"page" binding:"min=1" default:"1"
+    int32 page_size = 3; // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+}
+
+// Response message for listing project deliverables
+message ListProjectDeliverablesResponse {
+    ListProjectDeliverablesData data = 1; // @gotag: json:"data"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message ListProjectDeliverablesData {
+    repeated ProjectDeliverable deliverables = 1; // @gotag: json:"deliverables"
+    int32 total = 2; // @gotag: json:"total"
+    bool has_more = 3; // @gotag: json:"hasMore"
+}
+
+// Request message for getting a single project deliverable
+message GetProjectDeliverableRequest {
+    int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+// Response message for getting a single project deliverable
+message GetProjectDeliverableResponse {
+    GetProjectDeliverableData data = 1; // @gotag: json:"data"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message GetProjectDeliverableData {
+    ProjectDeliverable deliverable = 1; // @gotag: json:"deliverable"
+}
+
+// Request message for deleting a project deliverable
+message DeleteProjectDeliverableRequest {
+    int64 id = 1; // @gotag: form:"id" binding:"required"
+}
+
+// Response message for deleting a project deliverable
+message DeleteProjectDeliverableResponse {
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}

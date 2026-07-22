@@ -1,0 +1,369 @@
+import { Canvas, ColorItem, ColorPalette, Controls, Description, Meta } from "@storybook/addon-docs/blocks";
+
+import * as ButtonStories from "./button.stories";
+
+<Meta of={ButtonStories} />
+
+# Button
+
+An interactive control that triggers an action. Built on
+[`@base-ui-components/react`](https://base-ui.com/react) with SICO design tokens.
+Shadcn restyle of `base-nova` — every divergence from upstream (token swaps,
+naming, spacing, radius, disabled treatment, added `aria-invalid` styling) is
+enumerated in § Upstream Audit.
+
+## Examples
+
+### Variants
+
+Six visual variants cover the action hierarchy: from `primary` (one per screen)
+down to `link` (inline navigation-like actions).
+
+<Description of={ButtonStories.Primary} />
+<Canvas of={ButtonStories.Primary} />
+
+<Description of={ButtonStories.Secondary} />
+<Canvas of={ButtonStories.Secondary} />
+
+<Description of={ButtonStories.Subtle} />
+<Canvas of={ButtonStories.Subtle} />
+
+<Description of={ButtonStories.Destructive} />
+<Canvas of={ButtonStories.Destructive} />
+
+<Description of={ButtonStories.DestructiveOutline} />
+<Canvas of={ButtonStories.DestructiveOutline} />
+
+<Description of={ButtonStories.Link} />
+<Canvas of={ButtonStories.Link} />
+
+### Sizes
+
+Four text-button sizes (`xs` 24px → `lg` 36px) plus four `icon-*` sizes for
+square icon buttons.
+
+<Description of={ButtonStories.Xs} />
+<Canvas of={ButtonStories.Xs} />
+
+<Description of={ButtonStories.Small} />
+<Canvas of={ButtonStories.Small} />
+
+<Description of={ButtonStories.Primary} />
+<Canvas of={ButtonStories.Primary} />
+
+<Description of={ButtonStories.Large} />
+<Canvas of={ButtonStories.Large} />
+
+<Description of={ButtonStories.IconXs} />
+<Canvas of={ButtonStories.IconXs} />
+
+<Description of={ButtonStories.IconSm} />
+<Canvas of={ButtonStories.IconSm} />
+
+<Description of={ButtonStories.IconOnly} />
+<Canvas of={ButtonStories.IconOnly} />
+
+<Description of={ButtonStories.IconLg} />
+<Canvas of={ButtonStories.IconLg} />
+
+### Icons
+
+Tag the icon element with `data-icon="inline-start"` or `data-icon="inline-end"`
+(matching the position relative to the label). Icons get a default `size-4`
+(16px) via `[&_svg:not([class*='size-'])]:size-4` in the variant base class —
+uniform across **every** size (the container scales, the glyph does not). Never
+size icons manually inside Button; an icon carrying its own `size-*` opts out of
+the base rule (the `:not([class*='size-'])` guard) and keeps its own size.
+
+<Description of={ButtonStories.WithStartIcon} />
+<Canvas of={ButtonStories.WithStartIcon} />
+
+<Description of={ButtonStories.WithEndIcon} />
+<Canvas of={ButtonStories.WithEndIcon} />
+
+<Description of={ButtonStories.WithBothIcons} />
+<Canvas of={ButtonStories.WithBothIcons} />
+
+Every size renders the glyph at the same 16px — only the container scales. The
+comparison below lays the icon-only row above the text-with-icon row so the
+uniform glyph size is visible at a glance.
+
+<Description of={ButtonStories.IconSizeComparison} />
+<Canvas of={ButtonStories.IconSizeComparison} />
+
+### States
+
+Pointer events are blocked, contrast reduced, shadow removed. The disabled
+treatment is per-variant — defined inside the cva variant, not as a global
+override.
+
+<Description of={ButtonStories.Disabled} />
+<Canvas of={ButtonStories.Disabled} />
+
+## API
+
+<Controls of={ButtonStories.Primary} />
+
+---
+
+## Token Audit
+
+Design tokens consumed by Button, grouped by family. Color swatches read live
+values via `var(--token-name)`, so changes in `globals.css` reflect here
+immediately.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Primary — Fill"
+    subtitle="Solid dark fill — primary CTA"
+    colors={{
+      "Rest · neutral-800": "var(--color-button-primary-fill-rest)",
+      "Hover · neutral-900": "var(--color-button-primary-fill-hover)",
+      "Pressed · neutral-800": "var(--color-button-primary-fill-pressed)",
+      "Disabled · overlay-black-5": "var(--color-button-primary-fill-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Primary — Text"
+    subtitle="White label on the dark fill"
+    colors={{
+      "Rest · neutral-0": "var(--color-button-primary-foreground-rest)",
+      "Disabled · foreground-disabled": "var(--color-button-primary-foreground-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Secondary — Fill"
+    subtitle="White fill — bordered secondary CTA"
+    colors={{
+      "Rest · neutral-0": "var(--color-button-secondary-fill-rest)",
+      "Hover · neutral-50": "var(--color-button-secondary-fill-hover)",
+      "Pressed · neutral-50": "var(--color-button-secondary-fill-pressed)",
+      "Disabled · overlay-black-5": "var(--color-button-secondary-fill-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Secondary — Text"
+    subtitle="Primary foreground; falls back to foreground-disabled when disabled"
+    colors={{
+      "Rest · foreground-primary": "var(--color-button-secondary-foreground-rest)",
+      "Disabled · foreground-disabled": "var(--color-button-secondary-foreground-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Secondary — Stroke"
+    subtitle="Border for the secondary variant"
+    colors={{
+      "Rest · neutral-150": "var(--color-button-secondary-stroke-rest)",
+      "Hover · neutral-200": "var(--color-button-secondary-stroke-hover)",
+      "Pressed · neutral-250": "var(--color-button-secondary-stroke-pressed)",
+      "Disabled · overlay-black-5": "var(--color-button-secondary-stroke-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Subtle — Fill"
+    subtitle="Transparent at rest, soft fill on hover"
+    colors={{
+      "Rest · transparent": "var(--color-button-subtle-fill-rest)",
+      "Hover · overlay-black-5": "var(--color-button-subtle-fill-hover)",
+      "Pressed · overlay-black-5": "var(--color-button-subtle-fill-pressed)",
+      "Disabled · transparent": "var(--color-button-subtle-fill-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Subtle — Text"
+    subtitle="Primary foreground; mirrors Secondary text"
+    colors={{
+      "Rest · foreground-primary": "var(--color-button-subtle-foreground-rest)",
+      "Disabled · foreground-disabled": "var(--color-button-subtle-foreground-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Destructive — Fill"
+    subtitle="Subtle-style background; red text carries the meaning"
+    colors={{
+      "Rest · transparent": "var(--color-button-destructive-fill-rest)",
+      "Hover · danger-50": "var(--color-button-destructive-fill-hover)",
+      "Pressed · danger-50": "var(--color-button-destructive-fill-pressed)",
+      "Disabled · transparent": "var(--color-button-destructive-fill-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Destructive — Text"
+    subtitle="Red foreground across all destructive variants"
+    colors={{
+      "Rest · danger-500": "var(--color-button-destructive-foreground-rest)",
+      "Hover · danger-700": "var(--color-button-destructive-foreground-hover)",
+      "Pressed · danger-700": "var(--color-button-destructive-foreground-pressed)",
+      "Disabled · foreground-disabled": "var(--color-button-destructive-foreground-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Destructive Outline — Fill"
+    subtitle="White at rest, danger-tinted on hover/pressed"
+    colors={{
+      "Rest · neutral-0": "var(--color-button-destructive-outline-fill-rest)",
+      "Hover · danger-50": "var(--color-button-destructive-outline-fill-hover)",
+      "Pressed · danger-50": "var(--color-button-destructive-outline-fill-pressed)",
+      "Disabled · overlay-black-5": "var(--color-button-destructive-outline-fill-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Destructive Outline — Stroke"
+    subtitle="Red border across all states"
+    colors={{
+      "Rest · danger-500": "var(--color-button-destructive-outline-stroke-rest)",
+      "Hover · danger-700": "var(--color-button-destructive-outline-stroke-hover)",
+      "Pressed · danger-700": "var(--color-button-destructive-outline-stroke-pressed)",
+      "Disabled · overlay-black-5": "var(--color-button-destructive-outline-stroke-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Destructive Outline — Text"
+    subtitle="Red foreground; disabled falls back to foreground-disabled"
+    colors={{
+      "Rest · danger-500": "var(--color-button-destructive-outline-foreground-rest)",
+      "Hover · danger-700": "var(--color-button-destructive-outline-foreground-hover)",
+      "Pressed · danger-700": "var(--color-button-destructive-outline-foreground-pressed)",
+      "Disabled · foreground-disabled": "var(--color-button-destructive-outline-foreground-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Link — Text"
+    subtitle="Inline link variant; resolves through the running blue ramp"
+    colors={{
+      "Rest · running-500": "var(--color-button-link-foreground-rest)",
+      "Hover · running-700": "var(--color-button-link-foreground-hover)",
+      "Pressed · running-800": "var(--color-button-link-foreground-pressed)",
+      "Disabled · foreground-disabled": "var(--color-button-link-foreground-disabled)",
+    }}
+  />
+  <ColorItem
+    title="Focus ring"
+    subtitle="Shared focus ring across all variants"
+    colors={{
+      "neutral-800": "var(--color-ring)",
+    }}
+  />
+  <ColorItem
+    title="Error ring (aria-invalid)"
+    subtitle="Red border + 3px ring when `aria-invalid=true` — resolves to danger-500"
+    colors={{
+      "danger-500": "var(--color-destructive)",
+    }}
+  />
+</ColorPalette>
+
+### Sizing & spacing
+
+Padding compresses by ~4px on the side that carries an icon —
+`has-data-[icon=inline-start]:p[lr]-*` / `has-data-[icon=inline-end]:p[lr]-*`.
+`icon-*` sizes are square and ignore padding.
+
+| Size       | Class    | Size  | Gap     | Padding  | Padding (with icon) | Glyph  |
+| ---------- | -------- | ----- | ------- | -------- | ------------------- | ------ |
+| `xs`       | `h-6`    | 24px  | `gap-1`   | `px-2`    | `px-1.5` (icon side) | 16px |
+| `sm`       | `h-7`    | 28px  | `gap-1`   | `px-2.5`  | `px-1.5` (icon side) | 16px |
+| `default`  | `h-8`    | 32px  | `gap-1.5` | `px-3`    | `px-2` (icon side)   | 16px |
+| `lg`       | `h-9`    | 36px  | `gap-1.5` | `px-3`    | `px-2` (icon side)   | 16px |
+| `icon-xs`  | `size-6` | 24px  | —         | —         | —                    | 16px |
+| `icon-sm`  | `size-7` | 28px  | —         | —         | —                    | 16px |
+| `icon`     | `size-8` | 32px  | —         | —         | —                    | 16px |
+| `icon-lg`  | `size-9` | 36px  | —         | —         | —                    | 16px |
+
+**Special cases:**
+
+- `link` variant hardcodes `h-6` (24px) and ignores the `size` prop — link
+  buttons always render at 24px regardless of the size value passed.
+- Inside a `<div data-slot="button-group">`, the `xs`/`sm`/`icon-xs`/`icon-sm`
+  sizes switch from `rounded-md` (6px) to `rounded-lg` (8px) via
+  `in-data-[slot=button-group]:rounded-lg`.
+
+### Typography
+
+All sizes inherit `text-sm` from the cva base class (14px). `xs` overrides to
+`text-xs` (12px) for dense toolbars.
+
+| Size                  | Class     | Value | Source            |
+| --------------------- | --------- | ----- | ----------------- |
+| `xs`                  | `text-xs` | 12px  | size variant      |
+| `sm`/`default`/`lg`   | `text-sm` | 14px  | cva base class    |
+
+### Border radius
+
+| Sizes                                      | Class        | Value |
+| ------------------------------------------ | ------------ | ----- |
+| `xs`, `sm`, `icon-xs`, `icon-sm`           | `rounded-md` | 6px   |
+| `default`, `lg`, `icon`, `icon-lg`         | `rounded-lg` | 8px   |
+
+### Shadow tokens
+
+Applied as `shadow-button-*` classes on the variants that need surface
+elevation. All three resolve to `--shadow-s` today and are removed by
+`disabled:shadow-none`.
+
+| Token                                | Used by                | Resolves to    |
+| ------------------------------------ | ---------------------- | -------------- |
+| `--shadow-button-primary`            | `primary`              | `--shadow-s`   |
+| `--shadow-button-secondary`          | `secondary`            | `--shadow-s`   |
+| `--shadow-button-destructive-outline`| `destructive-outline`  | `--shadow-s`   |
+
+### Missing tokens
+
+The Figma spec defines a **Filter** variant that is not yet implemented in
+`globals.css`. Tracked as a follow-up. The full token set the variant will
+need — listed here so the eventual mapping is unambiguous:
+
+| Token name (proposed)                       | Figma value           |
+| ------------------------------------------- | --------------------- |
+| `--color-button-filter-fill-rest`           | overlay/Black/5       |
+| `--color-button-filter-fill-hover`          | overlay/Black/10      |
+| `--color-button-filter-fill-pressed`        | Primary/100 (#EDE9FE) |
+| `--color-button-filter-fill-disabled`       | overlay/Black/5       |
+| `--color-button-filter-foreground-rest`     | Neutral/900           |
+| `--color-button-filter-foreground-pressed`  | Primary/700           |
+| `--color-button-filter-foreground-disabled` | foreground-disabled   |
+
+---
+
+## Upstream Audit
+
+This component is a shadcn restyle of `base-nova/button`. The component logic,
+ARIA behavior, and JSX shape match upstream; styling, naming, and a small set of
+appended utilities diverge — every divergence is enumerated below.
+
+### Token swaps
+
+Every upstream className that resolves to a shadcn default is swapped for the
+matching SICO token. The full color / fill / stroke mapping lives in the Token
+Audit above; this table covers the non-color swaps and the cva key renames.
+
+| Upstream                                                            | SICO replacement                                                                                              |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `bg-primary` / `bg-secondary` / `bg-destructive` / etc.             | `bg-button-{variant}-fill-rest` (see Token Audit for full color mapping)                                      |
+| variant keys: `default` / `ghost`                                   | `primary` / `subtle` (semantic naming — `primary` reads as action hierarchy; `subtle` describes the treatment) |
+| `default`/`lg` padding `px-2.5`                                     | `px-3` (SICO spacing scale anchors text buttons at 12px horizontal padding)                                   |
+| `xs`/`sm`/`icon-xs`/`icon-sm` `rounded-[min(var(--radius-md),Npx)]` | `rounded-md` (6px — SICO radius scale uses fixed steps, not upstream's pixel-clamp)                           |
+| `sm` text `text-[0.8rem]` (12.8px)                                  | inherits `text-sm` (14px) from base — SICO type scale has no 12.8px step                                      |
+| `disabled:opacity-50`                                               | per-variant `disabled:bg-*-fill-disabled` + `disabled:text-*-foreground-disabled` (`link` keeps text-only disabled) |
+| `link` focus ring (shared upstream ring)                            | `focus-visible:border-transparent focus-visible:ring-0` — link renders inline with text                       |
+| _(SICO addition)_ press affordance                                  | `active:not-aria-[haspopup]:translate-y-px` — pressed buttons nudge down 1px, except when they're popover triggers (`aria-haspopup`)  |
+
+### API contract
+
+The prop surface matches upstream verbatim. `Button` accepts every prop forwarded
+to `@base-ui-components/react`'s `ButtonPrimitive` — `variant`, `size`,
+`disabled`, `className`, plus all native button attributes and event handlers.
+The `variant` / `size` unions accept SICO-renamed values (`primary` / `subtle`
+instead of `default` / `ghost`; extra `xs`, `icon-xs`, `icon-sm`, `icon-lg` sizes
+and the SICO-only `destructive-outline` variant) but the prop shape, event
+semantics, ARIA behavior, focus management, and the `data-icon="inline-start" |
+"inline-end"` slot convention all match upstream. The rendered tree adds only
+`data-slot="button"`.
+
+### Deleted from upstream
+
+| Deleted                            | Reason                                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `dark:aria-invalid:*` utilities    | SICO has no dark-mode theme yet — same omission across `Input`, `Textarea`, `InputGroup`        |

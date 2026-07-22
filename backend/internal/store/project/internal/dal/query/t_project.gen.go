@@ -29,6 +29,7 @@ func newTProject(db *gorm.DB, opts ...gen.DOOption) tProject {
 	tableName := _tProject.tProjectDo.TableName()
 	_tProject.ALL = field.NewAsterisk(tableName)
 	_tProject.ID = field.NewInt64(tableName, "id")
+	_tProject.OrganizationID = field.NewInt64(tableName, "organization_id")
 	_tProject.OwnerUsername = field.NewString(tableName, "owner_username")
 	_tProject.Name = field.NewString(tableName, "name")
 	_tProject.Description = field.NewString(tableName, "description")
@@ -49,6 +50,7 @@ type tProject struct {
 
 	ALL             field.Asterisk
 	ID              field.Int64  // Primary Key ID
+	OrganizationID  field.Int64  // Organization ID
 	OwnerUsername   field.String // Owner Username
 	Name            field.String // Project Name
 	Description     field.String // Project Description
@@ -74,6 +76,7 @@ func (t tProject) As(alias string) *tProject {
 func (t *tProject) updateTableName(table string) *tProject {
 	t.ALL = field.NewAsterisk(table)
 	t.ID = field.NewInt64(table, "id")
+	t.OrganizationID = field.NewInt64(table, "organization_id")
 	t.OwnerUsername = field.NewString(table, "owner_username")
 	t.Name = field.NewString(table, "name")
 	t.Description = field.NewString(table, "description")
@@ -98,8 +101,9 @@ func (t *tProject) GetFieldByName(fieldName string) (field.OrderExpr, bool) {
 }
 
 func (t *tProject) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 9)
+	t.fieldMap = make(map[string]field.Expr, 10)
 	t.fieldMap["id"] = t.ID
+	t.fieldMap["organization_id"] = t.OrganizationID
 	t.fieldMap["owner_username"] = t.OwnerUsername
 	t.fieldMap["name"] = t.Name
 	t.fieldMap["description"] = t.Description

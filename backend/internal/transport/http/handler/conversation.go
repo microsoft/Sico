@@ -117,6 +117,34 @@ func UpdateConversation(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, resp)
 }
 
+// DeleteConversation .
+// @Router /api/sico/conversation [DELETE]
+// @Tags Conversation
+// @Produce json
+// @Param request query conversation.DeleteConversationRequest true "Delete Conversation Request"
+// @Success 200 {object} conversation.DeleteConversationResponse
+// @Security BearerAuth
+func DeleteConversation(ctx *gin.Context) {
+	var (
+		err error
+		req conversation.DeleteConversationRequest
+	)
+
+	err = ctx.ShouldBindQuery(&req)
+	if err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	resp, err := conversationbiz.Default().DeleteConversation(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
 // ListConversations .
 // @Router /api/sico/conversation/list [GET]
 // @Tags Conversation

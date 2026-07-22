@@ -53,7 +53,7 @@ Both installer scripts are idempotent, so rerunning them is safe.
 | `make precommit-run` | Run all pre-commit hooks against the whole tree |
 | `make precommit-update` | Bump pinned hook versions |
 | `make openapi` | Regenerate Backend OpenAPI docs (`api/openapi/`) |
-| `make unzip-frontend` | Unpack packaged frontend assets for local backend serving |
+| `make build-frontend` | Install deps and build the frontend SPA (`packages/app/dist`) |
 | `make compose-up` / `compose-down` / `compose-logs` | Docker Compose stack |
 | `make kind-up` / `kind-down` | Local Kubernetes stack |
 | `make help` | List all targets |
@@ -72,7 +72,7 @@ Run the smallest check set that covers your change before opening a PR:
 | Backend build-sensitive changes | `cd backend && go build ./...` |
 | Core code, tools, prompts, or protobuf | `cd core && uv run pytest` |
 | Core lint-sensitive changes | `cd core && uv run ruff check .` |
-| Frontend source checkout with `frontend/package.json` | `cd frontend && pnpm build && pnpm lint` |
+| Frontend (`frontend/packages/*`) | `cd frontend && pnpm build && pnpm lint` |
 | Deployment, Helm, or Kind changes | `make setup-kind-check` and the relevant `make kind-*` flow |
 
 If a relevant check cannot be run locally, mention that in the PR and explain
@@ -123,17 +123,24 @@ uv run ruff format .                   # format
 
 ## Frontend (TypeScript / React)
 
-Frontend source code is not currently published in this repository. The public
-repo ships the frontend separately as a packaged archive; in this checkout,
-`frontend/package.json` does not exist. Frontend `pnpm` commands only apply when
-working from a separate frontend source checkout that includes the React/Vite
-package manifest.
-
-To unpack the packaged frontend assets for local backend serving, run:
+The frontend is a pnpm + Turborepo monorepo under `frontend/` (`packages/app` is
+the Vite SPA; `packages/ui`, `packages/shared`, and `packages/config` are shared
+libraries). Node is pinned to 24.13.0 (`frontend/.nvmrc`) and pnpm to 10.12.1
+(`packageManager`, activated via corepack).
 
 ```bash
-make unzip-frontend
+cd frontend
+pnpm install --frozen-lockfile         # install from the committed lockfile
+pnpm build                             # turbo build → packages/app/dist
+pnpm dev                               # vite dev server (proxies /api → :8080)
+pnpm lint                              # turbo lint
+pnpm test                              # turbo test (vitest)
 ```
+
+The production image builds the SPA from source with a multi-stage Dockerfile
+(`frontend/deployments/docker/Dockerfile`) and serves `packages/app/dist` with
+nginx; `make compose-up` and `make kind-up` do this automatically. `make
+build-frontend` runs the install + build locally for a quick check.
 
 ## Protobuf code generation
 

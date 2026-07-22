@@ -63,13 +63,17 @@ func CasbinMiddleware(enforcer *casbin.Enforcer) gin.HandlerFunc {
 		obj := normalizeObject(c.FullPath())
 		act := c.Request.Method
 		// Allow if there is no policy defined for this (obj, act)
-		candidate, _ := enforcer.GetFilteredPolicy(1, obj, act)
+		// In domain model, policy columns are: v0=role, v1=domain, v2=obj, v3=act
+		candidate, _ := enforcer.GetFilteredPolicy(2, obj, act)
 		if len(candidate) == 0 {
 			c.Next()
 			return
 		}
 
-		allowed, err := enforcer.Enforce(user.Name, obj, act)
+		// Route-level coarse check uses "*" as domain — only verifies
+		// the user holds some role that grants access to this resource/action.
+		// Entity-scoped checks happen in the biz layer with the actual domain.
+		allowed, err := enforcer.Enforce(user.Name, "*", obj, act)
 		if err != nil {
 			logger.Warn("casbin enforce error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{

@@ -639,6 +639,35 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Conversation"
+                ],
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.DeleteConversationResponse"
+                        }
+                    }
+                }
             }
         },
         "/api/sico/conversation/batch_summaries": {
@@ -781,6 +810,12 @@ const docTemplate = `{
                 ],
                 "parameters": [
                     {
+                        "type": "integer",
+                        "name": "agentInstanceId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
                         "minimum": 0,
                         "type": "integer",
                         "default": 1,
@@ -830,6 +865,11 @@ const docTemplate = `{
                         "name": "agentInstanceId",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "name": "conversationId",
+                        "in": "query"
                     },
                     {
                         "minimum": 1,
@@ -4555,6 +4595,9 @@ const docTemplate = `{
                         "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ChatAttachment"
                     }
                 },
+                "conversationId": {
+                    "type": "integer"
+                },
                 "message": {
                     "type": "string"
                 }
@@ -4618,6 +4661,23 @@ const docTemplate = `{
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_conversation.ConversationListItem": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "integer"
+                },
+                "creatorUsername": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_conversation.CreateConversationRequest": {
             "type": "object",
             "required": [
@@ -4626,12 +4686,6 @@ const docTemplate = `{
             "properties": {
                 "agentInstanceId": {
                     "type": "integer"
-                },
-                "metaData": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
                 },
                 "title": {
                     "type": "string"
@@ -4646,6 +4700,17 @@ const docTemplate = `{
                 },
                 "data": {
                     "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_conversation.DeleteConversationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
                 },
                 "msg": {
                     "type": "string"
@@ -4806,7 +4871,7 @@ const docTemplate = `{
                 "conversations": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationData"
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationListItem"
                     }
                 },
                 "hasMore": {
@@ -5068,6 +5133,9 @@ const docTemplate = `{
             "properties": {
                 "agentInstanceId": {
                     "type": "integer"
+                },
+                "conversationId": {
+                    "type": "integer"
                 }
             }
         },
@@ -5285,15 +5353,6 @@ const docTemplate = `{
             ],
             "properties": {
                 "id": {
-                    "type": "integer"
-                },
-                "metaData": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "status": {
                     "type": "integer"
                 },
                 "title": {

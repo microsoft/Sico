@@ -247,14 +247,14 @@ class TestChatFS:
         assert fs.list_files(1, "nobody") == []
 
     def test_write_and_read_plan(self, fs):
-        fs.plan.write(1, "alice", 100, '{"steps": []}')
-        content = fs.plan.read(1, "alice", 100)
+        fs.plan.write(1, "alice", 100, '{"steps": []}', conversation_id=22)
+        content = fs.plan.read(1, "alice", 100, conversation_id=22)
         assert "steps" in content
 
     def test_write_conversation_pretty_prints_json(self, fs):
-        fs.write_conversation(1, "alice", 100, '[{"role":"user","contents":[{"text":"你好"}]}]')
+        fs.write_conversation(1, "alice", 100, '[{"role":"user","contents":[{"text":"你好"}]}]', conversation_id=22)
 
-        content = fs.read_conversation(1, "alice", 100)
+        content = fs.read_conversation(1, "alice", 100, conversation_id=22)
 
         assert content is not None
         assert content.startswith("[\n")
@@ -263,38 +263,73 @@ class TestChatFS:
         assert "\\u4f60" not in content
 
     def test_write_conversation_leaves_invalid_json_unchanged(self, fs):
-        fs.write_conversation(1, "alice", 100, "not-json")
+        fs.write_conversation(1, "alice", 100, "not-json", conversation_id=22)
 
-        assert fs.read_conversation(1, "alice", 100) == "not-json"
+        assert fs.read_conversation(1, "alice", 100, conversation_id=22) == "not-json"
 
     def test_plan_exists(self, fs):
-        assert not fs.plan.exists(1, "alice", 100)
-        fs.plan.write(1, "alice", 100, "{}")
-        assert fs.plan.exists(1, "alice", 100)
+        assert not fs.plan.exists(1, "alice", 100, conversation_id=22)
+        fs.plan.write(1, "alice", 100, "{}", conversation_id=22)
+        assert fs.plan.exists(1, "alice", 100, conversation_id=22)
 
     def test_plan_cancelled_marker(self, fs):
-        assert not fs.plan.is_cancelled(1, "alice", 100)
-        fs.plan.write_cancelled_marker(1, "alice", 100)
-        assert fs.plan.is_cancelled(1, "alice", 100)
+        assert not fs.plan.is_cancelled(1, "alice", 100, conversation_id=22)
+        fs.plan.write_cancelled_marker(1, "alice", 100, conversation_id=22)
+        assert fs.plan.is_cancelled(1, "alice", 100, conversation_id=22)
 
-    def test_plan_ignores_conversation_id_for_path(self, fs):
+    def test_plan_uses_conversation_id_for_path(self, fs):
         fs.plan.write(1, "alice", 100, '{"conversation": 1}', conversation_id=1)
         fs.plan.write(1, "alice", 100, '{"conversation": 2}', conversation_id=2)
 
-        assert "2" in fs.plan.read(1, "alice", 100)
-        assert "2" in fs.plan.read(1, "alice", 100, conversation_id=1)
+        assert "1" in fs.plan.read(1, "alice", 100, conversation_id=1)
         assert "2" in fs.plan.read(1, "alice", 100, conversation_id=2)
         plan_path = fs.plan._get_path(1, "alice", 100, conversation_id=2)
-        assert "conversation" not in plan_path.parts
-        assert plan_path == fs.get_turn_path(1, "alice", 100) / "plan.json"
+        assert "conversation" in plan_path.parts
+        assert plan_path == fs.get_turn_path(1, "alice", 100, conversation_id=2) / "plan.json"
 
-    def test_plan_lock_ignores_conversation_id(self, fs):
-        assert fs.plan._get_lock_name(1, "alice", 100, conversation_id=1) == fs.plan._get_lock_name(
+    def test_plan_lock_includes_conversation_id(self, fs):
+        assert fs.plan._get_lock_name(1, "alice", 100, conversation_id=1) != fs.plan._get_lock_name(
             1,
             "alice",
             100,
             conversation_id=2,
         )
+
+    def test_workspace_path_includes_conversation_id(self, fs):
+        workspace = fs.get_workspace_path(1, "alice", conversation_id=22)
+        assert workspace == fs.root / "agent_instance" / "1" / "user" / "alice" / "conversation" / "22" / "workspace"
+
+    def test_migrate_legacy_session_moves_workspace_turns_and_skills(self, fs):
+        legacy_root = fs.get_user_path(1, "alice")
+        (legacy_root / "workspace").mkdir(parents=True)
+        (legacy_root / "workspace" / "ok.txt").write_text("fine", encoding="utf-8")
+        (legacy_root / "turn" / "100").mkdir(parents=True)
+        (legacy_root / "turn" / "100" / "conversation.json").write_text("[]", encoding="utf-8")
+        (legacy_root / "skills" / "7" / "runtime").mkdir(parents=True)
+
+        session_root = fs.migrate_legacy_session(1, "alice", 22)
+
+        assert (session_root / "workspace" / "ok.txt").read_text(encoding="utf-8") == "fine"
+        assert (session_root / "turn" / "100" / "conversation.json").exists()
+        assert (session_root / "skills" / "7" / "runtime").exists()
+        assert fs.read_file(1, "alice", "ok.txt", conversation_id=22) == "fine"
+
+    def test_migrate_legacy_session_merges_missing_legacy_turns(self, fs):
+        legacy_root = fs.get_user_path(1, "alice")
+        session_root = fs.get_conversation_path(1, "alice", 22)
+        (session_root / "turn" / "3").mkdir(parents=True)
+        (session_root / "turn" / "3" / "plan.json").write_text("scoped-plan", encoding="utf-8")
+        (legacy_root / "turn" / "3").mkdir(parents=True)
+        (legacy_root / "turn" / "3" / "conversation.json").write_text("legacy-conversation", encoding="utf-8")
+        (legacy_root / "turn" / "14").mkdir(parents=True)
+        (legacy_root / "turn" / "14" / "plan.json").write_text("legacy-plan", encoding="utf-8")
+
+        fs.migrate_legacy_session(1, "alice", 22)
+
+        assert (session_root / "turn" / "3" / "plan.json").read_text(encoding="utf-8") == "scoped-plan"
+        assert (session_root / "turn" / "3" / "conversation.json").read_text(encoding="utf-8") == "legacy-conversation"
+        assert (session_root / "turn" / "14" / "plan.json").read_text(encoding="utf-8") == "legacy-plan"
+        assert not (legacy_root / "turn" / "14").exists()
 
     def test_workspace_path(self, fs):
         fs.get_workspace_path(1, "alice")
@@ -304,9 +339,9 @@ class TestChatFS:
 
     def test_plan_write_is_atomic(self, fs):
         """write_plan must use a temp+rename so a concurrent reader never sees a partial file."""
-        fs.plan.write(1, "alice", 100, '{"a": 1}')
+        fs.plan.write(1, "alice", 100, '{"a": 1}', conversation_id=22)
         # No leftover temp files (we use unique names like ``plan.json.<rand>.tmp``).
-        plan_path = fs.plan._get_path(1, "alice", 100)
+        plan_path = fs.plan._get_path(1, "alice", 100, conversation_id=22)
         leftovers = list(plan_path.parent.glob("plan.json.*"))
         assert plan_path.exists()
         assert leftovers == [], f"unexpected temp files: {leftovers}"
@@ -319,9 +354,9 @@ class TestChatFS:
         so this only verifies the release-then-reacquire path — not nested re-entrancy,
         which the lock does not support.
         """
-        async with fs.plan.read_lock(1, "alice", 100, timeout=10):
+        async with fs.plan.read_lock(1, "alice", 100, timeout=10, conversation_id=22):
             pass
-        async with fs.plan.read_lock(1, "alice", 100, timeout=10):
+        async with fs.plan.read_lock(1, "alice", 100, timeout=10, conversation_id=22):
             pass
 
     @pytest.mark.asyncio
@@ -339,27 +374,27 @@ class TestChatFS:
         import json as _json
 
         # Seed the plan file so workers start from a known state.
-        fs.plan.write(1, "alice", 100, _json.dumps({"counter": 0}))
+        fs.plan.write(1, "alice", 100, _json.dumps({"counter": 0}), conversation_id=22)
 
         num_tasks = 4
         iterations = 25
 
         async def worker() -> None:
             for _ in range(iterations):
-                async with fs.plan.write_lock(1, "alice", 100, timeout=10):
-                    data = _json.loads(fs.plan.read(1, "alice", 100))
+                async with fs.plan.write_lock(1, "alice", 100, timeout=10, conversation_id=22):
+                    data = _json.loads(fs.plan.read(1, "alice", 100, conversation_id=22))
                     # Force a context switch inside the critical section so a
                     # broken lock would let other tasks observe the stale value.
                     await _asyncio.sleep(0)
                     data["counter"] += 1
-                    fs.plan.write(1, "alice", 100, _json.dumps(data))
+                    fs.plan.write(1, "alice", 100, _json.dumps(data), conversation_id=22)
 
         await _asyncio.wait_for(
             _asyncio.gather(*(worker() for _ in range(num_tasks))),
             timeout=60,
         )
 
-        final = _json.loads(fs.plan.read(1, "alice", 100))
+        final = _json.loads(fs.plan.read(1, "alice", 100, conversation_id=22))
         expected = num_tasks * iterations
         assert final["counter"] == expected, f"lost updates detected: expected {expected}, got {final['counter']}"
 
@@ -381,7 +416,7 @@ class TestChatFS:
         from app.utils.cache import Cache
 
         cache = Cache.get_instance()
-        lock_name = fs.plan._get_lock_name(1, "alice", 100)
+        lock_name = fs.plan._get_lock_name(1, "alice", 100, conversation_id=22)
         # Manually plant a lock entry with a tiny TTL, mimicking a crashed holder.
         await cache.try_acquire_lock(lock_name, timeout=1)
 

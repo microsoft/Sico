@@ -44,6 +44,7 @@ _LOGGER = logging.getLogger(__name__)
 # delegated tasks.
 WORKBOOK_CASES_MAX = 500
 
+
 class ExtractWorkbookCasesInput(BaseModel):
     source_path: str = Field(
         default="",
@@ -118,7 +119,7 @@ def _extract_case_source_path(ctx: ToolContext, request: ExtractWorkbookCasesInp
 
 
 def _resolve_structured_case_source(ctx: ToolContext, source_path: str) -> Path | None:
-    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id or 0, ctx.username)
+    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id or 0, ctx.username, ctx.conversation_id)
     normalized = source_path.replace("\\", "/").strip().lstrip("/")
     if not normalized:
         return None
@@ -132,7 +133,7 @@ def _resolve_structured_case_source(ctx: ToolContext, source_path: str) -> Path 
 
 
 def _extract_history_cases(ctx: ToolContext, request: ExtractWorkbookCasesInput) -> dict[str, Any]:
-    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id or 0, ctx.username)
+    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id or 0, ctx.username, ctx.conversation_id)
     candidates = _history_workbook_candidates(workspace, request.file_path, request.sheet_name)
     if not candidates:
         return {
@@ -164,7 +165,7 @@ def _extract_history_cases(ctx: ToolContext, request: ExtractWorkbookCasesInput)
 
 
 def _resolve_current_workbook(ctx: ToolContext, file_path: str) -> Path | None:
-    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id or 0, ctx.username)
+    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id or 0, ctx.username, ctx.conversation_id)
     normalized = file_path.replace("\\", "/").strip().lstrip("/")
     candidate_paths: list[Path] = []
     if normalized:
@@ -362,6 +363,7 @@ def _missing_case_ids(cases: list[dict[str, Any]], case_ids: list[str]) -> list[
     found_ids = {_normalize_case_id(str(case.get("case_id") or "")) for case in cases}
     return [case_id for case_id in wanted_ids if case_id not in found_ids]
 
+
 def _candidate_groups(candidates: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     groups: list[list[dict[str, Any]]] = []
     current_key: str | None = None
@@ -391,7 +393,7 @@ def _load_json(path: Path) -> Any:
 
 
 def _workspace_relative(ctx: ToolContext, path: Path) -> str:
-    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id or 0, ctx.username).resolve()
+    workspace = CHAT_FS.get_workspace_path(ctx.agent_instance_id or 0, ctx.username, ctx.conversation_id).resolve()
     with contextlib.suppress(ValueError):
         return path.resolve().relative_to(workspace).as_posix()
     return path.name

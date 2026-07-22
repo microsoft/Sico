@@ -1,0 +1,17 @@
+{
+  "name": "@sico/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.react.json": "./tsconfig.react.json",
+    "./eslint.config.base.cjs": "./eslint.config.base.cjs",
+    "./.oxlintrc.json": "./.oxlintrc.json",
+    "./.oxfmtrc.json": "./.oxfmtrc.json",
+    "./commitlint.config.js": "./commitlint.config.js",
+    "./vitest.config.base.ts": "./vitest.config.base.ts",
+    "./eslint-local-rules": "./eslint-local-rules/index.cjs",
+    "./eslint-local-rules.cjs": "./eslint-local-rules.cjs"
+  }
+}

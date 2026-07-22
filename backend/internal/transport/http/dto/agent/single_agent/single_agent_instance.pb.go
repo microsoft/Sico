@@ -32,7 +32,6 @@ import (
 	reflect "reflect"
 	common "sico-backend/internal/transport/http/dto/common"
 	project "sico-backend/internal/transport/http/dto/project"
-	sandbox "sico-backend/internal/transport/http/dto/sandbox"
 	sync "sync"
 	unsafe "unsafe"
 )
@@ -44,27 +43,146 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// SingleAgentInstance status enum
+type SingleAgentInstanceStatus int32
+
+const (
+	SingleAgentInstanceStatus_INSTANCE_UNKNOWN          SingleAgentInstanceStatus = 0
+	SingleAgentInstanceStatus_INSTANCE_ONBOARDING       SingleAgentInstanceStatus = 1
+	SingleAgentInstanceStatus_INSTANCE_NEW              SingleAgentInstanceStatus = 2
+	SingleAgentInstanceStatus_INSTANCE_ACTIVE           SingleAgentInstanceStatus = 3
+	SingleAgentInstanceStatus_INSTANCE_INACTIVE         SingleAgentInstanceStatus = 4
+	SingleAgentInstanceStatus_INSTANCE_ABORTED          SingleAgentInstanceStatus = 5
+	SingleAgentInstanceStatus_INSTANCE_DELETED          SingleAgentInstanceStatus = 6
+	SingleAgentInstanceStatus_INSTANCE_ONBOARDING_SAVED SingleAgentInstanceStatus = 7
+)
+
+// Enum value maps for SingleAgentInstanceStatus.
+var (
+	SingleAgentInstanceStatus_name = map[int32]string{
+		0: "INSTANCE_UNKNOWN",
+		1: "INSTANCE_ONBOARDING",
+		2: "INSTANCE_NEW",
+		3: "INSTANCE_ACTIVE",
+		4: "INSTANCE_INACTIVE",
+		5: "INSTANCE_ABORTED",
+		6: "INSTANCE_DELETED",
+		7: "INSTANCE_ONBOARDING_SAVED",
+	}
+	SingleAgentInstanceStatus_value = map[string]int32{
+		"INSTANCE_UNKNOWN":          0,
+		"INSTANCE_ONBOARDING":       1,
+		"INSTANCE_NEW":              2,
+		"INSTANCE_ACTIVE":           3,
+		"INSTANCE_INACTIVE":         4,
+		"INSTANCE_ABORTED":          5,
+		"INSTANCE_DELETED":          6,
+		"INSTANCE_ONBOARDING_SAVED": 7,
+	}
+)
+
+func (x SingleAgentInstanceStatus) Enum() *SingleAgentInstanceStatus {
+	p := new(SingleAgentInstanceStatus)
+	*p = x
+	return p
+}
+
+func (x SingleAgentInstanceStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SingleAgentInstanceStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_agent_single_agent_instance_proto_enumTypes[0].Descriptor()
+}
+
+func (SingleAgentInstanceStatus) Type() protoreflect.EnumType {
+	return &file_agent_single_agent_instance_proto_enumTypes[0]
+}
+
+func (x SingleAgentInstanceStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SingleAgentInstanceStatus.Descriptor instead.
+func (SingleAgentInstanceStatus) EnumDescriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{0}
+}
+
+// SingleAgentInstanceOrderBy specifies which field to sort by when listing agent instances.
+type SingleAgentInstanceOrderBy int32
+
+const (
+	SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED       SingleAgentInstanceOrderBy = 0 // Default: ID
+	SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_ID                SingleAgentInstanceOrderBy = 1
+	SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT        SingleAgentInstanceOrderBy = 2
+	SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT SingleAgentInstanceOrderBy = 3 // ORDER BY status, updated_at
+)
+
+// Enum value maps for SingleAgentInstanceOrderBy.
+var (
+	SingleAgentInstanceOrderBy_name = map[int32]string{
+		0: "SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED",
+		1: "SINGLE_AGENT_INSTANCE_ORDER_BY_ID",
+		2: "SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT",
+		3: "SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT",
+	}
+	SingleAgentInstanceOrderBy_value = map[string]int32{
+		"SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED":       0,
+		"SINGLE_AGENT_INSTANCE_ORDER_BY_ID":                1,
+		"SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT":        2,
+		"SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT": 3,
+	}
+)
+
+func (x SingleAgentInstanceOrderBy) Enum() *SingleAgentInstanceOrderBy {
+	p := new(SingleAgentInstanceOrderBy)
+	*p = x
+	return p
+}
+
+func (x SingleAgentInstanceOrderBy) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SingleAgentInstanceOrderBy) Descriptor() protoreflect.EnumDescriptor {
+	return file_agent_single_agent_instance_proto_enumTypes[1].Descriptor()
+}
+
+func (SingleAgentInstanceOrderBy) Type() protoreflect.EnumType {
+	return &file_agent_single_agent_instance_proto_enumTypes[1]
+}
+
+func (x SingleAgentInstanceOrderBy) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SingleAgentInstanceOrderBy.Descriptor instead.
+func (SingleAgentInstanceOrderBy) EnumDescriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{1}
+}
+
 // SingleAgentInstance message
 type SingleAgentInstance struct {
-	state              protoimpl.MessageState               `protogen:"open.v1"`
-	Id                 int64                                `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                                
-	AgentId            string                               `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agentId"`                                        
-	EmployerUsername   string                               `protobuf:"bytes,3,opt,name=employer_username,json=employerUsername,proto3" json:"employerUsername"`             
-	OperatorUsername   string                               `protobuf:"bytes,4,opt,name=operator_username,json=operatorUsername,proto3" json:"operatorUsername"`             
-	Name               string                               `protobuf:"bytes,5,opt,name=name,proto3" json:"name"`                                                             
-	Role               string                               `protobuf:"bytes,6,opt,name=role,proto3" json:"role"`                                                             
-	Desc               string                               `protobuf:"bytes,7,opt,name=desc,proto3" json:"desc"`                                                             
-	RawIconUri         string                               `protobuf:"bytes,8,opt,name=raw_icon_uri,json=rawIconUri,proto3" json:"rawIconUri"`                             
-	IconUri            string                               `protobuf:"bytes,9,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri"`                                        
-	RawEmployerIconUri string                               `protobuf:"bytes,10,opt,name=raw_employer_icon_uri,json=rawEmployerIconUri,proto3" json:"rawEmployerIconUri"`  
-	EmployerIconUri    string                               `protobuf:"bytes,11,opt,name=employer_icon_uri,json=employerIconUri,proto3" json:"employerIconUri"`             
-	ProjectId          int64                                `protobuf:"varint,13,opt,name=project_id,json=projectId,proto3" json:"-"`                                
-	Permission         string                               `protobuf:"bytes,17,opt,name=permission,proto3" json:"permission"`                                                
-	Attachments        []*common.Attachment                 `protobuf:"bytes,18,rep,name=attachments,proto3" json:"attachments"`                                              
-	CreatedAt          int64                                `protobuf:"varint,23,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                                
-	UpdatedAt          int64                                `protobuf:"varint,24,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                                
-	Project            *project.Project                     `protobuf:"bytes,26,opt,name=project,proto3" json:"project"`                                                      
-	Sandboxes          []*sandbox.InstanceSandboxStatusInfo `protobuf:"bytes,27,rep,name=sandboxes,proto3" json:"sandboxes"`                                                  
+	state              protoimpl.MessageState    `protogen:"open.v1"`
+	Id                 int64                     `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                                
+	AgentId            string                    `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agentId"`                                        
+	EmployerUsername   string                    `protobuf:"bytes,3,opt,name=employer_username,json=employerUsername,proto3" json:"employerUsername"`             
+	OperatorUsername   string                    `protobuf:"bytes,4,opt,name=operator_username,json=operatorUsername,proto3" json:"operatorUsername"`             
+	Name               string                    `protobuf:"bytes,5,opt,name=name,proto3" json:"name"`                                                             
+	Role               string                    `protobuf:"bytes,6,opt,name=role,proto3" json:"role"`                                                             
+	Desc               string                    `protobuf:"bytes,7,opt,name=desc,proto3" json:"desc"`                                                             
+	RawIconUri         string                    `protobuf:"bytes,8,opt,name=raw_icon_uri,json=rawIconUri,proto3" json:"rawIconUri"`                             
+	IconUri            string                    `protobuf:"bytes,9,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri"`                                        
+	RawEmployerIconUri string                    `protobuf:"bytes,10,opt,name=raw_employer_icon_uri,json=rawEmployerIconUri,proto3" json:"rawEmployerIconUri"`  
+	EmployerIconUri    string                    `protobuf:"bytes,11,opt,name=employer_icon_uri,json=employerIconUri,proto3" json:"employerIconUri"`             
+	ProjectId          int64                     `protobuf:"varint,13,opt,name=project_id,json=projectId,proto3" json:"-"`                                
+	Permission         string                    `protobuf:"bytes,17,opt,name=permission,proto3" json:"permission"`                                                
+	Attachments        []*common.Attachment      `protobuf:"bytes,18,rep,name=attachments,proto3" json:"attachments"`                                              
+	Status             SingleAgentInstanceStatus `protobuf:"varint,21,opt,name=status,proto3,enum=single_agent_instance.SingleAgentInstanceStatus" json:"status"`  
+	CreatedAt          int64                     `protobuf:"varint,23,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                                
+	UpdatedAt          int64                     `protobuf:"varint,24,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                                
+	Project            *project.Project          `protobuf:"bytes,26,opt,name=project,proto3" json:"project"`                                                      
+	Sandboxes          []*common.SandboxDigest   `protobuf:"bytes,27,rep,name=sandboxes,proto3" json:"sandboxes"`                                                  
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -197,6 +315,13 @@ func (x *SingleAgentInstance) GetAttachments() []*common.Attachment {
 	return nil
 }
 
+func (x *SingleAgentInstance) GetStatus() SingleAgentInstanceStatus {
+	if x != nil {
+		return x.Status
+	}
+	return SingleAgentInstanceStatus_INSTANCE_UNKNOWN
+}
+
 func (x *SingleAgentInstance) GetCreatedAt() int64 {
 	if x != nil {
 		return x.CreatedAt
@@ -218,7 +343,7 @@ func (x *SingleAgentInstance) GetProject() *project.Project {
 	return nil
 }
 
-func (x *SingleAgentInstance) GetSandboxes() []*sandbox.InstanceSandboxStatusInfo {
+func (x *SingleAgentInstance) GetSandboxes() []*common.SandboxDigest {
 	if x != nil {
 		return x.Sandboxes
 	}
@@ -228,14 +353,16 @@ func (x *SingleAgentInstance) GetSandboxes() []*sandbox.InstanceSandboxStatusInf
 // Request to create a single agent instance
 type CreateSingleAgentInstanceRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	AgentId          string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId" form:"agentId"`                             
-	EmployerUsername string                 `protobuf:"bytes,2,opt,name=employer_username,json=employerUsername,proto3" json:"employerUsername" form:"employerUsername" binding:"required"`  
-	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name" form:"name" binding:"required"`                                                  
-	Desc             string                 `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc" form:"desc"`                                                  
-	Role             string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role" form:"role"`                                                  
-	IconUri          string                 `protobuf:"bytes,6,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" form:"iconUri"`                             
-	EmployerIconUri  string                 `protobuf:"bytes,7,opt,name=employer_icon_uri,json=employerIconUri,proto3" json:"employerIconUri"`   
-	Attachments      []*common.Attachment   `protobuf:"bytes,12,rep,name=attachments,proto3" json:"attachments"`                                   
+	AgentId          string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agentId"`                              
+	EmployerUsername string                 `protobuf:"bytes,2,opt,name=employer_username,json=employerUsername,proto3" json:"employerUsername"`   
+	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name" binding:"required"`                                                   
+	Desc             string                 `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc"`                                                   
+	Role             string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role"`                                                   
+	IconUri          string                 `protobuf:"bytes,6,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri"`                              
+	EmployerIconUri  string                 `protobuf:"bytes,7,opt,name=employer_icon_uri,json=employerIconUri,proto3" json:"employerIconUri"`    
+	Attachments      []*common.Attachment   `protobuf:"bytes,12,rep,name=attachments,proto3" json:"attachments"`                                    
+	ProjectId        int64                  `protobuf:"varint,14,opt,name=project_id,json=projectId,proto3" json:"projectId" binding:"required"`                      
+	OperatorUsername string                 `protobuf:"bytes,15,opt,name=operator_username,json=operatorUsername,proto3" json:"-"`  
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -324,6 +451,20 @@ func (x *CreateSingleAgentInstanceRequest) GetAttachments() []*common.Attachment
 		return x.Attachments
 	}
 	return nil
+}
+
+func (x *CreateSingleAgentInstanceRequest) GetProjectId() int64 {
+	if x != nil {
+		return x.ProjectId
+	}
+	return 0
+}
+
+func (x *CreateSingleAgentInstanceRequest) GetOperatorUsername() string {
+	if x != nil {
+		return x.OperatorUsername
+	}
+	return ""
 }
 
 // Response for creating a single agent instance
@@ -743,6 +884,324 @@ func (x *UpdateSingleAgentInstanceResponse) GetMsg() string {
 	return ""
 }
 
+// Request to update a single agent instance status
+type UpdateSingleAgentInstanceStatusRequest struct {
+	state            protoimpl.MessageState    `protogen:"open.v1"`
+	Id               int64                     `protobuf:"varint,1,opt,name=id,proto3" json:"id" binding:"required"`                                                               
+	Status           SingleAgentInstanceStatus `protobuf:"varint,2,opt,name=status,proto3,enum=single_agent_instance.SingleAgentInstanceStatus" json:"status"`  
+	OperatorUsername string                    `protobuf:"bytes,3,opt,name=operator_username,json=operatorUsername,proto3" json:"-" form:"operatorUsername"`            
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *UpdateSingleAgentInstanceStatusRequest) Reset() {
+	*x = UpdateSingleAgentInstanceStatusRequest{}
+	mi := &file_agent_single_agent_instance_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSingleAgentInstanceStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSingleAgentInstanceStatusRequest) ProtoMessage() {}
+
+func (x *UpdateSingleAgentInstanceStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_single_agent_instance_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSingleAgentInstanceStatusRequest.ProtoReflect.Descriptor instead.
+func (*UpdateSingleAgentInstanceStatusRequest) Descriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *UpdateSingleAgentInstanceStatusRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpdateSingleAgentInstanceStatusRequest) GetStatus() SingleAgentInstanceStatus {
+	if x != nil {
+		return x.Status
+	}
+	return SingleAgentInstanceStatus_INSTANCE_UNKNOWN
+}
+
+func (x *UpdateSingleAgentInstanceStatusRequest) GetOperatorUsername() string {
+	if x != nil {
+		return x.OperatorUsername
+	}
+	return ""
+}
+
+// Response for updating a single agent instance status
+type UpdateSingleAgentInstanceStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSingleAgentInstanceStatusResponse) Reset() {
+	*x = UpdateSingleAgentInstanceStatusResponse{}
+	mi := &file_agent_single_agent_instance_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSingleAgentInstanceStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSingleAgentInstanceStatusResponse) ProtoMessage() {}
+
+func (x *UpdateSingleAgentInstanceStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_single_agent_instance_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSingleAgentInstanceStatusResponse.ProtoReflect.Descriptor instead.
+func (*UpdateSingleAgentInstanceStatusResponse) Descriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UpdateSingleAgentInstanceStatusResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *UpdateSingleAgentInstanceStatusResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+// Request to dismiss (deactivate) a single agent instance
+type DismissSingleAgentInstanceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id" binding:"required"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DismissSingleAgentInstanceRequest) Reset() {
+	*x = DismissSingleAgentInstanceRequest{}
+	mi := &file_agent_single_agent_instance_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DismissSingleAgentInstanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DismissSingleAgentInstanceRequest) ProtoMessage() {}
+
+func (x *DismissSingleAgentInstanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_single_agent_instance_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DismissSingleAgentInstanceRequest.ProtoReflect.Descriptor instead.
+func (*DismissSingleAgentInstanceRequest) Descriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *DismissSingleAgentInstanceRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+// Response for dismissing a single agent instance
+type DismissSingleAgentInstanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DismissSingleAgentInstanceResponse) Reset() {
+	*x = DismissSingleAgentInstanceResponse{}
+	mi := &file_agent_single_agent_instance_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DismissSingleAgentInstanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DismissSingleAgentInstanceResponse) ProtoMessage() {}
+
+func (x *DismissSingleAgentInstanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_single_agent_instance_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DismissSingleAgentInstanceResponse.ProtoReflect.Descriptor instead.
+func (*DismissSingleAgentInstanceResponse) Descriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DismissSingleAgentInstanceResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *DismissSingleAgentInstanceResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+// Request to reassign a single agent instance to a new operator
+type ReassignSingleAgentInstanceRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id" binding:"required"`                                                                
+	NewOperatorUsername string                 `protobuf:"bytes,2,opt,name=new_operator_username,json=newOperatorUsername,proto3" json:"newOperatorUsername" binding:"required"`  
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ReassignSingleAgentInstanceRequest) Reset() {
+	*x = ReassignSingleAgentInstanceRequest{}
+	mi := &file_agent_single_agent_instance_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReassignSingleAgentInstanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReassignSingleAgentInstanceRequest) ProtoMessage() {}
+
+func (x *ReassignSingleAgentInstanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_single_agent_instance_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReassignSingleAgentInstanceRequest.ProtoReflect.Descriptor instead.
+func (*ReassignSingleAgentInstanceRequest) Descriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ReassignSingleAgentInstanceRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *ReassignSingleAgentInstanceRequest) GetNewOperatorUsername() string {
+	if x != nil {
+		return x.NewOperatorUsername
+	}
+	return ""
+}
+
+// Response for reassigning a single agent instance
+type ReassignSingleAgentInstanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReassignSingleAgentInstanceResponse) Reset() {
+	*x = ReassignSingleAgentInstanceResponse{}
+	mi := &file_agent_single_agent_instance_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReassignSingleAgentInstanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReassignSingleAgentInstanceResponse) ProtoMessage() {}
+
+func (x *ReassignSingleAgentInstanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_single_agent_instance_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReassignSingleAgentInstanceResponse.ProtoReflect.Descriptor instead.
+func (*ReassignSingleAgentInstanceResponse) Descriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ReassignSingleAgentInstanceResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ReassignSingleAgentInstanceResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
 // Request to delete a single agent instance
 type DeleteSingleAgentInstanceRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -754,7 +1213,7 @@ type DeleteSingleAgentInstanceRequest struct {
 
 func (x *DeleteSingleAgentInstanceRequest) Reset() {
 	*x = DeleteSingleAgentInstanceRequest{}
-	mi := &file_agent_single_agent_instance_proto_msgTypes[9]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -766,7 +1225,7 @@ func (x *DeleteSingleAgentInstanceRequest) String() string {
 func (*DeleteSingleAgentInstanceRequest) ProtoMessage() {}
 
 func (x *DeleteSingleAgentInstanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_single_agent_instance_proto_msgTypes[9]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -779,7 +1238,7 @@ func (x *DeleteSingleAgentInstanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSingleAgentInstanceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSingleAgentInstanceRequest) Descriptor() ([]byte, []int) {
-	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{9}
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DeleteSingleAgentInstanceRequest) GetId() int64 {
@@ -807,7 +1266,7 @@ type DeleteSingleAgentInstanceResponse struct {
 
 func (x *DeleteSingleAgentInstanceResponse) Reset() {
 	*x = DeleteSingleAgentInstanceResponse{}
-	mi := &file_agent_single_agent_instance_proto_msgTypes[10]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -819,7 +1278,7 @@ func (x *DeleteSingleAgentInstanceResponse) String() string {
 func (*DeleteSingleAgentInstanceResponse) ProtoMessage() {}
 
 func (x *DeleteSingleAgentInstanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_single_agent_instance_proto_msgTypes[10]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -832,7 +1291,7 @@ func (x *DeleteSingleAgentInstanceResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use DeleteSingleAgentInstanceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSingleAgentInstanceResponse) Descriptor() ([]byte, []int) {
-	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{10}
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *DeleteSingleAgentInstanceResponse) GetCode() int32 {
@@ -849,32 +1308,37 @@ func (x *DeleteSingleAgentInstanceResponse) GetMsg() string {
 	return ""
 }
 
-// Request to list single agent instances
-type ListSingleAgentInstancesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"-" form:"username"`                         
-	Page          int32                  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"required,min=1"`                                
-	PageSize      int32                  `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"required,min=1,max=50"`        
-	IsEmployer    bool                   `protobuf:"varint,6,opt,name=is_employer,json=isEmployer,proto3" json:"is_employer,omitempty" form:"isEmployer"`  
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+// Filter for listing single agent instances (query params for GET /single_agent_instances)
+type ListSingleAgentInstancesFilter struct {
+	state            protoimpl.MessageState      `protogen:"open.v1"`
+	StatusList       string                      `protobuf:"bytes,2,opt,name=status_list,json=statusList,proto3" json:"status_list,omitempty" form:"statusList"`                                                            
+	StatusArr        []SingleAgentInstanceStatus `protobuf:"varint,3,rep,packed,name=status_arr,json=statusArr,proto3,enum=single_agent_instance.SingleAgentInstanceStatus" json:"-"`  
+	Page             int32                       `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"required,min=1"`                                                                                         
+	PageSize         int32                       `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"required,min=1,max=50"`                                                                 
+	EmployerUsername *string                     `protobuf:"bytes,6,opt,name=employer_username,json=employerUsername,proto3,oneof" json:"employer_username,omitempty" form:"employerUsername"`                                    
+	OrderBy          SingleAgentInstanceOrderBy  `protobuf:"varint,7,opt,name=order_by,json=orderBy,proto3,enum=single_agent_instance.SingleAgentInstanceOrderBy" json:"order_by,omitempty" form:"orderBy"`              
+	SortOrder        common.SortOrder            `protobuf:"varint,8,opt,name=sort_order,json=sortOrder,proto3,enum=common.SortOrder" json:"sort_order,omitempty" form:"sortOrder"`                                        
+	ProjectId        *int64                      `protobuf:"varint,9,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty" form:"projectId"`                                                        
+	OperatorUsername *string                     `protobuf:"bytes,10,opt,name=operator_username,json=operatorUsername,proto3,oneof" json:"operator_username,omitempty" form:"operatorUsername"`                                   
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
-func (x *ListSingleAgentInstancesRequest) Reset() {
-	*x = ListSingleAgentInstancesRequest{}
-	mi := &file_agent_single_agent_instance_proto_msgTypes[11]
+func (x *ListSingleAgentInstancesFilter) Reset() {
+	*x = ListSingleAgentInstancesFilter{}
+	mi := &file_agent_single_agent_instance_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListSingleAgentInstancesRequest) String() string {
+func (x *ListSingleAgentInstancesFilter) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListSingleAgentInstancesRequest) ProtoMessage() {}
+func (*ListSingleAgentInstancesFilter) ProtoMessage() {}
 
-func (x *ListSingleAgentInstancesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_single_agent_instance_proto_msgTypes[11]
+func (x *ListSingleAgentInstancesFilter) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_single_agent_instance_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -885,37 +1349,72 @@ func (x *ListSingleAgentInstancesRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListSingleAgentInstancesRequest.ProtoReflect.Descriptor instead.
-func (*ListSingleAgentInstancesRequest) Descriptor() ([]byte, []int) {
-	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{11}
+// Deprecated: Use ListSingleAgentInstancesFilter.ProtoReflect.Descriptor instead.
+func (*ListSingleAgentInstancesFilter) Descriptor() ([]byte, []int) {
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *ListSingleAgentInstancesRequest) GetUsername() string {
+func (x *ListSingleAgentInstancesFilter) GetStatusList() string {
 	if x != nil {
-		return x.Username
+		return x.StatusList
 	}
 	return ""
 }
 
-func (x *ListSingleAgentInstancesRequest) GetPage() int32 {
+func (x *ListSingleAgentInstancesFilter) GetStatusArr() []SingleAgentInstanceStatus {
+	if x != nil {
+		return x.StatusArr
+	}
+	return nil
+}
+
+func (x *ListSingleAgentInstancesFilter) GetPage() int32 {
 	if x != nil {
 		return x.Page
 	}
 	return 0
 }
 
-func (x *ListSingleAgentInstancesRequest) GetPageSize() int32 {
+func (x *ListSingleAgentInstancesFilter) GetPageSize() int32 {
 	if x != nil {
 		return x.PageSize
 	}
 	return 0
 }
 
-func (x *ListSingleAgentInstancesRequest) GetIsEmployer() bool {
-	if x != nil {
-		return x.IsEmployer
+func (x *ListSingleAgentInstancesFilter) GetEmployerUsername() string {
+	if x != nil && x.EmployerUsername != nil {
+		return *x.EmployerUsername
 	}
-	return false
+	return ""
+}
+
+func (x *ListSingleAgentInstancesFilter) GetOrderBy() SingleAgentInstanceOrderBy {
+	if x != nil {
+		return x.OrderBy
+	}
+	return SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED
+}
+
+func (x *ListSingleAgentInstancesFilter) GetSortOrder() common.SortOrder {
+	if x != nil {
+		return x.SortOrder
+	}
+	return common.SortOrder(0)
+}
+
+func (x *ListSingleAgentInstancesFilter) GetProjectId() int64 {
+	if x != nil && x.ProjectId != nil {
+		return *x.ProjectId
+	}
+	return 0
+}
+
+func (x *ListSingleAgentInstancesFilter) GetOperatorUsername() string {
+	if x != nil && x.OperatorUsername != nil {
+		return *x.OperatorUsername
+	}
+	return ""
 }
 
 // Response for listing single agent instances
@@ -930,7 +1429,7 @@ type ListSingleAgentInstancesResponse struct {
 
 func (x *ListSingleAgentInstancesResponse) Reset() {
 	*x = ListSingleAgentInstancesResponse{}
-	mi := &file_agent_single_agent_instance_proto_msgTypes[12]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -942,7 +1441,7 @@ func (x *ListSingleAgentInstancesResponse) String() string {
 func (*ListSingleAgentInstancesResponse) ProtoMessage() {}
 
 func (x *ListSingleAgentInstancesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_single_agent_instance_proto_msgTypes[12]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -955,7 +1454,7 @@ func (x *ListSingleAgentInstancesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSingleAgentInstancesResponse.ProtoReflect.Descriptor instead.
 func (*ListSingleAgentInstancesResponse) Descriptor() ([]byte, []int) {
-	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{12}
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListSingleAgentInstancesResponse) GetData() *ListSingleAgentInstancesData {
@@ -990,7 +1489,7 @@ type ListSingleAgentInstancesData struct {
 
 func (x *ListSingleAgentInstancesData) Reset() {
 	*x = ListSingleAgentInstancesData{}
-	mi := &file_agent_single_agent_instance_proto_msgTypes[13]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1002,7 +1501,7 @@ func (x *ListSingleAgentInstancesData) String() string {
 func (*ListSingleAgentInstancesData) ProtoMessage() {}
 
 func (x *ListSingleAgentInstancesData) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_single_agent_instance_proto_msgTypes[13]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1015,7 +1514,7 @@ func (x *ListSingleAgentInstancesData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSingleAgentInstancesData.ProtoReflect.Descriptor instead.
 func (*ListSingleAgentInstancesData) Descriptor() ([]byte, []int) {
-	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{13}
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListSingleAgentInstancesData) GetInstances() []*SingleAgentInstance {
@@ -1040,18 +1539,23 @@ func (x *ListSingleAgentInstancesData) GetHasNext() bool {
 }
 
 type ListSingleAgentInstanceFilter struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	EmployerUsername *string                `protobuf:"bytes,1,opt,name=employer_username,json=employerUsername,proto3,oneof" json:"employerUsername"`  
-	OperatorUsername *string                `protobuf:"bytes,2,opt,name=operator_username,json=operatorUsername,proto3,oneof" json:"operatorUsername"`  
-	Role             *string                `protobuf:"bytes,5,opt,name=role,proto3,oneof" json:"role"`                                                  
-	ProjectId        *int64                 `protobuf:"varint,6,opt,name=project_id,json=projectId,proto3,oneof" json:"projectId"`                      
+	state            protoimpl.MessageState      `protogen:"open.v1"`
+	EmployerUsername *string                     `protobuf:"bytes,1,opt,name=employer_username,json=employerUsername,proto3,oneof" json:"employerUsername"`                                    
+	OperatorUsername *string                     `protobuf:"bytes,2,opt,name=operator_username,json=operatorUsername,proto3,oneof" json:"operatorUsername"`                                    
+	FilterByStatus   bool                        `protobuf:"varint,3,opt,name=filter_by_status,json=filterByStatus,proto3" json:"filterByStatus"`                                             
+	StatusArr        []SingleAgentInstanceStatus `protobuf:"varint,4,rep,packed,name=status_arr,json=statusArr,proto3,enum=single_agent_instance.SingleAgentInstanceStatus" json:"-"`  
+	Role             *string                     `protobuf:"bytes,5,opt,name=role,proto3,oneof" json:"role"`                                                                                    
+	ProjectId        *int64                      `protobuf:"varint,6,opt,name=project_id,json=projectId,proto3,oneof" json:"projectId"`                                                        
+	AgentId          *string                     `protobuf:"bytes,7,opt,name=agent_id,json=agentId,proto3,oneof" json:"agentId"`                                                               
+	OrderBy          SingleAgentInstanceOrderBy  `protobuf:"varint,8,opt,name=order_by,json=orderBy,proto3,enum=single_agent_instance.SingleAgentInstanceOrderBy" json:"orderBy"`              
+	SortOrder        common.SortOrder            `protobuf:"varint,9,opt,name=sort_order,json=sortOrder,proto3,enum=common.SortOrder" json:"sortOrder"`                                        
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ListSingleAgentInstanceFilter) Reset() {
 	*x = ListSingleAgentInstanceFilter{}
-	mi := &file_agent_single_agent_instance_proto_msgTypes[14]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1063,7 +1567,7 @@ func (x *ListSingleAgentInstanceFilter) String() string {
 func (*ListSingleAgentInstanceFilter) ProtoMessage() {}
 
 func (x *ListSingleAgentInstanceFilter) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_single_agent_instance_proto_msgTypes[14]
+	mi := &file_agent_single_agent_instance_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1076,7 +1580,7 @@ func (x *ListSingleAgentInstanceFilter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSingleAgentInstanceFilter.ProtoReflect.Descriptor instead.
 func (*ListSingleAgentInstanceFilter) Descriptor() ([]byte, []int) {
-	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{14}
+	return file_agent_single_agent_instance_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListSingleAgentInstanceFilter) GetEmployerUsername() string {
@@ -1093,6 +1597,20 @@ func (x *ListSingleAgentInstanceFilter) GetOperatorUsername() string {
 	return ""
 }
 
+func (x *ListSingleAgentInstanceFilter) GetFilterByStatus() bool {
+	if x != nil {
+		return x.FilterByStatus
+	}
+	return false
+}
+
+func (x *ListSingleAgentInstanceFilter) GetStatusArr() []SingleAgentInstanceStatus {
+	if x != nil {
+		return x.StatusArr
+	}
+	return nil
+}
+
 func (x *ListSingleAgentInstanceFilter) GetRole() string {
 	if x != nil && x.Role != nil {
 		return *x.Role
@@ -1107,11 +1625,32 @@ func (x *ListSingleAgentInstanceFilter) GetProjectId() int64 {
 	return 0
 }
 
+func (x *ListSingleAgentInstanceFilter) GetAgentId() string {
+	if x != nil && x.AgentId != nil {
+		return *x.AgentId
+	}
+	return ""
+}
+
+func (x *ListSingleAgentInstanceFilter) GetOrderBy() SingleAgentInstanceOrderBy {
+	if x != nil {
+		return x.OrderBy
+	}
+	return SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED
+}
+
+func (x *ListSingleAgentInstanceFilter) GetSortOrder() common.SortOrder {
+	if x != nil {
+		return x.SortOrder
+	}
+	return common.SortOrder(0)
+}
+
 var File_agent_single_agent_instance_proto protoreflect.FileDescriptor
 
 const file_agent_single_agent_instance_proto_rawDesc = "" +
 	"\n" +
-	"!agent/single_agent_instance.proto\x12\x15single_agent_instance\x1a\x13common/common.proto\x1a\x15project/project.proto\x1a\x15sandbox/restful.proto\"\x99\x05\n" +
+	"!agent/single_agent_instance.proto\x12\x15single_agent_instance\x1a\x13common/common.proto\x1a\x15project/project.proto\"\xd6\x05\n" +
 	"\x13SingleAgentInstance\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12+\n" +
@@ -1131,13 +1670,14 @@ const file_agent_single_agent_instance_proto_rawDesc = "" +
 	"\n" +
 	"permission\x18\x11 \x01(\tR\n" +
 	"permission\x124\n" +
-	"\vattachments\x18\x12 \x03(\v2\x12.common.AttachmentR\vattachments\x12\x1d\n" +
+	"\vattachments\x18\x12 \x03(\v2\x12.common.AttachmentR\vattachments\x12H\n" +
+	"\x06status\x18\x15 \x01(\x0e20.single_agent_instance.SingleAgentInstanceStatusR\x06status\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\x17 \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x18 \x01(\x03R\tupdatedAt\x12*\n" +
-	"\aproject\x18\x1a \x01(\v2\x10.project.ProjectR\aproject\x12@\n" +
-	"\tsandboxes\x18\x1b \x03(\v2\".sandbox.InstanceSandboxStatusInfoR\tsandboxesJ\x04\b\x13\x10\x14\"\xa9\x02\n" +
+	"\aproject\x18\x1a \x01(\v2\x10.project.ProjectR\aproject\x123\n" +
+	"\tsandboxes\x18\x1b \x03(\v2\x15.common.SandboxDigestR\tsandboxesJ\x04\b\x13\x10\x14\"\xef\x02\n" +
 	" CreateSingleAgentInstanceRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12+\n" +
 	"\x11employer_username\x18\x02 \x01(\tR\x10employerUsername\x12\x12\n" +
@@ -1146,7 +1686,10 @@ const file_agent_single_agent_instance_proto_rawDesc = "" +
 	"\x04role\x18\x05 \x01(\tR\x04role\x12\x19\n" +
 	"\bicon_uri\x18\x06 \x01(\tR\aiconUri\x12*\n" +
 	"\x11employer_icon_uri\x18\a \x01(\tR\x0femployerIconUri\x124\n" +
-	"\vattachments\x18\f \x03(\v2\x12.common.AttachmentR\vattachmentsJ\x04\b\r\x10\x0e\"\x95\x01\n" +
+	"\vattachments\x18\f \x03(\v2\x12.common.AttachmentR\vattachments\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x0e \x01(\x03R\tprojectId\x12+\n" +
+	"\x11operator_username\x18\x0f \x01(\tR\x10operatorUsername\"\x95\x01\n" +
 	"!CreateSingleAgentInstanceResponse\x12H\n" +
 	"\x04data\x18\x01 \x01(\v24.single_agent_instance.CreateSingleAgentInstanceDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
@@ -1177,19 +1720,49 @@ const file_agent_single_agent_instance_proto_rawDesc = "" +
 	"\x04desc\x18\r \x01(\tR\x04descJ\x04\b\v\x10\f\"K\n" +
 	"!UpdateSingleAgentInstanceResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\xaf\x01\n" +
+	"&UpdateSingleAgentInstanceStatusRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12H\n" +
+	"\x06status\x18\x02 \x01(\x0e20.single_agent_instance.SingleAgentInstanceStatusR\x06status\x12+\n" +
+	"\x11operator_username\x18\x03 \x01(\tR\x10operatorUsername\"Q\n" +
+	"'UpdateSingleAgentInstanceStatusResponse\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"3\n" +
+	"!DismissSingleAgentInstanceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"L\n" +
+	"\"DismissSingleAgentInstanceResponse\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"h\n" +
+	"\"ReassignSingleAgentInstanceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x122\n" +
+	"\x15new_operator_username\x18\x02 \x01(\tR\x13newOperatorUsername\"M\n" +
+	"#ReassignSingleAgentInstanceResponse\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"_\n" +
 	" DeleteSingleAgentInstanceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12+\n" +
 	"\x11operator_username\x18\x02 \x01(\tR\x10operatorUsername\"K\n" +
 	"!DeleteSingleAgentInstanceResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\x8f\x01\n" +
-	"\x1fListSingleAgentInstancesRequest\x12\x1a\n" +
-	"\busername\x18\x01 \x01(\tR\busername\x12\x12\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\x86\x04\n" +
+	"\x1eListSingleAgentInstancesFilter\x12\x1f\n" +
+	"\vstatus_list\x18\x02 \x01(\tR\n" +
+	"statusList\x12O\n" +
+	"\n" +
+	"status_arr\x18\x03 \x03(\x0e20.single_agent_instance.SingleAgentInstanceStatusR\tstatusArr\x12\x12\n" +
 	"\x04page\x18\x04 \x01(\x05R\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x05 \x01(\x05R\bpageSize\x12\x1f\n" +
-	"\vis_employer\x18\x06 \x01(\bR\n" +
-	"isEmployer\"\x93\x01\n" +
+	"\tpage_size\x18\x05 \x01(\x05R\bpageSize\x120\n" +
+	"\x11employer_username\x18\x06 \x01(\tH\x00R\x10employerUsername\x88\x01\x01\x12L\n" +
+	"\border_by\x18\a \x01(\x0e21.single_agent_instance.SingleAgentInstanceOrderByR\aorderBy\x120\n" +
+	"\n" +
+	"sort_order\x18\b \x01(\x0e2\x11.common.SortOrderR\tsortOrder\x12\"\n" +
+	"\n" +
+	"project_id\x18\t \x01(\x03H\x01R\tprojectId\x88\x01\x01\x120\n" +
+	"\x11operator_username\x18\n" +
+	" \x01(\tH\x02R\x10operatorUsername\x88\x01\x01B\x14\n" +
+	"\x12_employer_usernameB\r\n" +
+	"\v_project_idB\x14\n" +
+	"\x12_operator_username\"\x93\x01\n" +
 	" ListSingleAgentInstancesResponse\x12G\n" +
 	"\x04data\x18\x01 \x01(\v23.single_agent_instance.ListSingleAgentInstancesDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
@@ -1197,17 +1770,39 @@ const file_agent_single_agent_instance_proto_rawDesc = "" +
 	"\x1cListSingleAgentInstancesData\x12H\n" +
 	"\tinstances\x18\x01 \x03(\v2*.single_agent_instance.SingleAgentInstanceR\tinstances\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x19\n" +
-	"\bhas_next\x18\x03 \x01(\bR\ahasNext\"\x84\x02\n" +
+	"\bhas_next\x18\x03 \x01(\bR\ahasNext\"\xac\x04\n" +
 	"\x1dListSingleAgentInstanceFilter\x120\n" +
 	"\x11employer_username\x18\x01 \x01(\tH\x00R\x10employerUsername\x88\x01\x01\x120\n" +
-	"\x11operator_username\x18\x02 \x01(\tH\x01R\x10operatorUsername\x88\x01\x01\x12\x17\n" +
+	"\x11operator_username\x18\x02 \x01(\tH\x01R\x10operatorUsername\x88\x01\x01\x12(\n" +
+	"\x10filter_by_status\x18\x03 \x01(\bR\x0efilterByStatus\x12O\n" +
+	"\n" +
+	"status_arr\x18\x04 \x03(\x0e20.single_agent_instance.SingleAgentInstanceStatusR\tstatusArr\x12\x17\n" +
 	"\x04role\x18\x05 \x01(\tH\x02R\x04role\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"project_id\x18\x06 \x01(\x03H\x03R\tprojectId\x88\x01\x01B\x14\n" +
+	"project_id\x18\x06 \x01(\x03H\x03R\tprojectId\x88\x01\x01\x12\x1e\n" +
+	"\bagent_id\x18\a \x01(\tH\x04R\aagentId\x88\x01\x01\x12L\n" +
+	"\border_by\x18\b \x01(\x0e21.single_agent_instance.SingleAgentInstanceOrderByR\aorderBy\x120\n" +
+	"\n" +
+	"sort_order\x18\t \x01(\x0e2\x11.common.SortOrderR\tsortOrderB\x14\n" +
 	"\x12_employer_usernameB\x14\n" +
 	"\x12_operator_usernameB\a\n" +
 	"\x05_roleB\r\n" +
-	"\v_project_idB=Z;sico-backend/internal/transport/http/dto/agent/single_agentb\x06proto3"
+	"\v_project_idB\v\n" +
+	"\t_agent_id*\xd3\x01\n" +
+	"\x19SingleAgentInstanceStatus\x12\x14\n" +
+	"\x10INSTANCE_UNKNOWN\x10\x00\x12\x17\n" +
+	"\x13INSTANCE_ONBOARDING\x10\x01\x12\x10\n" +
+	"\fINSTANCE_NEW\x10\x02\x12\x13\n" +
+	"\x0fINSTANCE_ACTIVE\x10\x03\x12\x15\n" +
+	"\x11INSTANCE_INACTIVE\x10\x04\x12\x14\n" +
+	"\x10INSTANCE_ABORTED\x10\x05\x12\x14\n" +
+	"\x10INSTANCE_DELETED\x10\x06\x12\x1d\n" +
+	"\x19INSTANCE_ONBOARDING_SAVED\x10\a*\xd8\x01\n" +
+	"\x1aSingleAgentInstanceOrderBy\x12.\n" +
+	"*SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED\x10\x00\x12%\n" +
+	"!SINGLE_AGENT_INSTANCE_ORDER_BY_ID\x10\x01\x12-\n" +
+	")SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT\x10\x02\x124\n" +
+	"0SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT\x10\x03B=Z;sico-backend/internal/transport/http/dto/agent/single_agentb\x06proto3"
 
 var (
 	file_agent_single_agent_instance_proto_rawDescOnce sync.Once
@@ -1221,43 +1816,61 @@ func file_agent_single_agent_instance_proto_rawDescGZIP() []byte {
 	return file_agent_single_agent_instance_proto_rawDescData
 }
 
-var file_agent_single_agent_instance_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_agent_single_agent_instance_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_agent_single_agent_instance_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_agent_single_agent_instance_proto_goTypes = []any{
-	(*SingleAgentInstance)(nil),               // 0: single_agent_instance.SingleAgentInstance
-	(*CreateSingleAgentInstanceRequest)(nil),  // 1: single_agent_instance.CreateSingleAgentInstanceRequest
-	(*CreateSingleAgentInstanceResponse)(nil), // 2: single_agent_instance.CreateSingleAgentInstanceResponse
-	(*CreateSingleAgentInstanceData)(nil),     // 3: single_agent_instance.CreateSingleAgentInstanceData
-	(*GetSingleAgentInstanceRequest)(nil),     // 4: single_agent_instance.GetSingleAgentInstanceRequest
-	(*GetSingleAgentInstanceResponse)(nil),    // 5: single_agent_instance.GetSingleAgentInstanceResponse
-	(*GetSingleAgentInstanceData)(nil),        // 6: single_agent_instance.GetSingleAgentInstanceData
-	(*UpdateSingleAgentInstanceRequest)(nil),  // 7: single_agent_instance.UpdateSingleAgentInstanceRequest
-	(*UpdateSingleAgentInstanceResponse)(nil), // 8: single_agent_instance.UpdateSingleAgentInstanceResponse
-	(*DeleteSingleAgentInstanceRequest)(nil),  // 9: single_agent_instance.DeleteSingleAgentInstanceRequest
-	(*DeleteSingleAgentInstanceResponse)(nil), // 10: single_agent_instance.DeleteSingleAgentInstanceResponse
-	(*ListSingleAgentInstancesRequest)(nil),   // 11: single_agent_instance.ListSingleAgentInstancesRequest
-	(*ListSingleAgentInstancesResponse)(nil),  // 12: single_agent_instance.ListSingleAgentInstancesResponse
-	(*ListSingleAgentInstancesData)(nil),      // 13: single_agent_instance.ListSingleAgentInstancesData
-	(*ListSingleAgentInstanceFilter)(nil),     // 14: single_agent_instance.ListSingleAgentInstanceFilter
-	(*common.Attachment)(nil),                 // 15: common.Attachment
-	(*project.Project)(nil),                   // 16: project.Project
-	(*sandbox.InstanceSandboxStatusInfo)(nil), // 17: sandbox.InstanceSandboxStatusInfo
+	(SingleAgentInstanceStatus)(0),                  // 0: single_agent_instance.SingleAgentInstanceStatus
+	(SingleAgentInstanceOrderBy)(0),                 // 1: single_agent_instance.SingleAgentInstanceOrderBy
+	(*SingleAgentInstance)(nil),                     // 2: single_agent_instance.SingleAgentInstance
+	(*CreateSingleAgentInstanceRequest)(nil),        // 3: single_agent_instance.CreateSingleAgentInstanceRequest
+	(*CreateSingleAgentInstanceResponse)(nil),       // 4: single_agent_instance.CreateSingleAgentInstanceResponse
+	(*CreateSingleAgentInstanceData)(nil),           // 5: single_agent_instance.CreateSingleAgentInstanceData
+	(*GetSingleAgentInstanceRequest)(nil),           // 6: single_agent_instance.GetSingleAgentInstanceRequest
+	(*GetSingleAgentInstanceResponse)(nil),          // 7: single_agent_instance.GetSingleAgentInstanceResponse
+	(*GetSingleAgentInstanceData)(nil),              // 8: single_agent_instance.GetSingleAgentInstanceData
+	(*UpdateSingleAgentInstanceRequest)(nil),        // 9: single_agent_instance.UpdateSingleAgentInstanceRequest
+	(*UpdateSingleAgentInstanceResponse)(nil),       // 10: single_agent_instance.UpdateSingleAgentInstanceResponse
+	(*UpdateSingleAgentInstanceStatusRequest)(nil),  // 11: single_agent_instance.UpdateSingleAgentInstanceStatusRequest
+	(*UpdateSingleAgentInstanceStatusResponse)(nil), // 12: single_agent_instance.UpdateSingleAgentInstanceStatusResponse
+	(*DismissSingleAgentInstanceRequest)(nil),       // 13: single_agent_instance.DismissSingleAgentInstanceRequest
+	(*DismissSingleAgentInstanceResponse)(nil),      // 14: single_agent_instance.DismissSingleAgentInstanceResponse
+	(*ReassignSingleAgentInstanceRequest)(nil),      // 15: single_agent_instance.ReassignSingleAgentInstanceRequest
+	(*ReassignSingleAgentInstanceResponse)(nil),     // 16: single_agent_instance.ReassignSingleAgentInstanceResponse
+	(*DeleteSingleAgentInstanceRequest)(nil),        // 17: single_agent_instance.DeleteSingleAgentInstanceRequest
+	(*DeleteSingleAgentInstanceResponse)(nil),       // 18: single_agent_instance.DeleteSingleAgentInstanceResponse
+	(*ListSingleAgentInstancesFilter)(nil),          // 19: single_agent_instance.ListSingleAgentInstancesFilter
+	(*ListSingleAgentInstancesResponse)(nil),        // 20: single_agent_instance.ListSingleAgentInstancesResponse
+	(*ListSingleAgentInstancesData)(nil),            // 21: single_agent_instance.ListSingleAgentInstancesData
+	(*ListSingleAgentInstanceFilter)(nil),           // 22: single_agent_instance.ListSingleAgentInstanceFilter
+	(*common.Attachment)(nil),                       // 23: common.Attachment
+	(*project.Project)(nil),                         // 24: project.Project
+	(*common.SandboxDigest)(nil),                    // 25: common.SandboxDigest
+	(common.SortOrder)(0),                           // 26: common.SortOrder
 }
 var file_agent_single_agent_instance_proto_depIdxs = []int32{
-	15, // 0: single_agent_instance.SingleAgentInstance.attachments:type_name -> common.Attachment
-	16, // 1: single_agent_instance.SingleAgentInstance.project:type_name -> project.Project
-	17, // 2: single_agent_instance.SingleAgentInstance.sandboxes:type_name -> sandbox.InstanceSandboxStatusInfo
-	15, // 3: single_agent_instance.CreateSingleAgentInstanceRequest.attachments:type_name -> common.Attachment
-	3,  // 4: single_agent_instance.CreateSingleAgentInstanceResponse.data:type_name -> single_agent_instance.CreateSingleAgentInstanceData
-	6,  // 5: single_agent_instance.GetSingleAgentInstanceResponse.data:type_name -> single_agent_instance.GetSingleAgentInstanceData
-	0,  // 6: single_agent_instance.GetSingleAgentInstanceData.instance:type_name -> single_agent_instance.SingleAgentInstance
-	15, // 7: single_agent_instance.UpdateSingleAgentInstanceRequest.attachments:type_name -> common.Attachment
-	13, // 8: single_agent_instance.ListSingleAgentInstancesResponse.data:type_name -> single_agent_instance.ListSingleAgentInstancesData
-	0,  // 9: single_agent_instance.ListSingleAgentInstancesData.instances:type_name -> single_agent_instance.SingleAgentInstance
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	23, // 0: single_agent_instance.SingleAgentInstance.attachments:type_name -> common.Attachment
+	0,  // 1: single_agent_instance.SingleAgentInstance.status:type_name -> single_agent_instance.SingleAgentInstanceStatus
+	24, // 2: single_agent_instance.SingleAgentInstance.project:type_name -> project.Project
+	25, // 3: single_agent_instance.SingleAgentInstance.sandboxes:type_name -> common.SandboxDigest
+	23, // 4: single_agent_instance.CreateSingleAgentInstanceRequest.attachments:type_name -> common.Attachment
+	5,  // 5: single_agent_instance.CreateSingleAgentInstanceResponse.data:type_name -> single_agent_instance.CreateSingleAgentInstanceData
+	8,  // 6: single_agent_instance.GetSingleAgentInstanceResponse.data:type_name -> single_agent_instance.GetSingleAgentInstanceData
+	2,  // 7: single_agent_instance.GetSingleAgentInstanceData.instance:type_name -> single_agent_instance.SingleAgentInstance
+	23, // 8: single_agent_instance.UpdateSingleAgentInstanceRequest.attachments:type_name -> common.Attachment
+	0,  // 9: single_agent_instance.UpdateSingleAgentInstanceStatusRequest.status:type_name -> single_agent_instance.SingleAgentInstanceStatus
+	0,  // 10: single_agent_instance.ListSingleAgentInstancesFilter.status_arr:type_name -> single_agent_instance.SingleAgentInstanceStatus
+	1,  // 11: single_agent_instance.ListSingleAgentInstancesFilter.order_by:type_name -> single_agent_instance.SingleAgentInstanceOrderBy
+	26, // 12: single_agent_instance.ListSingleAgentInstancesFilter.sort_order:type_name -> common.SortOrder
+	21, // 13: single_agent_instance.ListSingleAgentInstancesResponse.data:type_name -> single_agent_instance.ListSingleAgentInstancesData
+	2,  // 14: single_agent_instance.ListSingleAgentInstancesData.instances:type_name -> single_agent_instance.SingleAgentInstance
+	0,  // 15: single_agent_instance.ListSingleAgentInstanceFilter.status_arr:type_name -> single_agent_instance.SingleAgentInstanceStatus
+	1,  // 16: single_agent_instance.ListSingleAgentInstanceFilter.order_by:type_name -> single_agent_instance.SingleAgentInstanceOrderBy
+	26, // 17: single_agent_instance.ListSingleAgentInstanceFilter.sort_order:type_name -> common.SortOrder
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_agent_single_agent_instance_proto_init() }
@@ -1265,19 +1878,21 @@ func file_agent_single_agent_instance_proto_init() {
 	if File_agent_single_agent_instance_proto != nil {
 		return
 	}
-	file_agent_single_agent_instance_proto_msgTypes[14].OneofWrappers = []any{}
+	file_agent_single_agent_instance_proto_msgTypes[17].OneofWrappers = []any{}
+	file_agent_single_agent_instance_proto_msgTypes[20].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_single_agent_instance_proto_rawDesc), len(file_agent_single_agent_instance_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   15,
+			NumEnums:      2,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_agent_single_agent_instance_proto_goTypes,
 		DependencyIndexes: file_agent_single_agent_instance_proto_depIdxs,
+		EnumInfos:         file_agent_single_agent_instance_proto_enumTypes,
 		MessageInfos:      file_agent_single_agent_instance_proto_msgTypes,
 	}.Build()
 	File_agent_single_agent_instance_proto = out.File

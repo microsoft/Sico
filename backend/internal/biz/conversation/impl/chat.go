@@ -30,9 +30,10 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
+	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/consts"
 	conventity "sico-backend/internal/entity/conversation/conversation"
 	"sico-backend/internal/entity/conversation/message"
@@ -52,9 +53,10 @@ import (
 )
 
 const (
-	roleUser             = "user"
-	roleAssistant        = "assistant"
-	coreChatStartTimeout = 30 * time.Second
+	roleUser                  = "user"
+	roleAssistant             = "assistant"
+	maxCoreStreamChatAttempts = 2
+	coreStreamChatRetryDelay  = 200 * time.Millisecond
 )
 
 var (
@@ -200,7 +202,7 @@ func (s *Service) sendChunkEvent(
 	// continue waiting for new messages, as we need to persist the full response anyway.
 	if errors.Is(sendErr, context.Canceled) {
 		connection.sender.NotifyClosed()
-		connection.notifyDone <- struct{}{}
+		connection.signalDone()
 	}
 	logger.CtxWarn(ctx, "chat_chunk_send_failed conversationId=%d turnId=%d seq=%d err=%v",
 		connection.conversationId, connection.turnId, seq, sendErr)
@@ -212,7 +214,7 @@ func (s *Service) sendDoneEvent(ctx context.Context, connection *ChatConnection,
 			connection.conversationId, connection.turnId, seq, err)
 	}
 	connection.sender.NotifyClosed()
-	connection.notifyDone <- struct{}{}
+	connection.signalDone()
 }
 
 func (s *Service) tryPushChatResponseToConnection(
@@ -359,35 +361,24 @@ func notifyKeepaliveTimeout(ctx context.Context, connection *ChatConnection, che
 			connection.conversationId, connection.turnId, sendErr)
 	}
 	connection.sender.NotifyClosed()
-	connection.notifyDone <- struct{}{}
+	connection.signalDone()
 }
 
 // Chat bridges the HTTP SSE endpoint to the gRPC ChatService StreamChat call.
 func (s *Service) Chat(ctx context.Context, sender sse.SSESender, req *conversationdto.ChatRequestHttp) error {
-	if s.chatClient == nil {
-		return apperr.New(errcode.ConversationChatServiceUnavailable, "chat service client is not configured")
-	}
-
 	username := middleware.MustGetUsernameFromCtx(ctx)
 	logger.CtxInfo(ctx, "chat_request_received agentInstanceId=%d requestAttachmentCount=%d username=%s",
 		req.AgentInstanceID,
 		len(req.Attachments),
 		username,
 	)
-	if req.AgentInstanceID == 0 {
-		return apperr.New(errcode.ConversationAgentInstanceRequired, "agentInstanceId is required")
-	}
 
-	singleAgent, agentInstance, err := s.resolveAgentContext(ctx, req.AgentInstanceID)
+	singleAgent, agentInstance, conversation, err := s.resolveAndAuthorizeChat(
+		ctx, req.AgentInstanceID, username, req.ConversationID,
+	)
 	if err != nil {
 		return err
 	}
-
-	if singleAgent == nil {
-		return apperr.New(errcode.ConversationAgentRequired, "agent not found for the given agentId or agentInstanceId")
-	}
-	// ensure agent ID is set for downstream usage, in case only agentInstanceId is provided.
-	agentID := singleAgent.GetAgentId()
 
 	requestAttachments := req.Attachments
 	s.ensureChatAttachmentSAS(ctx, requestAttachments)
@@ -398,26 +389,15 @@ func (s *Service) Chat(ctx context.Context, sender sse.SSESender, req *conversat
 		s.ensureChatAttachmentSAS(ctx, agentAttachments)
 	}
 
-	conversation, err := s.ensureConversation(ctx, agentID, req.AgentInstanceID, username)
-	if err != nil {
-		return err
-	}
-
 	turnID := s.nextTurnID(ctx, conversation)
 	if err := s.persistChatUserMessage(ctx, conversation, req, username, turnID, requestAttachments); err != nil {
 		return err
 	}
 
 	chatReq := s.buildChatRequest(
-		ctx,
-		req,
-		username,
-		singleAgent,
-		agentInstance,
-		conversation,
-		turnID,
-		requestAttachments,
-		agentAttachments,
+		ctx, req,
+		username, singleAgent, agentInstance, conversation, turnID,
+		requestAttachments, agentAttachments,
 	)
 	logger.CtxInfo(ctx,
 		"chat_stream_start conversationId=%d turnId=%d agentId=%s "+
@@ -431,123 +411,47 @@ func (s *Service) Chat(ctx context.Context, sender sse.SSESender, req *conversat
 		len(agentAttachments),
 	)
 
-	channel := make(chan struct{})
-	connection := &ChatConnection{
-		ctx:                   ctx,
-		sender:                sender,
-		notifyDone:            channel,
-		agent:                 singleAgent,
-		agentInstance:         agentInstance,
-		username:              username,
-		turnId:                turnID,
-		conversationId:        conversation.ID,
-		busyMutex:             sync.Mutex{},
-		bufferedTopicMessages: make(map[int64]*conversationdto.TopicMessage),
-		lastActive:            time.Now(),
-	}
-
+	connection := s.newChatConnection(ctx, sender, singleAgent, agentInstance, username, turnID, conversation.ID)
 	s.registerChatConnection(conversation.ID, turnID, connection)
 
 	safego.Go(ctx, func() {
-		// Use WithoutCancel so the gRPC stream survives SSE disconnection,
-		// while still propagating the OTel trace context to core.
-		streamErr := s.startCoreChat(ctx, chatReq)
-		if streamErr != nil {
+		if streamErr := s.streamChatWithUnavailableRetry(ctx, connection, chatReq); streamErr != nil {
 			logger.CtxError(ctx,
 				"chat_grpc_stream_failed conversationId=%d turnId=%d agentInstanceId=%d model=%s err=%v",
 				conversation.ID, turnID, req.AgentInstanceID, chatReq.Model, streamErr)
-			// Send a message to channel to unblock the HTTP handler and return error to client
 			connection.sender.NotifyClosed()
-			connection.notifyDone <- struct{}{}
+			connection.signalDone()
 			return
 		}
 	})
 
 	safego.Go(ctx, func() { checkKeepalive(ctx, connection) })
 
-	// message sending will be handled elsewhere, we
-	// just listen the channel to receive a signal and then return
-	<-channel
-
+	awaitChatCompletion(ctx, connection)
 	return nil
 }
 
-func (s *Service) startCoreChat(ctx context.Context, chatReq *conversationdto.ChatRequest) error {
-	if err := s.waitCoreChatReady(ctx); err != nil {
-		return err
-	}
-	_, err := s.chatClient.StreamChat(context.WithoutCancel(ctx), chatReq, grpc.WaitForReady(true))
-	return err
-}
-
-func (s *Service) waitCoreChatReady(ctx context.Context) error {
-	if s.coreGRPC == nil {
-		return nil
-	}
-	waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), coreChatStartTimeout)
-	defer cancel()
-
-	s.coreGRPC.ResetConnectBackoff()
-	s.coreGRPC.Connect()
-	for {
-		state := s.coreGRPC.GetState()
-		if state == connectivity.Ready {
-			return nil
-		}
-		if !s.coreGRPC.WaitForStateChange(waitCtx, state) {
-			if err := waitCtx.Err(); err != nil {
-				return err
-			}
-			return context.DeadlineExceeded
-		}
-	}
-}
-
-// Chat bridges the HTTP SSE endpoint to the gRPC ChatService StreamChat call.
+// Reconnect bridges the HTTP SSE endpoint to the gRPC ChatService StreamChat call.
 func (s *Service) Reconnect(ctx context.Context, sender sse.SSESender, req *conversationdto.ReconnectRequest) error {
-	if s.chatClient == nil {
-		return apperr.New(errcode.ConversationChatServiceUnavailable, "chat service client is not configured")
-	}
-
 	username := middleware.MustGetUsernameFromCtx(ctx)
 	logger.CtxInfo(ctx, "chat_reconnect_request_received agentInstanceId=%d username=%s", req.AgentInstanceID, username)
-	if req.AgentInstanceID == 0 {
-		return apperr.New(errcode.ConversationAgentInstanceRequired, "agentInstanceId is required")
-	}
 
-	singleAgent, agentInstance, err := s.resolveAgentContext(ctx, req.AgentInstanceID)
-	if err != nil {
-		return err
-	}
-
-	if singleAgent == nil {
-		return apperr.New(errcode.ConversationAgentRequired, "agent not found for the given agentId or agentInstanceId")
-	}
-	// ensure agent ID is set for downstream usage, in case only agentInstanceId is provided.
-	agentID := singleAgent.GetAgentId()
-
-	// Reconnect resumes an in-progress turn, so the conversation must already
-	// exist. Look it up read-only rather than get-or-create: a missing
-	// conversation cannot have an ongoing turn to resume, and creating one here
-	// would leave a stray empty conversation as a side effect of a reconnect.
-	conversation, err := s.conversationRepo.Get(ctx, username, agentID, req.AgentInstanceID)
-	if err != nil {
-		logger.CtxError(ctx, "chat_reconnect_conversation_lookup_failed username=%s agentId=%s agentInstanceId=%d err=%v",
-			username, agentID, req.AgentInstanceID, err)
-		return err
-	}
-
-	// No conversation means there is nothing to resume; end the stream without
-	// creating a conversation or touching the ongoing-turn cache.
-	if conversation == nil {
-		logger.CtxInfo(ctx, "chat_reconnect_no_conversation agentInstanceId=%d username=%s",
-			req.AgentInstanceID, username)
-		if sendErr := sender.Send(ctx, buildDoneEvent()); sendErr != nil {
-			logger.CtxWarn(ctx, "chat_reconnect_done_send_failed err=%v", sendErr)
+	if req.ConversationID == 0 {
+		// send done and finish
+		if err := sender.Send(ctx, buildDoneEvent()); err != nil {
+			logger.CtxWarn(ctx, "chat_reconnect_done_send_failed conversationId=%d err=%v", req.ConversationID, err)
 		}
 		sender.NotifyClosed()
 		return nil
 	}
+
+	singleAgent, agentInstance, conversation, err := s.resolveAndAuthorizeChat(
+		ctx, req.AgentInstanceID, username, req.ConversationID,
+	)
+	if err != nil {
+		return err
+	}
+	agentID := singleAgent.GetAgentId()
 
 	sendDoneResponse := func() {
 		if err := sender.Send(ctx, buildDoneEvent()); err != nil {
@@ -562,45 +466,22 @@ func (s *Service) Reconnect(ctx context.Context, sender sse.SSESender, req *conv
 		return nil
 	}
 
-	cacheKey := getCacheKeyForOngoingChatTurn(conversation.ID, turnID)
-	cachedResponses, err := s.cache.LRange(ctx, cacheKey.chatResponsesCacheKey, 0, -1).Result()
+	cachedResponses, err := s.fetchCachedResponses(ctx, conversation.ID, turnID)
 	if err != nil {
-		logger.CtxError(ctx, "chat_reconnect_cached_response_list_failed conversationId=%d turnId=%d err=%v",
-			conversation.ID, turnID, err)
 		sendDoneResponse()
 		return nil
 	}
-	logger.CtxInfo(
-		ctx,
+	logger.CtxInfo(ctx,
 		"chat_reconnect_resume_start conversationId=%d turnId=%d "+
 			"agentId=%s agentInstanceId=%d cachedResponseCount=%d",
-		conversation.ID,
-		turnID,
-		agentID,
-		req.AgentInstanceID,
-		len(cachedResponses),
+		conversation.ID, turnID, agentID, req.AgentInstanceID, len(cachedResponses),
 	)
 
-	channel := make(chan struct{})
-	connection := &ChatConnection{
-		ctx:                   ctx,
-		sender:                sender,
-		notifyDone:            channel,
-		agent:                 singleAgent,
-		agentInstance:         agentInstance,
-		username:              username,
-		turnId:                turnID,
-		conversationId:        conversation.ID,
-		busyMutex:             sync.Mutex{},
-		bufferedTopicMessages: make(map[int64]*conversationdto.TopicMessage),
-		lastActive:            time.Now(),
-	}
+	connection := s.newChatConnection(ctx, sender, singleAgent, agentInstance, username, turnID, conversation.ID)
 
-	// lock the mutex to block message pushing until we finish pushing cached messages for this turn
 	connection.busyMutex.Lock()
 	s.registerChatConnection(conversation.ID, turnID, connection)
 	finished := s.replayCachedResponses(ctx, connection, cachedResponses)
-	// unlock the mutex to allow message pushing for new incoming messages for this turn
 	connection.busyMutex.Unlock()
 
 	if finished {
@@ -612,10 +493,127 @@ func (s *Service) Reconnect(ctx context.Context, sender sse.SSESender, req *conv
 
 	safego.Go(ctx, func() { checkKeepalive(ctx, connection) })
 
-	// message sending will be handled elsewhere, we
-	// just listen the channel to receive a signal and then return
-	<-channel
+	awaitChatCompletion(ctx, connection)
 	return nil
+}
+
+// resolveAndAuthorizeChat validates preconditions shared by Chat and Reconnect:
+// ensures the chat client is configured, the agent instance ID is provided,
+// resolves the agent context, enforces RBAC, and verifies the agent exists.
+func (s *Service) resolveAndAuthorizeChat(
+	ctx context.Context,
+	agentInstanceID int64,
+	username string,
+	conversationID int64,
+) (*singleagentpb.SingleAgent, *singleagentpb.SingleAgentInstance, *conventity.Conversation, error) {
+	if s.chatClient == nil {
+		return nil, nil, nil,
+			apperr.New(errcode.ConversationChatServiceUnavailable, "chat service client is not configured")
+	}
+	if agentInstanceID == 0 {
+		return nil, nil, nil, apperr.New(errcode.ConversationAgentInstanceRequired, "agentInstanceId is required")
+	}
+
+	singleAgent, agentInstance, err := s.resolveAgentContext(ctx, agentInstanceID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	agentID := singleAgent.GetAgentId()
+
+	if agentInstance != nil && agentInstance.GetProjectId() != 0 {
+		if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, agentInstance.GetProjectId(), "dw", "use"); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	if singleAgent == nil {
+		return nil, nil, nil,
+			apperr.New(errcode.ConversationAgentRequired, "agent not found for the given agentId or agentInstanceId")
+	}
+
+	conversation, err := s.resolveChatConversation(ctx, agentID, agentInstanceID, username, conversationID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return singleAgent, agentInstance, conversation, nil
+}
+
+func (s *Service) newChatConnection(
+	ctx context.Context,
+	sender sse.SSESender,
+	agent *singleagentpb.SingleAgent,
+	agentInstance *singleagentpb.SingleAgentInstance,
+	username string,
+	turnID, conversationID int64,
+) *ChatConnection {
+	return &ChatConnection{
+		ctx:                   ctx,
+		sender:                sender,
+		notifyDone:            make(chan struct{}),
+		agent:                 agent,
+		agentInstance:         agentInstance,
+		username:              username,
+		turnId:                turnID,
+		conversationId:        conversationID,
+		busyMutex:             sync.Mutex{},
+		bufferedTopicMessages: make(map[int64]*conversationdto.TopicMessage),
+		lastActive:            time.Now(),
+	}
+}
+
+func (s *Service) fetchCachedResponses(ctx context.Context, conversationID, turnID int64) ([]string, error) {
+	cacheKey := getCacheKeyForOngoingChatTurn(conversationID, turnID)
+	cachedResponses, err := s.cache.LRange(ctx, cacheKey.chatResponsesCacheKey, 0, -1).Result()
+	if err != nil {
+		logger.CtxError(ctx, "chat_reconnect_cached_response_list_failed conversationId=%d turnId=%d err=%v",
+			conversationID, turnID, err)
+		return nil, err
+	}
+	return cachedResponses, nil
+}
+
+// awaitChatCompletion blocks until the chat connection signals done
+// or the request context is canceled.
+func awaitChatCompletion(ctx context.Context, connection *ChatConnection) {
+	select {
+	case <-connection.notifyDone:
+	case <-ctx.Done():
+	}
+}
+
+func (s *Service) streamChatWithUnavailableRetry(
+	ctx context.Context,
+	connection *ChatConnection,
+	chatReq *conversationdto.ChatRequest,
+) error {
+	var streamErr error
+	for attempt := 1; attempt <= maxCoreStreamChatAttempts; attempt++ {
+		// Use WithoutCancel so the gRPC stream survives SSE disconnection,
+		// while still propagating the OTel trace context to core.
+		_, streamErr = s.chatClient.StreamChat(context.WithoutCancel(ctx), chatReq)
+		if streamErr == nil {
+			return nil
+		}
+		if !shouldRetryCoreStreamChat(streamErr, attempt, connection) {
+			return streamErr
+		}
+		logger.CtxWarn(ctx,
+			"chat_grpc_stream_retry conversationId=%d turnId=%d agentInstanceId=%d attempt=%d err=%v",
+			connection.conversationId, connection.turnId, chatReq.AgentInstanceId, attempt, streamErr)
+		time.Sleep(coreStreamChatRetryDelay)
+	}
+	return streamErr
+}
+
+func shouldRetryCoreStreamChat(err error, attempt int, connection *ChatConnection) bool {
+	if attempt >= maxCoreStreamChatAttempts {
+		return false
+	}
+	if status.Code(err) != codes.Unavailable {
+		return false
+	}
+	return !connection.hasSentTopicMessages()
 }
 
 // lookupOngoingTurnID returns the turn ID of an ongoing turn for the conversation,
@@ -688,7 +686,7 @@ func (s *Service) ensureConversation(
 		CreatorUsername: username,
 		AgentInstanceID: agentInstanceId,
 		AgentID:         agentID,
-		Title:           "UNUSED TITLE",
+		Title:           DefaultConversationTitle,
 	})
 	if err != nil {
 		logger.CtxError(ctx, "chat_conversation_create_failed username=%s agentId=%s agentInstanceId=%d err=%v",
@@ -697,6 +695,47 @@ func (s *Service) ensureConversation(
 	}
 
 	return conv, nil
+}
+
+func (s *Service) resolveChatConversation(
+	ctx context.Context,
+	agentID string,
+	agentInstanceID int64,
+	username string,
+	conversationID int64,
+) (*conventity.Conversation, error) {
+	if conversationID != 0 {
+		conv, err := s.conversationRepo.GetByID(ctx, conversationID)
+		if err != nil {
+			return nil, err
+		}
+		if conv == nil {
+			return nil, apperr.New(errcode.CommonNotFound, "conversation not found")
+		}
+		if conv.CreatorUsername != username || conv.AgentInstanceID != agentInstanceID {
+			return nil, apperr.New(
+				errcode.CommonInvalidParam,
+				"conversation does not belong to this user and agent instance",
+			)
+		}
+		if agentID != "" && conv.AgentID != "" && conv.AgentID != agentID {
+			return nil, apperr.New(errcode.CommonInvalidParam, "conversation does not belong to this agent")
+		}
+		return conv, nil
+	}
+
+	conversations, hasMore, err := s.conversationRepo.List(ctx, username, "", agentInstanceID, 2, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(conversations) == 1 && !hasMore {
+		return conversations[0], nil
+	}
+	if len(conversations) > 1 || hasMore {
+		return nil, apperr.New(errcode.CommonInvalidParam, "conversationId is required when multiple conversations exist")
+	}
+
+	return s.ensureConversation(ctx, agentID, agentInstanceID, username)
 }
 
 func (s *Service) nextTurnID(ctx context.Context, conversation *conventity.Conversation) int64 {
@@ -780,6 +819,7 @@ func (s *Service) buildChatRequest(
 		ProjectId:         projectId,
 		Model:             resolveAgentModel(singleAgent),
 		AgentRole:         agentRole,
+		NeedUpdateTitle:   conversation.Title == DefaultConversationTitle,
 	}
 }
 

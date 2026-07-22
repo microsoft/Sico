@@ -42,6 +42,7 @@ type UserRepository interface {
 	GetUserByEmail(ctx context.Context, email string) (*UserModel, error)
 	QueryUsers(ctx context.Context, filter *entity.UserFilter, page, pageSize int32) ([]*UserModel, int64, error)
 	UpdatePassword(ctx context.Context, id int64, hashedPassword string) error
+	GetUsersByIDs(ctx context.Context, ids []int64) ([]*UserModel, error)
 }
 
 func NewUserRepository(db *gorm.DB) UserRepository {

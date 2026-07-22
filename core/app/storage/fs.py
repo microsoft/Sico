@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +31,8 @@ from app.utils.sanitize import sanitize_user_id
 
 _LOGGER = logging.getLogger(__name__)
 
-_WORKSPACE_HIDDEN_DIRS = {"history"}
+
+_WORKSPACE_HIDDEN_DIRS = {"history", ".tmp"}
 
 
 class StorageFS:
@@ -329,9 +331,11 @@ SC_MEMORY_FS = SCMemoryFS(root=_SC_MEMORY_ROOT)
 class ChatFS:
     """Filesystem helper for chat-related filesystem storage.
 
-    Workspace path: {root}/agent_instance/{id}/user/{user}/workspace/
-    Skills path:    {root}/agent_instance/{id}/user/{user}/skills/{skill_id}/
-    Turn path:      {root}/agent_instance/{id}/user/{user}/turn/{turn_id}/
+    Workspace path: {root}/agent_instance/{id}/user/{user}/conversation/{conversation_id}/workspace/
+    Skills path:    {root}/agent_instance/{id}/user/{user}/conversation/{conversation_id}/skills/{skill_id}/
+    Turn path:      {root}/agent_instance/{id}/user/{user}/conversation/{conversation_id}/turn/{turn_id}/
+
+    Callers must pass the backend-resolved conversation id.
     """
 
     def __init__(self, root: Path) -> None:
@@ -339,7 +343,7 @@ class ChatFS:
 
         # Plan persistence + Redis-backed locking lives in its own module; ChatFS
         # exposes it as ``self.plan`` so callers do ``CHAT_FS.plan.read(...)``.
-        self.plan = PlanFS(self._get_user_path)
+        self.plan = PlanFS(self._get_conversation_path)
 
     @property
     def root(self) -> Path:
@@ -349,46 +353,105 @@ class ChatFS:
         safe_user_id = sanitize_user_id(user_id)
         return self._root / "agent_instance" / str(agent_instance_id) / "user" / safe_user_id
 
-    def _get_turn_path(self, agent_instance_id: int, user_id: str, turn_id: int) -> Path:
-        return self._get_user_path(agent_instance_id, user_id) / "turn" / str(turn_id)
+    def _get_conversation_path(self, agent_instance_id: int, user_id: str, conversation_id: int) -> Path:
+        user_path = self._get_user_path(agent_instance_id, user_id)
+        return user_path / "conversation" / str(conversation_id)
 
-    def get_workspace_path(self, agent_instance_id: int, user_id: str) -> Path:
+    def _get_turn_path(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int = 0) -> Path:
+        return self._get_conversation_path(agent_instance_id, user_id, conversation_id) / "turn" / str(turn_id)
+
+    def migrate_legacy_session(self, agent_instance_id: int, user_id: str, conversation_id: int) -> Path:
+        """Move legacy user-scoped chat state into a conversation-scoped directory.
+
+        This is best-effort and idempotent. If the target session directory
+        already exists, missing legacy files are merged without overwriting
+        scoped files. Only legacy session state is moved; the ``conversation/``
+        container itself is never moved into a session.
+        """
+        target = self._get_conversation_path(agent_instance_id, user_id, conversation_id)
+        legacy_root = self._get_user_path(agent_instance_id, user_id)
+        target.mkdir(parents=True, exist_ok=True)
+        for child_name in ("workspace", "turn", "skills"):
+            legacy_child = legacy_root / child_name
+            target_child = target / child_name
+            self._move_missing_legacy_path(legacy_child, target_child)
+        return target
+
+    def _move_missing_legacy_path(self, legacy_path: Path, target_path: Path) -> None:
+        if not legacy_path.exists():
+            return
+        if not target_path.exists():
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(legacy_path), str(target_path))
+            return
+        if not legacy_path.is_dir() or not target_path.is_dir():
+            return
+
+        for child in legacy_path.iterdir():
+            self._move_missing_legacy_path(child, target_path / child.name)
+        try:
+            legacy_path.rmdir()
+        except OSError:
+            pass
+
+    def get_workspace_path(self, agent_instance_id: int, user_id: str, conversation_id: int = 0) -> Path:
         """Return the workspace directory path for the given agent instance + user."""
-        return self._get_user_path(agent_instance_id, user_id) / "workspace"
+        return self._get_conversation_path(agent_instance_id, user_id, conversation_id) / "workspace"
 
     def get_user_path(self, agent_instance_id: int, user_id: str) -> Path:
         """Return the user-scoped chat storage root for the given agent instance + user."""
         return self._get_user_path(agent_instance_id, user_id)
 
-    def get_skill_path(self, agent_instance_id: int, user_id: str, skill_id: int) -> Path:
-        """Return the staged skill storage path for the given agent instance + user + skill."""
-        return self._get_user_path(agent_instance_id, user_id) / "skills" / str(skill_id)
+    def get_conversation_path(self, agent_instance_id: int, user_id: str, conversation_id: int) -> Path:
+        """Return the conversation-scoped chat storage root."""
+        return self._get_conversation_path(agent_instance_id, user_id, conversation_id)
 
-    def get_turn_path(self, agent_instance_id: int, user_id: str, turn_id: int) -> Path:
+    def get_skill_path(self, agent_instance_id: int, user_id: str, skill_id: int, conversation_id: int = 0) -> Path:
+        """Return the staged skill storage path for the given agent instance + user + skill."""
+        return self._get_conversation_path(agent_instance_id, user_id, conversation_id) / "skills" / str(skill_id)
+
+    def get_turn_path(self, agent_instance_id: int, user_id: str, turn_id: int, conversation_id: int = 0) -> Path:
         """Return the turn directory path for the given agent instance + user + turn."""
-        return self._get_turn_path(agent_instance_id, user_id, turn_id)
+        return self._get_turn_path(agent_instance_id, user_id, turn_id, conversation_id)
 
     # ---- workspace file operations ------------------------------------ #
 
-    def write_file(self, agent_instance_id: int, user_id: str, filepath: str, content: str, *, encoding: str = "utf-8") -> Path:
+    def write_file(
+        self,
+        agent_instance_id: int,
+        user_id: str,
+        filepath: str,
+        content: str,
+        *,
+        encoding: str = "utf-8",
+        conversation_id: int = 0,
+    ) -> Path:
         """Write a file to the workspace/ directory."""
-        workspace = self.get_workspace_path(agent_instance_id, user_id)
+        workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
         target = workspace / filepath
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding=encoding)
         return target
 
-    def read_file(self, agent_instance_id: int, user_id: str, filename: str, *, encoding: str = "utf-8") -> str:
+    def read_file(
+        self,
+        agent_instance_id: int,
+        user_id: str,
+        filename: str,
+        *,
+        encoding: str = "utf-8",
+        conversation_id: int = 0,
+    ) -> str:
         """Read a file from the workspace/ directory."""
-        workspace = self.get_workspace_path(agent_instance_id, user_id)
+        workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
         target = workspace / filename
         if not target.exists():
             raise FileNotFoundError(f"file not found at {target}")
         return target.read_text(encoding=encoding)
 
-    def delete_file(self, agent_instance_id: int, user_id: str, filepath: str) -> None:
+    def delete_file(self, agent_instance_id: int, user_id: str, filepath: str, *, conversation_id: int = 0) -> None:
         """Delete a file or directory from the workspace/ directory."""
-        workspace = self.get_workspace_path(agent_instance_id, user_id)
+        workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
         target = (workspace / filepath).resolve()
         if not target.is_relative_to(workspace.resolve()):
             raise ValueError("filepath must be within the workspace directory")
@@ -399,9 +462,9 @@ class ChatFS:
         else:
             raise FileNotFoundError(f"file not found: {filepath}")
 
-    def list_files(self, agent_instance_id: int, user_id: str) -> list[dict[str, Any]]:
+    def list_files(self, agent_instance_id: int, user_id: str, conversation_id: int = 0) -> list[dict[str, Any]]:
         """List all files under the workspace/ directory, returning relative paths and sizes."""
-        workspace = self.get_workspace_path(agent_instance_id, user_id)
+        workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
         if not workspace.exists():
             return []
         entries: list[dict[str, Any]] = []
@@ -418,9 +481,9 @@ class ChatFS:
             entries.append({"path": rel, "size_kb": size_kb})
         return entries
 
-    def resolve_workspace_file(self, agent_instance_id: int, user_id: str, filepath: str) -> Path:
+    def resolve_workspace_file(self, agent_instance_id: int, user_id: str, filepath: str, conversation_id: int = 0) -> Path:
         """Resolve a workspace-relative path to an absolute path with traversal protection."""
-        workspace = self.get_workspace_path(agent_instance_id, user_id)
+        workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
         target = (workspace / filepath).resolve()
         if not target.is_relative_to(workspace.resolve()):
             raise ValueError("filepath must be within the workspace directory")
@@ -437,9 +500,10 @@ class ChatFS:
         content: str,
         *,
         encoding: str = "utf-8",
+        conversation_id: int = 0,
     ) -> Path:
         """Write a report markdown file to the report/ directory under the turn path."""
-        turn_path = self._get_turn_path(agent_instance_id, user_id, turn_id)
+        turn_path = self._get_turn_path(agent_instance_id, user_id, turn_id, conversation_id)
         target = turn_path / "report" / filename
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding=encoding)
@@ -451,31 +515,50 @@ class ChatFS:
         user_id: str,
         turn_id: int,
         content: str,
-        *,
+        conversation_id: int,
         encoding: str = "utf-8",
     ) -> Path:
         """Write conversation.json under the turn path."""
-        turn_path = self._get_turn_path(agent_instance_id, user_id, turn_id)
+        turn_path = self._get_turn_path(agent_instance_id, user_id, turn_id, conversation_id)
         target = turn_path / "conversation.json"
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
             content = json.dumps(json.loads(content), ensure_ascii=False, indent=2)
         except json.JSONDecodeError:
             pass
-        target.write_text(content, encoding=encoding)
+        fd, tmp_name = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=str(target.parent))
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "w", encoding=encoding) as file:
+                file.write(content)
+            os.replace(tmp_path, target)
+        except BaseException:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
         return target
 
-    def read_conversation(self, agent_instance_id: int, user_id: str, turn_id: int, *, encoding: str = "utf-8") -> str | None:
+    def read_conversation(
+        self,
+        agent_instance_id: int,
+        user_id: str,
+        turn_id: int,
+        *,
+        conversation_id: int,
+        encoding: str = "utf-8",
+    ) -> str | None:
         """Read conversation.json from the turn path. Returns None if not found."""
-        turn_path = self._get_turn_path(agent_instance_id, user_id, turn_id)
+        turn_path = self._get_turn_path(agent_instance_id, user_id, turn_id, conversation_id)
         target = turn_path / "conversation.json"
         if not target.exists():
             return None
         return target.read_text(encoding=encoding)
 
-    def list_turn_ids(self, agent_instance_id: int, user_id: str) -> list[int]:
+    def list_turn_ids(self, agent_instance_id: int, user_id: str, conversation_id: int) -> list[int]:
         """List all turn IDs for the given agent instance + user, sorted ascending."""
-        turn_dir = self._get_user_path(agent_instance_id, user_id) / "turn"
+        turn_dir = self._get_conversation_path(agent_instance_id, user_id, conversation_id) / "turn"
         if not turn_dir.exists():
             return []
         ids: list[int] = []

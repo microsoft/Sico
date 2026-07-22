@@ -12,6 +12,8 @@ __all__ = (
     "CreateKnowledgeTagResponse",
     "DeleteKnowledgeDocumentRequest",
     "DeleteKnowledgeDocumentResponse",
+    "DeleteKnowledgePlaybookRequest",
+    "DeleteKnowledgePlaybookResponse",
     "DeleteKnowledgeTagRequest",
     "DeleteKnowledgeTagResponse",
     "ExtractDocumentResponse",
@@ -37,13 +39,19 @@ __all__ = (
     "KnowledgeDocument",
     "KnowledgeDocumentStatus",
     "KnowledgeDocumentType",
+    "KnowledgeItem",
+    "KnowledgeItemType",
     "KnowledgePlaybook",
+    "KnowledgePlaybookExtraInfo",
     "KnowledgeServiceBase",
     "KnowledgeServiceStub",
     "KnowledgeTag",
     "ListKnowledgeDocumentData",
     "ListKnowledgeDocumentRequest",
     "ListKnowledgeDocumentResponse",
+    "ListKnowledgeItemsData",
+    "ListKnowledgeItemsRequest",
+    "ListKnowledgeItemsResponse",
     "ListKnowledgePlaybookData",
     "ListKnowledgePlaybookRequest",
     "ListKnowledgePlaybookResponse",
@@ -153,6 +161,50 @@ class KnowledgeDocumentType(betterproto2.Enum):
             "KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN": 0,
             "KNOWLEDGE_DOCUMENT_TYPE_FILE": 1,
             "KNOWLEDGE_DOCUMENT_TYPE_LINK": 2,
+        }
+
+
+class KnowledgeItemType(betterproto2.Enum):
+    """
+    Unified knowledge item type
+    """
+
+    UNKNOWN = 0
+    """
+    @gotag: json:"KNOWLEDGE_ITEM_TYPE_UNKNOWN"
+    """
+
+    DOCUMENT = 1
+    """
+    @gotag: json:"KNOWLEDGE_ITEM_TYPE_DOCUMENT"
+    """
+
+    PLAYBOOK = 2
+    """
+    @gotag: json:"KNOWLEDGE_ITEM_TYPE_PLAYBOOK"
+    """
+
+    DELIVERABLE = 3
+    """
+    @gotag: json:"KNOWLEDGE_ITEM_TYPE_DELIVERABLE"
+    """
+
+    @classmethod
+    def betterproto_value_to_renamed_proto_names(cls) -> dict[int, str]:
+        return {
+            0: "KNOWLEDGE_ITEM_TYPE_UNKNOWN",
+            1: "KNOWLEDGE_ITEM_TYPE_DOCUMENT",
+            2: "KNOWLEDGE_ITEM_TYPE_PLAYBOOK",
+            3: "KNOWLEDGE_ITEM_TYPE_DELIVERABLE",
+        }
+
+    @classmethod
+    def betterproto_renamed_proto_names_to_value(cls) -> dict[str, int]:
+        return {
+            "KNOWLEDGE_ITEM_TYPE_UNKNOWN": 0,
+            "KNOWLEDGE_ITEM_TYPE_DOCUMENT": 1,
+            "KNOWLEDGE_ITEM_TYPE_PLAYBOOK": 2,
+            "KNOWLEDGE_ITEM_TYPE_DELIVERABLE": 3,
         }
 
 
@@ -345,6 +397,41 @@ class DeleteKnowledgeDocumentResponse(betterproto2.Message):
 
 default_message_pool.register_message(
     "knowledge", "DeleteKnowledgeDocumentResponse", DeleteKnowledgeDocumentResponse
+)
+
+
+@dataclass(eq=False, repr=False)
+class DeleteKnowledgePlaybookRequest(betterproto2.Message):
+    """
+    Delete Knowledge Playbook
+    """
+
+    id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: form:"id" binding:"required"
+    """
+
+
+default_message_pool.register_message(
+    "knowledge", "DeleteKnowledgePlaybookRequest", DeleteKnowledgePlaybookRequest
+)
+
+
+@dataclass(eq=False, repr=False)
+class DeleteKnowledgePlaybookResponse(betterproto2.Message):
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "knowledge", "DeleteKnowledgePlaybookResponse", DeleteKnowledgePlaybookResponse
 )
 
 
@@ -902,6 +989,49 @@ default_message_pool.register_message(
 
 
 @dataclass(eq=False, repr=False)
+class KnowledgeItem(betterproto2.Message):
+    """
+    KnowledgeItem represents a unified knowledge item (document, playbook, or deliverable).
+    """
+
+    type: "KnowledgeItemType" = betterproto2.field(
+        1, betterproto2.TYPE_ENUM, default_factory=lambda: KnowledgeItemType(0)
+    )
+    """
+    @gotag: json:"type"
+    """
+
+    document: "KnowledgeDocument | None" = betterproto2.field(
+        2, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"document,omitempty"
+    """
+
+    playbook: "KnowledgePlaybook | None" = betterproto2.field(
+        3, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"playbook,omitempty"
+    """
+
+    deliverable: "_project__.ProjectDeliverable | None" = betterproto2.field(
+        4, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"deliverable,omitempty"
+    """
+
+    updated_at: "int" = betterproto2.field(5, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"updatedAt"
+    """
+
+
+default_message_pool.register_message("knowledge", "KnowledgeItem", KnowledgeItem)
+
+
+@dataclass(eq=False, repr=False)
 class KnowledgePlaybook(betterproto2.Message):
     """
     Knowledge Playbook entity
@@ -944,9 +1074,35 @@ class KnowledgePlaybook(betterproto2.Message):
     @gotag: json:"tags"
     """
 
+    extra_info: "KnowledgePlaybookExtraInfo | None" = betterproto2.field(
+        8, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"extraInfo"
+    """
+
 
 default_message_pool.register_message(
     "knowledge", "KnowledgePlaybook", KnowledgePlaybook
+)
+
+
+@dataclass(eq=False, repr=False)
+class KnowledgePlaybookExtraInfo(betterproto2.Message):
+    """
+    KnowledgePlaybookExtraInfo holds additional display information for a playbook.
+    """
+
+    agent_instance: "_common__.AgentInstanceDigest | None" = betterproto2.field(
+        1, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"agentInstance"
+    """
+
+
+default_message_pool.register_message(
+    "knowledge", "KnowledgePlaybookExtraInfo", KnowledgePlaybookExtraInfo
 )
 
 
@@ -1103,6 +1259,83 @@ class ListKnowledgeDocumentResponse(betterproto2.Message):
 
 default_message_pool.register_message(
     "knowledge", "ListKnowledgeDocumentResponse", ListKnowledgeDocumentResponse
+)
+
+
+@dataclass(eq=False, repr=False)
+class ListKnowledgeItemsData(betterproto2.Message):
+    items: "list[KnowledgeItem]" = betterproto2.field(
+        1, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"items"
+    """
+
+    total: "int" = betterproto2.field(2, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"total"
+    """
+
+    has_next: "bool" = betterproto2.field(3, betterproto2.TYPE_BOOL)
+    """
+    @gotag: json:"hasNext"
+    """
+
+
+default_message_pool.register_message(
+    "knowledge", "ListKnowledgeItemsData", ListKnowledgeItemsData
+)
+
+
+@dataclass(eq=False, repr=False)
+class ListKnowledgeItemsRequest(betterproto2.Message):
+    """
+    List all knowledge items (documents, playbooks, deliverables) for a project.
+    """
+
+    project_id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: form:"projectId" binding:"required"
+    """
+
+    page: "int" = betterproto2.field(2, betterproto2.TYPE_INT32)
+    """
+    @gotag: form:"page" binding:"required,min=1"
+    """
+
+    page_size: "int" = betterproto2.field(3, betterproto2.TYPE_INT32)
+    """
+    @gotag: form:"pageSize" binding:"required,min=1,max=100"
+    """
+
+
+default_message_pool.register_message(
+    "knowledge", "ListKnowledgeItemsRequest", ListKnowledgeItemsRequest
+)
+
+
+@dataclass(eq=False, repr=False)
+class ListKnowledgeItemsResponse(betterproto2.Message):
+    data: "ListKnowledgeItemsData | None" = betterproto2.field(
+        1, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"data"
+    """
+
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "knowledge", "ListKnowledgeItemsResponse", ListKnowledgeItemsResponse
 )
 
 
@@ -1472,6 +1705,7 @@ class KnowledgeServiceStub:
 
 
 from ...common import common as _common__
+from ...project import project as _project__
 
 
 class KnowledgeServiceBase(betterproto2_grpclib.ServiceBase):

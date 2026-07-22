@@ -9,6 +9,7 @@ import (
 	"sico-backend/internal/store/agent/singleagent/internal/dal/model"
 	"sico-backend/internal/store/agent/singleagent/internal/dal/query"
 	"sico-backend/internal/transport/http/dto/agent/single_agent"
+	commondto "sico-backend/internal/transport/http/dto/common"
 )
 
 type SingleAgentInstanceDAO struct {
@@ -57,30 +58,12 @@ func (sai *SingleAgentInstanceDAO) MGet(ctx context.Context, ids []int64) ([]*en
 	return agentS, nil
 }
 
-func (sai *SingleAgentInstanceDAO) GetNamesByIDs(ctx context.Context, ids []int64) (map[int64]string, error) {
-	nameMap := make(map[int64]string)
-	if len(ids) == 0 {
-		return nameMap, nil
-	}
-
+func (sai *SingleAgentInstanceDAO) UpdateStatus(
+	ctx context.Context, id int64, status single_agent.SingleAgentInstanceStatus,
+) error {
 	saim := sai.dbQuery.TSingleAgentInstance
-	var rows []struct {
-		ID   int64
-		Name string
-	}
-	err := saim.WithContext(ctx).
-		Select(saim.ID, saim.Name).
-		Where(saim.ID.In(ids...)).
-		Scan(&rows)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, row := range rows {
-		nameMap[row.ID] = row.Name
-	}
-
-	return nameMap, nil
+	_, err := saim.WithContext(ctx).Where(saim.ID.Eq(id)).Update(saim.Status, int32(status))
+	return err
 }
 
 func (sai *SingleAgentInstanceDAO) Update(
@@ -103,90 +86,6 @@ func (sai *SingleAgentInstanceDAO) Delete(ctx context.Context, id int64) error {
 	return err
 }
 
-func (sai *SingleAgentInstanceDAO) ListByOperatorUsername(
-	ctx context.Context,
-	operatorUsername string, offset, limit int,
-) ([]*entity.SingleAgentInstance, error) {
-	saim := sai.dbQuery.TSingleAgentInstance
-	saimQuery := saim.WithContext(ctx)
-	saimQuery = saimQuery.Where(saim.OperatorUsername.Eq(operatorUsername))
-	pos, err := saimQuery.Offset(offset).Limit(limit).Find()
-	if err != nil {
-		return nil, err
-	}
-
-	entities := make([]*entity.SingleAgentInstance, len(pos))
-	for i, po := range pos {
-		entities[i] = sai.singleAgentInstancePo2Do(po)
-	}
-
-	return entities, nil
-}
-
-func (sai *SingleAgentInstanceDAO) CountByOperatorUsername(ctx context.Context, operatorUsername string) (int64, error) {
-	saim := sai.dbQuery.TSingleAgentInstance
-	saimQuery := saim.WithContext(ctx)
-
-	if len(operatorUsername) > 0 {
-		saimQuery = saimQuery.Where(saim.OperatorUsername.Eq(operatorUsername))
-	}
-
-	count, err := saimQuery.Count()
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
-}
-
-func (sai *SingleAgentInstanceDAO) CountByAgentID(ctx context.Context, agentID string) (int64, error) {
-	saim := sai.dbQuery.TSingleAgentInstance
-	return saim.WithContext(ctx).Where(saim.AgentID.Eq(agentID)).Count()
-}
-
-func (sai *SingleAgentInstanceDAO) ListByCondition(ctx context.Context, isEmployer bool, username string,
-	offset, limit int) ([]*entity.SingleAgentInstance, error) {
-	saim := sai.dbQuery.TSingleAgentInstance
-	saimQuery := saim.WithContext(ctx)
-
-	if isEmployer {
-		saimQuery = saimQuery.Where(saim.EmployerUsername.Eq(username))
-	} else {
-		saimQuery = saimQuery.Where(saim.OperatorUsername.Eq(username))
-	}
-
-	pos, err := saimQuery.Order(saim.ID.Desc()).Offset(offset).Limit(limit).Find()
-	if err != nil {
-		return nil, err
-	}
-
-	entities := make([]*entity.SingleAgentInstance, len(pos))
-	for i, po := range pos {
-		entities[i] = sai.singleAgentInstancePo2Do(po)
-	}
-
-	return entities, nil
-}
-
-func (sai *SingleAgentInstanceDAO) CountByCondition(
-	ctx context.Context, isEmployer bool, username string) (int64, error) {
-	saim := sai.dbQuery.TSingleAgentInstance
-	saimQuery := saim.WithContext(ctx)
-
-	if isEmployer {
-		saimQuery = saimQuery.Where(saim.EmployerUsername.Eq(username))
-	} else {
-		saimQuery = saimQuery.Where(saim.OperatorUsername.Eq(username))
-	}
-
-	count, err := saimQuery.Count()
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
-}
-
 func (sai *SingleAgentInstanceDAO) ListByFilter(
 	ctx context.Context,
 	filter *entity.ListSingleAgentInstanceFilter,
@@ -203,6 +102,14 @@ func (sai *SingleAgentInstanceDAO) ListByFilter(
 		saimQuery = saimQuery.Where(saim.OperatorUsername.Eq(*filter.OperatorUsername))
 	}
 
+	if filter.FilterByStatus && len(filter.StatusArr) > 0 {
+		var status []int32
+		for _, s := range filter.StatusArr {
+			status = append(status, int32(s))
+		}
+		saimQuery = saimQuery.Where(saim.Status.In(status...))
+	}
+
 	if filter.Role != nil {
 		saimQuery = saimQuery.Where(saim.Role.Eq(*filter.Role))
 	}
@@ -210,6 +117,12 @@ func (sai *SingleAgentInstanceDAO) ListByFilter(
 	if filter.ProjectId != nil {
 		saimQuery = saimQuery.Where(saim.ProjectID.Eq(*filter.ProjectId))
 	}
+
+	if filter.AgentId != nil {
+		saimQuery = saimQuery.Where(saim.AgentID.Eq(*filter.AgentId))
+	}
+
+	saimQuery = sai.applyInstanceSorting(saimQuery, filter)
 
 	count, err := saimQuery.Count()
 	if err != nil {
@@ -232,6 +145,31 @@ func (sai *SingleAgentInstanceDAO) ListByFilter(
 	}
 
 	return entities, count, nil
+}
+
+func (sai *SingleAgentInstanceDAO) applyInstanceSorting(
+	q query.ITSingleAgentInstanceDo, filter *entity.ListSingleAgentInstanceFilter,
+) query.ITSingleAgentInstanceDo {
+	saim := sai.dbQuery.TSingleAgentInstance
+	isAsc := filter.SortOrder == commondto.SortOrder_SORT_ORDER_ASC
+
+	switch filter.OrderBy {
+	case single_agent.SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT:
+		if isAsc {
+			return q.Order(saim.UpdatedAt.Asc())
+		}
+		return q.Order(saim.UpdatedAt.Desc())
+	case single_agent.SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT:
+		if isAsc {
+			return q.Order(saim.Status.Asc(), saim.UpdatedAt.Desc())
+		}
+		return q.Order(saim.Status.Desc(), saim.UpdatedAt.Asc())
+	default:
+		if isAsc {
+			return q.Order(saim.ID.Asc())
+		}
+		return q.Order(saim.ID.Desc())
+	}
 }
 
 func (sai *SingleAgentInstanceDAO) singleAgentInstancePo2Do(po *model.TSingleAgentInstance) *entity.SingleAgentInstance {
@@ -259,6 +197,7 @@ func (sai *SingleAgentInstanceDAO) singleAgentInstancePo2Do(po *model.TSingleAge
 			RawEmployerIconUri: po.EmployerIconURI,
 			ProjectId:          po.ProjectID,
 			Permission:         permission,
+			Status:             single_agent.SingleAgentInstanceStatus(po.Status),
 			Attachments:        po.Attachments,
 			CreatedAt:          po.CreatedAt,
 			UpdatedAt:          po.UpdatedAt,

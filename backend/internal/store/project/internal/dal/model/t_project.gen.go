@@ -13,6 +13,7 @@ const TableNameTProject = "t_project"
 // TProject Project Table
 type TProject struct {
 	ID              int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:Primary Key ID" json:"id"`                               // Primary Key ID
+	OrganizationID  int64          `gorm:"column:organization_id;not null;comment:Organization ID" json:"organization_id"`                         // Organization ID
 	OwnerUsername   string         `gorm:"column:owner_username;not null;default:0;comment:Owner Username" json:"owner_username"`                  // Owner Username
 	Name            string         `gorm:"column:name;not null;comment:Project Name" json:"name"`                                                  // Project Name
 	Description     string         `gorm:"column:description;not null;comment:Project Description" json:"description"`                             // Project Description

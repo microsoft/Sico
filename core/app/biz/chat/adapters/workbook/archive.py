@@ -75,7 +75,9 @@ def archive_parsed_document_source(
         if agent_instance_id <= 0:
             return
         target_dir = (
-            CHAT_FS.get_workspace_path(agent_instance_id, ctx.username) / CASE_SOURCES_DIR / PARSED_DOCUMENTS_DIR
+            CHAT_FS.get_workspace_path(agent_instance_id, ctx.username, ctx.conversation_id)
+            / CASE_SOURCES_DIR
+            / PARSED_DOCUMENTS_DIR
         )
         target_dir.mkdir(parents=True, exist_ok=True)
         slug = _source_slug(file_path)
@@ -116,6 +118,7 @@ def archive_workbook_attachment_source(
     *,
     agent_instance_id: int,
     username: str,
+    conversation_id: int = 0,
     file_path: str,
     data_rows: int,
     workbook_manifest: dict[str, Any],
@@ -124,7 +127,9 @@ def archive_workbook_attachment_source(
     try:
         if agent_instance_id <= 0 or not workbook_manifest:
             return
-        target_dir = CHAT_FS.get_workspace_path(agent_instance_id, username) / CASE_SOURCES_DIR / PARSED_DOCUMENTS_DIR
+        target_dir = (
+            CHAT_FS.get_workspace_path(agent_instance_id, username, conversation_id) / CASE_SOURCES_DIR / PARSED_DOCUMENTS_DIR
+        )
         target_dir.mkdir(parents=True, exist_ok=True)
         slug = _source_slug(file_path)
         workbook_sources = _archive_workbook_case_sources(target_dir, slug, workbook_case_sources)

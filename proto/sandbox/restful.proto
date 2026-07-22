@@ -23,6 +23,8 @@ syntax = "proto3";
 package sandbox;
 option go_package = "sico-backend/internal/transport/http/dto/sandbox";
 
+import "common/common.proto";
+
 // Unified sandbox control plane DTOs (HTTP/JSON).
 // NOTE: Use strings for `type/status` to keep JSON binding simple.
 
@@ -126,6 +128,8 @@ message SandboxResourceInfo {
   int64 usage_seconds = 10;   // @gotag: json:"usage_seconds"
   int64 created_at = 11;      // @gotag: json:"created_at,omitempty"
   int64 expires_at = 12;      // @gotag: json:"expires_at,omitempty"
+  int64 organization_id = 13; // @gotag: json:"organization_id"
+  int64 project_id = 14;      // @gotag: json:"project_id"
 }
 
 message SandboxResourcesByType {
@@ -177,9 +181,38 @@ message SandboxUnassignRequest {
   string sandbox_id = 2;  // @gotag: json:"sandbox_id" binding:"required"
 }
 
+// Org-level sandbox assignment (batch)
+message SandboxOrgAssignRequest {
+  int64 organization_id = 1;        // @gotag: json:"organization_id" binding:"required"
+  repeated string sandbox_ids = 2;  // @gotag: json:"sandbox_ids" binding:"required,min=1"
+}
+
+message SandboxOrgUnassignRequest {
+  int64 organization_id = 1;        // @gotag: json:"organization_id" binding:"required"
+  repeated string sandbox_ids = 2;  // @gotag: json:"sandbox_ids" binding:"required,min=1"
+}
+
+// Project-level sandbox assignment (batch)
+message SandboxProjectAssignRequest {
+  int64 project_id = 1;             // @gotag: json:"project_id" binding:"required"
+  repeated string sandbox_ids = 2;  // @gotag: json:"sandbox_ids" binding:"required,min=1"
+}
+
+message SandboxProjectUnassignRequest {
+  int64 project_id = 1;             // @gotag: json:"project_id" binding:"required"
+  repeated string sandbox_ids = 2;  // @gotag: json:"sandbox_ids" binding:"required,min=1"
+}
+
+// Filter for listing sandbox resources
+message ListSandboxResourcesFilter {
+  optional int64 organization_id = 1;   // @gotag: form:"organizationId" json:"organization_id"
+  optional int64 project_id = 2;        // @gotag: form:"projectId" json:"project_id"
+  optional string instance_id = 3;      // @gotag: form:"instanceId" json:"instance_id"
+}
+
 message SandboxInstanceInfo {
   string id = 1;     // @gotag: json:"id"
   string name = 2;   // @gotag: json:"name"
   string role = 3;   // @gotag: json:"role"
-  repeated InstanceSandboxStatusInfo sandboxes = 4; // @gotag: json:"sandboxes"
+  repeated common.SandboxDigest sandboxes = 4; // @gotag: json:"sandboxes"
 }

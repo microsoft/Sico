@@ -47,3 +47,4 @@ config:
   bearer_token: ${OPENROUTER_API_KEY}
   timeout_ms: 60000
   max_tokens: 128000
+  context_length: 1048576
