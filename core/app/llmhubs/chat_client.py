@@ -186,9 +186,14 @@ def _scan_computer_call_ids(messages: MutableSequence[Message]) -> set[str]:
 
 
 def _build_text_input(c: Any) -> InputContent | None:
-    if not c.text:
+    provider_metadata = _extract_provider_metadata(c)
+    if not c.text and not provider_metadata:
         return None
-    return InputContent(type="text", text=str(c.text), provider_metadata=_extract_provider_metadata(c))
+    return InputContent(
+        type="text",
+        text=str(c.text or ""),
+        provider_metadata=provider_metadata,
+    )
 
 
 def _extract_provider_metadata(c: Any) -> dict[str, Any] | None:
@@ -318,12 +323,15 @@ _REQUEST_OPTION_PASSTHROUGH_KEYS: tuple[str, ...] = (
     "temperature",
     "top_p",
     "max_tokens",
+    "max_completion_tokens",
     "frequency_penalty",
     "presence_penalty",
     "request_timeout_ms",
     "stop",
     "seed",
     "tool_choice",
+    "reasoning_effort",
+    "thinking",
     "timeout_ms",
     "allow_multiple_tool_calls",
 )
@@ -430,7 +438,7 @@ def _response_outputs_to_contents(response: Response) -> list[Any]:
 
 
 def _output_text_to_content(output: OutputItem) -> Content | None:
-    if not (output.text or output.annotations):
+    if not (output.text or output.annotations or output.provider_metadata):
         return None
     annotations = _parse_url_citations(output.annotations) if output.annotations else None
     kwargs: dict[str, Any] = {}

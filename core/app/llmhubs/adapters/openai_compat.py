@@ -149,6 +149,196 @@ def _extract_reasoning_option(
     return None
 
 
+def _extract_reasoning_effort(options: dict[str, Any]) -> Any:
+    reasoning_effort = options.get("reasoning_effort")
+    if reasoning_effort is not None:
+        return reasoning_effort
+
+    reasoning = options.get("reasoning")
+    if isinstance(reasoning, dict):
+        return reasoning.get("effort")
+    return None
+
+
+def _openai_compat_metadata(entry: ModelRegistryEntry, reasoning_content: str) -> dict[str, Any]:
+    return {
+        "openai_compatible": {
+            "model_key": entry.model_key,
+            "reasoning_content": reasoning_content,
+        }
+    }
+
+
+def _extract_replay_reasoning(
+    content_item: Any,
+    entry: ModelRegistryEntry,
+) -> str:
+    provider_metadata = content_item.provider_metadata
+    if not isinstance(provider_metadata, dict):
+        return ""
+    metadata = provider_metadata.get("openai_compatible")
+    if not isinstance(metadata, dict) or metadata.get("model_key") != entry.model_key:
+        return ""
+    reasoning_content = metadata.get("reasoning_content")
+    return reasoning_content if isinstance(reasoning_content, str) else ""
+
+
+def _validate_image_url(entry: ModelRegistryEntry, image_url: str) -> None:
+    configured_schemes = entry.config.get("supported_image_url_schemes")
+    if configured_schemes is None:
+        return
+
+    supported_schemes = _normalize_string_set(configured_schemes)
+    scheme = urlparse(image_url).scheme.lower()
+    if scheme not in supported_schemes:
+        supported = ", ".join(sorted(supported_schemes)) or "none"
+        raise LLMHubRuntimeError(
+            f"model '{entry.model_key}' does not support image URL scheme {scheme or '<missing>'!r}; "
+            f"supported schemes: {supported}",
+            code=400,
+            model=entry.model_key,
+        )
+
+
+def _validate_response_format(entry: ModelRegistryEntry, response_format: Any) -> None:
+    configured_types = entry.config.get("supported_response_format_types")
+    if configured_types is None or response_format is None:
+        return
+
+    response_type = response_format.get("type") if isinstance(response_format, dict) else None
+    supported_types = _normalize_string_set(configured_types)
+    if response_type not in supported_types:
+        supported = ", ".join(sorted(supported_types)) or "none"
+        raise LLMHubRuntimeError(
+            f"model '{entry.model_key}' does not support response_format type {response_type!r}; "
+            f"supported types: {supported}",
+            code=400,
+            model=entry.model_key,
+        )
+
+
+def _validate_tool_choice(entry: ModelRegistryEntry, tool_choice: Any) -> None:
+    configured_values = entry.config.get("supported_tool_choice_values")
+    if configured_values is None or tool_choice is None:
+        return
+
+    supported_values = _normalize_string_set(configured_values)
+    if isinstance(tool_choice, str) and tool_choice in supported_values:
+        return
+    supported = ", ".join(sorted(supported_values)) or "none"
+    raise LLMHubRuntimeError(
+        f"model '{entry.model_key}' does not support tool_choice {tool_choice!r}; "
+        f"supported values: {supported}",
+        code=400,
+        model=entry.model_key,
+    )
+
+
+def _apply_chat_max_tokens(
+    body: dict[str, Any],
+    request: Request,
+    entry: ModelRegistryEntry,
+) -> None:
+    requested_completion_tokens = request.options.get("max_completion_tokens")
+    max_tokens = requested_completion_tokens
+    if max_tokens is None:
+        max_tokens = BaseAdapter._resolve_max_tokens(request, entry)
+    if max_tokens is None:
+        return
+
+    configured_field = entry.config.get("max_tokens_field")
+    max_tokens_field = str(
+        configured_field
+        or ("max_completion_tokens" if requested_completion_tokens is not None else "max_tokens")
+    )
+    if max_tokens_field not in {"max_tokens", "max_completion_tokens"}:
+        raise LLMHubRuntimeError(
+            f"model '{entry.model_key}' has invalid max_tokens_field {max_tokens_field!r}",
+            code=500,
+            model=entry.model_key,
+        )
+    body[max_tokens_field] = max_tokens
+
+
+def _apply_chat_reasoning(
+    body: dict[str, Any],
+    request: Request,
+    entry: ModelRegistryEntry,
+) -> None:
+    reasoning_request_format = str(entry.config.get("reasoning_request_format") or "reasoning")
+    if reasoning_request_format == "reasoning_effort":
+        reasoning_effort = _extract_reasoning_effort(request.options)
+        if reasoning_effort is not None:
+            body["reasoning_effort"] = reasoning_effort
+        return
+    if reasoning_request_format == "reasoning":
+        if entry.io_profile.get("supports_reasoning") is True:
+            reasoning = _extract_reasoning_option(request.options, entry)
+            if reasoning is not None:
+                body["reasoning"] = reasoning
+        return
+    if reasoning_request_format == "passthrough":
+        return
+    raise LLMHubRuntimeError(
+        f"model '{entry.model_key}' has invalid reasoning_request_format "
+        f"{reasoning_request_format!r}",
+        code=500,
+        model=entry.model_key,
+    )
+
+
+def _capture_reasoning_delta(
+    delta: dict[str, Any],
+    metadata_state: dict[str, str],
+    entry: ModelRegistryEntry | None,
+) -> None:
+    if entry is None or not entry.config.get("reasoning_content_field"):
+        return
+    reasoning_content_field = str(entry.config["reasoning_content_field"])
+    reasoning_delta = delta.get(reasoning_content_field)
+    if isinstance(reasoning_delta, str):
+        metadata_state["reasoning_content"] = (
+            metadata_state.get("reasoning_content", "") + reasoning_delta
+        )
+
+
+def _finalize_stream_tool_calls(
+    state: dict[int, dict[str, str]],
+    metadata_state: dict[str, str],
+    entry: ModelRegistryEntry | None,
+) -> list[OutputItem]:
+    provider_metadata = None
+    if entry is not None and metadata_state.get("reasoning_content"):
+        provider_metadata = _openai_compat_metadata(entry, metadata_state["reasoning_content"])
+    outputs = [
+        OutputItem(
+            type="function_call",
+            call_id=state[index]["call_id"],
+            name=state[index]["name"],
+            arguments=state[index]["arguments"],
+            provider_metadata=provider_metadata,
+        )
+        for index in sorted(state)
+    ]
+    state.clear()
+    return outputs
+
+
+def _attach_stream_reasoning_metadata(
+    outputs: list[OutputItem],
+    metadata_state: dict[str, str],
+    entry: ModelRegistryEntry | None,
+) -> None:
+    if entry is None or not metadata_state.get("reasoning_content"):
+        return
+    provider_metadata = _openai_compat_metadata(entry, metadata_state["reasoning_content"])
+    text_outputs = [output for output in outputs if output.type == "text"]
+    if text_outputs:
+        text_outputs[-1].provider_metadata = provider_metadata
+    else:
+        outputs.append(OutputItem(type="text", provider_metadata=provider_metadata))
+
+
 def _prepare_responses_tool(tool: dict[str, Any]) -> dict[str, Any]:
     if tool.get("type") != "function":
         return dict(tool)
@@ -323,9 +513,11 @@ def _process_content_item(content_item: Any, entry: ModelRegistryEntry) -> dict[
             image_part["image_url"]["detail"] = detail
         return {"__kind": "content", "value": image_part}
     if c.type in ("input_image", "image") and (c.image_url or c.file_url):
+        image_url = c.image_url or c.file_url
+        _validate_image_url(entry, image_url)
         image_part = {
             "type": "image_url",
-            "image_url": {"url": c.image_url or c.file_url},
+            "image_url": {"url": image_url},
         }
         detail = resolve_image_detail(entry, c.detail)
         if detail is not None:
@@ -549,7 +741,7 @@ class OpenAICompatAdapter(BaseAdapter):
         url, body, headers, timeout = self._prepare_request(request, entry)
         resp = await self._post(url, json=body, headers=headers, timeout=timeout)
         data = resp.json()
-        return self._parse_response(data)
+        return self._parse_response(data, entry)
 
     async def generate_stream(self, request: Request, entry: ModelRegistryEntry) -> AsyncIterator[StreamChunk]:
         self._enforce_capability_constraints(request, entry)
@@ -560,8 +752,14 @@ class OpenAICompatAdapter(BaseAdapter):
         url, body, headers, timeout = self._prepare_request(request, entry)
         body["stream"] = True
         tool_call_state: dict[int, dict[str, str]] = {}
+        response_metadata_state: dict[str, str] = {}
         async for data in self._post_stream(url, json_body=body, headers=headers, timeout=timeout):
-            chunk = self._parse_stream_chunk(data, tool_call_state)
+            chunk = self._parse_stream_chunk(
+                data,
+                tool_call_state,
+                response_metadata_state,
+                entry,
+            )
             if chunk is not None:
                 yield chunk
 
@@ -625,12 +823,14 @@ class OpenAICompatAdapter(BaseAdapter):
 
         messages = self._build_messages(request, entry)
         body: dict[str, Any] = {"model": upstream_model, "messages": messages}
+        defaults = entry.config.get("chat_completions_defaults")
+        if isinstance(defaults, dict):
+            for key, value in defaults.items():
+                body.setdefault(key, value)
 
         if request.options.get("temperature") is not None:
             body["temperature"] = request.options["temperature"]
-        max_tokens = self._resolve_max_tokens(request, entry)
-        if max_tokens is not None:
-            body["max_tokens"] = max_tokens
+        _apply_chat_max_tokens(body, request, entry)
 
         # Pass through known OpenAI options
         for key in (
@@ -640,10 +840,13 @@ class OpenAICompatAdapter(BaseAdapter):
             "stop",
             "response_format",
             "seed",
+            "thinking",
             "tool_choice",
         ):
             if key in request.options:
                 body[key] = request.options[key]
+        _validate_response_format(entry, request.options.get("response_format"))
+        _validate_tool_choice(entry, request.options.get("tool_choice"))
         _apply_chat_logprobs_options(body, request.options)
         if request.options.get("allow_multiple_tool_calls") is not None:
             body["parallel_tool_calls"] = request.options["allow_multiple_tool_calls"]
@@ -653,17 +856,10 @@ class OpenAICompatAdapter(BaseAdapter):
             body.pop("tool_choice", None)
             body.pop("parallel_tool_calls", None)
 
-        # reasoning is only injected here when the entry explicitly opts in via
-        # io_profile.supports_reasoning=true. Otherwise we leave it to the
-        # passthrough step below: OpenRouter entries auto-allow reasoning via
-        # _OPENROUTER_CHAT_COMPLETIONS_OPTION_KEYS, while explicit
-        # supports_reasoning=false strips reasoning out of the passthrough set
-        # in _get_passthrough_option_keys. `_apply_option_passthrough` skips
-        # keys already present in body, so there is no risk of double-writing.
-        if entry.io_profile.get("supports_reasoning") is True:
-            reasoning = _extract_reasoning_option(request.options, entry)
-            if reasoning is not None:
-                body["reasoning"] = reasoning
+        # Reasoning request fields vary across OpenAI-compatible providers.
+        # The model descriptor selects the wire shape; the default preserves
+        # the existing ``reasoning`` behavior for OpenAI/OpenRouter entries.
+        _apply_chat_reasoning(body, request, entry)
 
         self._apply_option_passthrough(
             body,
@@ -673,6 +869,7 @@ class OpenAICompatAdapter(BaseAdapter):
                 "allow_multiple_tool_calls",
                 "frequency_penalty",
                 "logprobs",
+                "max_completion_tokens",
                 "max_output_tokens",
                 "max_tokens",
                 "presence_penalty",
@@ -681,6 +878,7 @@ class OpenAICompatAdapter(BaseAdapter):
                 "seed",
                 "stop",
                 "temperature",
+                "thinking",
                 "timeout_ms",
                 "top_logprobs",
                 "tool_choice",
@@ -705,7 +903,11 @@ class OpenAICompatAdapter(BaseAdapter):
             content_parts: list[dict[str, Any]] = []
             tool_calls: list[dict[str, Any]] = []
             tool_results: list[dict[str, Any]] = []
+            reasoning_content = ""
             for c in inp.content:
+                replay_reasoning = _extract_replay_reasoning(c, entry)
+                if replay_reasoning:
+                    reasoning_content = replay_reasoning
                 processed = _process_content_item(c, entry)
                 if processed is None:
                     continue
@@ -724,6 +926,10 @@ class OpenAICompatAdapter(BaseAdapter):
                 message["content"] = content_parts
             if tool_calls:
                 message["tool_calls"] = tool_calls
+            reasoning_content_field = entry.config.get("reasoning_content_field")
+            if reasoning_content and reasoning_content_field:
+                message[str(reasoning_content_field)] = reasoning_content
+                message.setdefault("content", "")
             if "content" in message or "tool_calls" in message:
                 messages.append(message)
             if tool_results:
@@ -732,7 +938,10 @@ class OpenAICompatAdapter(BaseAdapter):
         return messages
 
     @staticmethod
-    def _parse_response(data: dict[str, Any]) -> Response:
+    def _parse_response(
+        data: dict[str, Any],
+        entry: ModelRegistryEntry | None = None,
+    ) -> Response:
         outputs: list[OutputItem] = []
         choices = data.get("choices", [])
         if choices:
@@ -743,9 +952,10 @@ class OpenAICompatAdapter(BaseAdapter):
             refusal = message.get("refusal")
             if refusal:
                 outputs.append(OutputItem(type="refusal", text=str(refusal)))
+            tool_call_outputs: list[OutputItem] = []
             for tool_call in message.get("tool_calls", []) or []:
                 function_data = tool_call.get("function", {}) or {}
-                outputs.append(
+                tool_call_outputs.append(
                     OutputItem(
                         type="function_call",
                         call_id=tool_call.get("id", ""),
@@ -753,6 +963,21 @@ class OpenAICompatAdapter(BaseAdapter):
                         arguments=function_data.get("arguments", "") or "",
                     )
                 )
+            outputs.extend(tool_call_outputs)
+
+            reasoning_content = ""
+            if entry is not None and entry.config.get("reasoning_content_field"):
+                raw_reasoning = message.get(str(entry.config["reasoning_content_field"]))
+                if isinstance(raw_reasoning, str):
+                    reasoning_content = raw_reasoning
+            if reasoning_content and entry is not None:
+                provider_metadata = _openai_compat_metadata(entry, reasoning_content)
+                targets = tool_call_outputs or [output for output in outputs if output.type == "text"][-1:]
+                if targets:
+                    for output in targets:
+                        output.provider_metadata = provider_metadata
+                else:
+                    outputs.append(OutputItem(type="text", provider_metadata=provider_metadata))
 
         usage_data = data.get("usage", {})
         usage = Usage(
@@ -767,6 +992,8 @@ class OpenAICompatAdapter(BaseAdapter):
     def _parse_stream_chunk(
         data: dict[str, Any],
         tool_call_state: dict[int, dict[str, str]] | None = None,
+        response_metadata_state: dict[str, str] | None = None,
+        entry: ModelRegistryEntry | None = None,
     ) -> StreamChunk | None:
         choices = data.get("choices", [])
         finish = None
@@ -774,8 +1001,10 @@ class OpenAICompatAdapter(BaseAdapter):
         outputs: list[OutputItem] = []
         finalized_tool_calls: list[OutputItem] = []
         state = tool_call_state if tool_call_state is not None else {}
+        metadata_state = response_metadata_state if response_metadata_state is not None else {}
         for choice in choices:
             delta = choice.get("delta", {}) or {}
+            _capture_reasoning_delta(delta, metadata_state, entry)
             text = delta.get("content") or ""
             if text:
                 text_parts.append(text)
@@ -801,17 +1030,16 @@ class OpenAICompatAdapter(BaseAdapter):
                     current["arguments"] += function_data["arguments"]
             finish = choice.get("finish_reason") or finish
         if finish is not None and state:
-            for index in sorted(state):
-                current = state[index]
-                finalized_tool_calls.append(
-                    OutputItem(
-                        type="function_call",
-                        call_id=current["call_id"],
-                        name=current["name"],
-                        arguments=current["arguments"],
-                    )
-                )
-            state.clear()
+            finalized_tool_calls = _finalize_stream_tool_calls(state, metadata_state, entry)
+        if (
+            finish is not None
+            and not finalized_tool_calls
+            and entry is not None
+            and metadata_state.get("reasoning_content")
+        ):
+            _attach_stream_reasoning_metadata(outputs, metadata_state, entry)
+        if finish is not None:
+            metadata_state.clear()
         usage_data = data.get("usage")
         usage = None
         if usage_data:

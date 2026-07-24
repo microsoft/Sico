@@ -71,9 +71,48 @@ io_profile:
 #     passthrough_options: []            # Optional: allow specific request.options keys for all request types
 #     chat_completions_passthrough_options: []  # Fills only fields not already built by the adapter
 #     responses_passthrough_options: []         # Fills only fields not already built by the adapter
+#     max_tokens_field: max_tokens       # Or max_completion_tokens for compatible providers that require it
+#     reasoning_request_format: reasoning # reasoning | reasoning_effort | passthrough
+#     reasoning_content_field: reasoning_content  # Capture and replay provider reasoning verbatim
+#     chat_completions_defaults: {}       # Provider-required fields, overridden by per-request options
+#     supported_response_format_types: [] # Optional response_format.type allowlist
+#     supported_tool_choice_values: []    # Optional tool_choice string allowlist
+#     supported_image_url_schemes: []     # Optional URL scheme allowlist, e.g. [data, ms]
 #     default_headers: {}               # Optional: extra request headers sent on every call
 #     timeout_ms: 60000
 #     max_tokens: 8192
+#
+#   Kimi K3 (official Moonshot API):
+#     base_url: ${MOONSHOT_API_BASE_URL:-https://api.moonshot.cn/v1}
+#     path: /chat/completions
+#     upstream_model_name: kimi-k3
+#     bearer_token: ${MOONSHOT_API_KEY}
+#     use_chat_completions: true
+#     max_tokens: 131072
+#     max_tokens_field: max_completion_tokens
+#     context_length: 1048576
+#     reasoning_request_format: reasoning_effort
+#     reasoning_content_field: reasoning_content
+#     supported_response_format_types: [json_object, json_schema]
+#     supported_image_detail_levels: []
+#     supported_image_url_schemes: [data, ms]
+#
+#   GLM-5.2 (official Z.AI international API):
+#     base_url: ${ZAI_API_BASE_URL:-https://api.z.ai/api/paas/v4}
+#     path: /chat/completions
+#     upstream_model_name: glm-5.2
+#     bearer_token: ${ZAI_API_KEY}
+#     use_chat_completions: true
+#     max_tokens: 131072
+#     context_length: 1048576
+#     reasoning_request_format: reasoning_effort
+#     reasoning_content_field: reasoning_content
+#     chat_completions_defaults:
+#       thinking:
+#         type: enabled
+#         clear_thinking: false
+#     supported_tool_choice_values: [auto]
+#     supported_response_format_types: [json_object]
 #
 # OpenRouter via OpenAI-compatible (provider_template_type: openai_compatible):
 #   Chat Completions-compatible text, streaming, tools, structured outputs, and image inputs work through the same adapter.
