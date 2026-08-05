@@ -140,9 +140,14 @@ services:
       - EVENT_BUS_TOPIC=core-backend
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - MEM0_QDRANT_HOST=qdrant
+      - MEM0_AZURE_OPENAI_ENDPOINT=${MEM0_AZURE_OPENAI_ENDPOINT:-}
+      - MEM0_AZURE_OPENAI_API_KEY=${MEM0_AZURE_OPENAI_API_KEY:-}
       - EXPERIENCES_ENABLED=${EXPERIENCES_ENABLED:-true}
       - RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE=${RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE:-false}
       - CHAT_AGENT_MAX_ITERATIONS=${CHAT_AGENT_MAX_ITERATIONS:-1000}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - AZURE_OPENAI_GPT54_ENDPOINT=${AZURE_OPENAI_GPT54_ENDPOINT:-}
+      - AZURE_OPENAI_GPT54_API_KEY=${AZURE_OPENAI_GPT54_API_KEY:-}
       - TASK_RUNTIME_RUN_STORE=${TASK_RUNTIME_RUN_STORE:-backend}
       - TASK_RUNTIME_ARTIFACT_STORE=${TASK_RUNTIME_ARTIFACT_STORE:-seaweedfs}
       - TASK_RUNTIME_ARTIFACT_PUBLIC_BASE_URL=${TASK_RUNTIME_ARTIFACT_PUBLIC_BASE_URL:-/storage}
@@ -164,7 +169,7 @@ services:
       qdrant:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import grpc; ch = grpc.insecure_channel('localhost:50053'); grpc.channel_ready_future(ch).result(timeout=2)"]
+      test: ["CMD", "python", "-c", "import socket; s = socket.create_connection(('127.0.0.1', 50053), timeout=2); s.close()"]
       interval: 10s
       timeout: 5s
       retries: 5
