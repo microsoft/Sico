@@ -67,7 +67,7 @@
     "immer": "^11.1.8",
     "jotai": "^2.20.0",
     "lucide-react": "^1.11.0",
-    "pdfjs-dist": "^6.0.227",
+    "pdfjs-dist": "^6.2.108",
     "react-error-boundary": "^6.1.1",
     "react-hook-form": "^7.76.1",
     "react-markdown": "^9.0.1",
