@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 const globals = require("globals");
 const js = require("@eslint/js");
 const reactPlugin = require("eslint-plugin-react");
@@ -178,17 +156,7 @@ module.exports = function createBaseConfig({ tsconfigRootDir }) {
         version: "detect",
       },
       tailwindcss: {
-        // Tailwind v4 ships no JS config file — its design tokens live in
-        // `@theme` blocks inside CSS. Without this, eslint-plugin-tailwindcss
-        // logs "Cannot resolve default tailwindcss config path" once per file
-        // (hundreds of lines of noise). Point it at the shared @sico/ui
-        // globals.css via an absolute path derived from THIS config file's
-        // location so it resolves identically no matter which package's CWD
-        // eslint runs from.
-        config: require("node:path").join(
-          __dirname,
-          "../ui/src/styles/globals.css",
-        ),
+        config: path.join(rootDir, "packages/ui/src/styles/globals.css"),
       },
     },
     rules: {
@@ -519,6 +487,16 @@ module.exports = function createBaseConfig({ tsconfigRootDir }) {
             "ease\\-(entrance|exit|persistent|elastic)",
             // ─── Foundation color scales (stories + token audit pages) ───
             "(bg|text|border)\\-(primary|danger|warn|neutral|success|info)\\-\\d+",
+            // ─── Landing-page feature tokens (@sico/shared) ──────────────
+            // The marketing landing page rides `landing-page-*` @theme color &
+            // typography tokens (utility-prefixed, e.g. `bg-landing-page-fill`,
+            // `text-landing-page-hero-title`) plus a fixed set of bare
+            // `landing-page-*` component classes defined in @sico/shared
+            // features/landing-page/index.css. `cssFiles` can't resolve @sico/ui
+            // vars from @sico/shared — the whitelist is the mechanism. Bare
+            // classes are enumerated (not `landing-page-.+`) so typos still fail.
+            "(bg|text|border|ring|shadow|fill|stroke|outline)\\-landing-page\\-.+",
+            "landing-page\\-(footer|roles|roles-viewport|scenario|scenarios|scenario-image|scenario-title|role-description|role-dot)",
           ],
         },
       ],

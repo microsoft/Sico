@@ -1,34 +1,18 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { type JSX } from "react";
+import { type JSX, useEffect } from "react";
 
 import { Markdown } from "../../../../components/markdown";
+import { firstMarkdownHeading } from "../../../../utils/markdown-title";
 import { useFetchedText } from "../../hooks/use-fetched-text";
 import { LoadingOverlay } from "../loading-overlay";
 import { UnpreviewableState } from "../unpreviewable-state";
 
 export type MarkdownFileViewerProps = {
   fileUrl: string;
+  // Optional: reports the document's own H1 (or undefined when it has none) once
+  // the file has loaded, so a header can title itself with the article title
+  // instead of the filename. The fetch lives here, so the title can only surface
+  // upward through this callback.
+  onTitleResolved?: (title: string | undefined) => void;
 };
 
 /**
@@ -43,8 +27,19 @@ export type MarkdownFileViewerProps = {
  */
 export function MarkdownFileViewer({
   fileUrl,
+  onTitleResolved,
 }: MarkdownFileViewerProps): JSX.Element {
   const { content, loading, error } = useFetchedText(fileUrl);
+
+  // Surface the H1 to the header once the body has settled — undefined while
+  // pending or on failure, so the header falls back to the filename.
+  useEffect(() => {
+    if (loading || error) {
+      onTitleResolved?.(undefined);
+      return;
+    }
+    onTitleResolved?.(firstMarkdownHeading(content));
+  }, [content, loading, error, onTitleResolved]);
 
   if (error) {
     return <UnpreviewableState />;

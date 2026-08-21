@@ -1,25 +1,5 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
+import { Button } from "@sico/ui";
+import { Plus } from "lucide-react";
 import type * as React from "react";
 
 import { MessageState } from "../../../components/message-state";
@@ -30,9 +10,17 @@ const COPY = {
   body: "Projects hold your digital workers and their work.",
 } as const;
 
-/** Empty state for `/project`. The create affordance is intentionally omitted —
- * projects are provisioned outside the dashboard. */
-export function EmptyState(): React.JSX.Element {
+export type EmptyStateProps = {
+  // Opens the create-project dialog. Optional so the empty state still renders
+  // read-only where no create affordance is wanted.
+  onCreate?: () => void;
+};
+
+/** Empty state for `/project` — offers a "Create project" CTA when `onCreate`
+ * is provided (copy mirrors the PR346 design draft). */
+export function EmptyState({
+  onCreate,
+}: EmptyStateProps = {}): React.JSX.Element {
   return (
     <MessageState
       fill
@@ -41,6 +29,14 @@ export function EmptyState(): React.JSX.Element {
       illustrationHeight={EMPTY_ILLUSTRATIONS.projects.height}
       heading={COPY.heading}
       body={COPY.body}
+      action={
+        onCreate ? (
+          <Button variant="primary" onClick={onCreate}>
+            <Plus aria-hidden="true" />
+            Create Project
+          </Button>
+        ) : undefined
+      }
     />
   );
 }

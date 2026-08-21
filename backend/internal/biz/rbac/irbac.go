@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package rbac
 
 import (
@@ -43,6 +23,7 @@ type Service interface {
 	Login(ctx context.Context, req *token.LoginRequest) (*token.LoginResponse, error)
 	Logout(ctx context.Context, token string) (*token.LogoutResponse, error)
 	RefreshToken(ctx context.Context, oldToken string, userInfo *jwtx.UserInfo) (*token.RefreshTokenResponse, error)
+	AuthorizeRoleChange(ctx context.Context, roleCode, scopeType, scopeID string) error
 	AssignUserRole(ctx context.Context, req *user_role.AssignUserRoleRequest) (*user_role.AssignUserRoleResponse, error)
 	RemoveUserRole(ctx context.Context, req *user_role.RemoveUserRoleRequest) (*user_role.RemoveUserRoleResponse, error)
 	ListUserRoles(ctx context.Context, req *user_role.ListUserRolesRequest) (*user_role.ListUserRolesResponse, error)

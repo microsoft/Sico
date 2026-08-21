@@ -16,7 +16,7 @@ type ModelRegistry struct {
 	DisplayName          string `gorm:"column:display_name;not null"`
 	ModelType            int32  `gorm:"column:model_type;not null"`
 	ProviderTemplateType int32  `gorm:"column:provider_template_type;not null"`
-	AgentID              string `gorm:"column:agent_id;not null;default:''"`
+	OrganizationID       int64  `gorm:"column:organization_id;not null;default:0"`
 	Status               int32  `gorm:"column:status;not null;default:1"`
 	IsBuiltin            int32  `gorm:"column:is_builtin;not null;default:0"`
 	Description          string `gorm:"column:description"`
@@ -34,7 +34,7 @@ func (*ModelRegistry) TableName() string { return tableNameModelRegistry }
 
 // ModelRegistryFilter represents query filters for listing model registry entries.
 type ModelRegistryFilter struct {
-	AgentID              string
+	OrganizationID       int64
 	Status               int32
 	ProviderTemplateType int32
 	ModelType            int32
@@ -94,8 +94,8 @@ func (d *ModelRegistryDAO) ExistsByModelKey(ctx context.Context, modelKey string
 func (d *ModelRegistryDAO) List(ctx context.Context, filter *ModelRegistryFilter) ([]*ModelRegistry, int64, error) {
 	tx := d.db.WithContext(ctx).Model(&ModelRegistry{})
 
-	if filter.AgentID != "" {
-		tx = tx.Where("agent_id = ?", filter.AgentID)
+	if filter.OrganizationID > 0 {
+		tx = tx.Where("organization_id = ?", filter.OrganizationID)
 	}
 	if filter.Status >= 0 {
 		tx = tx.Where("status = ?", filter.Status)

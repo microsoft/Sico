@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createStore, Provider } from "jotai";
@@ -76,14 +54,20 @@ describe("MarkdownPreviewer", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the title through the mounted header", () => {
-    renderPreviewer(makeContent({ title: "My Report" }));
+  it("shows the document's H1 as the header title", () => {
+    renderPreviewer(makeContent({ title: "My Report", markdown: "# Hello" }));
+    // The header title is a <p>; the body renders the same H1 as an <h1>.
+    expect(screen.getByText("Hello", { selector: "p" })).toBeInTheDocument();
+  });
+
+  it("falls back to the filename in the header when the body has no H1", () => {
+    renderPreviewer(makeContent({ title: "My Report", markdown: "body only" }));
     expect(screen.getByText("My Report")).toBeInTheDocument();
   });
 
   it("renders the markdown body", () => {
-    renderPreviewer(makeContent({ markdown: "# Hello" }));
-    expect(screen.getByText("Hello")).toBeInTheDocument();
+    renderPreviewer(makeContent({ markdown: "# Hello\n\nbody text" }));
+    expect(screen.getByText("body text")).toBeInTheDocument();
   });
 
   it("gives the body a fluid reading gutter (px-4, widening to px-34 at @3xl)", () => {

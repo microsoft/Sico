@@ -1,24 +1,4 @@
 #!/usr/bin/env bash
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 set -euo pipefail
 
 # Unified proto code generation script.
@@ -74,9 +54,13 @@ run_backend_reverse() {
 
   local targets=(
     "knowledge|knowledge|reverse_rpc"
+    "llmhubs|llmhubs|reverse_rpc"
     "sandbox|sandbox|reverse_rpc"
     "conversation|conversation|reverse_rpc"
     "taskruntime|taskruntime|reverse_rpc"
+    "notification|notification|reverse_rpc"
+    "authstate|authstate|reverse_rpc"
+    "casereplay|casereplay|reverse_rpc"
   )
 
   _gen_go_grpc "$out_abs" "${targets[@]}"
@@ -151,6 +135,15 @@ run_backend_http() {
 
   _http_process_subdir "organization" "organization" \
     organization
+
+  _http_process_subdir "notification" "notification" \
+    notification
+
+  _http_process_subdir "scheduledtask" "scheduledtask" \
+    scheduled_task
+
+  _http_process_subdir "authstate" "authstate" \
+    restful
 
   _http_process_subdir "conversation" "conversation" \
     conversation \
@@ -236,7 +229,7 @@ run_core() {
   # extra_opts defaults to "server_generation=async" when omitted or empty.
   local targets=(
     "llmhubs|llmhubs|rpc reverse_rpc"
-    "conversation|conversation|msg reverse_rpc chat plan api rpc"
+    "conversation|conversation|conversation msg reverse_rpc chat plan api rpc"
     "common|common|common"
     "health|health|rpc"
     "knowledge|knowledge|knowledge rpc reverse_rpc"
@@ -244,6 +237,9 @@ run_core() {
     "skill|skill|skill rpc"
     "sandbox|sandbox|reverse_rpc"
     "taskruntime|taskruntime|reverse_rpc"
+    "notification|notification|notification reverse_rpc"
+    "authstate|authstate|reverse_rpc"
+    "casereplay|casereplay|reverse_rpc"
   )
 
   local target subdir out_subdir files extra_opts full_out_dir file opts

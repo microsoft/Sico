@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   Field,
   FieldError,
@@ -39,6 +17,7 @@ import { z } from "zod";
 import { DwAvatarPicker } from "./dw-avatar-picker";
 import { StatusRow } from "./status-row";
 import { ProjectAvatar } from "../../../components/project-avatar";
+import { FIELD_LABEL_CLASS } from "../../../constants/form";
 import { type Project } from "../../projects/schemas/project";
 import { type SingleAgentCard } from "../../studio/schemas/single-agent-card";
 import { DW_AVATAR_PRESETS } from "../constants";
@@ -59,9 +38,6 @@ export const ADD_DW_INITIAL_VALUES: AddDwValues = {
   iconUri: DW_AVATAR_PRESETS[0],
 };
 
-const UPPER_LABEL =
-  "text-foreground-secondary text-xs font-semibold tracking-wider uppercase";
-
 export function renderProjectField(
   control: Control<AddDwValues>,
   projects: Project[],
@@ -75,7 +51,7 @@ export function renderProjectField(
       control={control}
       render={({ field, fieldState }) => (
         <Field data-invalid={fieldState.invalid ? true : undefined}>
-          <FieldLabel htmlFor="add-dw-project" className={UPPER_LABEL}>
+          <FieldLabel htmlFor="add-dw-project" className={FIELD_LABEL_CLASS}>
             Project
           </FieldLabel>
           <Select
@@ -156,7 +132,7 @@ export function renderDwField(
       control={control}
       render={({ field, fieldState }) => (
         <Field data-invalid={fieldState.invalid ? true : undefined}>
-          <FieldLabel htmlFor="add-dw-template" className={UPPER_LABEL}>
+          <FieldLabel htmlFor="add-dw-template" className={FIELD_LABEL_CLASS}>
             Digital worker
           </FieldLabel>
           <Select
@@ -227,7 +203,7 @@ export function renderNameField(
       control={control}
       render={({ field, fieldState }) => (
         <Field data-invalid={fieldState.invalid ? true : undefined}>
-          <FieldLabel htmlFor="add-dw-name" className={UPPER_LABEL}>
+          <FieldLabel htmlFor="add-dw-name" className={FIELD_LABEL_CLASS}>
             Name
           </FieldLabel>
           <Input
@@ -259,7 +235,7 @@ export function renderAvatarField(
       control={control}
       render={({ field }) => (
         <Field>
-          <FieldLabel className={UPPER_LABEL}>Avatar</FieldLabel>
+          <FieldLabel className={FIELD_LABEL_CLASS}>Avatar</FieldLabel>
           <DwAvatarPicker value={field.value} onChange={field.onChange} />
         </Field>
       )}

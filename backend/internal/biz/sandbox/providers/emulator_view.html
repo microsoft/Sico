@@ -1,0 +1,288 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+	<title>Emulator Live View</title>
+	<style>
+		*{margin:0;padding:0;box-sizing:border-box}
+		html,body{overflow:hidden;height:100vh}
+		body{background:#fff;display:flex;flex-direction:column;justify-content:center;align-items:center;touch-action:none}
+		#videoContainer{position:relative;display:inline-block;touch-action:none}
+		video{max-width:100%;max-height:calc(100vh - 48px);display:block;border:2px solid #4f46e5;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair}
+		#playOverlay{display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);border-radius:8px;cursor:pointer;align-items:center;justify-content:center;z-index:10}
+		#playOverlay .play-btn{font-size:48px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+		#status{position:fixed;top:8px;left:8px;color:#334155;font-size:11px;font-family:ui-sans-serif,system-ui;z-index:20}
+		.controls{display:flex;justify-content:center;gap:6px;margin-top:8px}
+		.controls button{background:#4f46e5;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-family:ui-sans-serif,system-ui}
+		.controls button:hover{background:#4338ca}
+		.controls button:active{background:#3730a3}
+	</style>
+</head>
+<body>
+	<div id="status"></div>
+	<div id="videoContainer">
+		<video id="screen" autoplay muted playsinline></video>
+		<div id="playOverlay" onclick="startPlay()">
+			<div style="text-align:center">
+				<div class="play-btn">▶</div>
+			</div>
+		</div>
+	</div>
+	<div class="controls">
+		<button onclick="sendBack()">◀ Back</button>
+		<button onclick="sendHome()">⌂ Home</button>
+		<button onclick="sendRecent()">☐ Recent</button>
+	</div>
+	<script src="/js/jmuxer.min.js"></script>
+	<script>
+		const wsPath = __WS_PATH__;
+		const video = document.getElementById('screen');
+		const playOverlay = document.getElementById('playOverlay');
+		const statusEl = document.getElementById('status');
+
+		let ws = null;
+		let jmuxer = null;
+		let deviceWidth = 0, deviceHeight = 0;
+		let reconnectAttempts = 0;
+		let playAttempted = false;
+		const MAX_RECONNECT = 8;
+
+		function connect() {
+			statusEl.textContent = 'Connecting...';
+
+			jmuxer = new JMuxer({
+				node: 'screen',
+				mode: 'video',
+				flushingTime: 16,
+				fps: 30,
+				debug: false,
+			});
+
+			const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+			ws = new WebSocket(proto + '//' + location.host + wsPath);
+			ws.binaryType = 'arraybuffer';
+
+			ws.onopen = () => {
+				statusEl.textContent = '';
+				reconnectAttempts = 0;
+				playAttempted = false;
+			};
+
+			ws.onclose = () => {
+				statusEl.textContent = 'Reconnecting...';
+				cleanup();
+				if (reconnectAttempts < MAX_RECONNECT) {
+					reconnectAttempts++;
+					setTimeout(connect, 1000 * Math.min(reconnectAttempts, 5));
+				} else {
+					statusEl.textContent = 'Connection lost. Please refresh.';
+				}
+			};
+
+			ws.onerror = () => { statusEl.textContent = 'WebSocket error.'; };
+
+			ws.onmessage = (event) => {
+				if (typeof event.data === 'string') {
+					const msg = JSON.parse(event.data);
+					if (msg.type === 'config') {
+						deviceWidth = msg.width || 0;
+						deviceHeight = msg.height || 0;
+						if (msg.description) {
+							const configData = Uint8Array.from(
+								atob(msg.description), c => c.charCodeAt(0));
+							jmuxer.feed({ video: configData });
+						}
+					}
+				} else {
+					const data = new Uint8Array(event.data);
+					if (data.length < 9) return;
+					const payload = data.subarray(9);
+					jmuxer.feed({ video: payload });
+					if (!playAttempted && video.paused) {
+						playAttempted = true;
+						video.play().catch(() => { playOverlay.style.display = 'flex'; });
+					}
+				}
+			};
+		}
+
+		function cleanup() {
+			if (jmuxer) { try { jmuxer.destroy(); } catch(e){} jmuxer = null; }
+			if (ws) { try { ws.close(); } catch(e){} ws = null; }
+		}
+
+		function tryAutoplay() {
+			const p = video.play();
+			if (p !== undefined) {
+				p.catch(() => { playOverlay.style.display = 'flex'; });
+			}
+		}
+
+		function startPlay() {
+			playOverlay.style.display = 'none';
+			video.play().catch(e => console.warn('Play failed:', e));
+		}
+
+		// --- Input handlers (touch/mouse/keyboard/scroll) ---
+		let activePointers = new Map();
+
+		function getDeviceCoords(e) {
+			const rect = video.getBoundingClientRect();
+			if (!deviceWidth || !deviceHeight || !rect.width || !rect.height) return null;
+			const scaleX = deviceWidth / rect.width;
+			const scaleY = deviceHeight / rect.height;
+			const x = Math.round((e.clientX - rect.left) * scaleX);
+			const y = Math.round((e.clientY - rect.top) * scaleY);
+			return { x: Math.max(0, Math.min(deviceWidth, x)), y: Math.max(0, Math.min(deviceHeight, y)) };
+		}
+
+		function sendControl(msg) {
+			if (ws && ws.readyState === WebSocket.OPEN) {
+				ws.send(JSON.stringify(msg));
+			}
+		}
+
+		function sendTouch(action, x, y, pointerId) {
+			sendControl({ type: 'touch', action, x, y, pointerId: pointerId || 0 });
+		}
+
+		function sendKey(action, keycode) {
+			sendControl({ type: 'key', action, keycode });
+		}
+
+		function sendBack() {
+			sendKey('down', 4); setTimeout(() => sendKey('up', 4), 50);
+		}
+		function sendHome() {
+			sendKey('down', 3); setTimeout(() => sendKey('up', 3), 50);
+		}
+		function sendRecent() {
+			sendKey('down', 187); setTimeout(() => sendKey('up', 187), 50);
+		}
+
+		// Mouse events
+		video.addEventListener('mousedown', (e) => {
+			e.preventDefault();
+			const c = getDeviceCoords(e);
+			if (!c) return;
+			sendTouch('down', c.x, c.y);
+			activePointers.set('mouse', c);
+		});
+		video.addEventListener('mousemove', (e) => {
+			if (activePointers.has('mouse')) {
+				e.preventDefault();
+				const c = getDeviceCoords(e);
+				if (!c) return;
+				sendTouch('move', c.x, c.y);
+			}
+		});
+		video.addEventListener('mouseup', (e) => {
+			if (activePointers.has('mouse')) {
+				e.preventDefault();
+				const c = getDeviceCoords(e);
+				if (!c) { activePointers.delete('mouse'); return; }
+				sendTouch('up', c.x, c.y);
+				activePointers.delete('mouse');
+			}
+		});
+		video.addEventListener('mouseleave', (e) => {
+			if (activePointers.has('mouse')) {
+				const c = getDeviceCoords(e);
+				if (c) sendTouch('up', c.x, c.y);
+				activePointers.delete('mouse');
+			}
+		});
+
+		// Touch events
+		video.addEventListener('touchstart', (e) => {
+			e.preventDefault();
+			for (const t of e.changedTouches) {
+				const c = getDeviceCoords(t);
+				if (!c) continue;
+				sendTouch('down', c.x, c.y, t.identifier);
+				activePointers.set(t.identifier, c);
+			}
+		});
+		video.addEventListener('touchmove', (e) => {
+			e.preventDefault();
+			for (const t of e.changedTouches) {
+				if (activePointers.has(t.identifier)) {
+					const c = getDeviceCoords(t);
+					if (!c) continue;
+					sendTouch('move', c.x, c.y, t.identifier);
+				}
+			}
+		});
+		video.addEventListener('touchend', (e) => {
+			e.preventDefault();
+			for (const t of e.changedTouches) {
+				if (activePointers.has(t.identifier)) {
+					const c = getDeviceCoords(t);
+					if (c) sendTouch('up', c.x, c.y, t.identifier);
+					activePointers.delete(t.identifier);
+				}
+			}
+		});
+		video.addEventListener('touchcancel', (e) => {
+			for (const t of e.changedTouches) {
+				if (activePointers.has(t.identifier)) {
+					const c = getDeviceCoords(t);
+					if (c) sendTouch('up', c.x, c.y, t.identifier);
+					activePointers.delete(t.identifier);
+				}
+			}
+		});
+
+		// Scroll/wheel events — intercept at document level to prevent macOS
+		// trackpad two-finger swipe from triggering browser back/forward
+		// navigation (which destroys the iframe and kills the WebSocket).
+		// NOTE: scroll messages are NOT forwarded to the emulator via this
+		// WebSocket because sending bursts of messages on the H264 fan-out
+		// hub connection causes abnormal disconnection (close code 1006).
+		// Touch, click, and keyboard events work fine (low-frequency).
+		document.addEventListener('wheel', (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+		}, { passive: false });
+
+		// Keyboard events
+		document.addEventListener('keydown', (e) => {
+			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+			let keycode = null;
+			switch (e.key) {
+				case 'Backspace': keycode = 67; break;
+				case 'Enter': keycode = 66; break;
+				case 'Escape': keycode = 111; break;
+				case 'ArrowUp': keycode = 19; break;
+				case 'ArrowDown': keycode = 20; break;
+				case 'ArrowLeft': keycode = 21; break;
+				case 'ArrowRight': keycode = 22; break;
+			}
+			if (keycode) { e.preventDefault(); sendKey('down', keycode); }
+			else if (e.key.length === 1) { e.preventDefault(); sendControl({ type: 'text', text: e.key }); }
+		});
+		document.addEventListener('keyup', (e) => {
+			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+			let keycode = null;
+			switch (e.key) {
+				case 'Backspace': keycode = 67; break;
+				case 'Enter': keycode = 66; break;
+				case 'Escape': keycode = 111; break;
+				case 'ArrowUp': keycode = 19; break;
+				case 'ArrowDown': keycode = 20; break;
+				case 'ArrowLeft': keycode = 21; break;
+				case 'ArrowRight': keycode = 22; break;
+			}
+			if (keycode) sendKey('up', keycode);
+		});
+
+		// Disable context menu on video
+		video.addEventListener('contextmenu', (e) => e.preventDefault());
+
+		connect();
+		video.addEventListener('loadeddata', tryAutoplay, { once: true });
+		window.addEventListener('beforeunload', cleanup);
+	</script>
+</body>
+</html>

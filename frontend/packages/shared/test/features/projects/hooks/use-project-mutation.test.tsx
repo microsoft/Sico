@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { AxiosInstance } from "axios";
@@ -43,6 +21,9 @@ const cachedDetail: ProjectDetail = {
   ownerUsername: "alice",
   creatorUsername: "alice",
   operatorAdmins: ["bob", "carol"],
+  projectMembers: [],
+  projectAdmins: [],
+  sandboxes: [],
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_001_000,
 };
@@ -73,7 +54,7 @@ beforeEach(() => {
 
 describe("useProjectMutation — operatorAdmins data-loss guard", () => {
   it("injects the full cached operatorAdmins when the caller omits them", async () => {
-    vi.mocked(service.updateProject).mockResolvedValue(1);
+    vi.mocked(service.updateProject).mockResolvedValue(undefined);
     const { Wrapper, queryClient } = makeWrapper();
     queryClient.setQueryData(["projects", "detail", 1], cachedDetail);
 
@@ -93,8 +74,8 @@ describe("useProjectMutation — operatorAdmins data-loss guard", () => {
     );
   });
 
-  it("invalidates the detail key on success", async () => {
-    vi.mocked(service.updateProject).mockResolvedValue(1);
+  it("invalidates the detail key and the project list on success", async () => {
+    vi.mocked(service.updateProject).mockResolvedValue(undefined);
     const { Wrapper, queryClient } = makeWrapper();
     queryClient.setQueryData(["projects", "detail", 1], cachedDetail);
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
@@ -105,17 +86,23 @@ describe("useProjectMutation — operatorAdmins data-loss guard", () => {
 
     await result.current.mutateAsync({ name: "New" });
 
+    // The drawer/detail refreshes...
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ["projects", "detail", 1],
       }),
     );
+    // ...and so does the list, so the edited project's card updates.
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["projects", "list"],
+      exact: false,
+    });
   });
 });
 
 describe("useProjectMutation — explicit operatorAdmins override", () => {
   it("sends an operator-add set verbatim", async () => {
-    vi.mocked(service.updateProject).mockResolvedValue(1);
+    vi.mocked(service.updateProject).mockResolvedValue(undefined);
     const { Wrapper, queryClient } = makeWrapper();
     queryClient.setQueryData(["projects", "detail", 1], cachedDetail);
 
@@ -137,7 +124,7 @@ describe("useProjectMutation — explicit operatorAdmins override", () => {
   });
 
   it("sends an operator-remove set verbatim", async () => {
-    vi.mocked(service.updateProject).mockResolvedValue(1);
+    vi.mocked(service.updateProject).mockResolvedValue(undefined);
     const { Wrapper, queryClient } = makeWrapper();
     queryClient.setQueryData(["projects", "detail", 1], cachedDetail);
 
@@ -154,7 +141,7 @@ describe("useProjectMutation — explicit operatorAdmins override", () => {
   });
 
   it("lets an explicit empty array survive (remove-last-operator, not the cache fallback)", async () => {
-    vi.mocked(service.updateProject).mockResolvedValue(1);
+    vi.mocked(service.updateProject).mockResolvedValue(undefined);
     const { Wrapper, queryClient } = makeWrapper();
     queryClient.setQueryData(["projects", "detail", 1], cachedDetail);
 

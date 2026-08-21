@@ -1,38 +1,23 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Spinner } from "@sico/ui";
-import { type ReactElement, useRef, useState } from "react";
+import { useAtomValue } from "jotai";
+import { type ReactElement, useRef, useState, useTransition } from "react";
 
 import { DigitalWorkerCard } from "./digital-worker-card";
 import { EmptyState } from "./empty-state";
 import { InactiveToggle } from "./inactive-toggle";
+import { userAtom } from "../../../atoms/auth-atom";
 import { CardGrid } from "../../../components/card-grid";
 import { useInfiniteScrollSentinel } from "../../../hooks/use-infinite-scroll-sentinel";
+import { useProjectsInfiniteQueryNonSuspense } from "../../projects/hooks/use-projects-query";
 import {
   useDedupedAgents,
   useSuspenseAgentsInfiniteQuery,
 } from "../hooks/use-agents-query";
-import { useVisibleAgents } from "../hooks/use-visible-agents";
+
+type DigitalWorkersGridProps = {
+  // Opens the Add DW dialog from the empty state (when the user has a project).
+  onAddDw?: () => void;
+};
 
 /**
  * Infinite-paginated grid of `/digital-worker`. Errors are not handled
@@ -42,14 +27,42 @@ import { useVisibleAgents } from "../hooks/use-visible-agents";
  * Own three-part flex column: a scrolling card region (middle) + a fixed
  * inactive-toggle footer, so the toggle stays reachable without scrolling to
  * the end of a long list. The scroll container is local to this component.
+ *
+ * Inactive DWs are filtered SERVER-SIDE via `showInactive` (it flows into the
+ * query key, so hide/show are separately paginated — pagination counts only
+ * the visible workers, no "fetched 10, showed 5"). Toggling refetches with the
+ * new filter; each filter's pages live in a distinct cache entry, so a second
+ * toggle back is instant.
  */
-export function DigitalWorkersGrid(): ReactElement {
-  const query = useSuspenseAgentsInfiniteQuery();
+export function DigitalWorkersGrid({
+  onAddDw,
+}: DigitalWorkersGridProps): ReactElement {
+  // "My Digital Workers" = the DWs the current user OPERATES. The backend no
+  // longer scopes to the caller, so pass `operatorUsername` explicitly.
+  const operatorUsername = useAtomValue(userAtom)?.email;
+  const [showInactive, setShowInactive] = useState(false);
+  // Toggling the filter changes the suspense query key. Without a transition,
+  // the new (uncached) filter would suspend and unmount the whole grid — the
+  // toggle button included, destroying focus + flashing the skeleton. A
+  // transition keeps the current grid mounted until the new page resolves.
+  const [isFilterPending, startFilterTransition] = useTransition();
+  const query = useSuspenseAgentsInfiniteQuery({
+    operatorUsername,
+    showInactive,
+  });
   const agents = useDedupedAgents(query.data.pages);
   const { isFetchingNextPage, hasNextPage, fetchNextPage } = query;
 
-  const [showInactive, setShowInactive] = useState(false);
-  const { visible, inactiveCount } = useVisibleAgents(agents, showInactive);
+  const toggleInactive = (): void => {
+    startFilterTransition(() => setShowInactive((prev) => !prev));
+  };
+
+  // Non-suspense read: the empty-state CTA branches on whether the user has any
+  // project. `projectsQuery.isPending` gates the CTA so we don't flash "Create
+  // project" for a user who actually has one (or vice versa) before it resolves.
+  const projectsQuery = useProjectsInfiniteQueryNonSuspense({});
+  const hasProject =
+    (projectsQuery.data?.pages.flatMap((page) => page.items).length ?? 0) > 0;
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -63,26 +76,26 @@ export function DigitalWorkersGrid(): ReactElement {
     { rootRef: scrollRef },
   );
 
-  if (agents.length === 0) {
-    // EmptyState fills + centers itself (MessageState `fill`), so no wrapper.
-    return <EmptyState />;
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
         ref={scrollRef}
         className="scrollbar min-h-0 flex-1 overflow-y-auto px-16 pb-8"
       >
-        {visible.length === 0 ? (
-          // Every loaded DW is inactive and hidden — the CardGrid would be
-          // blank, so guide the user to the reveal toggle below instead.
-          <p className="text-foreground-tertiary py-16 text-center text-sm">
-            All digital workers are inactive. Use the toggle below to show them.
-          </p>
+        {agents.length === 0 ? (
+          // Empty in EITHER filter → the onboarding CTA (add DW / create
+          // project). Rendered inline (not an early return) so the reveal
+          // toggle below stays mounted: a user whose only workers are inactive
+          // sees the CTA AND can still reveal them. `EmptyState` self-centers
+          // (MessageState `fill`), so it fills the scroll region.
+          <EmptyState
+            hasProject={hasProject}
+            projectsLoading={projectsQuery.isPending}
+            onAddDw={onAddDw}
+          />
         ) : (
           <CardGrid>
-            {visible.map((agent) => (
+            {agents.map((agent) => (
               <DigitalWorkerCard key={agent.id} agent={agent} />
             ))}
           </CardGrid>
@@ -94,13 +107,11 @@ export function DigitalWorkersGrid(): ReactElement {
           </div>
         ) : null}
       </div>
-      {inactiveCount > 0 ? (
-        <InactiveToggle
-          count={inactiveCount}
-          showInactive={showInactive}
-          onToggle={() => setShowInactive((prev) => !prev)}
-        />
-      ) : null}
+      <InactiveToggle
+        showInactive={showInactive}
+        isPending={isFilterPending}
+        onToggle={toggleInactive}
+      />
     </div>
   );
 }

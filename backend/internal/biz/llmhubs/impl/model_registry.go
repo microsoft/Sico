@@ -1,28 +1,9 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 	"unicode"
@@ -33,8 +14,8 @@ import (
 
 	"sico-backend/internal/errcode"
 	"sico-backend/internal/shared/apperr"
-	agentrepo "sico-backend/internal/store/agent/singleagent/repository"
 	registryrepo "sico-backend/internal/store/llmhubs/repository"
+	orgrepo "sico-backend/internal/store/organization/repository"
 	dto "sico-backend/internal/transport/http/dto/llmhubs"
 	"sico-backend/internal/transport/http/middleware"
 )
@@ -88,7 +69,7 @@ func (s *Service) CreateModel(
 		DisplayName:          req.DisplayName,
 		ModelType:            req.ModelType,
 		ProviderTemplateType: req.ProviderTemplateType,
-		AgentID:              req.AgentId,
+		OrganizationID:       req.OrganizationId,
 		Status:               statusActive,
 		IsBuiltin:            0,
 		Description:          req.Description,
@@ -108,7 +89,7 @@ func (s *Service) CreateModel(
 	if err := s.withRepositories(ctx, func(
 		modelRepo registryrepo.ModelRegistryRepository,
 		secretRepo registryrepo.ModelRegistrySecretRepository,
-		_ agentrepo.SingleAgentLLMHubConfigRepository,
+		_ orgrepo.OrganizationLLMConfigRepository,
 	) error {
 		id, createErr := modelRepo.Create(ctx, m)
 		if createErr != nil {
@@ -140,7 +121,7 @@ func (s *Service) ListModels(ctx context.Context, req *dto.ListModelRegistryRequ
 	}
 
 	filter := &registryrepo.ModelRegistryFilter{
-		AgentID:              req.AgentId,
+		OrganizationID:       req.OrganizationId,
 		Status:               req.Status,
 		ProviderTemplateType: req.ProviderTemplateType,
 		ModelType:            req.ModelType,
@@ -173,7 +154,7 @@ func (s *Service) DeleteModel(
 	if err := s.withRepositories(ctx, func(
 		modelRepo registryrepo.ModelRegistryRepository,
 		secretRepo registryrepo.ModelRegistrySecretRepository,
-		configRepo agentrepo.SingleAgentLLMHubConfigRepository,
+		configRepo orgrepo.OrganizationLLMConfigRepository,
 	) error {
 		existing, getErr := modelRepo.GetByID(ctx, req.Id)
 		if getErr != nil {
@@ -182,7 +163,9 @@ func (s *Service) DeleteModel(
 		if existing.IsBuiltin == 1 {
 			return apperr.New(errcode.CommonForbidden, "cannot delete built-in model")
 		}
-		if err := cleanupDeletedModelFromAgentConfig(ctx, configRepo, existing.AgentID, existing.ModelKey); err != nil {
+		if err := cleanupDeletedModelFromOrgConfig(
+			ctx, configRepo, existing.OrganizationID, existing.ModelKey,
+		); err != nil {
 			return err
 		}
 		if deleteErr := modelRepo.Delete(ctx, req.Id); deleteErr != nil {
@@ -208,6 +191,16 @@ var (
 	multiDashRegex   = regexp.MustCompile(`-{2,}`)
 )
 
+const suffixAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+func randomSuffix(length int) string {
+	suffix := make([]byte, length)
+	for i := range suffix {
+		suffix[i] = suffixAlphabet[rand.IntN(len(suffixAlphabet))]
+	}
+	return string(suffix)
+}
+
 // generateModelKey creates a URL-safe model_key from display_name.
 func (s *Service) generateModelKey(ctx context.Context, displayName string) (string, error) {
 	normalized := norm.NFKD.String(displayName)
@@ -230,14 +223,21 @@ func (s *Service) generateModelKey(ctx context.Context, displayName string) (str
 		key = key[:120]
 	}
 
-	exists, err := s.ModelRegistryRepo.ExistsByModelKey(ctx, key)
-	if err != nil {
-		return "", err
+	const maxRetries = 5
+	for range maxRetries {
+		candidate := key + "-" + randomSuffix(6)
+		exists, err := s.ModelRegistryRepo.ExistsByModelKey(ctx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
 	}
-	if !exists {
-		return key, nil
-	}
-	return "", apperr.New(errcode.CommonConflict, fmt.Sprintf("model key %q already exists", key))
+	return "", apperr.New(
+		errcode.CommonConflict,
+		fmt.Sprintf("model key %q already exists and suffix retries exhausted", key),
+	)
 }
 
 // modelToEntry converts a GORM model to a DTO entry.
@@ -248,7 +248,7 @@ func modelToEntry(m *registryrepo.ModelRegistryModel) *dto.ModelRegistryEntry {
 		DisplayName:          m.DisplayName,
 		ModelType:            m.ModelType,
 		ProviderTemplateType: m.ProviderTemplateType,
-		AgentId:              m.AgentID,
+		OrganizationId:       m.OrganizationID,
 		Status:               m.Status,
 		IsBuiltin:            m.IsBuiltin == 1,
 		Description:          m.Description,
@@ -546,75 +546,37 @@ func injectAuthConfigFields(cfg *structpb.Struct, auth *dto.AuthConfig) *structp
 	return merged
 }
 
-// cleanupDeletedModelFromAgentConfig removes a deleted model_key from any agent's
-// selected models and clears the default global model key if it referenced it.
-func cleanupDeletedModelFromAgentConfig(
+// cleanupDeletedModelFromOrgConfig clears an organization's default model key when
+// it referenced a model that has just been deleted.
+func cleanupDeletedModelFromOrgConfig(
 	ctx context.Context,
-	repo agentrepo.SingleAgentLLMHubConfigRepository,
-	agentID, deletedModelKey string,
+	repo orgrepo.OrganizationLLMConfigRepository,
+	organizationID int64, deletedModelKey string,
 ) error {
-	if repo == nil {
+	if repo == nil || organizationID <= 0 {
 		return nil
 	}
-	agentID = strings.TrimSpace(agentID)
 	deletedModelKey = strings.ToLower(strings.TrimSpace(deletedModelKey))
-	if agentID == "" || deletedModelKey == "" {
+	if deletedModelKey == "" {
 		return nil
 	}
 
-	config, err := repo.Get(ctx, agentID)
+	config, err := repo.Get(ctx, organizationID)
 	if err != nil {
-		return apperr.Wrap(errcode.CommonInternalError, "failed to load agent llmhub config", err)
+		return apperr.Wrap(errcode.CommonInternalError, "failed to load organization llm config", err)
 	}
 	if config == nil {
 		return nil
 	}
-
-	filteredModelKeys := filterModelKeys(config.ModelKeys, deletedModelKey)
-	defaultGlobalModelKey := resolveDefaultGlobalModelKey(config.DefaultGlobalModelKey, deletedModelKey)
-
-	if len(filteredModelKeys) == len(config.ModelKeys) && defaultGlobalModelKey == config.DefaultGlobalModelKey {
+	if strings.ToLower(strings.TrimSpace(config.DefaultModelKey)) != deletedModelKey {
 		return nil
 	}
 
-	if len(filteredModelKeys) == 0 && defaultGlobalModelKey == "" {
-		if err := repo.Delete(ctx, agentID); err != nil {
-			return apperr.Wrap(errcode.CommonInternalError, "failed to delete agent llmhub config", err)
-		}
-		return nil
-	}
-
-	config.ModelKeys = filteredModelKeys
-	config.DefaultGlobalModelKey = defaultGlobalModelKey
+	config.DefaultModelKey = ""
 	if err := repo.Upsert(ctx, config); err != nil {
-		return apperr.Wrap(errcode.CommonInternalError, "failed to save agent llmhub config", err)
+		return apperr.Wrap(errcode.CommonInternalError, "failed to save organization llm config", err)
 	}
 	return nil
-}
-
-// filterModelKeys returns a normalized copy of keys with blanks and the deleted key removed.
-func filterModelKeys(keys []string, deletedModelKey string) []string {
-	filtered := make([]string, 0, len(keys))
-	for _, key := range keys {
-		normalizedKey := strings.ToLower(strings.TrimSpace(key))
-		if normalizedKey == "" || normalizedKey == deletedModelKey {
-			continue
-		}
-		filtered = append(filtered, normalizedKey)
-	}
-
-	return filtered
-}
-
-// resolveDefaultGlobalModelKey returns the normalized default key, clearing it if it
-// references the deleted model.
-func resolveDefaultGlobalModelKey(current, deletedModelKey string) string {
-	normalized := strings.ToLower(strings.TrimSpace(current))
-	if normalized == deletedModelKey {
-		return ""
-	}
-
-	return normalized
 }
 
 // usernameFromCtx extracts the username from the auth middleware context.
@@ -633,17 +595,17 @@ func (s *Service) withRepositories(
 	fn func(
 		modelRepo registryrepo.ModelRegistryRepository,
 		secretRepo registryrepo.ModelRegistrySecretRepository,
-		configRepo agentrepo.SingleAgentLLMHubConfigRepository,
+		configRepo orgrepo.OrganizationLLMConfigRepository,
 	) error,
 ) error {
 	if s.DB == nil {
-		return fn(s.ModelRegistryRepo, s.ModelRegistrySecretRepo, s.SingleAgentLLMHubConfigRepo)
+		return fn(s.ModelRegistryRepo, s.ModelRegistrySecretRepo, s.OrgLLMConfigRepo)
 	}
 	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(
 			registryrepo.NewModelRegistryRepo(tx),
 			registryrepo.NewModelRegistrySecretRepo(tx),
-			agentrepo.NewSingleAgentLLMHubConfigRepo(tx),
+			orgrepo.NewOrganizationLLMConfigRepository(tx),
 		)
 	})
 }

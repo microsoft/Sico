@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Skeleton } from "@sico/ui";
 import type * as React from "react";
 
@@ -39,7 +17,7 @@ export type AssetDetailSkeletonProps = {
 function renderPanel(variant: "rich" | "simple"): React.JSX.Element {
   if (variant === "simple") {
     return (
-      <div className="flex flex-1 flex-col gap-8 p-6">
+      <div className="flex flex-1 flex-col gap-8 pt-8 pr-5 pb-5">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-4 w-32" />
@@ -58,7 +36,7 @@ function renderPanel(variant: "rich" | "simple"): React.JSX.Element {
     );
   }
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <div className="flex flex-1 flex-col gap-8 pt-8 pr-5 pb-5">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-4 w-full" />
@@ -127,12 +105,8 @@ export function AssetDetailSkeleton({
           </div>
         </div>
       </div>
-      <div
-        aria-hidden="true"
-        className="border-divider flex h-full w-90 shrink-0 flex-col border-l"
-      >
-        <div className="flex h-12 items-center justify-between px-5">
-          <Skeleton className="h-4 w-16" />
+      <div aria-hidden="true" className="flex h-full w-80 shrink-0 flex-col">
+        <div className="flex h-12 items-center justify-end pr-5">
           <Skeleton className="size-7" />
         </div>
         {renderPanel(variant)}

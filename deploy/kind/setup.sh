@@ -1,24 +1,4 @@
 #!/usr/bin/env bash
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 # sico -- one-click Kind cluster setup and deploy (local development only)
 #
 # Builds images into a local registry on localhost:5000 and installs Helm
@@ -34,6 +14,8 @@ CMD="${1:?"Usage: $0 [up|stop|down|restart] [backend|core|frontend]"}"
 SVC="${2:-}"
 SCRIPT_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 ROOT_DIR="$(realpath "${SCRIPT_DIR}/../..")"
+REQUESTED_BACKEND_DOCKERFILE="${BACKEND_DOCKERFILE:-}"
+REQUESTED_VERSION="${VERSION:-}"
 
 case "${CMD}" in
   up|stop|down|restart) ;;
@@ -43,29 +25,19 @@ case "${CMD}" in
     ;;
 esac
 
-# Load .env without evaluating values as shell code
-if [[ -f "${ROOT_DIR}/.env" ]]; then
-  while IFS= read -r line || [[ -n "${line}" ]]; do
-    line="${line%$'\r'}"
-    # skip blank lines, whitespace-only lines, and comments
-    [[ -z "${line}" || "${line}" =~ ^[[:space:]]*$ || "${line}" =~ ^[[:space:]]*# ]] && continue
-    if ! [[ "${line}" =~ ^[A-Za-z_][A-Za-z0-9_]*=.*$ ]]; then
-      echo "ERROR: .env contains invalid line: ${line}" >&2
-      exit 1
-    fi
-    key="${line%%=*}"
-    value="${line#*=}"
-    export "${key}=${value}"
-  done < "${ROOT_DIR}/.env"
-fi
+source "${ROOT_DIR}/scripts/load-env.sh"
+load_env_file "${ROOT_DIR}/.env"
 
 CLUSTER_NAME="${CLUSTER_NAME:-sico}"
 REGISTRY="${REGISTRY:-localhost:5000}"
 KIND_CONFIG="${KIND_CONFIG:-${SCRIPT_DIR}/kind-config.yaml}"
 KUBE_CONTEXT="${KUBE_CONTEXT:-kind-${CLUSTER_NAME}}"
-VERSION="${VERSION:-local}"
+VERSION="${REQUESTED_VERSION:-${VERSION:-local}}"
+BACKEND_DOCKERFILE="${REQUESTED_BACKEND_DOCKERFILE:-${BACKEND_DOCKERFILE:-backend/deployments/docker/Dockerfile}}"
 BACKEND_DEPLOY_TIMEOUT="${BACKEND_DEPLOY_TIMEOUT:-300s}"
 BACKEND_ROLLOUT_TIMEOUT="${BACKEND_ROLLOUT_TIMEOUT:-300s}"
+BACKEND_HELM_VALUES_FILE="${BACKEND_HELM_VALUES_FILE:-}"
+CORE_HELM_VALUES_FILE="${CORE_HELM_VALUES_FILE:-}"
 
 # -- stop / down -----------------------------------------------------------------
 
@@ -142,16 +114,13 @@ if [[ "${CMD}" == "restart" ]]; then
   esac
 fi
 
-# Validate that required passwords are set
-for var in DB_PASSWORD REDIS_PASSWORD; do
-  if [[ -z "${!var:-}" ]]; then
-    echo "ERROR: ${var} is not set. Define it in .env" >&2
-    exit 1
-  fi
-done
+require_env_vars DB_PASSWORD REDIS_PASSWORD PYPI_INDEX_URL NPM_REGISTRY
 
 prepare_backend_helm_extra_args() {
-  BACKEND_HELM_EXTRA_ARGS=()
+  BACKEND_HELM_EXTRA_ARGS=(--set-string "env.APP_ENV=development")
+  if [[ -n "${BACKEND_HELM_VALUES_FILE}" ]]; then
+    BACKEND_HELM_EXTRA_ARGS+=(-f "${BACKEND_HELM_VALUES_FILE}")
+  fi
   if [[ -n "${SANDBOX_EMULATOR_BASE_URL:-}" ]]; then
     EFFECTIVE_EMULATOR_URL="${SANDBOX_EMULATOR_BASE_URL}"
     if [[ "${SANDBOX_EMULATOR_BASE_URL}" == *"host.docker.internal"* ]]; then
@@ -180,9 +149,13 @@ prepare_backend_helm_extra_args() {
 
 prepare_core_helm_extra_args() {
   CORE_HELM_EXTRA_ARGS=()
+  if [[ -n "${CORE_HELM_VALUES_FILE}" ]]; then
+    CORE_HELM_EXTRA_ARGS+=(-f "${CORE_HELM_VALUES_FILE}")
+  fi
   if [[ -n "${SICO_PORT:-}" ]]; then
     CORE_HELM_EXTRA_ARGS+=(--set-string "env.SICO_PORT=${SICO_PORT}")
   fi
+  CORE_HELM_EXTRA_ARGS+=(--set-string "env.UV_DEFAULT_INDEX=${PYPI_INDEX_URL}")
 }
 
 build_kind_image() {
@@ -190,22 +163,25 @@ build_kind_image() {
   local dockerfile=""
   local image=""
   local context=""
+  local build_args=()
 
   case "${svc}" in
     backend)
-      dockerfile="backend/deployments/docker/Dockerfile"
       image="sico-backend"
       context="backend/"
+      dockerfile="${BACKEND_DOCKERFILE}"
       ;;
     core)
       dockerfile="core/deployments/docker/Dockerfile"
       image="sico-core"
       context="."
+      build_args+=(--build-arg "PYPI_INDEX_URL=${PYPI_INDEX_URL}")
       ;;
     frontend)
       dockerfile="frontend/deployments/docker/Dockerfile"
       image="sico-frontend"
       context="frontend/"
+      build_args+=(--build-arg "NPM_REGISTRY=${NPM_REGISTRY}")
       ;;
     *)
       echo "ERROR: unsupported service '${svc}'. Use backend, core, or frontend." >&2
@@ -213,8 +189,8 @@ build_kind_image() {
       ;;
   esac
 
-  echo "Building ${svc} image..."
-  docker build -f "${dockerfile}" -t "${REGISTRY}/sico/${image}:${VERSION}" "${context}"
+  echo "Building ${svc} image (dockerfile=${dockerfile})..."
+  docker build "${build_args[@]}" -f "${dockerfile}" -t "${REGISTRY}/sico/${image}:${VERSION}" "${context}"
   echo "Pushing ${svc} image to local registry..."
   docker push "${REGISTRY}/sico/${image}:${VERSION}"
   echo "Loading ${svc} image directly into Kind nodes..."

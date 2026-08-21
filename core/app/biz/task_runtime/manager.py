@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Task runtime manager - orchestration facade.
 
 :class:`TaskManager` is a thin composition root. It wires the runtime's
@@ -26,11 +6,11 @@ collaborators together in ``__init__`` and exposes a small public surface
 ``build_tool_payload``, ``reconcile_stale_runs``).
 Each public method delegates to the collaborator that owns the work:
 
-* :class:`~.submitter.Submitter`        - batch submission + scheduling
-* :class:`~.run_coordinator.RunCoordinator`   - single-run execution
-* :class:`~.sandbox_coordinator.SandboxCoordinator` - sandbox leases
+* :class:`~.orchestration.submitter.Submitter` - batch submission + scheduling
+* :class:`~.orchestration.run_coordinator.RunCoordinator` - single-run execution
+* :class:`~.sandbox.coordinator.SandboxCoordinator` - sandbox leases
 * :class:`~.presentation.progress_sink.ProgressSink` - plan / tool-call streaming UI
-* :class:`~.stale_reconciler.StaleReconciler` - crash recovery
+* :class:`~.orchestration.recovery.StaleReconciler` - crash recovery
 
 Each collaborator holds its own dependencies directly.
 """
@@ -42,49 +22,35 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .models import TERMINAL_BATCH_STATUSES, PlanCancellationRequested
+from .domain.models import TERMINAL_BATCH_STATUSES, PlanCancellationRequested
 from .context import TurnContext
-from .executors.base import DispatchRouter, Executor
-from .factory import (
-    default_task_manager,
-    set_task_manager_factory,
-)
-from .models import PreparedTaskBatch
-from .models import (
+from .execution.contracts import Executor
+from .execution.router import DispatchRouter
+from .domain.models import PreparedTaskBatch
+from .domain.models import (
     BatchResult,
     BatchStatus,
     TaskRun,
 )
 from .presentation.rendering import parent_payload
 from .presentation.progress_sink import ProgressSink
-from .run_coordinator import RunCoordinator
-from .sandbox import SandboxLeaseManager
-from .sandbox_coordinator import SandboxCoordinator
-from .scheduler import DEFAULT_MAX_CONCURRENCY, BatchScheduler
-from .stale_reconciler import (
-    StaleReconciler,
-    reconcile_stale_task_runtime_once,
-    run_task_runtime_startup_reconciler,
-)
-from .store import FileRunStore, RunStore
-from .submitter import Submitter
-from .workspace import workspace_layout
+from .orchestration.run_coordinator import RunCoordinator
+from .sandbox.coordinator import SandboxCoordinator
+from .sandbox.lease_manager import SandboxLeaseManager
+from .orchestration.scheduler import DEFAULT_MAX_CONCURRENCY, BatchScheduler
+from .orchestration.recovery import StaleReconciler
+from .storage.file_store import FileRunStore
+from .storage.run_store import RunStore
+from .orchestration.submitter import Submitter
+from .workspace.layout import workspace_layout
 
 if TYPE_CHECKING:
-    from .skill_loader import SkillLoader
+    from .capabilities.loader import SkillLoader
 
-# Public entrypoints re-exported from this module for callers that import them
-# from ``app.biz.task_runtime.manager``. Module-private helpers (``_merge_run_snapshots``,
-# ``_plan_context_for_batch``, ...) are intentionally NOT re-exported: import them
-# from their owning module if ever needed.
 __all__ = [
     "PlanCancellationRequested",
     "TaskManager",
     "cancel_turn_task_runtime_once",
-    "default_task_manager",
-    "reconcile_stale_task_runtime_once",
-    "run_task_runtime_startup_reconciler",
-    "set_task_manager_factory",
 ]
 
 
@@ -109,10 +75,10 @@ class TaskManager:
         self.scheduler = BatchScheduler(max_concurrency=max_concurrency)
 
         # Route dispatch through a DispatchRouter so the run coordinator never
-        # branches on dispatch kind. A bare backend is wrapped so tool/skill
-        # runs still execute; sub-agent runs then deterministically reject
-        # until a sub-agent executor is supplied via a pre-built router.
-        router = executor if isinstance(executor, DispatchRouter) else DispatchRouter(tool=executor)
+        # branches on dispatch kind. A bare executor is wrapped as the capability
+        # destination; sub-agent runs then deterministically reject until a
+        # sub-agent executor is supplied via a pre-built router.
+        router = executor if isinstance(executor, DispatchRouter) else DispatchRouter(capability=executor)
 
         self.progress = ProgressSink(store)
         self.sandbox = SandboxCoordinator(store, self.progress, lease_manager=sandbox_lease_manager)
@@ -124,7 +90,6 @@ class TaskManager:
             sandbox=self.sandbox,
             runs=self.runs,
             batch_dir=self._batch_dir,
-            run_dir=self._run_dir,
             merge_run_snapshots=_merge_run_snapshots,
             skill_loader=skill_loader,
         )
@@ -160,7 +125,7 @@ class TaskManager:
         await self.reconciler.reconcile(ctx)
 
     async def cancel_turn(self, ctx: TurnContext, reason: str = "Task cancelled by user.") -> int:
-        from .results import safe_list_batch_runs
+        from .domain.results import safe_list_batch_runs
 
         batches = await self.store.list_batches_by_turn(ctx.conversation_id, ctx.turn_id, active_only=True)
         cancelled_count = 0
@@ -203,12 +168,6 @@ class TaskManager:
             raise ValueError("sidechain_root is required for stores without batch_dir")
         return self.sidechain_root / batch_id
 
-    def _run_dir(self, batch_id: str, run_id: str) -> Path:
-        run_dir = getattr(self.store, "run_dir", None)
-        if callable(run_dir):
-            return run_dir(batch_id, run_id)
-        return self._batch_dir(batch_id) / run_id
-
 
 def _merge_run_snapshots(*snapshots: list[TaskRun]) -> list[TaskRun]:
     merged: dict[str, TaskRun] = {}
@@ -236,11 +195,11 @@ async def cancel_turn_task_runtime_once(
     store: RunStore | None = None,
     sandbox_lease_manager: SandboxLeaseManager | None = None,
 ) -> int:
-    from .stale_reconciler import _ReconcileOnlyExecutor
+    from .orchestration.recovery import _ReconcileOnlyExecutor
 
     if store is None:
         if os.getenv("TASK_RUNTIME_RUN_STORE", "backend").strip().lower() in {"backend", "db", "mysql"}:
-            from .db_store import DBRunStore
+            from .storage.db_store import DBRunStore
 
             store = DBRunStore()
         else:

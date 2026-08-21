@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package reverse_rpc;
+option go_package = "sico-backend/internal/transport/reverse_grpc/pb/notification/reverse_rpc";
+
+import "notification/notification.proto";
+
+service ReverseNotificationRPC {
+    rpc RpcCreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse) {}
+}
+
+message CreateNotificationRequest {
+    notification.Notification notification = 1; // @gotag: json:"notification"
+}
+
+message CreateNotificationData {
+    int64 id = 1; // @gotag: json:"id"
+}
+
+message CreateNotificationResponse {
+    CreateNotificationData data = 1; // @gotag: json:"data"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}

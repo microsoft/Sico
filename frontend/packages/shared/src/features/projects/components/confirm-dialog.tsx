@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   Button,
   Dialog,
@@ -46,13 +24,17 @@ export type ConfirmDialogProps = {
   onConfirm: () => void;
   /** While true the destructive action shows a spinner and disables. */
   pending?: boolean;
+  /** Confirm-button verb (default "Delete"). E.g. "Dismiss", "Remove". */
+  confirmLabel?: string;
+  /** Confirm-button label while pending (default "Deleting…"). */
+  pendingLabel?: string;
 };
 
 /**
  * Reusable destructive-confirm dialog (design.md §5 `confirm.delete`) — the
- * single confirm reused by asset delete, knowledge-tag delete, and the
- * detail-panel delete. Built on the `@sico/ui` `Dialog` primitives; `title`
- * and `body` are supplied by the consumer rather than hardcoded.
+ * single confirm reused by asset delete, member remove, and DW dismiss. Built on
+ * the `@sico/ui` `Dialog` primitives; `title`/`body` and the confirm verb are
+ * supplied by the consumer rather than hardcoded.
  *
  * Visibility is fully consumer-controlled: `open`/`onOpenChange` pass straight
  * to the `<Dialog>` root, Cancel closes via `DialogClose`, and `onConfirm`
@@ -65,6 +47,8 @@ function ConfirmDialogImpl({
   body,
   onConfirm,
   pending = false,
+  confirmLabel = "Delete",
+  pendingLabel = "Deleting…",
 }: ConfirmDialogProps): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -83,7 +67,7 @@ function ConfirmDialogImpl({
             onClick={onConfirm}
           >
             {pending ? <Loader2 className="animate-spin" /> : null}
-            {pending ? "Deleting…" : "Delete"}
+            {pending ? pendingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

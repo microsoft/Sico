@@ -1,28 +1,7 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // Agents fetch via TanStack Query infinite query.
 //
-// Two surfaces share one cache entry per `(isEmployer, pageSize)` tuple:
+// Two surfaces share one cache entry per
+// `(operatorUsername, pageSize, projectId, showInactive)` tuple:
 //   - Dashboard `/digital-worker` — uses `agentsQueryOptions` + a Route
 //     `loader` prefetch + `useSuspenseAgentsInfiniteQuery` so the route
 //     boundary handles loading/error.
@@ -30,7 +9,9 @@
 //     mounts inside an already-rendered shell and uses its own
 //     skeleton/error UI.
 //
-// Both consumers share the same `queryKey` so the cache is hit once.
+// Both consumers key off the same tuple so a shared cache entry is hit once.
+// The sidebar preview always uses the default `showInactive: false`, matching
+// the dashboard's default filter, so they share that entry.
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -49,22 +30,52 @@ import { useMemo } from "react";
 
 import { type Paged } from "../../../schemas/paginated";
 import { useApiClient } from "../../../services/api-client-context";
+import { DEFAULT_AGENTS_PAGE_SIZE } from "../constants";
 import {
-  DEFAULT_AGENTS_IS_EMPLOYER,
-  DEFAULT_AGENTS_PAGE_SIZE,
-} from "../constants";
-import { type Agent } from "../schemas/agent";
+  type Agent,
+  type AgentStatus,
+  AgentStatusSchema,
+} from "../schemas/agent";
 import { fetchAgentDetail, fetchAgents } from "../services/agents";
 
 type Params = {
-  isEmployer?: boolean;
   pageSize?: number;
+  /** Scope to DWs a user OPERATES — the "my DWs" filter (dashboard + sidebar).
+   * The backend no longer forces the current user, so callers must pass it. */
+  operatorUsername?: string;
+  /** Scope the list to one project (backend-filtered). Keyed separately so a
+   * project's roster never shares the dashboard's "my DWs" cache entry. */
+  projectId?: number;
+  // When false (default), the list hides inactive DWs by asking the backend for
+  // every status EXCEPT inactive — so pagination counts only visible workers
+  // (no "fetched 10, showed 5"). When true, no status filter is sent (all).
+  showInactive?: boolean;
 };
+
+// "Hide inactive" filter: every *concrete* `AgentStatus` except INACTIVE.
+// Derived from the schema (not a literal) so a new status is included
+// automatically. UNKNOWN (0) is excluded too — the backend rejects
+// `status <= INSTANCE_UNKNOWN` with "Invalid status", and it's a sentinel,
+// never a real worker state. Sorted for a stable request. Yields [1,2,3,5,7].
+const HIDE_INACTIVE_STATUS_LIST: AgentStatus[] = Object.values(
+  AgentStatusSchema.enum,
+)
+  .filter(
+    (status) =>
+      status !== AgentStatusSchema.enum.INACTIVE &&
+      status !== AgentStatusSchema.enum.UNKNOWN,
+  )
+  .sort((a, b) => a - b);
 
 type AgentsQueryKey = readonly [
   "agents",
   "list",
-  { isEmployer: boolean; pageSize: number },
+  {
+    operatorUsername: string | null;
+    pageSize: number;
+    projectId: number | null;
+    showInactive: boolean;
+  },
 ];
 
 type Options = UseSuspenseInfiniteQueryOptions<
@@ -79,12 +90,25 @@ export function agentsQueryOptions(
   params: Params,
   apiClient: AxiosInstance,
 ): Options {
-  const isEmployer = params.isEmployer ?? DEFAULT_AGENTS_IS_EMPLOYER;
   const pageSize = params.pageSize ?? DEFAULT_AGENTS_PAGE_SIZE;
+  const projectId = params.projectId ?? null;
+  const operatorUsername = params.operatorUsername ?? null;
+  const showInactive = params.showInactive ?? false;
+  const statusList = showInactive ? undefined : HIDE_INACTIVE_STATUS_LIST;
   return {
-    queryKey: ["agents", "list", { isEmployer, pageSize }] as const,
+    queryKey: [
+      "agents",
+      "list",
+      { operatorUsername, pageSize, projectId, showInactive },
+    ] as const,
     queryFn: ({ pageParam }): Promise<Paged<Agent>> =>
-      fetchAgents(apiClient, { page: pageParam, pageSize, isEmployer }),
+      fetchAgents(apiClient, {
+        page: pageParam,
+        pageSize,
+        statusList,
+        ...(operatorUsername === null ? {} : { operatorUsername }),
+        ...(projectId === null ? {} : { projectId }),
+      }),
     initialPageParam: 1,
     getNextPageParam: (lastPage, _allPages, lastPageParam) =>
       lastPage.hasNext ? lastPageParam + 1 : undefined,
@@ -111,7 +135,8 @@ export function useAgentsQuery(
   return useInfiniteQuery(agentsQueryOptions(params, apiClient));
 }
 
-// Prefix-key for invalidation; actual queryKey appends `{isEmployer, pageSize}`.
+// Prefix-key for invalidation; actual queryKey appends
+// `{operatorUsername, pageSize, projectId, showInactive}`.
 export const AGENTS_QUERY_KEY_PREFIX = ["agents", "list"] as const;
 
 // Flattens pages in backend order, deduping by id — a higher `updatedAt`

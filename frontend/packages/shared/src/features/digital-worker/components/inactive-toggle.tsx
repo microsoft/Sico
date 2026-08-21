@@ -1,42 +1,39 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { type ReactElement } from "react";
 
 type InactiveToggleProps = {
-  count: number;
   showInactive: boolean;
+  // True while the filter switch is in flight (the new page is loading in a
+  // transition). Disables the button so a double-click can't queue a second
+  // switch, and swaps the chevron for a spinner as a loading affordance.
+  isPending?: boolean;
   onToggle: () => void;
 };
+
+// Trailing icon: a spinner while the filter switch is loading, otherwise the
+// chevron pointing in the direction the click will move (up = collapse,
+// down = expand). A plain helper (not a component) so the button JSX stays flat
+// without tripping `react/no-multi-comp`.
+function toggleIcon(showInactive: boolean, isPending: boolean): ReactElement {
+  if (isPending) {
+    return <Loader2 aria-hidden="true" className="size-4 animate-spin" />;
+  }
+  return showInactive ? (
+    <ChevronUp aria-hidden="true" className="size-4" />
+  ) : (
+    <ChevronDown aria-hidden="true" className="size-4" />
+  );
+}
 
 /**
  * Reveal/hide control for inactive DWs. Rendered as the grid's fixed footer
  * (below the scroll region) so it stays put while cards scroll. Plain text
- * link (PR346 styling).
+ * link (PR346 styling). No count — the hidden inactive workers aren't fetched
+ * (server-side filter), so their number is unknown.
  */
 export function InactiveToggle({
-  count,
   showInactive,
+  isPending = false,
   onToggle,
 }: InactiveToggleProps): ReactElement {
   return (
@@ -44,16 +41,14 @@ export function InactiveToggle({
       <button
         type="button"
         onClick={onToggle}
-        className="text-foreground-tertiary hover:text-foreground-primary flex shrink-0 items-center gap-0.5 rounded-sm text-sm"
+        disabled={isPending}
+        aria-busy={isPending}
+        className="text-foreground-tertiary hover:text-foreground-primary flex shrink-0 items-center gap-0.5 rounded-sm text-sm disabled:opacity-60"
       >
         {showInactive
-          ? `Hide ${String(count)} inactive digital workers`
-          : `Show ${String(count)} inactive digital workers`}
-        {showInactive ? (
-          <ChevronUp aria-hidden="true" className="size-4" />
-        ) : (
-          <ChevronDown aria-hidden="true" className="size-4" />
-        )}
+          ? "Hide inactive digital workers"
+          : "Show inactive digital workers"}
+        {toggleIcon(showInactive, isPending)}
       </button>
     </div>
   );

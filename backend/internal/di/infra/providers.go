@@ -1,45 +1,33 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package infra
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
+	"sico-backend/internal/consts"
 	sico_redis "sico-backend/internal/infra/cache/redis"
 	"sico-backend/internal/infra/coregrpc"
 	"sico-backend/internal/infra/cron"
+	"sico-backend/internal/infra/email"
 	"sico-backend/internal/infra/idgen"
 	"sico-backend/internal/infra/mysql"
 	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/shared/enum"
+	"sico-backend/pkg/logger"
 )
 
 var ProviderSet = wire.NewSet(
 	ProvideDB,
 	ProvideRedisClient,
 	ProvideIDGenerator,
+	ProvideEmailClient,
 	ProvideBlobStorage,
 	ProvideCoreGRPCConnection,
 	ProvideCron,
@@ -73,8 +61,20 @@ func ProvideIDGenerator(client *redis.Client) (idgen.IDGenerator, error) {
 	return idgen.NewIDGen(client)
 }
 
+func ProvideEmailClient() (email.Client, error) {
+	return email.NewClient()
+}
+
 func ProvideBlobStorage(ctx context.Context) (storage.Storage, error) {
-	return storage.New(ctx, enum.StorageTypeSeaweedFS)
+	storageType := enum.StorageTypeSeaweedFS
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(consts.StorageType))) {
+	case "", "seaweedfs":
+	case "azure_blob", "blob":
+		storageType = enum.StorageTypeAzureBlob
+	default:
+		return nil, fmt.Errorf("unsupported storage type %q", os.Getenv(consts.StorageType))
+	}
+	return storage.New(ctx, storageType)
 }
 
 func ProvideCoreGRPCConnection() (coregrpc.Connection, error) {
@@ -82,11 +82,14 @@ func ProvideCoreGRPCConnection() (coregrpc.Connection, error) {
 }
 
 func ProvideCron() (cron.Cron, func(), error) {
-	cron := cron.NewCron()
+	runner := cron.NewCron()
+	runner.Start()
 	cleanup := func() {
-		if stopper, ok := cron.(interface{ Stop() }); ok {
-			stopper.Stop()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := runner.Stop(ctx); err != nil {
+			logger.CtxError(ctx, "failed to stop cron runner: %v", err)
 		}
 	}
-	return cron, cleanup, nil
+	return runner, cleanup, nil
 }

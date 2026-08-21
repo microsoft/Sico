@@ -20,22 +20,22 @@ Guidelines for editors:
   add the compare link at the bottom.
 -->
 
-## [Unreleased]
+## [0.4.0] - 2026-08-24
+
+_Highlights: scheduled tasks, notifications, Digital Worker solutions, language switching, AgentStream, RBAC improvements, and chat agent optimizations._
 
 ### Added
 
-- **AgentStream:** add an experimental streaming evaluation framework for
-  self-evolving LLM agents under `labs/AgentStream` (#72).
+- **RBAC:** add a fully functional role-based access control system with login, logout, and token refresh; user lifecycle and password management; Casbin-enforced authorization; role assignment across platform, organization, project, and agent scopes; built-in platform administrator, organization administrator/member, developer, project administrator/member, and agent editor roles; policy management and queries; and live enforcer reload.
+- **Scheduled tasks:** add recurring Digital Worker task scheduling with timezone-aware cron expressions, completion notifications and emails, and deliverable attachments.
+- **Notifications:** add user and project notification feeds for published deliverables, Digital Worker dismissals and reassignments, member and role changes, editor access changes, and scheduled-task completion, with per-item and mark-all-as-read controls.
+- **DW Solution:** add a Studio workflow to create and manage Digital Worker drafts, configure each worker's name, role, and skills, deploy a runnable instance, and continue directly into its Collaboration workspace.
+- **Language Switch:** add UI language switching between English (`en`) and Simplified Chinese (`zh-CN`), with automatic browser-language detection and a persisted user preference.
+- **AgentStream:** add an experimental streaming evaluation framework for self-evolving LLM agents under `labs/AgentStream` (#72).
 
 ### Changed
 
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
+- **Chat Agent Optimization:** replace source-specific chat adapters with a unified preparation pipeline and a single `delegate` contract, validate mixed instruction and tabular inputs before durable batch submission, centralize attachment and Knowledge snapshots for repeatable execution and reruns, and simplify routing to fast direct answers or full task mode.
 
 
 ## [0.3.0] - 2026-07-21

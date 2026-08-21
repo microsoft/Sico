@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -68,19 +48,47 @@ func TestAppliableResourcesForOSOrdersManagedBeforePhysical(t *testing.T) {
 		require.NoError(t, rds.Close())
 	})
 
-	seedSnapshot(t, ctx, rds, enum.SandboxTypeEmulator.String(), time.Now(), testEmulatorResource(ResourceStatusAvailable))
+	emulator := testEmulatorResource(ResourceStatusAvailable)
+	physical := &Resource{
+		Type: enum.SandboxTypePhysical.String(), ResourceID: "manager|device-1", Status: ResourceStatusAvailable,
+		Metadata: map[string]string{enum.MetadataOSKey: enum.SandboxOSAndroid.String()},
+	}
+	seedSnapshot(t, ctx, rds, enum.SandboxTypeEmulator.String(), time.Now(), emulator)
+	seedSnapshot(t, ctx, rds, enum.SandboxTypePhysical.String(), time.Now(), physical)
 
-	svc := &Service{Pool: newTestPool(rds, &fakeProvider{
-		providerType: enum.SandboxTypeEmulator.String(),
-	}, time.Minute)}
+	svc := &Service{Pool: newTestPoolWithProviders(
+		rds,
+		time.Minute,
+		&fakeProvider{providerType: enum.SandboxTypeEmulator.String()},
+		&fakeProvider{providerType: enum.SandboxTypePhysical.String()},
+	)}
 
 	ordered, byID, _, err := svc.appliableResourcesForOS(ctx, enum.SandboxOSAndroid)
 	require.NoError(t, err)
 
 	require.Equal(t, []string{
-		enum.SandboxTypeEmulator.String() + ":" + testEmulatorResource(ResourceStatusAvailable).ResourceID,
+		enum.SandboxTypeEmulator.String() + ":" + emulator.ResourceID,
+		enum.SandboxTypePhysical.String() + ":" + physical.ResourceID,
 	}, ordered)
-	require.Contains(t, byID, enum.SandboxTypeEmulator.String()+":"+testEmulatorResource(ResourceStatusAvailable).ResourceID)
+	require.Contains(t, byID, enum.SandboxTypeEmulator.String()+":"+emulator.ResourceID)
+	require.Contains(t, byID, enum.SandboxTypePhysical.String()+":"+physical.ResourceID)
+}
+
+func TestAppliableResourcesForOSReturnsEmptyWhenNoProviderSuppliesOS(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	mr := miniredis.RunT(t)
+	rds := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { require.NoError(t, rds.Close()) })
+	seedSnapshot(t, ctx, rds, enum.SandboxTypeEmulator.String(), time.Now(), testEmulatorResource(ResourceStatusAvailable))
+
+	svc := &Service{Pool: newTestPool(rds, &fakeProvider{providerType: enum.SandboxTypeEmulator.String()}, time.Minute)}
+	ordered, byID, _, err := svc.appliableResourcesForOS(ctx, enum.SandboxOSWindows)
+
+	require.NoError(t, err)
+	require.Empty(t, ordered)
+	require.Empty(t, byID)
 }
 
 func TestApplySandboxReturnsNilWhenNoResourceSuppliesOS(t *testing.T) {

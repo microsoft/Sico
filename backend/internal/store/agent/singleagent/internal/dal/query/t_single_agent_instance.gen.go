@@ -39,6 +39,7 @@ func newTSingleAgentInstance(db *gorm.DB, opts ...gen.DOOption) tSingleAgentInst
 	_tSingleAgentInstance.EmployerIconURI = field.NewString(tableName, "employer_icon_uri")
 	_tSingleAgentInstance.ProjectID = field.NewInt64(tableName, "project_id")
 	_tSingleAgentInstance.Permission = field.NewString(tableName, "permission")
+	_tSingleAgentInstance.Status = field.NewInt32(tableName, "status")
 	_tSingleAgentInstance.Attachments = field.NewField(tableName, "attachments")
 	_tSingleAgentInstance.CreatedAt = field.NewInt64(tableName, "created_at")
 	_tSingleAgentInstance.UpdatedAt = field.NewInt64(tableName, "updated_at")

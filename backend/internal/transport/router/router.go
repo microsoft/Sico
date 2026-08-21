@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package router
 
 import (
@@ -25,10 +5,13 @@ import (
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	"sico-backend/internal/biz/rbac"
+	sandboxproviders "sico-backend/internal/biz/sandbox/providers"
 	"sico-backend/internal/transport/http/handler"
 	"sico-backend/internal/transport/http/middleware"
+	"sico-backend/pkg/env"
 )
 
 // Health is a simple handler for health check endpoint
@@ -41,13 +24,15 @@ func Health(ctx *gin.Context) {
 	ctx.JSON(200, gin.H{"status": "ok"})
 }
 
-func RegisterAPIs(router *gin.Engine) {
+func RegisterAPIs(router *gin.Engine, sandboxIntegration sandboxproviders.Integration) {
+	router.Use(otelgin.Middleware(env.GetOrDefault("OTEL_SERVICE_NAME", "sico-backend")))
 	router.Use(cors.Default())
 
 	// Health check must be registered before auth middleware
 	router.GET("/api/sico/health", func(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"status": "ok"})
 	})
+	registerPublicAuthStateRoutes(router)
 
 	router.Use(middleware.AuthMiddleware())
 	r := router.Group("/api/sico")
@@ -63,6 +48,10 @@ func RegisterAPIs(router *gin.Engine) {
 	registerKnowledgeRoutes(r)
 	registerSkillsRoutes(r)
 	registerOrganizationRoutes(r)
+	registerNotificationRoutes(r)
+	registerScheduledTaskRoutes(r)
+	registerAuthStateRoutes(r)
+	sandboxIntegration.RegisterHTTPRoutes(r)
 
 	// Swagger documentation route (public)
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -92,11 +81,6 @@ func registerSandboxRoutes(r *gin.RouterGroup) {
 	sandboxApi.GET("/instance/:instanceId/vnc", handler.GetInstanceVNC) // Get VNC URLs for instance
 	sandboxApi.GET("/instance", handler.SandboxGetInstanceSandboxes)    // Get instance sandboxes with status
 	sandboxApi.GET("/:sandboxId/vnc", handler.GetSandboxVNC)            // Get VNC URL for sandbox
-
-	// Emulator resource proxy - H264 WS stream + UI for HTTPS iframe embedding + API proxy
-	sandboxApi.GET("/resources/emulator/:rid/vnc", handler.ResourceEmulatorUI)
-	sandboxApi.GET("/resources/emulator/:rid/ws/h264", handler.ResourceEmulatorH264WS)
-	sandboxApi.Any("/resources/emulator/:rid/api/*path", handler.ResourceEmulatorProxy)
 
 	// ==================== Sandbox Client APIs (Requires X-Sico-* headers) ====================
 	sandboxApi.Use(middleware.SandboxAuthMiddleware())
@@ -154,6 +138,33 @@ func registerConversationRoutes(r *gin.RouterGroup) {
 	}
 }
 
+func registerNotificationRoutes(r *gin.RouterGroup) {
+	r.POST("/notification", handler.CreateNotification)
+	r.PUT("/notification/status", handler.UpdateNotificationStatus)
+	r.GET("/notifications", handler.ListNotification)
+	r.GET("/project/notifications", handler.ListProjectNotifications)
+	r.PUT("/notification/read-all", handler.ReadAllNotifications)
+}
+
+func registerAuthStateRoutes(r *gin.RouterGroup) {
+	authStateApi := r.Group("/auth-state")
+	authStateApi.GET("", handler.GetAuthState)
+	authStateApi.POST("/status", handler.UpdateAuthStateStatus)
+}
+
+func registerPublicAuthStateRoutes(router *gin.Engine) {
+	router.POST("/api/sico/auth-state/import", handler.ImportAuthState)
+}
+
+func registerScheduledTaskRoutes(r *gin.RouterGroup) {
+	tasks := r.Group("/scheduled-tasks")
+	tasks.POST("", handler.CreateScheduledTask)
+	tasks.GET("", handler.GetScheduledTask)
+	tasks.PUT("", handler.UpdateScheduledTask)
+	tasks.DELETE("", handler.DeleteScheduledTask)
+	tasks.GET("/list", handler.ListScheduledTasks)
+}
+
 func registerLLMRoutes(r *gin.RouterGroup) {
 	llmApi := r.Group("/llm")
 
@@ -165,6 +176,10 @@ func registerLLMRoutes(r *gin.RouterGroup) {
 	llmApi.GET("/source-slots", handler.ListSourceSlots)
 	llmApi.POST("/runtime/generate", handler.RuntimeGenerate)
 	llmApi.POST("/runtime/generate/stream", handler.RuntimeGenerateStream)
+
+	orgConfigApi := llmApi.Group("/org-config")
+	orgConfigApi.POST("", handler.SetOrganizationLLMConfig)
+	orgConfigApi.GET("", handler.GetOrganizationLLMConfig)
 }
 
 func registerProjectRoutes(r *gin.RouterGroup) {
@@ -177,6 +192,8 @@ func registerProjectRoutes(r *gin.RouterGroup) {
 	projectApi.PUT("", handler.UpdateProject)
 	projectApi.DELETE("", handler.DeleteProject)
 	projectApi.POST("/asset", handler.AddProjectAsset)
+	projectApi.POST("/asset/upload_url", handler.CreateProjectAssetUploadURL)
+	projectApi.POST("/asset/complete", handler.CompleteProjectAssetUpload)
 	projectApi.GET("/sas_asset", handler.GetProjectSASAsset)
 	projectApi.GET("/assets", handler.GetProjectAssetList)
 	projectApi.DELETE("/asset", handler.DeleteProjectAsset)
@@ -193,11 +210,12 @@ func registerAgentRoutes(r *gin.RouterGroup) {
 	agentApi.POST("/single_agent", handler.CreateSingleAgent)
 	agentApi.GET("/single_agent", handler.GetSingleAgent)
 	agentApi.PUT("/single_agent", handler.UpdateSingleAgent)
-	//agentApi.DELETE("/single_agent", handler.DeleteSingleAgent)
+	agentApi.DELETE("/single_agent", handler.DeleteSingleAgent)
 	agentApi.GET("/single_agents", handler.ListSingleAgents)
 	agentApi.GET("/single_agent_infos", handler.ListSingleAgentInfos)
 	agentApi.GET("/roles", handler.ListRoles)
 	agentApi.POST("/single_agent/deploy", handler.DeploySingleAgent)
+	agentApi.POST("/single_agent/publish", handler.PublishSingleAgent)
 
 	agentApi.POST("/single_agent_instance", handler.CreateSingleAgentInstance)
 	agentApi.GET("/single_agent_instance", handler.GetSingleAgentInstance)
@@ -210,8 +228,8 @@ func registerAgentRoutes(r *gin.RouterGroup) {
 }
 
 func registerAgentsRoutes(r *gin.RouterGroup) {
-	agentsApi := r.Group("/agents")
-	agentsApi.GET("/:agentId/models", handler.GetSingleAgentModels)
+	// Agent-level model binding removed; models are now configured at the organization level.
+	_ = r
 }
 
 func registerKnowledgeRoutes(r *gin.RouterGroup) {
@@ -253,6 +271,7 @@ func registerSkillsRoutes(r *gin.RouterGroup) {
 func registerOrganizationRoutes(r *gin.RouterGroup) {
 	orgApi := r.Group("/organization")
 	{
+		orgApi.GET("/user_organizations", handler.GetUserOrganizationList)
 		orgApi.POST("", handler.CreateOrganization)
 		orgApi.PUT("", handler.UpdateOrganization)
 		orgApi.DELETE("", handler.DeleteOrganization)

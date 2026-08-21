@@ -1,29 +1,8 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { createStore } from "jotai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  activeConversationIdAtom,
   type Conversation,
   conversationsAtom,
   type Message,
@@ -383,5 +362,193 @@ describe("createOnReplay", () => {
     expect(joinText(store, clientId, "ai")).toBe("final answer");
     // …but the terminal state survives the late replay.
     expect(msg?.streamingState).toBe("done");
+  });
+});
+
+// Read the active conversation's AI rows (author "ai") with their streaming state.
+function activeAiRows(
+  store: ReturnType<typeof createStore>,
+  clientId: string,
+): Message[] {
+  return (store.get(conversationsAtom).get(clientId)?.history ?? []).filter(
+    (m) => m.author === "ai",
+  );
+}
+
+describe("createOnReplay — onOpen thinking placeholder (reconnect follows the live send)", () => {
+  // An active conversation whose tail is a human row with NO AI reply yet — the
+  // in-flight turn whose reply never persisted (messages_v2 returns it empty).
+  function storeWithPendingHumanTurn(): {
+    store: ReturnType<typeof createStore>;
+    clientId: string;
+  } {
+    const store = createStore();
+    const clientId = "c1";
+    const conv: Conversation = {
+      clientId,
+      history: [{ id: "human-1", author: "human", content: [] }],
+    };
+    store.set(conversationsAtom, new Map([[clientId, conv]]));
+    store.set(activeConversationIdAtom, clientId);
+    return { store, clientId };
+  }
+
+  it("mints a streaming AI placeholder on open so the turn shows Thinking… (not a spinner) before any frame", () => {
+    const { store, clientId } = storeWithPendingHumanTurn();
+    const { onOpen } = createOnReplay(store);
+
+    onOpen();
+
+    const ai = activeAiRows(store, clientId);
+    expect(ai).toHaveLength(1);
+    // `streaming`, not `pending`: reconnect resumes an already-open stream, so the
+    // turn is past the spinner state — it was showing Thinking… before the switch.
+    expect(ai[0]?.streamingState).toBe("streaming");
+    expect(ai[0]?.turnId).toBeUndefined();
+    expect(ai[0]?.content).toEqual([]);
+  });
+
+  it("does not mint a placeholder when the conversation already has a settled AI row (completed turn revisit)", () => {
+    const store = createStore();
+    const clientId = "c1";
+    const conv: Conversation = {
+      clientId,
+      history: [
+        { id: "human-1", author: "human", turnId: 7, content: [] },
+        {
+          id: "ai-1",
+          author: "ai",
+          turnId: 7,
+          streamingState: "done",
+          content: [{ partId: "p", type: "text", text: "done reply" }],
+        },
+      ],
+    };
+    store.set(conversationsAtom, new Map([[clientId, conv]]));
+    store.set(activeConversationIdAtom, clientId);
+    const { onOpen } = createOnReplay(store);
+
+    onOpen();
+
+    // Still exactly the one settled AI row — no thinking placeholder.
+    const ai = activeAiRows(store, clientId);
+    expect(ai).toHaveLength(1);
+    expect(ai[0]?.id).toBe("ai-1");
+  });
+
+  it("does not mint a second placeholder when an AI row is already streaming", () => {
+    const store = createStore();
+    const clientId = "c1";
+    const conv: Conversation = {
+      clientId,
+      history: [
+        { id: "human-1", author: "human", content: [] },
+        { id: "ai-1", author: "ai", streamingState: "streaming", content: [] },
+      ],
+    };
+    store.set(conversationsAtom, new Map([[clientId, conv]]));
+    store.set(activeConversationIdAtom, clientId);
+    const { onOpen } = createOnReplay(store);
+
+    onOpen();
+
+    expect(activeAiRows(store, clientId)).toHaveLength(1);
+  });
+
+  it("is a no-op when there is no active conversation", () => {
+    const store = createStore();
+    const setSpy = vi.spyOn(store, "set");
+    const { onOpen } = createOnReplay(store);
+
+    onOpen();
+
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("the first frame claims the placeholder in place — no second AI row", () => {
+    const { store, clientId } = storeWithPendingHumanTurn();
+    const { onOpen, onReplay } = createOnReplay(store);
+
+    onOpen();
+    const placeholderId = activeAiRows(store, clientId)[0]?.id;
+
+    // First reconnect frame carries the turnId — claims the placeholder.
+    onReplay([messageFrame("resumed reply", 7)]);
+    flushRaf();
+
+    const ai = activeAiRows(store, clientId);
+    expect(ai).toHaveLength(1);
+    expect(ai[0]?.id).toBe(placeholderId);
+    expect(ai[0]?.turnId).toBe(7);
+    expect(ai[0]?.streamingState).toBe("streaming");
+    expect(joinText(store, clientId, placeholderId!)).toBe("resumed reply");
+  });
+
+  it("onStreamEnd removes a never-claimed placeholder (avoids a stuck Thinking…)", () => {
+    const { store, clientId } = storeWithPendingHumanTurn();
+    const { onOpen, onStreamEnd } = createOnReplay(store);
+
+    onOpen();
+    expect(activeAiRows(store, clientId)).toHaveLength(1);
+
+    // Stream ended (e.g. an already-done turn's empty reconnect) without ever
+    // delivering a frame — drop the placeholder.
+    onStreamEnd();
+
+    expect(activeAiRows(store, clientId)).toHaveLength(0);
+  });
+
+  it("onStreamEnd leaves a claimed placeholder intact", () => {
+    const { store, clientId } = storeWithPendingHumanTurn();
+    const { onOpen, onReplay, onStreamEnd } = createOnReplay(store);
+
+    onOpen();
+    onReplay([messageFrame("resumed reply", 7)]);
+    flushRaf();
+    onStreamEnd();
+
+    const ai = activeAiRows(store, clientId);
+    expect(ai).toHaveLength(1);
+    expect(joinText(store, clientId, ai[0]!.id)).toBe("resumed reply");
+  });
+
+  it("first frame mints an AI row in the active conversation when open never placed one (onOpen raced ahead of hydration)", () => {
+    // The onOpen probe fired before history created the slot, so no placeholder
+    // exists. The in-flight text turn has NO human row to pair (messages_v2
+    // returned it empty), so `createAiRowForTurn` can't help — yet the frame must
+    // still land. Since the reconnect target IS the active conversation, mint a
+    // bare AI row there rather than buffering forever (the switch-back bug).
+    const store = createStore();
+    const clientId = "c1";
+    store.set(
+      conversationsAtom,
+      new Map([[clientId, { clientId, history: [] }]]),
+    );
+    store.set(activeConversationIdAtom, clientId);
+    const { onReplay } = createOnReplay(store);
+
+    onReplay([messageFrame("resumed reply", 7)]);
+    flushRaf();
+
+    const ai = activeAiRows(store, clientId);
+    expect(ai).toHaveLength(1);
+    expect(ai[0]?.turnId).toBe(7);
+    expect(ai[0]?.streamingState).toBe("streaming");
+    expect(joinText(store, clientId, ai[0]!.id)).toBe("resumed reply");
+  });
+
+  it("still buffers (does not mint) when there is no active conversation — #191 preserved", () => {
+    // No active conversation set: the turn may belong to a not-yet-hydrated view
+    // (the #191 race). The active-conversation fallback must NOT fire, so the run
+    // buffers instead of minting a stray row.
+    const { store } = storeWithTurn(42); // unrelated turn, no activeConversationIdAtom
+    const setSpy = vi.spyOn(store, "set");
+    const { onReplay } = createOnReplay(store);
+
+    onReplay([messageFrame("resumed", 99)]);
+    flushRaf();
+
+    // Buffered, not applied — no write to the store.
+    expect(setSpy).not.toHaveBeenCalled();
   });
 });

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { createStore } from "jotai";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -48,24 +26,21 @@ beforeEach(() => {
   clearAuthStorage();
 });
 
+// A structured role grant matching the backend's post-change login payload.
+const GRANT = {
+  id: 24,
+  roleCode: "project_member",
+  scopeType: "project",
+  scopeId: 76,
+};
+
 describe("userAtom", () => {
   it("initializes from LS", () => {
     setItemToLocalStorage(LS_TOKEN, "tok");
     setItemToLocalStorage(LS_EXPIRES, String(FUTURE()));
     setItemToLocalStorage(
       LS_USER,
-      JSON.stringify({
-        id: 1,
-        email: "a@b.test",
-        roles: [
-          {
-            id: 9,
-            roleCode: "project_admin",
-            scopeType: "project",
-            scopeId: 1,
-          },
-        ],
-      }),
+      JSON.stringify({ id: 1, email: "a@b.test", roles: [GRANT] }),
     );
     const store = createStore();
     expect(store.get(userAtom)).toMatchObject({ id: 1 });
@@ -75,12 +50,9 @@ describe("userAtom", () => {
   it("loginAtom writes LS (incl. expiresAt) + sets atom (drops extra user fields)", () => {
     const store = createStore();
     const expires = FUTURE();
-    const roles = [
-      { id: 9, roleCode: "project_member", scopeType: "project", scopeId: 3 },
-    ];
     store.set(loginAtom, {
       tokenInfo: { accessToken: "tok", expiresAt: expires },
-      user: { id: 1, email: "a@b.test", roles, extra: "nope" },
+      user: { id: 1, email: "a@b.test", roles: [GRANT], extra: "nope" },
     });
     expect(getItemFromLocalStorage(LS_TOKEN)).toBe("tok");
     expect(getItemFromLocalStorage(LS_EXPIRES)).toBe(String(expires));
@@ -88,12 +60,12 @@ describe("userAtom", () => {
     expect(JSON.parse(getItemFromLocalStorage(LS_USER)!)).toEqual({
       id: 1,
       email: "a@b.test",
-      roles,
+      roles: [GRANT],
     });
     expect(store.get(userAtom)).toEqual({
       id: 1,
       email: "a@b.test",
-      roles,
+      roles: [GRANT],
     });
   });
 

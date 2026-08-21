@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, type Mock, vi } from "vitest";
@@ -27,28 +5,44 @@ import { describe, expect, it, type Mock, vi } from "vitest";
 import { ConfirmDialog } from "@/features/projects/components/confirm-dialog";
 
 const TITLE = "Delete Knowledge";
-const BODY =
-  "Permanently remove access to this knowledge across your organization.";
+const BODY = "Permanently remove access to this knowledge across your project.";
 
-function setup(args: { pending?: boolean }): {
+function setup(args: {
+  pending?: boolean;
+  confirmLabel?: string;
+  pendingLabel?: string;
+}): {
   user: ReturnType<typeof userEvent.setup>;
   onConfirm: Mock;
   onOpenChange: Mock;
+  rerender: (next: {
+    pending?: boolean;
+    confirmLabel?: string;
+    pendingLabel?: string;
+  }) => void;
 } {
   const user = userEvent.setup();
   const onConfirm = vi.fn();
   const onOpenChange = vi.fn();
-  render(
+  const ui = (a: typeof args): React.JSX.Element => (
     <ConfirmDialog
       open
       onOpenChange={onOpenChange}
       title={TITLE}
       body={BODY}
       onConfirm={onConfirm}
-      pending={args.pending ?? false}
-    />,
+      pending={a.pending ?? false}
+      confirmLabel={a.confirmLabel}
+      pendingLabel={a.pendingLabel}
+    />
   );
-  return { user, onConfirm, onOpenChange };
+  const { rerender } = render(ui(args));
+  return {
+    user,
+    onConfirm,
+    onOpenChange,
+    rerender: (next) => rerender(ui(next)),
+  };
 }
 
 describe("<ConfirmDialog>", () => {
@@ -73,6 +67,20 @@ describe("<ConfirmDialog>", () => {
 
     const action = screen.getByRole("button", { name: /deleting…/i });
     expect(action).toBeDisabled();
+  });
+
+  it("uses custom confirm/pending labels when provided", () => {
+    const { rerender } = setup({
+      confirmLabel: "Dismiss",
+      pendingLabel: "Dismissing…",
+    });
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
+    rerender({
+      confirmLabel: "Dismiss",
+      pendingLabel: "Dismissing…",
+      pending: true,
+    });
+    expect(screen.getByRole("button", { name: /dismissing…/i })).toBeDisabled();
   });
 
   it("clicking Cancel requests close without confirming", async () => {

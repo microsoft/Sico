@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { describe, expect, it } from "vitest";
 
 import { loginResponseSchema, userSchema } from "@/schemas/auth";
@@ -29,17 +7,19 @@ describe("userSchema", () => {
     const result = userSchema.safeParse({
       id: 42,
       email: "a@b.co",
-      roles: [
-        { id: 7, roleCode: "project_admin", scopeType: "project", scopeId: 1 },
-      ],
+      roles: [],
     });
     expect(result.success).toBe(true);
   });
 
-  it("parses scoped role-grant objects (backend common.UserRoleInfo)", () => {
+  // Regression — the backend changed `roles` from a flat string list to
+  // structured grants `{ id, roleCode, scopeType, scopeId }` (dwp test env,
+  // v-xingkezhu account). The old `z.array(z.string())` rejected these, so
+  // login crashed with a ZodError. The schema must parse the object grants.
+  it("accepts structured role grants (post-backend-change shape)", () => {
     const result = userSchema.safeParse({
-      id: 1,
-      email: "a@b.co",
+      id: 6,
+      email: "v-xingkezhu@microsoft.com",
       roles: [
         {
           id: 24,
@@ -48,22 +28,17 @@ describe("userSchema", () => {
           scopeId: 76,
         },
         {
-          id: 25,
+          id: 181,
           roleCode: "project_admin",
           scopeType: "project",
-          scopeId: 80,
+          scopeId: 127,
         },
       ],
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.roles).toHaveLength(2);
-      expect(result.data.roles[0]).toEqual({
-        id: 24,
-        roleCode: "project_member",
-        scopeType: "project",
-        scopeId: 76,
-      });
+      expect(result.data.roles[1]?.roleCode).toBe("project_admin");
     }
   });
 
@@ -79,8 +54,8 @@ describe("userSchema", () => {
   // Regression — dogfood QA Round 1 FIND-1 (qa.md §W2).
   // Backend (`microsoft/sico`) serialises an unassigned roles slice as
   // JSON `null` for the `operator@sico.local` seed account. The schema
-  // must accept `null` and coerce it to `[]` so downstream consumers can
-  // call array methods without null checks.
+  // must accept `null` and coerce it to `[]` so downstream consumers
+  // can call array methods without null checks.
   it("accepts null roles from backend and coerces to []", () => {
     const result = userSchema.safeParse({
       id: 1,

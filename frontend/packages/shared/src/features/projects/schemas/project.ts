@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { z } from "zod";
 
 export const MemberTypeSchema = z.enum({
@@ -29,31 +7,56 @@ export const MemberTypeSchema = z.enum({
 });
 export type MemberType = z.infer<typeof MemberTypeSchema>;
 
-// Backend `iconUrl` is either an absolute http(s) URL, a server-relative
-// path (e.g. `/storage/1/xxx.svg`), or an empty string — and the backend may
-// omit the field entirely (or send `null`). `safeIconUri` performs the final
-// scheme allow-list at render time; the schema only normalises absence to `""`
-// so consumers keep a plain `string` (they already branch on empty via
-// `safeIconUri(iconUrl ?? undefined)`).
+// The project's own avatar URL (`icon_sas_url` → json `iconUrl`): an absolute
+// http(s) URL, a server-relative path, or an empty string; Go may marshal an
+// unset value as `null`. Coerce null|undefined → "" so it never fails the parse;
+// `safeIconUri` does the scheme allow-list at render time.
 const iconUrlSchema = z
   .string()
   .nullish()
   .transform((v) => v ?? "");
 
-// The `/project/user_projects` list marshals each agent instance's avatar
-// under `agentIconUrl` (NOT the bare `iconUrl` used by the project itself).
-// Read the wire field verbatim, then expose it to consumers as `iconUrl` so
-// the card avatar code stays field-name agnostic.
+// The backend digest's avatar field is `agentIconUrl` (common.AgentInstanceDigest
+// → `agent_icon_url`), NOT `iconUrl`. Go marshals an unset value as JSON `null`
+// or omits it, so accept null|undefined and coerce to "" — one iconless agent
+// can't fail the project parse; `safeIconUri` does the scheme allow-list at
+// render time (an empty string renders the fallback avatar). Renamed to the
+// canonical `iconUrl` here so avatar consumers read one field name.
 export const projectAgentInstanceSchema = z
   .object({
     id: z.number().int(),
-    agentIconUrl: iconUrlSchema,
+    agentIconUrl: z
+      .string()
+      .nullish()
+      .transform((v) => v ?? ""),
   })
-  .transform(({ agentIconUrl, ...rest }) => ({
-    ...rest,
-    iconUrl: agentIconUrl,
-  }));
+  .transform(({ id, agentIconUrl }) => ({ id, iconUrl: agentIconUrl }));
 export type ProjectAgentInstance = z.infer<typeof projectAgentInstanceSchema>;
+
+// A member/admin summary the detail endpoint embeds (`common.UserDigest`).
+// `projectMembers` is the FULL roster (admins included); `projectAdmins` is the
+// admin subset. `alias`/`iconUrl` may be empty strings the backend sends.
+export const projectMemberDigestSchema = z.object({
+  id: z.number().int(),
+  alias: z.string().optional(),
+  username: z.string(),
+  email: z.string(),
+  iconUrl: z.string().optional(),
+});
+export type ProjectMemberDigest = z.infer<typeof projectMemberDigestSchema>;
+
+// A sandbox summary the detail endpoint embeds (`common.SandboxDigest`). The
+// drawer only needs `type` (bucket) + `status` (availability); the rest are
+// carried for completeness/forward-compat. Camel-case (detail endpoint), unlike
+// the snake_case `/sandbox/list` payload.
+export const projectSandboxDigestSchema = z.object({
+  sandboxId: z.string(),
+  type: z.string(),
+  status: z.string(),
+  displayName: z.string().optional(),
+  projectId: z.number().int().optional(),
+});
+export type ProjectSandboxDigest = z.infer<typeof projectSandboxDigestSchema>;
 
 export const projectSchema = z.object({
   id: z.number().int(),
@@ -87,6 +90,26 @@ export const projectDetailSchema = projectSchema.extend({
   // array (the operator data-loss invariant, §6 dec 6).
   operatorAdmins: z
     .array(z.string())
+    .nullish()
+    .transform((v) => v ?? []),
+  // Full member roster (admins included) + the admin subset — `UserDigest`
+  // arrays the detail endpoint returns. Nullish→[] like the sibling arrays (Go
+  // marshals empty slices as `null`). `projectMembers` is the source of truth
+  // for the roster preview count; `operatorAdmins` above is only the admin
+  // usernames and undercounts.
+  projectMembers: z
+    .array(projectMemberDigestSchema)
+    .nullish()
+    .transform((v) => v ?? []),
+  projectAdmins: z
+    .array(projectMemberDigestSchema)
+    .nullish()
+    .transform((v) => v ?? []),
+  // Sandboxes bound to this project (`common.SandboxDigest[]`). Same data the
+  // drawer used to fetch via `/sandbox/list?projectId`; now read inline so the
+  // drawer's Sandbox section needs no separate query. Nullish→[].
+  sandboxes: z
+    .array(projectSandboxDigestSchema)
     .nullish()
     .transform((v) => v ?? []),
   createdAt: z.number().int(),

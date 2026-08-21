@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 
@@ -31,6 +9,8 @@ import {
 import {
   type ApiResponse,
   apiResponseSchema,
+  assertOk,
+  EnvelopeError,
   makeOkEnvelope,
   makeUnauthorizedEnvelope,
 } from "@/schemas/api";
@@ -67,7 +47,33 @@ describe("apiResponseSchema", () => {
   });
 });
 
-// `widen` erases the narrow inferred type so the `code === …` check
+describe("assertOk", () => {
+  it("does nothing on an OK envelope", () => {
+    expect(() => assertOk({ code: 0, msg: "success" }, "ctx")).not.toThrow();
+  });
+
+  it("throws an EnvelopeError carrying the backend code + msg", () => {
+    try {
+      assertOk({ code: 101_004, msg: "role already assigned to user" }, "ctx");
+      throw new Error("expected assertOk to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvelopeError);
+      const envelope = error as EnvelopeError;
+      expect(envelope.code).toBe(101_004);
+      expect(envelope.msg).toBe("role already assigned to user");
+    }
+  });
+
+  it("defaults msg to an empty string when the caller omits it", () => {
+    try {
+      assertOk({ code: 500 }, "ctx");
+      throw new Error("expected assertOk to throw");
+    } catch (error) {
+      expect((error as EnvelopeError).msg).toBe("");
+    }
+  });
+});
+
 // isn't constant-folded away by `no-unnecessary-condition`.
 // `assertType` is compile-time only — used instead of
 // `expectTypeOf().toEqualTypeOf` (which trips on generic propagation).

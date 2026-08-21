@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { type createStore } from "jotai";
 
 import { logger } from "../../../utils/logger";
@@ -27,7 +5,6 @@ import {
   activeConversationAtom,
   type Conversation,
   isStreamingAiMessage,
-  type Part,
 } from "../atoms/chat-atom";
 
 type Store = ReturnType<typeof createStore>;
@@ -39,7 +16,9 @@ const STOP_FAILED_COPY =
 
 export type StopTurnContext = {
   // Injected to keep the orchestration a pure, testable fn. Takes the numeric
-  // turnId (= Number(planId)).
+  // turnId. Despite the `/plan/cancel` name, the backend cancels the whole
+  // TURN's task runtime by turnId (not just a plan) — see the core
+  // `cancel_turn_task_runtime_once` call — so this stops a plain text stream too.
   cancelPlan: (turnId: number) => Promise<void>;
   // The reconnect manager's hard idle exit. Stop routes through it on EVERY
   // path: a bare `abort()` reads as a transport close → backoff → reopen, so
@@ -48,40 +27,39 @@ export type StopTurnContext = {
   toastError: (message: string) => void;
 };
 
-// The `plan` Part of the in-flight turn, if any — the plan-vs-text
-// discriminator for Stop. The SSE stream stays open for the whole plan
-// execution, so a RUNNING plan's turn is always still `streaming` here.
-function streamingPlanPart(
-  conv: Conversation | undefined,
-): Extract<Part, { type: "plan" }> | undefined {
-  const ai = conv?.history.find(isStreamingAiMessage);
-  return ai?.content.find(
-    (p): p is Extract<Part, { type: "plan" }> => p.type === "plan",
-  );
+// The in-flight turn's server turnId, if any. The SSE stream stays open for the
+// whole turn (plan execution OR a plain text stream), so a live turn's AI
+// message is always still `streaming` here and carries its `turnId`.
+function streamingTurnId(conv: Conversation | undefined): number | undefined {
+  return conv?.history.find(isStreamingAiMessage)?.turnId;
 }
 
-// Stop the active turn. Plan in progress → `POST /plan/cancel` FIRST (aborting
-// the stream before the backend cancels would orphan a running plan); on
-// failure toast and leave the turn running. Teardown order is load-bearing:
-// `reconnectStop()` BEFORE `abort()`, so the abort echo resolves to a clean
-// idle and then drives `sendMessage` to mark the partial turn done.
+// Stop the active turn. Any in-flight turn → `POST /plan/cancel` FIRST (the
+// backend cancels the turn's task runtime by turnId — text streams included —
+// so aborting the transport before that would orphan a running turn on the
+// server, and a reload's reconnect probe would resume it). Keying on the turn's
+// `turnId` (not on a plan Part) is deliberate: a plain text stream has a turnId
+// but no plan, and it must be cancelled too. On cancel failure, toast and leave
+// the turn running so the user keeps the retry affordance.
 //
-// Settling the AI message to `done` is NOT done here — it is event-driven by the
-// stream's own lifecycle: a normal send's `sendMessage` closure marks it on the
-// abort echo, and a reconnect-resumed turn is marked by the reconnect machine's
-// terminal `settle` command (use-reconnect). Stop just tears the transport down.
+// Teardown order is load-bearing: `reconnectStop()` BEFORE `abort()`, so the
+// abort echo resolves to a clean idle and then drives `sendMessage` to mark the
+// partial turn done. Settling the AI message to `done` is event-driven by the
+// stream's own lifecycle (a normal send's `sendMessage` closure on the abort
+// echo, or the reconnect machine's terminal `settle`) — Stop just tears the
+// transport down.
 export async function stopTurn(
   store: Store,
   ctx: StopTurnContext,
 ): Promise<void> {
   const conv = store.get(activeConversationAtom);
-  const planPart = streamingPlanPart(conv);
+  const turnId = streamingTurnId(conv);
 
-  if (planPart) {
+  if (turnId !== undefined) {
     try {
-      await ctx.cancelPlan(Number(planPart.planId));
+      await ctx.cancelPlan(turnId);
     } catch (err) {
-      logger.warn("chat: plan cancel failed on stop", { err });
+      logger.warn("chat: turn cancel failed on stop", { err });
       ctx.toastError(STOP_FAILED_COPY);
       return;
     }

@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 // @title Sico API
 // @version 1.0
 // @description Sico AI Agent Platform API
@@ -40,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 
 	"sico-backend/api/openapi"
@@ -47,6 +28,7 @@ import (
 	"sico-backend/internal/consts"
 	"sico-backend/internal/di"
 	"sico-backend/internal/infra/migration"
+	"sico-backend/internal/infra/telemetry"
 	"sico-backend/internal/transport/reverse_grpc"
 	"sico-backend/internal/transport/router"
 	"sico-backend/pkg/env"
@@ -55,6 +37,9 @@ import (
 )
 
 func main() {
+	appCtx, cancelApp := context.WithCancel(context.Background())
+	defer cancelApp()
+
 	if err := env.LoadDotEnv(""); err != nil {
 		logger.Warn("failed to load .env file: %v", err)
 	}
@@ -75,6 +60,8 @@ func main() {
 	}
 
 	logger.Info("Starting DWP Backend application (env=%s, gin_mode=%s)", env.AppEnv(), gin.Mode())
+	shutdownTelemetry := initializeTelemetry(appCtx)
+	defer shutdownTelemetry()
 
 	// make sure database migrations are applied before starting the server
 	migrator := migration.NewMigrator()
@@ -89,7 +76,7 @@ func main() {
 	ginEngine.ContextWithFallback = true
 	openapi.SwaggerInfo.BasePath = "/"
 
-	injector, cleanup, err := di.BuildInjector(context.Background())
+	injector, cleanup, err := di.BuildInjector(appCtx)
 	if err != nil {
 		panic(fmt.Sprintf("failed to build injector: %v", err))
 	}
@@ -97,9 +84,8 @@ func main() {
 		defer cleanup()
 	}
 
-	err = seeds.Run(context.Background(), injector)
-	if err != nil {
-		panic(fmt.Sprintf("failed to run seeds: %v", err))
+	if err := initializeSandboxAndSeeds(appCtx, injector); err != nil {
+		panic(fmt.Sprintf("failed to initialize sandbox and seeds: %v", err))
 	}
 
 	port := flag.String("port", "8081", "Port to run the server on")
@@ -112,11 +98,13 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		// increase max receive message size
 		grpc.MaxRecvMsgSize(consts.GRPCMaxRecvMsgSize),
 		grpc.MaxSendMsgSize(consts.GRPCMaxSendMsgSize),
 	)
-	reverse_grpc.RegisterReverseGRPCServer(grpcServer)
+	reverse_grpc.RegisterReverseGRPCServer(grpcServer, injector.SandboxIntegration)
+	router.RegisterAPIs(ginEngine, injector.SandboxIntegration)
 
 	safego.Go(context.Background(), func() {
 		logger.Info("Starting reverse gRPC server on %s", address)
@@ -124,8 +112,6 @@ func main() {
 			logger.Error("Reverse gRPC server stopped: %v", err)
 		}
 	})
-
-	router.RegisterAPIs(ginEngine)
 
 	// Setup graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -150,7 +136,46 @@ func main() {
 	// Stop gRPC server
 	grpcServer.GracefulStop()
 	logger.Info("gRPC server stopped")
+	cancelApp()
 
 	<-ctx.Done()
 	logger.Info("Shutdown complete")
+}
+
+func initializeTelemetry(ctx context.Context) func() {
+	provider, err := telemetry.NewFromEnvironment(ctx)
+	if err != nil {
+		panic(fmt.Sprintf("failed to initialize telemetry: %v", err))
+	}
+	return func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := provider.Shutdown(shutdownCtx); err != nil {
+			logger.Error("failed to shut down telemetry: %v", err)
+		}
+	}
+}
+
+func initializeSandboxAndSeeds(
+	ctx context.Context,
+	injector *di.Injector,
+) error {
+	if err := injector.SandboxApp.Start(ctx); err != nil {
+		return fmt.Errorf("start sandbox pool: %w", err)
+	}
+	if err := injector.ScheduledTaskApp.Start(ctx); err != nil {
+		return fmt.Errorf("start scheduled task worker: %w", err)
+	}
+	if shouldRunSeeds() {
+		if err := seeds.Run(ctx, injector); err != nil {
+			return fmt.Errorf("run seeds: %w", err)
+		}
+	} else {
+		logger.Info("Skipping startup seeds outside development environment")
+	}
+	return nil
+}
+
+func shouldRunSeeds() bool {
+	return env.IsDevelopment()
 }

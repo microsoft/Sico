@@ -1,49 +1,51 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-"""Task runtime — durable batch execution for agent tool/skill/sub-agent runs.
+"""Task runtime — durable batch execution for agent capability / sub-agent runs.
 
 This package's **public API** is exactly the names re-exported here:
 
 - Entrypoints: :class:`TaskManager`, :func:`default_task_manager`,
   :func:`set_task_manager_factory`, :func:`cancel_turn_task_runtime_once`,
-  :func:`run_task_runtime_startup_reconciler`.
+    :func:`default_agent_profile_resolver`,
+    :func:`reconcile_stale_task_runtime_once`,
+    :func:`run_task_runtime_startup_reconciler`.
 - Extension points (protocols a host implements/injects): :class:`RunStore`
-  (persistence), :class:`Executor` (execution backend).
+  (persistence), :class:`Executor` (execution backend),
+  :class:`CapabilityProvider` (a source of executable capabilities) together
+  with :class:`CapabilityHandler` and the types their entry points exchange.
 - Domain models: the dataclasses/enums describing a batch, run, spec and result.
 
-Everything else (``submitter``, ``run_coordinator``, ``scheduler``, ``progress``,
-``rendering``, ``store`` implementations, ``executors`` concrete backends, …) is
-an internal implementation detail and may change without notice. Import from the
-submodules only if you are extending the runtime itself.
+Everything else (the ``orchestration``, ``presentation``, ``events``, ``sandbox``,
+and ``sub_agent`` internals plus concrete ``storage`` and ``execution`` adapters)
+may change without notice. Import from those submodules only when extending the
+runtime itself.
 """
 
-from .executors.base import Executor
+from .sub_agent.profile import (
+    ALL_CAPABILITIES,
+    AgentProfile,
+    AgentProfileResolver,
+    ProfileDescriptor,
+    ProfileQuery,
+    ProfileVisibilityPolicy,
+    StaticAgentProfileResolver,
+)
+from .sub_agent.profile_loader import default_agent_profile_resolver
+from .capabilities.descriptors import (
+    CapabilityBinding,
+    CapabilityContext,
+    CapabilityDescriptor,
+    CapabilityHandler,
+    CapabilityProvider,
+    CatalogueQuery,
+    ResolveContext,
+)
+from .execution.contracts import Executor
+from .factory import default_task_manager, set_task_manager_factory
 from .manager import (
     TaskManager,
     cancel_turn_task_runtime_once,
-    default_task_manager,
-    run_task_runtime_startup_reconciler,
-    set_task_manager_factory,
 )
-from .models import (
+from .orchestration.recovery import reconcile_stale_task_runtime_once, run_task_runtime_startup_reconciler
+from .domain.models import (
     ArtifactRef,
     BatchRecord,
     BatchResult,
@@ -57,7 +59,7 @@ from .models import (
     TaskStatus,
     compute_idempotency_key,
 )
-from .store import RunStore
+from .storage.run_store import RunStore
 
 __all__ = [
     # Entrypoints
@@ -65,10 +67,29 @@ __all__ = [
     "default_task_manager",
     "set_task_manager_factory",
     "cancel_turn_task_runtime_once",
+    "default_agent_profile_resolver",
+    "reconcile_stale_task_runtime_once",
     "run_task_runtime_startup_reconciler",
     # Extension points (protocols)
     "RunStore",
     "Executor",
+    # ... and everything implementing a capability provider needs: the two
+    # protocols it satisfies, the types its entry points take and return.
+    "CapabilityProvider",
+    "CapabilityHandler",
+    "CapabilityDescriptor",
+    "CapabilityBinding",
+    "CapabilityContext",
+    "CatalogueQuery",
+    "ResolveContext",
+    # ... and agent profile resolution.
+    "ALL_CAPABILITIES",
+    "AgentProfile",
+    "AgentProfileResolver",
+    "ProfileDescriptor",
+    "ProfileQuery",
+    "ProfileVisibilityPolicy",
+    "StaticAgentProfileResolver",
     # Domain models
     "ArtifactRef",
     "BatchRecord",

@@ -13,7 +13,7 @@ make setup
 ```
 
 This installs the default contributor toolchain: Go, Python (and `uv`), Node.js,
-`pnpm`, `pre-commit`, `addlicense`, and `golangci-lint`, then registers the git
+`pnpm`, `pre-commit`, and `golangci-lint`, then registers the git
 pre-commit hook. The command dispatches to the right platform installer:
 
 - macOS / Linux: `scripts/install-dev-tools.sh` (uses brew, apt, dnf, or pacman)
@@ -49,7 +49,6 @@ Both installer scripts are idempotent, so rerunning them is safe.
 | `make setup-kind-check` | Check the Kind toolchain (Helm + `kubectl` + `kind`) is installed |
 | `make lint` | Run `golangci-lint`, `ruff`, and `eslint` |
 | `make lint-fix` | Same as `make lint` but apply auto-fixes |
-| `make license-check` | Verify every source file has an MIT header |
 | `make precommit-run` | Run all pre-commit hooks against the whole tree |
 | `make precommit-update` | Bump pinned hook versions |
 | `make openapi` | Regenerate Backend OpenAPI docs (`api/openapi/`) |
@@ -140,7 +139,10 @@ pnpm test                              # turbo test (vitest)
 The production image builds the SPA from source with a multi-stage Dockerfile
 (`frontend/deployments/docker/Dockerfile`) and serves `packages/app/dist` with
 nginx; `make compose-up` and `make kind-up` do this automatically. `make
-build-frontend` runs the install + build locally for a quick check.
+build-frontend` loads `NPM_REGISTRY` from the repository-root `.env`, then runs
+the install and build locally for a quick check. When running `pnpm install`
+directly, export that `.env` value first because `frontend/.npmrc` resolves its
+registry from the `NPM_REGISTRY` environment variable.
 
 ## Protobuf code generation
 
@@ -166,11 +168,9 @@ Each domain under `proto/<name>/` can contain:
 - `restful.proto`: HTTP DTO definitions for the Backend.
 - Regular messages used by the above.
 
-## License headers
+## Licensing
 
-Every new source file (Go, Python, TypeScript, JavaScript, proto, shell, YAML, Dockerfile, …) must carry the MIT header. The pre-commit hook adds it automatically.
-
-Generated files are excluded in `.pre-commit-config.yaml` (`*.pb.go`, `*_pb2.py`, `wire_gen.go`, `zz_otelwrap_gen.go`, `backend/api/openapi/**`, GORM `model`/`dal`/`query` dirs, `core/app/pb/**`, ambient `*.d.ts`, …). If you add a new generator, extend the ignore list so generated output is not rewritten by source-file hooks.
+Sico is licensed under the MIT License in the repository root. Project-owned files do not require per-file license headers. Third-party copyright and license notices must be preserved.
 
 ## Documentation ownership
 

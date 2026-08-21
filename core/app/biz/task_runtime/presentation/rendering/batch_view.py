@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Batch-level helpers for the task_runtime rendering layer.
 
 Per-run progress is carried by the structured ``TaskRuntimeExecutionInfo``
@@ -35,7 +15,7 @@ from app.schemas.conversation.plan import (
     ToolCallStatus,
 )
 
-from ...models import BatchStatus, TaskResult, TaskRun
+from ...domain.models import BatchStatus, TaskResult, TaskRun
 
 
 _ACTIVE_TOOL_CALL_STATUSES = {
@@ -198,7 +178,7 @@ def _force_settle_tool_call_tree(tool_call, keep_tool_call_id: int) -> bool:
 
 
 def _terminal_plan_step_status(batch_status):
-    from ...models import BatchStatus as _BatchStatus
+    from ...domain.models import BatchStatus as _BatchStatus
 
     if batch_status == _BatchStatus.CANCELLED:
         return PlanStepStatus.CANCELLED
@@ -208,15 +188,8 @@ def _terminal_plan_step_status(batch_status):
 
 
 # ---------------------------------------------------------------------------
-# Run / batch snapshot helpers (used by submitter + progress sink).
+# Run / batch snapshot helper (used by submitter + progress sink).
 # ---------------------------------------------------------------------------
-
-
-def _planned_batch_sizes(total_count: int, concurrency: int) -> tuple[int, ...]:
-    if total_count <= 0:
-        return ()
-    step = max(1, concurrency)
-    return tuple(min(step, total_count - index) for index in range(0, total_count, step))
 
 
 def _with_result_snapshots(runs: list[TaskRun], results: list[TaskResult]) -> list[TaskRun]:
@@ -249,6 +222,5 @@ __all__ = [
     "RECOVERY_TAIL_PLACEHOLDER_TITLES",
     "tool_call_status_for_batch",
     "_mark_parent_step_terminal_if_settled",
-    "_planned_batch_sizes",
     "_with_result_snapshots",
 ]

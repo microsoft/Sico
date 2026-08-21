@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { JSX } from "react";
 
 import { safeIconUri } from "../../../utils/safe-icon-uri";
@@ -37,6 +15,10 @@ import { VideoViewer } from "./viewers/video-viewer";
 export type FilePreviewProps = {
   fileUrl: string;
   filename: string;
+  // Optional: only the markdown viewer reports its H1 here, so a chat header can
+  // title itself with the document title instead of the filename. Other subtypes
+  // ignore it; other callers (projects, skill explorer) omit it.
+  onMarkdownTitleResolved?: (title: string | undefined) => void;
 };
 
 /**
@@ -51,6 +33,7 @@ export type FilePreviewProps = {
 export function FilePreview({
   fileUrl,
   filename,
+  onMarkdownTitleResolved,
 }: FilePreviewProps): JSX.Element {
   // Single scheme/origin gate for the whole body: `fileUrl` is an agent-authored
   // (untrusted) URL that fans out to every viewer's `fetch`/`<img>`/`<video>`/
@@ -74,7 +57,12 @@ export function FilePreview({
     case "pdf":
       return <LazyPdfViewer fileUrl={fileUrl} />;
     case "markdown":
-      return <MarkdownFileViewer fileUrl={fileUrl} />;
+      return (
+        <MarkdownFileViewer
+          fileUrl={fileUrl}
+          onTitleResolved={onMarkdownTitleResolved}
+        />
+      );
     case "text":
       return <TextFileViewer fileUrl={fileUrl} />;
     case "html":

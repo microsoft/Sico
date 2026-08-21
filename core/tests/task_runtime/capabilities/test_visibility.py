@@ -1,0 +1,74 @@
+﻿"""Tests for CapabilityCard visibility + SkillLoader.list_cards filtering."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from app.biz.task_runtime.capabilities.loader import CapabilityCard, SkillLoader
+
+
+def _seed_resolver_with_cards(*cards: CapabilityCard) -> SkillLoader:
+    resolver = SkillLoader(workspace_root=Path("/tmp/does-not-matter"))
+    resolver._cards = {card.name: card for card in cards}
+    return resolver
+
+
+def test_capability_card_defaults_to_public_visibility() -> None:
+    card = CapabilityCard(name="alpha")
+    assert card.visibility == "public"
+
+
+def test_list_cards_defaults_to_public_only() -> None:
+    resolver = _seed_resolver_with_cards(
+        CapabilityCard(name="public-1", visibility="public"),
+        CapabilityCard(name="internal-1", visibility="internal"),
+        CapabilityCard(name="public-2", visibility="public"),
+    )
+
+    cards = resolver.list_cards()
+    names = sorted(card.name for card in cards)
+    assert names == ["public-1", "public-2"]
+
+
+def test_list_cards_internal_filter() -> None:
+    resolver = _seed_resolver_with_cards(
+        CapabilityCard(name="public-1", visibility="public"),
+        CapabilityCard(name="internal-1", visibility="internal"),
+    )
+
+    cards = resolver.list_cards(visibility="internal")
+    assert [card.name for card in cards] == ["internal-1"]
+
+
+def test_list_cards_any_returns_all() -> None:
+    resolver = _seed_resolver_with_cards(
+        CapabilityCard(name="public-1", visibility="public"),
+        CapabilityCard(name="internal-1", visibility="internal"),
+    )
+
+    cards = resolver.list_cards(visibility="any")
+    assert sorted(card.name for card in cards) == ["internal-1", "public-1"]
+
+
+def test_resolve_works_regardless_of_visibility() -> None:
+    """Visibility only filters discovery; explicit resolution always succeeds."""
+    resolver = _seed_resolver_with_cards(
+        CapabilityCard(name="public-1", visibility="public"),
+        CapabilityCard(name="internal-1", visibility="internal"),
+    )
+
+    assert resolver.resolve("internal-1") is not None
+    assert resolver.resolve("public-1") is not None
+    assert resolver.resolve("missing") is None
+
+
+def test_render_cards_section_omits_internal_cards() -> None:
+    """The Lead Planner LLM never sees ``visibility="internal"`` cards."""
+    resolver = _seed_resolver_with_cards(
+        CapabilityCard(name="public-skill", skill_name="public-skill", action_name="run", visibility="public"),
+        CapabilityCard(name="internal-skill", skill_name="internal-skill", action_name="run", visibility="internal"),
+    )
+
+    rendered = resolver.render_cards_section()
+    assert "public-skill" in rendered
+    assert "internal-skill" not in rendered

@@ -1,32 +1,18 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package redis
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/redis/go-redis/v9"
 
 	"sico-backend/internal/consts"
@@ -108,6 +94,52 @@ func nsKey(ns, key string) string {
 
 var redisFromEnvironment *redis.Client
 
+func extractUsernameFromToken(token string) string {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	payload := parts[1]
+	switch len(payload) % 4 {
+	case 2:
+		payload += "=="
+	case 3:
+		payload += "="
+	}
+	decoded, err := base64.URLEncoding.DecodeString(payload)
+	if err != nil {
+		return ""
+	}
+	var claims map[string]interface{}
+	if err := json.Unmarshal(decoded, &claims); err != nil {
+		return ""
+	}
+	username, _ := claims["oid"].(string)
+	return username
+}
+
+func redisCredentialProvider(ctx context.Context) (username, password string, err error) {
+	credential, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return "", "", err
+	}
+	token, err := credential.GetToken(ctx, policy.TokenRequestOptions{
+		Scopes: []string{"https://redis.azure.com/.default"},
+	})
+	if err != nil {
+		return "", "", err
+	}
+	username = extractUsernameFromToken(token.Token)
+	if username == "" {
+		return "", "", err
+	}
+	password = token.Token
+	if password == "" {
+		return "", "", err
+	}
+	return username, password, nil
+}
+
 func GetRedisFromEnvironment() *redis.Client {
 	if redisFromEnvironment == nil {
 		redisFromEnvironment = NewFromEnvironment()
@@ -122,6 +154,7 @@ func NewFromEnvironment() *redis.Client {
 	host := os.Getenv(consts.RedisHost)
 	port := os.Getenv(consts.RedisPort)
 	password := os.Getenv(consts.RedisPassword)
+	authType := strings.ToLower(strings.TrimSpace(os.Getenv(consts.RedisAuthType)))
 
 	// When Redis is not configured at all (e.g. unit tests or deployments
 	// that do not rely on Redis), return nil instead of panicking on a
@@ -133,7 +166,7 @@ func NewFromEnvironment() *redis.Client {
 		return nil
 	}
 
-	rdb := redis.NewClient(&redis.Options{
+	options := &redis.Options{
 		Addr: host + ":" + port,
 		DB:   0, // Default database
 
@@ -151,7 +184,19 @@ func NewFromEnvironment() *redis.Client {
 		DialTimeout:  5 * time.Second, // Connection establishment timeout
 		ReadTimeout:  3 * time.Second, // Read operation timeout
 		WriteTimeout: 3 * time.Second, // Write operation timeout
-	})
+	}
+	switch authType {
+	case "", "password":
+	case "azure":
+		options.Username = ""
+		options.Password = ""
+		options.CredentialsProviderContext = redisCredentialProvider
+		options.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	default:
+		panic("unsupported Redis auth type: " + authType)
+	}
+
+	rdb := redis.NewClient(options)
 
 	result := rdb.Ping(context.Background())
 	if result.Err() != nil {

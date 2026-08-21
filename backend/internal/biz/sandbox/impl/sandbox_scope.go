@@ -1,58 +1,142 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"sico-backend/internal/errcode"
 	"sico-backend/internal/shared/apperr"
+	"sico-backend/internal/shared/enum"
 	sandboxdto "sico-backend/internal/transport/http/dto/sandbox"
 	"sico-backend/pkg/logger"
 )
 
-const (
-	sandboxOrgAssignKeyPrefix     = "sandbox:org-assign:"
-	sandboxProjectAssignKeyPrefix = "sandbox:project-assign:"
-	sandboxOrgSandboxesKeyPrefix  = "sandbox:org-sandboxes:"
-	sandboxProjectSandboxesPrefix = "sandbox:project-sandboxes:"
-)
-
-func orgAssignKey(sandboxID string) string     { return sandboxOrgAssignKeyPrefix + sandboxID }
-func projectAssignKey(sandboxID string) string { return sandboxProjectAssignKeyPrefix + sandboxID }
-func orgSandboxesKey(orgID int64) string {
-	return sandboxOrgSandboxesKeyPrefix + strconv.FormatInt(orgID, 10)
-}
-func projectSandboxesKey(projectID int64) string {
-	return sandboxProjectSandboxesPrefix + strconv.FormatInt(projectID, 10)
-}
-
 func (s *Service) ListAllResourcesFiltered(
 	ctx context.Context, filter *sandboxdto.ListSandboxResourcesFilter,
 ) (map[string]interface{}, error) {
-	// Delegate to the unfiltered implementation for now; filtering can be
-	// layered on top once the sandbox pool exposes org/project metadata.
-	return s.ListAllResources(ctx)
+	allTypes := enum.AllSandboxTypes()
+	result := make(map[string]interface{}, len(allTypes))
+	grouped := make(map[string][]*sandboxdto.SandboxResource, len(allTypes))
+	for _, sandboxType := range allTypes {
+		result[sandboxType] = []map[string]interface{}{}
+		grouped[sandboxType] = []*sandboxdto.SandboxResource{}
+	}
+
+	listResult, err := s.Pool.ListResources(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	orgBindings, projectBindings := s.loadScopeBindings(ctx, listResult.Resources)
+	for _, resource := range listResult.Resources {
+		if resource == nil {
+			continue
+		}
+		sandboxID := resource.Type + ":" + resource.ResourceId
+		if resource.SandboxId != "" {
+			sandboxID = resource.SandboxId
+		}
+		if !matchesSandboxFilter(filter, sandboxID, orgBindings, projectBindings, listResult.Leases) {
+			continue
+		}
+		if _, ok := grouped[resource.Type]; ok {
+			grouped[resource.Type] = append(grouped[resource.Type], resource)
+		}
+	}
+
+	displayNames := s.buildDisplayNameMap(listResult.Resources)
+	now := time.Now()
+	for _, sandboxType := range allTypes {
+		resources := grouped[sandboxType]
+		sort.Slice(resources, func(i, j int) bool {
+			return strings.ToLower(resources[i].ResourceId) < strings.ToLower(resources[j].ResourceId)
+		})
+
+		list := make([]map[string]interface{}, 0, len(resources))
+		for _, resource := range resources {
+			info := s.buildResourceInfo(resource, listResult, displayNames, now)
+			sandboxID, _ := info["sandbox_id"].(string)
+			info["organization_id"] = orgBindings[sandboxID]
+			info["project_id"] = projectBindings[sandboxID]
+			list = append(list, info)
+		}
+		result[sandboxType] = list
+	}
+
+	return result, nil
+}
+
+func (s *Service) loadScopeBindings(
+	ctx context.Context, resources []*sandboxdto.SandboxResource,
+) (map[string]int64, map[string]int64) {
+	orgBindings := make(map[string]int64, len(resources))
+	projectBindings := make(map[string]int64, len(resources))
+	rds := s.Pool.GetRedis()
+	if rds == nil {
+		return orgBindings, projectBindings
+	}
+
+	sandboxIDs := make([]string, 0, len(resources))
+	pipe := rds.Pipeline()
+	orgCommands := make([]*redis.StringCmd, 0, len(resources))
+	projectCommands := make([]*redis.StringCmd, 0, len(resources))
+	for _, resource := range resources {
+		if resource == nil {
+			continue
+		}
+		sandboxID := resource.Type + ":" + resource.ResourceId
+		if resource.SandboxId != "" {
+			sandboxID = resource.SandboxId
+		}
+		sandboxIDs = append(sandboxIDs, sandboxID)
+		orgCommands = append(orgCommands, pipe.Get(ctx, orgAssignKey(sandboxID)))
+		projectCommands = append(projectCommands, pipe.Get(ctx, projectAssignKey(sandboxID)))
+	}
+	_, _ = pipe.Exec(ctx)
+
+	for index, sandboxID := range sandboxIDs {
+		if value, err := orgCommands[index].Result(); err == nil {
+			if id, parseErr := strconv.ParseInt(value, 10, 64); parseErr == nil {
+				orgBindings[sandboxID] = id
+			}
+		}
+		if value, err := projectCommands[index].Result(); err == nil {
+			if id, parseErr := strconv.ParseInt(value, 10, 64); parseErr == nil {
+				projectBindings[sandboxID] = id
+			}
+		}
+	}
+	return orgBindings, projectBindings
+}
+
+func matchesSandboxFilter(
+	filter *sandboxdto.ListSandboxResourcesFilter,
+	sandboxID string,
+	orgBindings, projectBindings map[string]int64,
+	leases map[string]*Lease,
+) bool {
+	if filter == nil {
+		return true
+	}
+	if filter.OrganizationId != nil && orgBindings[sandboxID] != *filter.OrganizationId {
+		return false
+	}
+	if filter.ProjectId != nil && projectBindings[sandboxID] != *filter.ProjectId {
+		return false
+	}
+	if filter.InstanceId != nil {
+		lease := leases[sandboxID]
+		if lease == nil || lease.User != *filter.InstanceId {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Service) AssignSandboxToOrg(ctx context.Context, orgID int64, sandboxIDs []string) error {
@@ -120,6 +204,17 @@ func (s *Service) AssignSandboxToProject(ctx context.Context, projectID, orgID i
 func (s *Service) UnassignSandboxFromProject(ctx context.Context, projectID int64, sandboxIDs []string) error {
 	rds := s.Pool.rds
 	for _, sid := range sandboxIDs {
+		lease, err := s.Pool.GetSandboxByID(ctx, sid)
+		if err != nil {
+			if ae, ok := apperr.As(err); !ok || ae.Code() != errcode.SandboxLeaseNotFound {
+				return err
+			}
+		}
+		if lease != nil && lease.User != "" {
+			if err := s.UnassignSandbox(ctx, lease.User, sid); err != nil {
+				return err
+			}
+		}
 		rds.Del(ctx, projectAssignKey(sid))
 		rds.SRem(ctx, projectSandboxesKey(projectID), sid)
 	}

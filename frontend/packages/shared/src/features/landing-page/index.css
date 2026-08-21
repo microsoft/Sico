@@ -1,0 +1,205 @@
+@theme {
+	--color-neutral-225: #d9d9d9;
+	--color-neutral-725: #7c7c7c;
+	--color-neutral-925: #272727;
+	--color-neutral-930: #252525;
+	--color-neutral-1000: #000000;
+
+	--gradient-landing-page-hero-fade: linear-gradient(180deg, var(--color-landing-page-hero-fade-start) 0%, var(--color-neutral-925) 57.27%);
+	--gradient-landing-page-role-active: linear-gradient(90.75deg, var(--color-neutral-0) 7.41%, var(--color-landing-page-role-active-mid) 49.48%, var(--color-landing-page-role-active-end) 56.93%);
+
+	--text-landing-page-hero-title: 6.25rem;
+	--text-landing-page-hero-title-compact: 3.9375rem;
+	--text-landing-page-hero-tagline: 3.75rem;
+	--text-landing-page-hero-tagline-compact: 2.6875rem;
+	--text-landing-page-github: 0.8125rem;
+	--text-landing-page-role-title: 7.5rem;
+	--text-landing-page-role-title-compact: 5rem;
+	--text-landing-page-role-description: 1.75rem;
+	--text-landing-page-role-description-compact: 1.25rem;
+
+	--animate-landing-page-role-dot-primary: landing-page-role-breathe-primary 7.6s ease-in-out -1.1s infinite;
+	--animate-landing-page-role-dot-upper: landing-page-role-breathe-upper 9.1s ease-in-out -3.7s infinite;
+	--animate-landing-page-role-dot-lower: landing-page-role-breathe-lower 6.8s ease-in-out -2.3s infinite;
+	--animate-landing-page-role-dot-content: landing-page-role-breathe-content 10.4s ease-in-out -5.2s infinite;
+
+	--color-landing-page-fill: var(--color-neutral-925);
+	--color-landing-page-header-fill: var(--color-overlay-wash-5);
+	--color-landing-page-partner-fill: var(--color-neutral-225);
+	--color-landing-page-partner-foreground: var(--color-neutral-1000);
+	--color-landing-page-github-fill: var(--color-neutral-0);
+	--color-landing-page-github-foreground: var(--color-neutral-930);
+	--color-landing-page-description-foreground: var(--color-neutral-725);
+	--color-landing-page-role-inactive: var(--color-neutral-900);
+	--color-landing-page-scenario-foreground: #7e7e7e;
+	--color-landing-page-scenario-fill: var(--color-overlay-white-10);
+	--color-landing-page-scenario-border: rgba(249, 249, 249, 0.25);
+	--color-landing-page-hero-fade-start: rgba(43, 45, 43, 0);
+	--color-landing-page-role-active-mid: #5dccf9;
+	--color-landing-page-role-active-end: #5afbcb;
+}
+
+@keyframes landing-page-role-breathe-primary {
+	0%, 100% { transform: scale(0.96); }
+	29% { transform: scale(1.025); }
+	71% { transform: scale(0.985); }
+}
+
+@keyframes landing-page-role-breathe-upper {
+	0%, 100% { transform: scale(1.01); }
+	38% { transform: scale(0.95); }
+	79% { transform: scale(1.035); }
+}
+
+@keyframes landing-page-role-breathe-lower {
+	0%, 100% { transform: scale(0.94); }
+	43% { transform: scale(1.04); }
+	76% { transform: scale(0.99); }
+}
+
+@keyframes landing-page-role-breathe-content {
+	0%, 100% { transform: scale(0.975); }
+	33% { transform: scale(1.02); }
+	68% { transform: scale(0.955); }
+}
+
+.landing-page-scenario {
+	--scenario-expanded-width: 32.5rem;
+	min-width: 3.5rem;
+	transition:
+		flex-grow var(--duration-mega) var(--ease-persistent),
+		flex-basis var(--duration-mega) var(--ease-persistent);
+}
+
+@media (min-width: 1024px) {
+	.landing-page-scenario {
+		--scenario-expanded-width: 40.5rem;
+		flex: 1 1 0;
+		background: var(--color-overlay-white-10);
+		box-shadow: inset 0 3px 4px var(--color-overlay-white-15);
+		backdrop-filter: blur(20px);
+	}
+}
+
+@media (min-width: 1536px) {
+	.landing-page-scenario { --scenario-expanded-width: 50.5rem; }
+}
+
+.landing-page-scenario::before {
+	display: none;
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	padding: 1px;
+	border-radius: inherit;
+	background: var(--color-landing-page-scenario-border);
+	content: "";
+	pointer-events: none;
+	transition: opacity var(--duration-medium-2) linear;
+	mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+	mask-composite: exclude;
+}
+
+.landing-page-scenario-image,
+.landing-page-scenario-title {
+	opacity: 1;
+	transition: opacity var(--duration-medium-2) linear;
+}
+
+@media (min-width: 1024px) {
+	.landing-page-scenario::before { display: block; }
+	.landing-page-scenario-image { opacity: 0; }
+
+	.landing-page-scenario:hover,
+	.landing-page-scenarios:not(:has(.landing-page-scenario:hover)) .landing-page-scenario:first-child {
+		flex-grow: 0;
+		flex-shrink: 0;
+		flex-basis: var(--scenario-expanded-width);
+	}
+
+	.landing-page-scenario:hover .landing-page-scenario-image,
+	.landing-page-scenarios:not(:has(.landing-page-scenario:hover)) .landing-page-scenario:first-child .landing-page-scenario-image {
+		opacity: 1;
+	}
+
+	.landing-page-scenario:hover .landing-page-scenario-title,
+	.landing-page-scenario:hover::before,
+	.landing-page-scenarios:not(:has(.landing-page-scenario:hover)) .landing-page-scenario:first-child .landing-page-scenario-title,
+	.landing-page-scenarios:not(:has(.landing-page-scenario:hover)) .landing-page-scenario:first-child::before {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.landing-page-scenario,
+	.landing-page-scenario-image,
+	.landing-page-scenario-title,
+	.landing-page-scenario::before {
+		transition: none;
+	}
+}
+
+.landing-page-footer {
+	background-color: var(--color-neutral-1000);
+	background-image: linear-gradient(180deg, var(--color-neutral-925) 0, var(--color-neutral-1000) 800px);
+}
+
+.landing-page-role-description {
+	grid-template-rows: 1fr;
+	opacity: 1;
+	transform: translateY(0);
+}
+
+@media (min-width: 1024px) {
+	.landing-page-roles { height: 400svh; }
+
+	.landing-page-roles-viewport {
+		position: sticky;
+		top: 4.125rem;
+		height: calc(100svh - 4.125rem);
+		min-height: 0;
+	}
+
+	.landing-page-role-description {
+		display: grid;
+		grid-template-rows: 0fr;
+		opacity: 0;
+		transform: translateY(-0.5rem);
+		transition:
+			grid-template-rows var(--duration-medium-2) var(--ease-persistent),
+			opacity var(--duration-medium-2) linear,
+			transform var(--duration-medium-2) var(--ease-persistent);
+	}
+
+	[data-active="true"] > .landing-page-role-description {
+		grid-template-rows: 1fr;
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.landing-page-role-dot {
+	opacity: 1;
+	scale: 1;
+	transition:
+		opacity var(--duration-medium-2) linear,
+		scale var(--duration-medium-2) var(--ease-entrance);
+}
+
+@media (min-width: 1024px) {
+	.landing-page-role-dot {
+		opacity: 0;
+		scale: 0.82;
+	}
+
+	.landing-page-role-dot[data-visible="true"] {
+		opacity: 1;
+		scale: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.landing-page-role-description,
+	.landing-page-role-dot { transition: none; }
+	.landing-page-role-dot img { animation: none; }
+}

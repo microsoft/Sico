@@ -1,27 +1,7 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Per-turn timing telemetry for the chat service.
 
-Records the wall-clock cost of each chat-turn pipeline stage (route, intent
-check, prompt build, agent build, stream submit, response drain, …) and emits a
+Records the wall-clock cost of each chat-turn pipeline stage (workspace init,
+route, prompt build, agent build, stream submit, response drain, …) and emits a
 single structured log line per turn. These stages are chat-specific, so the
 telemetry lives next to the chat service rather than in the task runtime.
 """
@@ -42,7 +22,6 @@ _T = TypeVar("_T")
 
 _TIMING_STAGES = (
     "route_ms",
-    "intent_check_ms",
     "prompt_build_ms",
     "workspace_init_ms",
     "user_message_build_ms",

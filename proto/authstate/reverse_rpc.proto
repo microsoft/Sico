@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package reverse_rpc;
+
+option go_package = "sico-backend/internal/transport/reverse_grpc/pb/authstate/reverse_rpc";
+
+service ReverseAuthStateRPC {
+  rpc RpcGetAuthState(GetAuthStateRequest) returns (GetAuthStateResponse) {}
+  rpc RpcUpsertAuthState(UpsertAuthStateRequest) returns (UpsertAuthStateResponse) {}
+  rpc RpcMarkAuthStateExpired(MarkAuthStateExpiredRequest) returns (EmptyAuthStateResponse) {}
+}
+
+enum AuthStateStatus {
+  AUTH_STATE_STATUS_UNKNOWN = 0;
+  AUTH_STATE_STATUS_VALID = 1;
+  AUTH_STATE_STATUS_EXPIRED = 2;
+  AUTH_STATE_STATUS_DISABLED = 3;
+}
+
+message EmptyAuthStateResponse {
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+message AuthState {
+  int64 id = 1;                  // @gotag: json:"id"
+  string account_key = 2;        // @gotag: json:"accountKey"
+  string site_host = 3;          // @gotag: json:"siteHost"
+  string state_blob_path = 4;    // @gotag: json:"stateBlobPath"
+  AuthStateStatus status = 5;    // @gotag: json:"status"
+  int64 expires_at = 6;          // @gotag: json:"expiresAt"
+  int64 last_validated_at = 7;   // @gotag: json:"lastValidatedAt"
+  string metadata = 8;           // @gotag: json:"metadata"
+  int64 created_at = 9;          // @gotag: json:"createdAt"
+  int64 updated_at = 10;         // @gotag: json:"updatedAt"
+}
+
+message GetAuthStateRequest {
+  string account_key = 1;  // @gotag: json:"accountKey"
+  string site_host = 2;    // @gotag: json:"siteHost"
+}
+
+message GetAuthStateResponse {
+  bool found = 1;            // @gotag: json:"found"
+  AuthState auth_state = 2;  // @gotag: json:"authState"
+  int32 code = 253;          // @gotag: json:"code"
+  string msg = 254;          // @gotag: json:"msg"
+}
+
+message UpsertAuthStateRequest {
+  string account_key = 1;       // @gotag: json:"accountKey"
+  string site_host = 2;         // @gotag: json:"siteHost"
+  string state_blob_path = 3;   // @gotag: json:"stateBlobPath"
+  AuthStateStatus status = 4;   // @gotag: json:"status"
+  int64 expires_at = 5;         // @gotag: json:"expiresAt"
+  int64 last_validated_at = 6;  // @gotag: json:"lastValidatedAt"
+  string metadata = 7;          // @gotag: json:"metadata"
+}
+
+message UpsertAuthStateResponse {
+  int64 id = 1;      // @gotag: json:"id"
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+message MarkAuthStateExpiredRequest {
+  string account_key = 1;  // @gotag: json:"accountKey"
+  string site_host = 2;    // @gotag: json:"siteHost"
+}

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ReactElement } from "react";
@@ -34,9 +12,9 @@ const buttonVariants = cva(
         // SICO Primary: dark fill, white text, shadow-s
         primary:
           "bg-button-primary-fill-rest text-button-primary-foreground-rest shadow-button-primary hover:bg-button-primary-fill-hover active:bg-button-primary-fill-pressed disabled:bg-button-primary-fill-disabled disabled:text-button-primary-foreground-disabled disabled:shadow-none",
-        // SICO Secondary: white fill, border, shadow-s
+        // SICO Secondary: white fill, border, no shadow
         secondary:
-          "border-button-secondary-stroke-rest bg-button-secondary-fill-rest text-button-secondary-foreground-rest shadow-button-secondary hover:border-button-secondary-stroke-hover hover:bg-button-secondary-fill-hover active:border-button-secondary-stroke-pressed active:bg-button-secondary-fill-pressed disabled:border-button-secondary-stroke-disabled disabled:bg-button-secondary-fill-disabled disabled:text-button-secondary-foreground-disabled disabled:shadow-none",
+          "border-button-secondary-stroke-rest bg-button-secondary-fill-rest text-button-secondary-foreground-rest hover:border-button-secondary-stroke-hover hover:bg-button-secondary-fill-hover active:border-button-secondary-stroke-pressed active:bg-button-secondary-fill-pressed disabled:border-button-secondary-stroke-disabled disabled:bg-button-secondary-fill-disabled disabled:text-button-secondary-foreground-disabled",
         // SICO Subtle: transparent, hover shows gray
         subtle:
           "bg-button-subtle-fill-rest text-button-subtle-foreground-rest hover:bg-button-subtle-fill-hover active:bg-button-subtle-fill-pressed disabled:bg-button-subtle-fill-disabled disabled:text-button-subtle-foreground-disabled",

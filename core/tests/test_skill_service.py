@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import annotations
 
 import io
@@ -36,6 +16,12 @@ def test_skill_resolver_prompt_prefers_uv_run_for_python_entrypoints() -> None:
     assert "over plain" in _RESOLVER_SYSTEM_PROMPT
     assert "Preserve documented platform/tooling dependency setup commands" in _RESOLVER_SYSTEM_PROMPT
     assert '["sh", "scripts/install-adb.sh"]' in _RESOLVER_SYSTEM_PROMPT
+
+
+def test_skill_resolver_prompt_uses_sandbox_builtin_for_desktop_sandboxes() -> None:
+    assert "sandbox.macos" in _RESOLVER_SYSTEM_PROMPT
+    assert '["sandbox.windows", "sandbox.macos"]' in _RESOLVER_SYSTEM_PROMPT
+    assert "use {_sandbox}" in _RESOLVER_SYSTEM_PROMPT
 
 
 @pytest.mark.asyncio
@@ -68,6 +54,61 @@ async def test_skill_resolver_retries_invalid_schema_output(tmp_path) -> None:
     assert resolved.actions == []
     assert len(resolver.prompts) == 2
     assert "failed JSON/schema validation" in resolver.prompts[1]
+
+
+@pytest.mark.asyncio
+async def test_skill_resolver_retries_deprecated_sandbox_placeholder(tmp_path) -> None:
+    original_root = tmp_path / "original"
+    original_root.mkdir()
+    (original_root / "SKILL.md").write_text(
+        "---\nname: desktop\ndescription: Desktop skill.\n---\n# Desktop\n",
+        encoding="utf-8",
+    )
+    outputs = iter(
+        [
+            json.dumps(
+                {
+                    "cortex": [{"name": "SKILL.md"}],
+                    "actions": [
+                        {
+                            "name": "run",
+                            "infra_requirements": ["sandbox.windows"],
+                            "steps": [{"argv": ["runner", "{sandbox.windows}"]}],
+                        }
+                    ],
+                }
+            ),
+            json.dumps(
+                {
+                    "cortex": [{"name": "SKILL.md"}],
+                    "actions": [
+                        {
+                            "name": "run",
+                            "infra_requirements": ["sandbox.windows", "sandbox.macos"],
+                            "steps": [{"argv": ["runner", "{_sandbox}"]}],
+                        }
+                    ],
+                }
+            ),
+        ]
+    )
+
+    class RetryResolver(SkillResolver):
+        def __init__(self) -> None:
+            self.prompts: list[str] = []
+
+        async def _generate(self, prompt: str) -> str:
+            self.prompts.append(prompt)
+            return next(outputs)
+
+    resolver = RetryResolver()
+
+    resolved = await resolver.resolve(original_root)
+
+    assert resolved.actions[0].infra_requirements == ["sandbox.windows", "sandbox.macos"]
+    assert resolved.actions[0].steps[0].argv == ["runner", "{_sandbox}"]
+    assert len(resolver.prompts) == 2
+    assert "sandbox placeholders" in resolver.prompts[1]
 
 
 @pytest.mark.asyncio

@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package handler
 
 import (
@@ -28,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
@@ -36,11 +15,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
-	"sico-backend/internal/shared/apperr"
 	sandboxbiz "sico-backend/internal/biz/sandbox"
 	"sico-backend/internal/biz/sandbox/impl"
 	"sico-backend/internal/enum"
 	"sico-backend/internal/errcode"
+	"sico-backend/internal/shared/apperr"
 	commondto "sico-backend/internal/transport/http/dto/common"
 	"sico-backend/pkg/safego"
 )
@@ -53,6 +32,10 @@ func mustGetSandboxImplServiceFromDefault(c *gin.Context) (*impl.Service, bool) 
 	}
 
 	return implSvc, true
+}
+
+type emulatorResourceParser interface {
+	ParseResourceIDForProxy(resourceID string) (baseURL, deviceID string, err error)
 }
 
 // isWebSocketUpgrade checks if the request is a WebSocket upgrade request.
@@ -264,13 +247,13 @@ func InstanceEmulatorH264WS(c *gin.Context) {
 		internalServerErrorResponse(c, fmt.Errorf("emulator provider not available"))
 		return
 	}
-	emu, ok := prov.(*impl.EmulatorProvider)
+	emu, ok := prov.(emulatorResourceParser)
 	if !ok {
 		internalServerErrorResponse(c, fmt.Errorf("invalid emulator provider"))
 		return
 	}
 
-	baseURL, deviceID, err := emu.ParseEmulatorResourceIDForProxy(lease.ResourceID)
+	baseURL, deviceID, err := emu.ParseResourceIDForProxy(lease.ResourceID)
 	if err != nil {
 		internalServerErrorResponse(c, err)
 		return
@@ -303,472 +286,6 @@ func InstanceEmulatorH264WS(c *gin.Context) {
 	upstreamConn, _, err := dialer.DialContext(reqctx(c), upstream, nil)
 	if err != nil {
 		_ = clientConn.WriteMessage(websocket.TextMessage, []byte("upstream websocket dial failed"))
-		return
-	}
-	defer func() {
-		_ = upstreamConn.Close()
-	}()
-
-	proxyWebSocketBidirectional(clientConn, upstreamConn)
-}
-
-// resourceEmulatorHTMLTemplate is the HTML+JS for the per-resource emulator viewer.
-// It contains a single %q placeholder for the WebSocket path and %% literals for CSS.
-const resourceEmulatorHTMLTemplate = `<!doctype html>
-<html>
-<head>
-	<meta charset="utf-8"/>
-	<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
-	<title>Emulator Live View</title>
-	<style>
-		*{margin:0;padding:0;box-sizing:border-box}
-		html,body{overflow:hidden;height:100vh}
-		body{background:#fff;display:flex;flex-direction:column;` +
-	`justify-content:center;align-items:center;touch-action:none}
-		#videoContainer{position:relative;display:inline-block;touch-action:none}
-		video{max-width:100%%;max-height:calc(100vh - 48px);display:block;` +
-	`border:2px solid #4f46e5;border-radius:8px;background:#fff;` +
-	`touch-action:none;cursor:crosshair}
-		#playOverlay{display:none;position:absolute;top:0;left:0;right:0;bottom:0;` +
-	`background:rgba(0,0,0,.7);border-radius:8px;cursor:pointer;` +
-	`align-items:center;justify-content:center;z-index:10}
-		#playOverlay .play-btn{font-size:48px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5)}
-		#status{position:fixed;top:8px;left:8px;color:#334155;` +
-	`font-size:11px;font-family:ui-sans-serif,system-ui;z-index:20}
-		.controls{display:flex;justify-content:center;gap:6px;margin-top:8px}
-		.controls button{background:#4f46e5;color:#fff;border:none;padding:6px 14px;` +
-	`border-radius:6px;cursor:pointer;font-size:12px;font-family:ui-sans-serif,system-ui}
-		.controls button:hover{background:#4338ca}
-		.controls button:active{background:#3730a3}
-	</style>
-</head>
-<body>
-	<div id="status"></div>
-	<div id="videoContainer">
-		<video id="screen" autoplay muted playsinline></video>
-		<div id="playOverlay" onclick="startPlay()">
-			<div style="text-align:center">
-				<div class="play-btn">▶</div>
-			</div>
-		</div>
-	</div>
-	<div class="controls">
-		<button onclick="sendBack()">◀ Back</button>
-		<button onclick="sendHome()">⌂ Home</button>
-		<button onclick="sendRecent()">☐ Recent</button>
-	</div>
-	<script src="/js/jmuxer.min.js"></script>
-	<script>
-		const wsPath = %q;
-		const video = document.getElementById('screen');
-		const playOverlay = document.getElementById('playOverlay');
-		const statusEl = document.getElementById('status');
-
-		let ws = null;
-		let jmuxer = null;
-		let deviceWidth = 0, deviceHeight = 0;
-		let reconnectAttempts = 0;
-		let playAttempted = false;
-		const MAX_RECONNECT = 8;
-
-		function connect() {
-			statusEl.textContent = 'Connecting...';
-
-			jmuxer = new JMuxer({
-				node: 'screen',
-				mode: 'video',
-				flushingTime: 16,
-				fps: 30,
-				debug: false,
-			});
-
-			const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-			ws = new WebSocket(proto + '//' + location.host + wsPath);
-			ws.binaryType = 'arraybuffer';
-
-			ws.onopen = () => {
-				statusEl.textContent = '';
-				reconnectAttempts = 0;
-				playAttempted = false;
-			};
-
-			ws.onclose = () => {
-				statusEl.textContent = 'Reconnecting...';
-				cleanup();
-				if (reconnectAttempts < MAX_RECONNECT) {
-					reconnectAttempts++;
-					setTimeout(connect, 1000 * Math.min(reconnectAttempts, 5));
-				} else {
-					statusEl.textContent = 'Connection lost. Please refresh.';
-				}
-			};
-
-			ws.onerror = () => { statusEl.textContent = 'WebSocket error.'; };
-
-			ws.onmessage = (event) => {
-				if (typeof event.data === 'string') {
-					const msg = JSON.parse(event.data);
-					if (msg.type === 'config') {
-						deviceWidth = msg.width || 0;
-						deviceHeight = msg.height || 0;
-						if (msg.description) {
-							const configData = Uint8Array.from(
-								atob(msg.description), c => c.charCodeAt(0));
-							jmuxer.feed({ video: configData });
-						}
-					}
-				} else {
-					const data = new Uint8Array(event.data);
-					if (data.length < 9) return;
-					const payload = data.subarray(9);
-					jmuxer.feed({ video: payload });
-					if (!playAttempted && video.paused) {
-						playAttempted = true;
-						video.play().catch(() => { playOverlay.style.display = 'flex'; });
-					}
-				}
-			};
-		}
-
-		function cleanup() {
-			if (jmuxer) { try { jmuxer.destroy(); } catch(e){} jmuxer = null; }
-			if (ws) { try { ws.close(); } catch(e){} ws = null; }
-		}
-
-		function tryAutoplay() {
-			const p = video.play();
-			if (p !== undefined) {
-				p.catch(() => { playOverlay.style.display = 'flex'; });
-			}
-		}
-
-		function startPlay() {
-			playOverlay.style.display = 'none';
-			video.play().catch(e => console.warn('Play failed:', e));
-		}
-
-		// --- Input handlers (touch/mouse/keyboard/scroll) ---
-		let activePointers = new Map();
-
-		function getDeviceCoords(e) {
-			const rect = video.getBoundingClientRect();
-			if (!deviceWidth || !deviceHeight || !rect.width || !rect.height) return null;
-			const scaleX = deviceWidth / rect.width;
-			const scaleY = deviceHeight / rect.height;
-			const x = Math.round((e.clientX - rect.left) * scaleX);
-			const y = Math.round((e.clientY - rect.top) * scaleY);
-			return { x: Math.max(0, Math.min(deviceWidth, x)), y: Math.max(0, Math.min(deviceHeight, y)) };
-		}
-
-		function sendControl(msg) {
-			if (ws && ws.readyState === WebSocket.OPEN) {
-				ws.send(JSON.stringify(msg));
-			}
-		}
-
-		function sendTouch(action, x, y, pointerId) {
-			sendControl({ type: 'touch', action, x, y, pointerId: pointerId || 0 });
-		}
-
-		function sendKey(action, keycode) {
-			sendControl({ type: 'key', action, keycode });
-		}
-
-		function sendBack() {
-			sendKey('down', 4); setTimeout(() => sendKey('up', 4), 50);
-		}
-		function sendHome() {
-			sendKey('down', 3); setTimeout(() => sendKey('up', 3), 50);
-		}
-		function sendRecent() {
-			sendKey('down', 187); setTimeout(() => sendKey('up', 187), 50);
-		}
-
-		// Mouse events
-		video.addEventListener('mousedown', (e) => {
-			e.preventDefault();
-			const c = getDeviceCoords(e);
-			if (!c) return;
-			sendTouch('down', c.x, c.y);
-			activePointers.set('mouse', c);
-		});
-		video.addEventListener('mousemove', (e) => {
-			if (activePointers.has('mouse')) {
-				e.preventDefault();
-				const c = getDeviceCoords(e);
-				if (!c) return;
-				sendTouch('move', c.x, c.y);
-			}
-		});
-		video.addEventListener('mouseup', (e) => {
-			if (activePointers.has('mouse')) {
-				e.preventDefault();
-				const c = getDeviceCoords(e);
-				if (!c) { activePointers.delete('mouse'); return; }
-				sendTouch('up', c.x, c.y);
-				activePointers.delete('mouse');
-			}
-		});
-		video.addEventListener('mouseleave', (e) => {
-			if (activePointers.has('mouse')) {
-				const c = getDeviceCoords(e);
-				if (c) sendTouch('up', c.x, c.y);
-				activePointers.delete('mouse');
-			}
-		});
-
-		// Touch events
-		video.addEventListener('touchstart', (e) => {
-			e.preventDefault();
-			for (const t of e.changedTouches) {
-				const c = getDeviceCoords(t);
-				if (!c) continue;
-				sendTouch('down', c.x, c.y, t.identifier);
-				activePointers.set(t.identifier, c);
-			}
-		});
-		video.addEventListener('touchmove', (e) => {
-			e.preventDefault();
-			for (const t of e.changedTouches) {
-				if (activePointers.has(t.identifier)) {
-					const c = getDeviceCoords(t);
-					if (!c) continue;
-					sendTouch('move', c.x, c.y, t.identifier);
-				}
-			}
-		});
-		video.addEventListener('touchend', (e) => {
-			e.preventDefault();
-			for (const t of e.changedTouches) {
-				if (activePointers.has(t.identifier)) {
-					const c = getDeviceCoords(t);
-					if (c) sendTouch('up', c.x, c.y, t.identifier);
-					activePointers.delete(t.identifier);
-				}
-			}
-		});
-		video.addEventListener('touchcancel', (e) => {
-			for (const t of e.changedTouches) {
-				if (activePointers.has(t.identifier)) {
-					const c = getDeviceCoords(t);
-					if (c) sendTouch('up', c.x, c.y, t.identifier);
-					activePointers.delete(t.identifier);
-				}
-			}
-		});
-
-		// Scroll/wheel events — intercept at document level to prevent macOS
-		// trackpad two-finger swipe from triggering browser back/forward
-		// navigation (which destroys the iframe and kills the WebSocket).
-		// NOTE: scroll messages are NOT forwarded to the emulator via this
-		// WebSocket because sending bursts of messages on the H264 fan-out
-		// hub connection causes abnormal disconnection (close code 1006).
-		// Touch, click, and keyboard events work fine (low-frequency).
-		document.addEventListener('wheel', (e) => {
-			e.preventDefault();
-			e.stopPropagation();
-		}, { passive: false });
-
-		// Keyboard events
-		document.addEventListener('keydown', (e) => {
-			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-			let keycode = null;
-			switch (e.key) {
-				case 'Backspace': keycode = 67; break;
-				case 'Enter': keycode = 66; break;
-				case 'Escape': keycode = 111; break;
-				case 'ArrowUp': keycode = 19; break;
-				case 'ArrowDown': keycode = 20; break;
-				case 'ArrowLeft': keycode = 21; break;
-				case 'ArrowRight': keycode = 22; break;
-			}
-			if (keycode) { e.preventDefault(); sendKey('down', keycode); }
-			else if (e.key.length === 1) { e.preventDefault(); sendControl({ type: 'text', text: e.key }); }
-		});
-		document.addEventListener('keyup', (e) => {
-			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-			let keycode = null;
-			switch (e.key) {
-				case 'Backspace': keycode = 67; break;
-				case 'Enter': keycode = 66; break;
-				case 'Escape': keycode = 111; break;
-				case 'ArrowUp': keycode = 19; break;
-				case 'ArrowDown': keycode = 20; break;
-				case 'ArrowLeft': keycode = 21; break;
-				case 'ArrowRight': keycode = 22; break;
-			}
-			if (keycode) sendKey('up', keycode);
-		});
-
-		// Disable context menu on video
-		video.addEventListener('contextmenu', (e) => e.preventDefault());
-
-		connect();
-		video.addEventListener('loadeddata', tryAutoplay, { once: true });
-		window.addEventListener('beforeunload', cleanup);
-	</script>
-</body>
-</html>`
-
-// ResourceEmulatorUI renders a backend-owned HTML viewer for a specific emulator resource.
-// Uses JMuxer + H264 WebSocket streaming (same approach as emulator's /vnc/view page).
-func ResourceEmulatorUI(c *gin.Context) {
-	rid := resolveResourceRid(c)
-	if rid == "" {
-		invalidParamRequestResponse(c, "rid is required")
-		return
-	}
-
-	wsPath := fmt.Sprintf("/api/sico/sandbox/resources/emulator/%s/ws/h264", url.PathEscape(rid))
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	html := fmt.Sprintf(resourceEmulatorHTMLTemplate, wsPath)
-
-	c.String(http.StatusOK, "%s", html)
-}
-
-// ResourceEmulatorProxy reverse-proxies REST API requests to the emulator service.
-// Route: /api/sico/sandbox/resources/emulator/:rid/api/*path
-// This allows the HTTPS dashboard to call emulator APIs (like port-forward)
-// without mixed-content or CORS issues.
-func ResourceEmulatorProxy(c *gin.Context) {
-	rid := resolveResourceRid(c)
-	if rid == "" {
-		invalidParamRequestResponse(c, "rid is required")
-		return
-	}
-
-	implSvc, ok := mustGetSandboxImplServiceFromDefault(c)
-	if !ok {
-		return
-	}
-
-	resource, err := resolveResourceByHash(reqctx(c), implSvc.Pool, enum.SandboxTypeEmulator.String(), rid)
-	if err != nil {
-		internalServerErrorResponse(c, err)
-		return
-	}
-
-	prov, ok := implSvc.Pool.GetProvider(enum.SandboxTypeEmulator.String())
-	if !ok {
-		internalServerErrorResponse(c, fmt.Errorf("emulator provider not available"))
-		return
-	}
-	emu, ok := prov.(*impl.EmulatorProvider)
-	if !ok {
-		internalServerErrorResponse(c, fmt.Errorf("invalid emulator provider"))
-		return
-	}
-
-	baseURL, _, err := emu.ParseEmulatorResourceIDForProxy(resource.ResourceID)
-	if err != nil {
-		internalServerErrorResponse(c, err)
-		return
-	}
-
-	target, err := url.Parse(strings.TrimRight(baseURL, "/"))
-	if err != nil {
-		internalServerErrorResponse(c, err)
-		return
-	}
-
-	path := c.Param("path")
-	if path == "" {
-		path = "/"
-	}
-	upstreamPath := "/api" + path
-
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, e error) {
-		internalServerErrorResponse(c, fmt.Errorf("emulator proxy error: %v", e))
-	}
-
-	origDirector := proxy.Director
-	proxy.Director = func(r *http.Request) {
-		origDirector(r)
-		r.URL.Path = singleJoiningSlash(target.Path, upstreamPath)
-		r.Host = target.Host
-		r.URL.RawQuery = c.Request.URL.RawQuery
-		// Strip auth headers
-		for k := range r.Header {
-			if strings.HasPrefix(strings.ToLower(k), "x-sico-") {
-				r.Header.Del(k)
-			}
-		}
-	}
-
-	proxy.ServeHTTP(c.Writer, c.Request)
-}
-
-// ResourceEmulatorH264WS proxies the emulator H264 WebSocket stream for a
-// specific resource.  This is a simple 1:1 bidirectional WebSocket proxy —
-// the emulator's H264DeviceHub guarantees at most one scrcpy process per
-// device regardless of how many upstream connections it receives.
-func ResourceEmulatorH264WS(c *gin.Context) {
-	rid := resolveResourceRid(c)
-	if rid == "" {
-		invalidParamRequestResponse(c, "rid is required")
-		return
-	}
-
-	implSvc, ok := mustGetSandboxImplServiceFromDefault(c)
-	if !ok {
-		return
-	}
-
-	resource, err := resolveResourceByHash(reqctx(c), implSvc.Pool, enum.SandboxTypeEmulator.String(), rid)
-	if err != nil {
-		internalServerErrorResponse(c, err)
-		return
-	}
-
-	prov, ok := implSvc.Pool.GetProvider(enum.SandboxTypeEmulator.String())
-	if !ok {
-		internalServerErrorResponse(c, fmt.Errorf("emulator provider not available"))
-		return
-	}
-	emu, ok := prov.(*impl.EmulatorProvider)
-	if !ok {
-		internalServerErrorResponse(c, fmt.Errorf("invalid emulator provider"))
-		return
-	}
-
-	baseURL, deviceID, err := emu.ParseEmulatorResourceIDForProxy(resource.ResourceID)
-	if err != nil {
-		internalServerErrorResponse(c, err)
-		return
-	}
-
-	query := c.Request.URL.Query()
-	query.Del("rid")
-	encodedQuery := query.Encode()
-	if strings.TrimSpace(encodedQuery) == "" {
-		encodedQuery = "max_size=900&bit_rate=4000000&max_fps=24"
-	}
-	wsBaseURL := httpToWebsocketURL(strings.TrimRight(baseURL, "/"))
-	upstream := fmt.Sprintf("%s/api/v1/devices/%s/ws/h264?%s", wsBaseURL, url.PathEscape(deviceID), encodedQuery)
-
-	upgrader := websocket.Upgrader{
-		ReadBufferSize:  32768,
-		WriteBufferSize: 32768,
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-
-	clientConn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		return
-	}
-	defer func() {
-		_ = clientConn.Close()
-	}()
-
-	// Dial upstream emulator WebSocket
-	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
-	upstreamConn, _, err := dialer.DialContext(reqctx(c), upstream, nil)
-	if err != nil {
-		log.Printf("[Emulator WS Proxy] Failed to dial upstream %s: %v", upstream, err)
-		_ = clientConn.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","message":"upstream dial failed"}`))
 		return
 	}
 	defer func() {
@@ -885,8 +402,8 @@ func proxyToSandbox(c *gin.Context, leaseOwnerID, sandboxType, targetPath string
 	// Build target URL
 	var targetURL string
 	if lease.Type == enum.SandboxTypeEmulator.String() {
-		if emulatorProv, ok := provider.(*impl.EmulatorProvider); ok {
-			baseURL, deviceID, err := emulatorProv.ParseEmulatorResourceIDForProxy(lease.ResourceID)
+		if emulatorProv, ok := provider.(emulatorResourceParser); ok {
+			baseURL, deviceID, err := emulatorProv.ParseResourceIDForProxy(lease.ResourceID)
 			if err != nil {
 				internalServerErrorResponse(c, fmt.Errorf("failed to parse emulator resource ID: %w", err))
 				return
@@ -1036,33 +553,6 @@ func httpToWebsocketURL(httpURL string) string {
 		return "ws://" + strings.TrimPrefix(httpURL, "http://")
 	}
 	return httpURL
-}
-
-func resolveResourceRid(c *gin.Context) string {
-	if c == nil {
-		return ""
-	}
-	if rid := strings.TrimSpace(c.Param("rid")); rid != "" {
-		return rid
-	}
-	if rid := strings.TrimSpace(c.Query("rid")); rid != "" {
-		return rid
-	}
-	if ref := strings.TrimSpace(c.Request.Referer()); ref != "" {
-		if refURL, err := url.Parse(ref); err == nil {
-			if rid := strings.TrimSpace(refURL.Query().Get("rid")); rid != "" {
-				return rid
-			}
-		}
-	}
-	return ""
-}
-
-func resolveResourceByHash(ctx context.Context, pool *impl.Pool, sandboxType, rid string) (*impl.Resource, error) {
-	if pool == nil {
-		return nil, apperr.New(errcode.SandboxProviderUnavailable, "sandbox provider unavailable")
-	}
-	return pool.ResolveResourceByHash(ctx, sandboxType, rid)
 }
 
 func readRequestBodyBytes(req *http.Request) ([]byte, error) {

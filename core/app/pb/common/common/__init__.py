@@ -4,14 +4,18 @@
 # This file has been @generated
 
 __all__ = (
+    "AgentDigest",
     "AgentInstanceDigest",
     "Attachment",
     "ColumnType",
+    "ConversationRunStatus",
     "DocTableColumn",
     "DocTableSheet",
     "FileType",
     "NamedTypeInfo",
+    "ProjectDigest",
     "SandboxDigest",
+    "ScheduledTaskDigest",
     "SortOrder",
     "TypeInfo",
     "UserDigest",
@@ -88,6 +92,30 @@ class ColumnType(betterproto2.Enum):
         }
 
 
+class ConversationRunStatus(betterproto2.Enum):
+    UNKNOWN = 0
+
+    RUNNING = 1
+
+    IDLE = 2
+
+    @classmethod
+    def betterproto_value_to_renamed_proto_names(cls) -> dict[int, str]:
+        return {
+            0: "CONVERSATION_RUN_STATUS_UNKNOWN",
+            1: "CONVERSATION_RUN_STATUS_RUNNING",
+            2: "CONVERSATION_RUN_STATUS_IDLE",
+        }
+
+    @classmethod
+    def betterproto_renamed_proto_names_to_value(cls) -> dict[str, int]:
+        return {
+            "CONVERSATION_RUN_STATUS_UNKNOWN": 0,
+            "CONVERSATION_RUN_STATUS_RUNNING": 1,
+            "CONVERSATION_RUN_STATUS_IDLE": 2,
+        }
+
+
 class FileType(betterproto2.Enum):
     UNKNOWN = 0
 
@@ -153,6 +181,46 @@ class SortOrder(betterproto2.Enum):
             "SORT_ORDER_ASC": 1,
             "SORT_ORDER_DESC": 2,
         }
+
+
+@dataclass(eq=False, repr=False)
+class AgentDigest(betterproto2.Message):
+    """
+    AgentDigest holds summary information about an agent.
+    """
+
+    agent_id: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"agentId"
+    """
+
+    name: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"name"
+    """
+
+    icon_uri: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"iconUri"
+    """
+
+    icon_url: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"iconUrl"
+    """
+
+    role: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"role"
+    """
+
+    organization_id: "int" = betterproto2.field(6, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"organizationId"
+    """
+
+
+default_message_pool.register_message("common", "AgentDigest", AgentDigest)
 
 
 @dataclass(eq=False, repr=False)
@@ -308,6 +376,26 @@ default_message_pool.register_message("common", "NamedTypeInfo", NamedTypeInfo)
 
 
 @dataclass(eq=False, repr=False)
+class ProjectDigest(betterproto2.Message):
+    """
+    ProjectDigest holds summary information about a project.
+    """
+
+    id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"id"
+    """
+
+    name: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"name"
+    """
+
+
+default_message_pool.register_message("common", "ProjectDigest", ProjectDigest)
+
+
+@dataclass(eq=False, repr=False)
 class SandboxDigest(betterproto2.Message):
     """
     SandboxDigest holds summary information about a sandbox.
@@ -365,6 +453,28 @@ class SandboxDigest(betterproto2.Message):
 
 
 default_message_pool.register_message("common", "SandboxDigest", SandboxDigest)
+
+
+@dataclass(eq=False, repr=False)
+class ScheduledTaskDigest(betterproto2.Message):
+    """
+    ScheduledTaskDigest holds display information about a scheduled task.
+    """
+
+    id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"id"
+    """
+
+    title: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"title"
+    """
+
+
+default_message_pool.register_message(
+    "common", "ScheduledTaskDigest", ScheduledTaskDigest
+)
 
 
 @dataclass(eq=False, repr=False)

@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -43,9 +23,12 @@ import (
 )
 
 type Pool struct {
+	registry  *ProviderRegistry
 	providers map[string]Provider
 	rds       *redis.Client
 
+	startMu                  sync.Mutex
+	started                  bool
 	refreshInterval          time.Duration
 	refreshMu                sync.Mutex
 	providerFailureCount     map[string]int
@@ -77,18 +60,14 @@ func (p *Pool) GetRedis() *redis.Client {
 	return p.rds
 }
 
-func NewPool(emulator *EmulatorProvider, rds *redis.Client) *Pool {
-	providers := map[string]Provider{}
-	if emulator != nil {
-		providers[emulator.Type()] = emulator
-	}
-
-	pool := &Pool{
-		providers:                providers,
+func NewPool(registry *ProviderRegistry, rds *redis.Client) *Pool {
+	return &Pool{
+		registry:                 registry,
+		providers:                make(map[string]Provider),
 		rds:                      rds,
 		refreshInterval:          15 * time.Second,
-		providerFailureCount:     make(map[string]int, len(providers)),
-		providerLastSuccessAt:    make(map[string]time.Time, len(providers)),
+		providerFailureCount:     make(map[string]int),
+		providerLastSuccessAt:    make(map[string]time.Time),
 		missingLeaseMarkAfter:    30 * time.Second,
 		missingLeaseHideAfter:    time.Minute,
 		missingLeaseDeleteAfter:  24 * time.Hour,
@@ -97,10 +76,33 @@ func NewPool(emulator *EmulatorProvider, rds *redis.Client) *Pool {
 		snapshotUnhealthyAfter:   60 * time.Second,
 		snapshotUnavailableAfter: 2 * time.Minute,
 	}
+}
 
-	pool.startBackgroundRefresh()
+func (p *Pool) Start(ctx context.Context) error {
+	if p == nil {
+		return errors.New("sandbox pool is nil")
+	}
+	if ctx == nil {
+		return errors.New("sandbox pool context is nil")
+	}
 
-	return pool
+	p.startMu.Lock()
+	defer p.startMu.Unlock()
+	if p.started {
+		return errors.New("sandbox pool is already started")
+	}
+
+	if p.registry != nil {
+		p.registry.Seal()
+		for _, provider := range p.registry.Providers() {
+			p.providers[provider.Type()] = provider
+		}
+	}
+	p.started = true
+	p.runBackgroundRefreshOnce()
+	p.startBackgroundRefresh(ctx)
+
+	return nil
 }
 
 // ListResourcesResult holds the provider inventory view plus lease metadata
@@ -273,18 +275,21 @@ func (p *Pool) loadLeasesByResourceKey(ctx context.Context, typeFilter string) (
 	return leaseByResourceKey, nil
 }
 
-func (p *Pool) startBackgroundRefresh() {
+func (p *Pool) startBackgroundRefresh(ctx context.Context) {
 	if p == nil || len(p.providers) == 0 || p.refreshInterval <= 0 {
 		return
 	}
 
-	safego.Go(context.Background(), func() {
-		p.runBackgroundRefreshOnce()
-
+	safego.Go(ctx, func() {
 		ticker := time.NewTicker(p.refreshInterval)
 		defer ticker.Stop()
-		for range ticker.C {
-			p.runBackgroundRefreshOnce()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				p.runBackgroundRefreshOnce()
+			}
 		}
 	})
 }
@@ -771,7 +776,7 @@ func (p *Pool) tryAcquireRefreshLeadership(ctx context.Context) (bool, error) {
 	}
 
 	return redislock.AcquireLockNonblockingWithValue(
-		ctx, p.rds, resourceSnapshotLeaderKey, instanceID,
+		ctx, p.rds, resourceSnapshotLeaderLockKey(), instanceID,
 		int(p.refreshLeaderLeaseTTLDuration()/time.Second),
 	)
 }
@@ -784,7 +789,7 @@ func (p *Pool) releaseRefreshLeadership(ctx context.Context) error {
 	if instanceID == "" {
 		return nil
 	}
-	return redislock.ReleaseLock(ctx, p.rds, resourceSnapshotLeaderKey, instanceID)
+	return redislock.ReleaseLock(ctx, p.rds, resourceSnapshotLeaderLockKey(), instanceID)
 }
 
 func (p *Pool) renewRefreshLeadership(ctx context.Context) error {
@@ -1384,7 +1389,7 @@ func (p *Pool) persistLease(ctx context.Context, lease *Lease) error {
 		return err
 	}
 
-	return p.rds.Set(ctx, resourceKeyPrefix+lease.SandboxID, string(payload), 0).Err()
+	return p.rds.Set(ctx, resourceLeaseKey(lease.SandboxID), string(payload), 0).Err()
 }
 
 func (p *Pool) deleteLeaseAndAssignment(ctx context.Context, lease *Lease) error {
@@ -1393,7 +1398,7 @@ func (p *Pool) deleteLeaseAndAssignment(ctx context.Context, lease *Lease) error
 	}
 
 	pipe := p.rds.TxPipeline()
-	pipe.Del(ctx, resourceKeyPrefix+lease.SandboxID)
+	pipe.Del(ctx, resourceLeaseKey(lease.SandboxID))
 	if lease.User != "" {
 		pipe.HDel(ctx, assignKey(lease.User), lease.SandboxID)
 	}
@@ -1576,7 +1581,7 @@ func (p *Pool) mergeResolvedResourceIntoLease(ctx context.Context, resource *Res
 		return nil
 	}
 
-	resKey := resourceKeyPrefix + resource.Type + ":" + resource.ResourceID
+	resKey := resourceKey(resource.Type, resource.ResourceID)
 	normalizedStatus := normalizeProviderResourceStatus(resource.Status)
 	for range 3 {
 		err := p.rds.Watch(ctx, func(tx *redis.Tx) error {
@@ -1676,9 +1681,9 @@ func cloneTimePtr(value *time.Time) *time.Time {
 }
 
 // extractTypeFromResourceKey parses the sandbox type from a resource key.
-// Key format: "sandbox:resource:{type}:{resourceID}"
+// Key format: "sandbox:[env:<namespace>:]resource:{type}:{resourceID}"
 func extractTypeFromResourceKey(key string) string {
-	trimmed := strings.TrimPrefix(key, resourceKeyPrefix)
+	trimmed := strings.TrimPrefix(key, sandboxResourceKeyPrefix())
 	if idx := strings.Index(trimmed, ":"); idx > 0 {
 		return trimmed[:idx]
 	}
@@ -1687,7 +1692,7 @@ func extractTypeFromResourceKey(key string) string {
 }
 
 func extractSandboxIDFromResourceKey(key string) string {
-	return strings.TrimPrefix(key, resourceKeyPrefix)
+	return strings.TrimPrefix(key, sandboxResourceKeyPrefix())
 }
 
 // GetSandboxByID returns the stored sandbox lease by ID.
@@ -1798,8 +1803,8 @@ func (p *Pool) AcquireAssignedLease(
 }
 
 func (p *Pool) tryAcquireAssignedLease(ctx context.Context, sandboxID, expectedOwnerPattern string) (*Lease, error) {
-	resKey := resourceKeyPrefix + sandboxID
-	cdKey := cooldownKeyPrefix + sandboxID
+	resKey := resourceLeaseKey(sandboxID)
+	cdKey := cooldownKey(sandboxID)
 	result, luaErr := acquireLeaseScript.Run(ctx, p.rds, []string{resKey, cdKey}, expectedOwnerPattern).Result()
 	if luaErr != nil {
 		if errors.Is(luaErr, redis.Nil) {
@@ -1853,13 +1858,13 @@ func (p *Pool) ReleaseLease(ctx context.Context, instanceID, sandboxID string) (
 	if marshalErr != nil {
 		return nil, marshalErr
 	}
-	resKey := resourceKeyPrefix + sandboxID
+	resKey := resourceLeaseKey(sandboxID)
 	if setErr := p.rds.Set(ctx, resKey, string(payload), 0).Err(); setErr != nil {
 		return nil, setErr
 	}
 
 	// Set cooldown key — sandbox cannot be re-acquired until TTL expires
-	cdKey := cooldownKeyPrefix + sandboxID
+	cdKey := cooldownKey(sandboxID)
 	if cdErr := p.rds.Set(ctx, cdKey, "1", releaseCooldown).Err(); cdErr != nil {
 		logger.CtxWarn(ctx, "Failed to set cooldown key %s: %v", cdKey, cdErr)
 	}
@@ -1867,20 +1872,7 @@ func (p *Pool) ReleaseLease(ctx context.Context, instanceID, sandboxID string) (
 	return lease, nil
 }
 
-const resourceKeyPrefix = "sandbox:resource:"
-const resourceSnapshotKeyPrefix = "sandbox:snapshot:resource:"
-const resourcePendingShrinkKeyPrefix = "sandbox:snapshot:resource:pending-shrink:"
-const resourceSnapshotLeaderKey = "sandbox:snapshot:resource:leader"
-const cooldownKeyPrefix = "sandbox:cooldown:"
 const releaseCooldown = 3 * time.Second
-
-func resourceKey(t, id string) string { return resourceKeyPrefix + t + ":" + id }
-
-func resourceSnapshotKey(snapshotType string) string { return resourceSnapshotKeyPrefix + snapshotType }
-
-func resourcePendingShrinkKey(snapshotType string) string {
-	return resourcePendingShrinkKeyPrefix + snapshotType
-}
 
 func (p *Pool) scanResourceKeys(ctx context.Context) ([]string, error) {
 	var (
@@ -1904,8 +1896,8 @@ func (p *Pool) scanResourceKeys(ctx context.Context) ([]string, error) {
 }
 
 func (p *Pool) getLease(ctx context.Context, sandboxID string) (*Lease, error) {
-	// sandboxID = {type}:{resourceID}, resourceKey = resourceKeyPrefix + sandboxID
-	resKey := resourceKeyPrefix + sandboxID
+	// sandboxID = {type}:{resourceID}
+	resKey := resourceLeaseKey(sandboxID)
 	val, err := p.rds.Get(ctx, resKey).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {

@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Tests for app.storage.fs — StorageFS, SCMemoryFS, ChatFS, parse_skill_frontmatter."""
 
 import pathlib
@@ -209,6 +189,10 @@ class TestChatFS:
         fs.write_file(1, "alice", "legit.txt", "ok")
         with pytest.raises(ValueError, match="within the workspace"):
             fs.delete_file(1, "alice", "../../etc/passwd")
+        with pytest.raises(ValueError, match="within the workspace"):
+            fs.write_file(1, "alice", "../../outside.txt", "nope")
+        with pytest.raises(ValueError, match="within the workspace"):
+            fs.read_file(1, "alice", "/etc/passwd")
 
     def test_path_traversal_prefix_collision_blocked(self, fs):
         workspace = fs.get_workspace_path(1, "alice")
@@ -232,14 +216,18 @@ class TestChatFS:
         assert "sub/b.txt" in paths
         assert all("size_kb" in f for f in files)
 
-    def test_list_files_hides_history_and_results(self, fs):
+    def test_list_files_hides_history_and_internal_repository(self, fs):
         fs.write_file(1, "alice", "history/turn-1/conversation.json", "[]")
+        fs.write_file(1, "alice", ".source-repository/index.json", "{}")
+        fs.write_file(1, "alice", ".sources/user-file.txt", "visible")
         fs.write_file(1, "alice", "results/skills/1/report.html", "<html></html>")
         fs.write_file(1, "alice", "visible.txt", "ok")
 
         paths = [f["path"] for f in fs.list_files(1, "alice")]
 
         assert "history/turn-1/conversation.json" not in paths
+        assert ".source-repository/index.json" not in paths
+        assert ".sources/user-file.txt" in paths
         assert "results/skills/1/report.html" in paths
         assert "visible.txt" in paths
 

@@ -6,6 +6,7 @@
 __all__ = (
     "AgentInstanceInfo",
     "ConversationData",
+    "ConversationExtraInfo",
     "ConversationListItem",
     "CreateConversationRequest",
     "CreateConversationResponse",
@@ -99,9 +100,34 @@ class ConversationData(betterproto2.Message):
     @gotag: json:"agentInstanceInfo,omitempty"
     """
 
+    extra_info: "ConversationExtraInfo | None" = betterproto2.field(
+        9, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"extraInfo,omitempty"
+    """
+
 
 default_message_pool.register_message(
     "conversation", "ConversationData", ConversationData
+)
+
+
+@dataclass(eq=False, repr=False)
+class ConversationExtraInfo(betterproto2.Message):
+    scheduled_task_id: "int" = betterproto2.field(1, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"scheduledTaskId,omitempty"
+    """
+
+    scheduled_task_run_id: "int" = betterproto2.field(2, betterproto2.TYPE_INT64)
+    """
+    @gotag: json:"scheduledTaskRunId,omitempty"
+    """
+
+
+default_message_pool.register_message(
+    "conversation", "ConversationExtraInfo", ConversationExtraInfo
 )
 
 
@@ -125,6 +151,20 @@ class ConversationListItem(betterproto2.Message):
     title: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
     """
     @gotag: json:"title"
+    """
+
+    extra_info: "ConversationExtraInfo | None" = betterproto2.field(
+        5, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"extraInfo,omitempty"
+    """
+
+    conversation_status: "_common__.ConversationRunStatus | None" = betterproto2.field(
+        6, betterproto2.TYPE_ENUM, optional=True
+    )
+    """
+    @gotag: json:"conversationStatus,omitempty"
     """
 
 
@@ -174,3 +214,6 @@ class CreateConversationResponse(betterproto2.Message):
 default_message_pool.register_message(
     "conversation", "CreateConversationResponse", CreateConversationResponse
 )
+
+
+from ...common import common as _common__

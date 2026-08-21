@@ -1,36 +1,19 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Chat route selection.
 
-Two-stage routing:
+A turn is routed to exactly one of two modes: ``FAST`` (answer directly, no
+tools) or ``TASK`` (the full chat tool set plus ``delegate``). Routing runs as a
+chain of :class:`ChatRouter` stages — each either decides or returns ``None`` to
+defer to the next, and an exhausted chain falls back to ``TASK``:
 
-1. :func:`hard_guard_route` — cheap keyword-based decision. Returns ``UNSPECIFIED``
-   if no rule fires.
-2. :func:`llm_intent_check` — single-round LLM with structured output
-   (:class:`ChatIntentCheckerOutput`) that decides the route from the available
-   capabilities / adapters / direct tools and pre-rendered context sections.
+1. :class:`HardGuardChatRouter` — keyword rules loaded from ``route_rules.toml``.
+2. :class:`LlmChatRouter` — single-round LLM with structured output
+    (:class:`ChatIntentCheckerOutput`) over the delegate tool, direct tools,
+   and pre-rendered context sections.
 
-The TASK route then runs the regular chat agent with the full read+write+plan
-tool set augmented by the single ``delegate`` adapter tool (see
-:func:`app.tools.delegate.build_adapter_tools`).
+There is deliberately no read-only middle route; see `docs/tools.md` for why the
+classification decision was deleted rather than tuned.
+
+Tool selection is *not* here; see :mod:`app.biz.chat.tool_registry`.
 """
 
 from __future__ import annotations
@@ -38,7 +21,12 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any
+import tomllib
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from functools import cache
+from pathlib import Path
+from typing import Protocol
 
 import pydantic
 
@@ -46,85 +34,60 @@ import app.llmhubs
 from app.biz.chat.types import (
     ChatIntentCheckerInput,
     ChatIntentCheckerOutput,
-    ChatRouteHardGuardDecision,
+    ChatRouteDecision,
     ChatRouteMode,
 )
 from app.llmhubs.request_builder import build_llm_request
-from app.tools import (
-    CONTEXT_TOOL,
-    GREP_TOOL,
-    GET_TASK_DETAIL_TOOL,
-    PLAN_READ_TOOL,
-    PLAN_TOOL_CALL_MESSAGE_UPDATE_TOOL,
-    PLAN_WRITE_TOOL,
-    READ_TOOL,
-    REMOVE_TOOL,
-    REPORT_TOOL,
-    WRITE_FILE_TOOL,
-    EDIT_TOOL,
-    WEBFETCH_TOOL,
-    CURL_TOOL,
-    SEARCH_MEMORY_TOOL,
-    PARSE_DOCUMENT_TOOL,
-    DOWNLOAD_TOOL,
-)
 
 _LOGGER = logging.getLogger(__name__)
 
 _JSON_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.IGNORECASE | re.DOTALL)
 
+_GREETING_EDGE_PATTERN = re.compile(r"^[\s\W_]+|[\s\W_]+$")
+
+_ROUTE_RULES_PATH = Path(__file__).resolve().parent / "route_rules.toml"
+
 
 # ---------------------------------------------------------------------------
-# Route → tool list
+# Router chain
 # ---------------------------------------------------------------------------
 
 
-_INSPECT_TOOLS: tuple[Any, ...] = (
-    CONTEXT_TOOL,
-    READ_TOOL,
-    GREP_TOOL,
-    PLAN_READ_TOOL,
-    PLAN_WRITE_TOOL,
-    PLAN_TOOL_CALL_MESSAGE_UPDATE_TOOL,
-    SEARCH_MEMORY_TOOL,
-    WEBFETCH_TOOL,
-    PARSE_DOCUMENT_TOOL,
-    REPORT_TOOL,
-    GET_TASK_DETAIL_TOOL,
-)
-
-# TASK: read + write + plan + report. ``run_command`` is intentionally excluded;
-# "real work" should go through the ``delegate`` tool wired in by the
-# service layer alongside this tool set.
-_TASK_TOOLS: tuple[Any, ...] = (
-    CONTEXT_TOOL,
-    READ_TOOL,
-    GREP_TOOL,
-    WRITE_FILE_TOOL,
-    EDIT_TOOL,
-    REMOVE_TOOL,
-    REPORT_TOOL,
-    PLAN_READ_TOOL,
-    PLAN_WRITE_TOOL,
-    PLAN_TOOL_CALL_MESSAGE_UPDATE_TOOL,
-    WEBFETCH_TOOL,
-    CURL_TOOL,
-    SEARCH_MEMORY_TOOL,
-    PARSE_DOCUMENT_TOOL,
-    DOWNLOAD_TOOL,
-    GET_TASK_DETAIL_TOOL,
-)
-
-_TOOLS_BY_ROUTE: dict[ChatRouteMode, tuple[Any, ...]] = {
-    ChatRouteMode.FAST: (),
-    ChatRouteMode.INSPECT: _INSPECT_TOOLS,
-    ChatRouteMode.TASK: _TASK_TOOLS,
-}
+@dataclass(frozen=True)
+class ChatRouteRequest:
+    user_prompt: str
+    has_attachments: bool
+    # Built on demand: a hard-guarded turn must not pay for assembling prior-turn
+    # history into a payload only the LLM stage ever reads.
+    build_intent_input: Callable[[], ChatIntentCheckerInput]
 
 
-def tools_for_route(route: ChatRouteMode) -> list[Any]:
-    """Return a fresh list of tool instances to expose to the chat agent for ``route``."""
-    return list(_TOOLS_BY_ROUTE.get(route, _TASK_TOOLS))
+class ChatRouter(Protocol):
+    async def decide(self, request: ChatRouteRequest) -> ChatRouteDecision | None:
+        """Decide the route, or return ``None`` to defer to the next router."""
+        ...
+
+
+class ChatRouterChain:
+    """Runs routers in order and returns the first non-deferred decision."""
+
+    def __init__(self, routers: Sequence[ChatRouter]) -> None:
+        self._routers = tuple(routers)
+
+    async def decide(self, request: ChatRouteRequest) -> ChatRouteDecision:
+        for router in self._routers:
+            try:
+                decision = await router.decide(request)
+            except Exception:
+                # A classifier is never worth failing the turn over. Deferring lets
+                # a later stage still decide; only an exhausted chain lands on TASK.
+                _LOGGER.warning("chat_router_failed router=%s", type(router).__name__, exc_info=True)
+                continue
+            if decision is not None:
+                return decision
+        # Routing must never block a turn, and when unsure the wider toolset is
+        # the cheaper mistake: a FAST turn withholds ``delegate`` from real work.
+        return ChatRouteDecision(route=ChatRouteMode.TASK, reason="router_chain_exhausted")
 
 
 # ---------------------------------------------------------------------------
@@ -132,41 +95,69 @@ def tools_for_route(route: ChatRouteMode) -> list[Any]:
 # ---------------------------------------------------------------------------
 
 
-_FAST_KEYWORDS = (
-    "hello",
-    "hi ",
-    "hey",
-    "thanks",
-    "thank you",
-    "你好",
-    "谢谢",
-)
-
-_TASK_KEYWORDS = (
-    "execute",
-    "run all",
-    "batch",
-    "批量",
-    "重跑",
-    "重新执行",
-    "execute the workbook",
-    "run the cases",
-)
+@dataclass(frozen=True)
+class HardGuardRules:
+    task_keywords: tuple[str, ...] = ()
+    fast_greetings: frozenset[str] = frozenset()
 
 
-def hard_guard_route(user_prompt: str, *, has_attachments: bool) -> ChatRouteHardGuardDecision:
-    """Cheap keyword + attachment heuristic. Returns UNSPECIFIED when unsure."""
-    text = (user_prompt or "").lower()
-    if not text.strip() and not has_attachments:
-        return ChatRouteHardGuardDecision(route=ChatRouteMode.FAST, reason="empty_prompt")
+def _normalize_greeting(text: str) -> str:
+    return _GREETING_EDGE_PATTERN.sub("", text.lower())
 
-    if any(token in text for token in _TASK_KEYWORDS):
-        return ChatRouteHardGuardDecision(route=ChatRouteMode.TASK, reason="task_keyword")
 
-    if not has_attachments and len(text) <= 24 and any(text.startswith(kw) for kw in _FAST_KEYWORDS):
-        return ChatRouteHardGuardDecision(route=ChatRouteMode.FAST, reason="fast_greeting")
+def _rule_list(raw: Mapping[str, object], table: str, key: str, path: Path) -> tuple[str, ...]:
+    """Read ``[table] key`` as a list of strings. A missing table or key is a valid partial config."""
+    section = raw.get(table)
+    if section is None:
+        return ()
+    if isinstance(section, Mapping):
+        if key not in section:
+            return ()
+        value = section[key]
+        if isinstance(value, list) and all(isinstance(item, str) for item in value):
+            return tuple(value)
+    # Present but misshapen. A bare string would iterate into one rule per character.
+    _LOGGER.warning("chat_route_rules_malformed path=%s rule=%s.%s; ignored", path, table, key)
+    return ()
 
-    return ChatRouteHardGuardDecision(route=ChatRouteMode.UNSPECIFIED, reason="")
+
+@cache
+def load_hard_guard_rules(path: Path = _ROUTE_RULES_PATH) -> HardGuardRules:
+    """Read the keyword rules. Empty rules on failure — the LLM stage still routes."""
+    try:
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        _LOGGER.warning("chat_route_rules_unreadable path=%s; hard guard disabled", path, exc_info=True)
+        return HardGuardRules()
+    greetings = [_normalize_greeting(item) for item in _rule_list(raw, "fast", "greetings", path)]
+    # Blank entries are dropped on both sides: "" is a substring of every message,
+    # and it normalizes to "" which equals every punctuation-only one.
+    return HardGuardRules(
+        task_keywords=tuple(item.lower() for item in _rule_list(raw, "task", "keywords", path) if item.strip()),
+        fast_greetings=frozenset(greeting for greeting in greetings if greeting),
+    )
+
+
+class HardGuardChatRouter:
+    """Cheap keyword + attachment heuristic. Defers whenever it is not sure."""
+
+    def __init__(self, rules: HardGuardRules | None = None) -> None:
+        self._rules = rules if rules is not None else load_hard_guard_rules()
+
+    async def decide(self, request: ChatRouteRequest) -> ChatRouteDecision | None:
+        text = (request.user_prompt or "").lower()
+        if not text.strip() and not request.has_attachments:
+            return ChatRouteDecision(route=ChatRouteMode.FAST, reason="hard_guard:empty_prompt")
+
+        if any(token in text for token in self._rules.task_keywords):
+            return ChatRouteDecision(route=ChatRouteMode.TASK, reason="hard_guard:task_keyword")
+
+        # Whole message, not a prefix: "hello, run tests" is a request wearing a greeting,
+        # and answering it with zero tools burns the turn.
+        if not request.has_attachments and _normalize_greeting(text) in self._rules.fast_greetings:
+            return ChatRouteDecision(route=ChatRouteMode.FAST, reason="hard_guard:fast_greeting")
+
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -174,16 +165,24 @@ def hard_guard_route(user_prompt: str, *, has_attachments: bool) -> ChatRouteHar
 # ---------------------------------------------------------------------------
 
 
-_INTENT_SYSTEM_PROMPT: str | None = None
+class LlmChatRouter:
+    """One structured-output LLM call; never defers.
+
+    ``llm_intent_check`` resolves LLM-side failures to TASK itself. An unbuildable
+    payload raises out of here, and the chain is what catches that.
+    """
+
+    async def decide(self, request: ChatRouteRequest) -> ChatRouteDecision:
+        output = await llm_intent_check(request.build_intent_input())
+        return ChatRouteDecision(route=output.route, reason=output.reason)
 
 
 def _get_intent_system_prompt() -> str:
-    global _INTENT_SYSTEM_PROMPT  # noqa: PLW0603
-    if _INTENT_SYSTEM_PROMPT is None:
-        from app.biz.chat.prompt import PromptFile, read_prompt_file
+    # Read fresh each call so prompt edits (via CHAT_PROMPTS_DIR) hot-reload.
+    # read_prompt_file caches on mtime, so unchanged files are not re-read.
+    from app.biz.chat.prompt import PromptFile, read_prompt_file
 
-        _INTENT_SYSTEM_PROMPT = read_prompt_file(PromptFile.INTENT_CHECK)
-    return _INTENT_SYSTEM_PROMPT
+    return read_prompt_file(PromptFile.INTENT_CHECK)
 
 
 def _strip_json_fence(text: str) -> str:
@@ -204,12 +203,13 @@ async def llm_intent_check(payload: ChatIntentCheckerInput) -> ChatIntentChecker
         "user_prompt": payload.user_prompt,
         "attachment_count": len(payload.attachments),
         "attachment_names": [a.name for a in payload.attachments if getattr(a, "name", None)],
-        "adapters": [{"name": a.name, "description": a.description} for a in payload.adapters],
+        "delegate": payload.delegate.model_dump() if payload.delegate is not None else None,
         "direct_tools": [{"name": t.name, "description": t.description} for t in payload.direct_tools],
         "workspace_attachments_section": payload.workspace_attachments_section,
+        "source_manifests_section": payload.source_manifests_section,
         "workspace_knowledge_section": payload.workspace_knowledge_section,
         "prior_rerun_sources_section": payload.prior_rerun_sources_section,
-        "prior_parsed_workbook_sources_section": payload.prior_parsed_workbook_sources_section,
+        "prior_tabular_sources_section": payload.prior_tabular_sources_section,
         "prior_conversation_section": payload.prior_conversation_section,
         "skills_section": payload.skills_section,
     }
@@ -228,18 +228,10 @@ async def llm_intent_check(payload: ChatIntentCheckerInput) -> ChatIntentChecker
         response = await app.llmhubs.generate(request=request)
     except Exception as exc:  # noqa: BLE001
         _LOGGER.warning("chat_intent_check_llm_failed err=%s", exc)
-        return ChatIntentCheckerOutput(
-            route=ChatRouteMode.TASK,
-            confidence=0.0,
-            reason=f"intent_check_llm_failed: {exc}",
-        )
+        return ChatIntentCheckerOutput(route=ChatRouteMode.TASK, reason=f"intent_check_llm_failed: {exc}")
     if response.code != 0:
         _LOGGER.warning("chat_intent_check_llm_non_zero code=%s msg=%s", response.code, response.msg)
-        return ChatIntentCheckerOutput(
-            route=ChatRouteMode.TASK,
-            confidence=0.0,
-            reason=f"intent_check_llm_error: {response.msg}",
-        )
+        return ChatIntentCheckerOutput(route=ChatRouteMode.TASK, reason=f"intent_check_llm_error: {response.msg}")
 
     structured = None
     if response.outputs:
@@ -254,34 +246,35 @@ async def llm_intent_check(payload: ChatIntentCheckerInput) -> ChatIntentChecker
         text = text or response.text or ""
         if not text:
             _LOGGER.warning("chat_intent_check_llm_empty")
-            return ChatIntentCheckerOutput(
-                route=ChatRouteMode.TASK,
-                confidence=0.0,
-                reason="intent_check_empty_response",
-            )
+            return ChatIntentCheckerOutput(route=ChatRouteMode.TASK, reason="intent_check_empty_response")
         try:
             structured = json.loads(_strip_json_fence(text))
         except json.JSONDecodeError as exc:
             _LOGGER.warning("chat_intent_check_json_decode_failed err=%s preview=%s", exc, text[:200])
-            return ChatIntentCheckerOutput(
-                route=ChatRouteMode.TASK,
-                confidence=0.0,
-                reason="intent_check_json_decode_failed",
-            )
+            return ChatIntentCheckerOutput(route=ChatRouteMode.TASK, reason="intent_check_json_decode_failed")
 
     try:
         return ChatIntentCheckerOutput.model_validate(structured)
     except pydantic.ValidationError as exc:
         _LOGGER.warning("chat_intent_check_validation_failed err=%s", exc)
-        return ChatIntentCheckerOutput(
-            route=ChatRouteMode.TASK,
-            confidence=0.0,
-            reason="intent_check_validation_failed",
-        )
+        return ChatIntentCheckerOutput(route=ChatRouteMode.TASK, reason="intent_check_validation_failed")
+
+
+_DEFAULT_ROUTER = ChatRouterChain((HardGuardChatRouter(), LlmChatRouter()))
+
+
+def default_chat_router() -> ChatRouterChain:
+    return _DEFAULT_ROUTER
 
 
 __all__ = [
-    "hard_guard_route",
+    "ChatRouteRequest",
+    "ChatRouter",
+    "ChatRouterChain",
+    "HardGuardChatRouter",
+    "HardGuardRules",
+    "LlmChatRouter",
+    "default_chat_router",
     "llm_intent_check",
-    "tools_for_route",
+    "load_hard_guard_rules",
 ]

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   Button,
   InputGroup,
@@ -71,13 +49,17 @@ export type AssetsToolbarProps = {
   onSearchChange: (next: Partial<AssetSearch>) => void;
   /** Opens the parent's Add Knowledge dialog. */
   onAddKnowledge: () => void;
+  /** Whether the viewer may create knowledge (asset.manage.own — admin+member).
+   * Combined with the category gate: Add Knowledge shows only on All/Knowledge
+   * AND when the user can add. */
+  canAddKnowledge: boolean;
 };
 
 /**
  * The assets table's toolbar row (frame `19456-11535`): the category Tabs (pill
  * variant) on the left, now rendered as router `<Link>`s so each tab is a real
  * URL (`/project/$id/knowledge`) — the active one derives from the route path,
- * not local state. On the right: the collapsible 🔍 search + category-gated Add
+ * not local state. On the right: the collapsible search + category-gated Add
  * Knowledge. Add Knowledge only adds Knowledge, so it shows on All/Knowledge
  * only. `searchOpen` is purely local UI state; the query itself stays in the URL
  * via `search`/`onSearchChange`.
@@ -88,11 +70,13 @@ export function AssetsToolbar({
   search,
   onSearchChange,
   onAddKnowledge,
+  canAddKnowledge,
 }: AssetsToolbarProps): React.JSX.Element {
   // Seed open when the URL already carries a query so a shared/back-button link
   // shows the active filter rather than a collapsed icon.
   const [searchOpen, setSearchOpen] = useState(search.q.trim() !== "");
-  const showAddKnowledge = category === "all" || category === "knowledge";
+  const showAddKnowledge =
+    canAddKnowledge && (category === "all" || category === "knowledge");
 
   return (
     <div className="flex items-center justify-between gap-4">
@@ -131,7 +115,7 @@ export function AssetsToolbar({
             <InputGroupInput
               aria-label="Search assets"
               placeholder="Search assets"
-              // eslint-disable-next-line jsx-a11y/no-autofocus -- focus the field the user just revealed via the 🔍 toggle
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- focus the field the user just revealed via the search toggle
               autoFocus
               value={search.q}
               onChange={(event) => onSearchChange({ q: event.target.value })}

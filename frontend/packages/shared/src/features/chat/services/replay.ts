@@ -1,31 +1,10 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { produce } from "immer";
 import { type createStore } from "jotai";
 
 import { replayFrames } from "./frame-reducer";
 import { makeId } from "../../../utils/id";
 import {
+  activeConversationIdAtom,
   conversationsAtom,
   type Message,
   type TerminalStreamingState,
@@ -36,6 +15,15 @@ type Store = ReturnType<typeof createStore>;
 
 export type OnReplay = {
   onReplay: (events: ChatEvent[]) => void;
+  // Reconnect stream opened: mint a `streaming` AI placeholder so the resumed
+  // turn shows Thinking… immediately — it resumes a stream that already opened,
+  // so it's past the `pending` (spinner) state. No-op unless the active
+  // conversation looks like it has an unanswered in-flight turn (see
+  // `mintThinkingPlaceholder`).
+  onOpen: () => void;
+  // Reconnect stream ended: drop a placeholder that was never claimed by a frame
+  // (e.g. an already-done turn's empty reconnect), so no stuck Thinking… lingers.
+  onStreamEnd: () => void;
   // Tears down the rAF + any pending hydration subscription (called on unmount).
   dispose: () => void;
 };
@@ -157,17 +145,146 @@ function applyReplay(
   );
 }
 
+// Mint a bare AI row (with its turnId) directly in the ACTIVE conversation. The
+// last-resort target when a resumed turn has neither an existing AI row nor a
+// human row to pair (a live text turn switched away from before anything
+// persisted — messages_v2 returns it empty). The reconnect target IS the active
+// conversation, so its frames belong here. Guarded by the caller on there being
+// an active conversation, so the #191 buffer path (turn for a not-yet-hydrated
+// OTHER view, no active slot) is untouched. Returns the new row's location, or
+// undefined when there is no active conversation to mint into.
+function createAiRowInActiveConversation(
+  store: Store,
+  turnId: number,
+): { clientId: string; messageId: string } | undefined {
+  const activeId = store.get(activeConversationIdAtom);
+  if (activeId === null) {
+    return undefined;
+  }
+  const conversations = store.get(conversationsAtom);
+  if (!conversations.has(activeId)) {
+    return undefined;
+  }
+  const messageId = makeId();
+  store.set(
+    conversationsAtom,
+    produce(conversations, (draft) => {
+      draft.get(activeId)?.history.push({
+        id: messageId,
+        author: "ai",
+        turnId,
+        content: [],
+        streamingState: "streaming",
+      });
+    }),
+  );
+  return { clientId: activeId, messageId };
+}
+
 // Resolve the AI target for a turn (existing row, else mint one paired to the
-// human row) and write the from-head run into it. Returns false when no row
-// carries the turn yet (the #191 race) so the caller keeps buffering.
+// human row, else — for a persisted-nothing live turn — mint one in the active
+// conversation) and write the from-head run into it. Returns false when no row
+// carries the turn AND there is no active conversation to mint into (the #191
+// race) so the caller keeps buffering.
 function applyToTurn(store: Store, turnId: number, run: ChatEvent[]): boolean {
   const target =
-    findMessageByTurnId(store, turnId) ?? createAiRowForTurn(store, turnId);
+    findMessageByTurnId(store, turnId) ??
+    createAiRowForTurn(store, turnId) ??
+    createAiRowInActiveConversation(store, turnId);
   if (target === undefined) {
     return false;
   }
   applyReplay(store, target.clientId, target.messageId, run);
   return true;
+}
+
+// A placeholder location: the AI row `onOpen` minted, awaiting its first frame.
+type Placeholder = { clientId: string; messageId: string };
+
+// Mint the Thinking… AI placeholder in the active conversation, returning its
+// location so the caller can later claim or drop it. Seeded `streaming`, NOT
+// `pending`: reconnect resumes a stream that ALREADY opened before the switch, so
+// its turn was showing "Thinking…" (the `streaming`, no-part state) — seeding
+// `pending` would flash a spinner and regress the turn to a pre-open state it had
+// already left. This also matches `createAiRowForTurn`, the other reconnect mint
+// path. The B gate: skip when NO active conversation, or when the conversation
+// already has ANY AI row (a live tail, or a settled reply from history — a
+// completed-turn revisit must not flash a placeholder). A never-yet-answered turn
+// (empty tail human row, or an empty conversation racing history) is the case we
+// DO want to cover.
+function mintThinkingPlaceholder(store: Store): Placeholder | undefined {
+  const activeId = store.get(activeConversationIdAtom);
+  if (activeId === null) {
+    return undefined;
+  }
+  const conv = store.get(conversationsAtom).get(activeId);
+  if (conv === undefined || conv.history.some((m) => m.author === "ai")) {
+    return undefined;
+  }
+  const messageId = makeId();
+  store.set(
+    conversationsAtom,
+    produce(store.get(conversationsAtom), (draft) => {
+      draft.get(activeId)?.history.push({
+        id: messageId,
+        author: "ai",
+        content: [],
+        streamingState: "streaming",
+      });
+    }),
+  );
+  return { clientId: activeId, messageId };
+}
+
+// Claim the `onOpen` placeholder for `turnId`: stamp the turnId, then write the
+// from-head run into it (replayFrames flips it to `streaming`) — the reconnect
+// mirror of the live send's `pending → streaming` transition. Returns true when
+// the claim applied (the placeholder row still exists), so the caller skips the
+// find/mint path and clears its tracked placeholder.
+function claimPlaceholder(
+  store: Store,
+  placeholder: Placeholder,
+  turnId: number,
+  run: ChatEvent[],
+): boolean {
+  const conv = store.get(conversationsAtom).get(placeholder.clientId);
+  if (conv?.history.find((m) => m.id === placeholder.messageId) === undefined) {
+    return false;
+  }
+  store.set(
+    conversationsAtom,
+    produce(store.get(conversationsAtom), (draft) => {
+      const target = draft
+        .get(placeholder.clientId)
+        ?.history.find((m) => m.id === placeholder.messageId);
+      if (target) {
+        target.turnId = turnId;
+      }
+    }),
+  );
+  applyReplay(store, placeholder.clientId, placeholder.messageId, run);
+  return true;
+}
+
+// Drop a never-claimed placeholder (the stream ended before any frame). Matches
+// only an UNCLAIMED row (no turnId) — a claimed row carries a turnId and is left
+// standing. A no-op once the row is gone.
+function removePlaceholder(store: Store, placeholder: Placeholder): void {
+  store.set(
+    conversationsAtom,
+    produce(store.get(conversationsAtom), (draft) => {
+      const conv = draft.get(placeholder.clientId);
+      if (!conv) {
+        return;
+      }
+      const i = conv.history.findIndex(
+        (m) => m.id === placeholder.messageId && m.turnId === undefined,
+      );
+      if (i !== -1) {
+        conv.history.splice(i, 1);
+      }
+    }),
+  );
 }
 
 // Reconnect replay handler. Each call carries the whole from-head run
@@ -178,65 +295,110 @@ function applyToTurn(store: Store, turnId: number, run: ChatEvent[]): boolean {
 // found yet the run is buffered and a one-shot conversationsAtom subscription
 // retries it on the next store change, then unsubscribes — otherwise a reconnect
 // that wins the race would silently drop the resumed turn (issue #191).
-export function createOnReplay(store: Store): OnReplay {
-  let latest: ChatEvent[] | null = null;
-  let rafId: number | null = null;
-  let unsubscribe: (() => void) | null = null;
+//
+// A class (not a closure) keeps each concern a small method — sidestepping
+// max-lines-per-function on the factory and the no-param-reassign that threading
+// a mutable state bag through module helpers would trip (mirrors
+// ReconnectController in use-reconnect).
+class ReplayCoalescer {
+  private latest: ChatEvent[] | null = null;
+  private rafId: number | null = null;
+  private unsubscribe: (() => void) | null = null;
+  // The `onOpen` placeholder awaiting its first frame. Set on open, cleared once
+  // claimed by a frame or dropped on stream end.
+  private placeholder: Placeholder | null = null;
   // Re-entrancy guard: minting the AI row (and the apply) call `store.set`, which
   // synchronously notifies the `conversationsAtom` subscription that drives
   // `attempt`. Without this flag that nested call would re-enter mid-write —
   // jotai forbids a `set` during its own notification flush (it throws), and a
   // second mint would duplicate the row. The re-entrant tick bails here and the
   // outer call finishes the work.
-  let applying = false;
+  private applying = false;
+
+  constructor(private readonly store: Store) {}
 
   // Single apply funnel for both the rAF tick and the hydration subscription.
   // Clears `latest` BEFORE writing so a re-entrant notification can't double-apply.
-  const attempt = (): void => {
-    if (latest === null || applying) {
+  private attempt = (): void => {
+    if (this.latest === null || this.applying) {
       return;
     }
-    const turnId = extractTurnId(latest);
+    const turnId = extractTurnId(this.latest);
     if (turnId === undefined) {
-      latest = null; // keepalive-only run, nothing to apply
+      this.latest = null; // keepalive-only run, nothing to apply
       return;
     }
-    const run = latest;
-    applying = true;
+    const run = this.latest;
+    this.applying = true;
     try {
-      if (!applyToTurn(store, turnId, run)) {
+      // First frame after open: claim the placeholder in place (mirror of the
+      // live send's pending→streaming). Falls through to find/mint only if the
+      // placeholder is gone (view reset) — the row then carries a turnId and the
+      // usual dedup applies.
+      if (
+        this.placeholder !== null &&
+        claimPlaceholder(this.store, this.placeholder, turnId, run)
+      ) {
+        this.placeholder = null;
+      } else if (!applyToTurn(this.store, turnId, run)) {
         // Turn not hydrated yet — keep buffered, retry on the next atom change.
-        unsubscribe ??= store.sub(conversationsAtom, attempt);
+        this.unsubscribe ??= this.store.sub(conversationsAtom, this.attempt);
         return;
       }
-      latest = null;
-      unsubscribe?.();
-      unsubscribe = null;
+      this.latest = null;
+      this.unsubscribe?.();
+      this.unsubscribe = null;
     } finally {
-      applying = false;
+      this.applying = false;
     }
   };
 
-  const onReplay = (events: ChatEvent[]): void => {
-    latest = events;
-    if (rafId !== null) {
+  onReplay = (events: ChatEvent[]): void => {
+    this.latest = events;
+    if (this.rafId !== null) {
       return;
     }
-    rafId = requestAnimationFrame(() => {
-      rafId = null;
-      attempt();
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = null;
+      this.attempt();
     });
   };
 
-  const dispose = (): void => {
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
+  onOpen = (): void => {
+    // At most one placeholder per open episode; a re-open before a claim keeps
+    // the existing one rather than stacking a second.
+    if (this.placeholder !== null) {
+      return;
     }
-    unsubscribe?.();
-    unsubscribe = null;
-    latest = null;
+    this.placeholder = mintThinkingPlaceholder(this.store) ?? null;
   };
 
-  return { onReplay, dispose };
+  onStreamEnd = (): void => {
+    if (this.placeholder === null) {
+      return;
+    }
+    removePlaceholder(this.store, this.placeholder);
+    this.placeholder = null;
+  };
+
+  dispose = (): void => {
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    this.latest = null;
+    this.placeholder = null;
+  };
+}
+
+export function createOnReplay(store: Store): OnReplay {
+  const c = new ReplayCoalescer(store);
+  return {
+    onReplay: c.onReplay,
+    onOpen: c.onOpen,
+    onStreamEnd: c.onStreamEnd,
+    dispose: c.dispose,
+  };
 }

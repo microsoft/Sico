@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 // Command dbgen generates the backend's GORM DAL layer (the typed query
 // helpers and model structs) from the live MySQL schema.
 //
@@ -55,11 +35,14 @@ import (
 	"gorm.io/gorm"
 
 	messageEntity "sico-backend/internal/entity/conversation/message"
+	scheduledtaskEntity "sico-backend/internal/entity/scheduledtask"
 	migrationImpl "sico-backend/internal/infra/migration"
 	mysqlImpl "sico-backend/internal/infra/mysql"
 	agentCommon "sico-backend/internal/transport/http/dto/agent/common"
 	commondto "sico-backend/internal/transport/http/dto/common"
 	conversationdto "sico-backend/internal/transport/http/dto/conversation"
+	notificationdto "sico-backend/internal/transport/http/dto/notification"
+	scheduledtaskdto "sico-backend/internal/transport/http/dto/scheduledtask"
 	"sico-backend/pkg/env"
 )
 
@@ -113,7 +96,6 @@ var stores = []storeSpec{
 		outDir: "internal/store/project/internal/dal/query",
 		tables: []tableSpec{
 			{name: "t_project"},
-			{name: "t_project_user"},
 			{name: "t_project_asset"},
 			{name: "t_project_deliverable"},
 		},
@@ -121,7 +103,12 @@ var stores = []storeSpec{
 	{
 		outDir: "internal/store/conversation/conversation/internal/dal/query",
 		tables: []tableSpec{
-			{name: "t_conversation"},
+			{
+				name: "t_conversation",
+				jsonColumns: []jsonColumn{
+					{name: "extra_info", sample: &conversationdto.ConversationExtraInfo{}},
+				},
+			},
 		},
 	},
 	{
@@ -146,6 +133,13 @@ var stores = []storeSpec{
 		},
 	},
 	{
+		outDir: "internal/store/organization/internal/dal/query",
+		tables: []tableSpec{
+			{name: "t_organization"},
+			{name: "t_organization_llmhubs_config"},
+		},
+	},
+	{
 		outDir: "internal/store/knowledge/internal/dal/query",
 		tables: []tableSpec{
 			{name: "t_knowledge_document"},
@@ -163,6 +157,13 @@ var stores = []storeSpec{
 		},
 	},
 	{
+		outDir: "internal/store/llmhubs/internal/dal/query",
+		tables: []tableSpec{
+			{name: "t_model_registry"},
+			{name: "t_model_registry_secret"},
+		},
+	},
+	{
 		outDir:        "internal/store/taskruntime/internal/dal/query",
 		fieldNullable: true,
 		tables: []tableSpec{
@@ -173,6 +174,54 @@ var stores = []storeSpec{
 			{
 				name:                 "t_task_runtime_run",
 				datatypesJSONColumns: []string{"run_json", "result_json"},
+			},
+		},
+	},
+	{
+		outDir: "internal/store/notification/internal/dal/query",
+		tables: []tableSpec{
+			{
+				name: "t_notification",
+				jsonColumns: []jsonColumn{
+					{name: "extra_info", sample: &notificationdto.NotificationExtraInfo{}},
+				},
+			},
+		},
+	},
+	{
+		outDir: "internal/store/scheduledtask/internal/dal/query",
+		tables: []tableSpec{
+			{
+				name: "t_scheduled_task",
+				jsonColumns: []jsonColumn{
+					{name: "attachments", sample: []*commondto.Attachment{}},
+					{name: "extra_info", sample: &scheduledtaskdto.ScheduledTaskExtraInfo{}},
+				},
+			},
+			{
+				name: "t_scheduled_task_run",
+				jsonColumns: []jsonColumn{
+					{name: "extra_info", sample: &scheduledtaskEntity.RunExtraInfo{}},
+				},
+			},
+		},
+	},
+	{
+		outDir: "internal/store/authstate/internal/dal/query",
+		tables: []tableSpec{
+			{
+				name:                 "t_auth_state",
+				datatypesJSONColumns: []string{"metadata"},
+			},
+		},
+	},
+	{
+		outDir: "internal/store/casereplay/internal/dal/query",
+		tables: []tableSpec{
+			{name: "t_case_replay"},
+			{
+				name:                 "t_case_replay_version",
+				datatypesJSONColumns: []string{"metadata"},
 			},
 		},
 	},

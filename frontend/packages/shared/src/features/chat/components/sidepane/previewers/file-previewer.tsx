@@ -1,28 +1,6 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@sico/ui";
 import { ArrowDownToLine } from "lucide-react";
-import { type JSX, useCallback } from "react";
+import { type JSX, useCallback, useState } from "react";
 
 import { downloadFile } from "../../../../../utils/download-file";
 import { iconForFilename } from "../../../../../utils/file-icon";
@@ -55,6 +33,12 @@ const COPY = {
  */
 export function FilePreviewer({ content }: FilePreviewerProps): JSX.Element {
   const { filename, fileUrl, fileUri } = content;
+  // A markdown file reports its own H1 once loaded; use it as the header title
+  // so the pane shows the document title, not the filename. Undefined (non-md,
+  // still loading, no H1, or load failure) falls back to the filename.
+  const [markdownTitle, setMarkdownTitle] = useState<string | undefined>(
+    undefined,
+  );
 
   const handleDownload = useCallback(() => {
     void downloadFile(fileUrl, filename);
@@ -64,7 +48,7 @@ export function FilePreviewer({ content }: FilePreviewerProps): JSX.Element {
     <div className="bg-surface-basic flex h-full flex-col overflow-y-auto">
       <SidepaneHeader
         icon={iconForFilename(filename)}
-        title={filename}
+        title={markdownTitle ?? filename}
         actionsSlot={
           <>
             {content.canAddToProject && (
@@ -100,7 +84,11 @@ export function FilePreviewer({ content }: FilePreviewerProps): JSX.Element {
           </>
         }
       />
-      <FilePreview fileUrl={fileUrl} filename={filename} />
+      <FilePreview
+        fileUrl={fileUrl}
+        filename={filename}
+        onMarkdownTitleResolved={setMarkdownTitle}
+      />
     </div>
   );
 }

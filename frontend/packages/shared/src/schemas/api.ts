@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { z } from "zod";
 
 import {
@@ -45,17 +23,30 @@ export const apiResponseSchema = <T extends z.ZodTypeAny>(
     data: data.optional(),
   });
 
-// Throw on a non-OK envelope `code` so the caller sees the real failure code,
-// not a downstream "missing data". For edit/delete fns that carry no `data`.
-export function assertOk(parsed: { code: number }, context: string): void {
+// A non-OK backend envelope (`code !== 0`) surfaced as an Error that KEEPS the
+// backend `code` + `msg`, so a toast can show the real reason (e.g. "role
+// already assigned to user") instead of a generic fallback. `assertOk` throws
+// this; `apiErrorMessage` reads `.msg` off it.
+export class EnvelopeError extends Error {
+  readonly code: number;
+  readonly msg: string;
+  constructor(code: number, msg: string, context: string) {
+    super(`${context}: rejected (code ${String(code)})`);
+    this.name = "EnvelopeError";
+    this.code = code;
+    this.msg = msg;
+  }
+}
+
+// Throw on a non-OK envelope `code` so the caller sees the real failure code +
+// message, not a downstream "missing data". For edit/delete fns that carry no
+// `data`. `msg` defaults to "" when a caller passes only `{ code }`.
+export function assertOk(
+  parsed: { code: number; msg?: string },
+  context: string,
+): void {
   if (parsed.code !== HTTP_OK) {
-    throw new z.ZodError([
-      {
-        code: "custom",
-        path: ["code"],
-        message: `${context}: rejected (code ${parsed.code})`,
-      },
-    ]);
+    throw new EnvelopeError(parsed.code, parsed.msg ?? "", context);
   }
 }
 

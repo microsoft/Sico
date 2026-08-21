@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package handler
 
 import (
@@ -29,10 +9,9 @@ import (
 	"github.com/google/uuid"
 
 	singleAgentSVC "sico-backend/internal/biz/agent"
-	llmhubsSVC "sico-backend/internal/biz/llmhubs"
+	conversationbiz "sico-backend/internal/biz/conversation"
 	saEntity "sico-backend/internal/entity/agent/singleagent"
 	"sico-backend/internal/transport/http/dto/agent/single_agent"
-	llmhubsDTO "sico-backend/internal/transport/http/dto/llmhubs"
 	"sico-backend/internal/transport/http/middleware"
 )
 
@@ -91,6 +70,11 @@ func GetSingleAgent(ctx *gin.Context) {
 	err = ctx.ShouldBindQuery(&req)
 	if err != nil {
 		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	if err := singleAgentSVC.DefaultFull().CheckAgentVisibility(reqctx(ctx), req.AgentId); err != nil {
+		internalServerErrorResponse(ctx, err)
 		return
 	}
 
@@ -159,6 +143,11 @@ func DeleteSingleAgent(ctx *gin.Context) {
 		return
 	}
 
+	if err := singleAgentSVC.DefaultFull().CheckAgentOwner(reqctx(ctx), req.AgentId); err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
 	resp, err := singleAgentSVC.DefaultFull().DeleteSingleAgent(reqctx(ctx), &req)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
@@ -187,6 +176,7 @@ func ListSingleAgents(ctx *gin.Context) {
 		invalidParamRequestResponse(ctx, err.Error())
 		return
 	}
+	req.PublishStatusArr = parsePublishStatusList(req.PublishStatusList)
 
 	resp, err := singleAgentSVC.DefaultFull().ListSingleAgents(reqctx(ctx), &req)
 	if err != nil {
@@ -208,9 +198,16 @@ func ListSingleAgents(ctx *gin.Context) {
 func ListSingleAgentInfos(ctx *gin.Context) {
 	var (
 		err error
+		req single_agent.ListSingleAgentInfosRequest
 	)
 
-	resp, err := singleAgentSVC.DefaultFull().ListSingleAgentInfos(reqctx(ctx))
+	if err = ctx.ShouldBindQuery(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+	req.PublishStatusArr = parsePublishStatusList(req.PublishStatusList)
+
+	resp, err := singleAgentSVC.DefaultFull().ListSingleAgentInfos(reqctx(ctx), &req)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
 		return
@@ -238,6 +235,27 @@ func ListRoles(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, resp)
+}
+
+func validateSingleAgentInstanceStatus(status ...single_agent.SingleAgentInstanceStatus) bool {
+	for _, s := range status {
+		if s <= single_agent.SingleAgentInstanceStatus_INSTANCE_UNKNOWN ||
+			s > single_agent.SingleAgentInstanceStatus_INSTANCE_ONBOARDING_SAVED {
+			return false
+		}
+	}
+
+	return true
+}
+
+func parseSingleAgentInstanceStatusList(list string) []single_agent.SingleAgentInstanceStatus {
+	var statuses []single_agent.SingleAgentInstanceStatus
+	for _, part := range strings.Split(list, ",") {
+		if status, err := strconv.Atoi(strings.TrimSpace(part)); err == nil {
+			statuses = append(statuses, single_agent.SingleAgentInstanceStatus(status))
+		}
+	}
+	return statuses
 }
 
 // DeploySingleAgent deploys a single agent by creating an agent instance for the current user
@@ -495,15 +513,11 @@ func ListSingleAgentInstances(ctx *gin.Context) {
 		return
 	}
 
-	statusParts := strings.Split(req.GetStatusList(), ",")
-	for _, part := range statusParts {
-		part = strings.TrimSpace(part)
-		if v, ok := single_agent.SingleAgentInstanceStatus_value[part]; ok {
-			req.StatusArr = append(req.StatusArr, single_agent.SingleAgentInstanceStatus(v))
-		}
-	}
-	if len(req.StatusArr) == 1 && req.StatusArr[0] == single_agent.SingleAgentInstanceStatus(0) {
-		req.StatusArr = nil
+	req.StatusArr = parseSingleAgentInstanceStatusList(req.GetStatusList())
+
+	if !validateSingleAgentInstanceStatus(req.StatusArr...) {
+		invalidParamRequestResponse(ctx, "Invalid status")
+		return
 	}
 
 	// Build filter from request
@@ -551,75 +565,66 @@ func ListSingleAgentInstances(ctx *gin.Context) {
 		instanceID := strconv.FormatInt(inst.Id, 10)
 		inst.Sandboxes = getInstanceSandboxes(reqctx(ctx), instanceID)
 	}
+	if req.GetFetchConversationStatus() {
+		instanceIDs := make([]int64, 0, len(resp.Data.Instances))
+		for _, inst := range resp.Data.Instances {
+			if inst != nil {
+				instanceIDs = append(instanceIDs, inst.Id)
+			}
+		}
+		statuses := conversationbiz.Default().GetAgentInstanceConversationRunStatuses(reqctx(ctx), instanceIDs)
+		for _, inst := range resp.Data.Instances {
+			if inst != nil {
+				status := statuses[inst.Id]
+				inst.ConversationStatus = &status
+			}
+		}
+	}
 
 	ctx.JSON(http.StatusOK, resp)
 }
 
-// GetSingleAgentModels lists builtin models, current agent custom models, and current selection.
-// @Router /api/sico/agents/{agentId}/models [GET]
+// PublishSingleAgent publishes a single agent (transitions from draft to published)
+// @Router /api/sico/agent/single_agent/publish [POST]
 // @Tags SingleAgent
 // @Accept json
 // @Produce json
-// @Param agentId path string true "Agent ID"
-// @Success 200 {object} single_agent.GetSingleAgentModelsResponse
+// @Param request body single_agent.PublishSingleAgentRequest true "Publish single agent request"
+// @Success 200 {object} single_agent.PublishSingleAgentResponse
 // @Security BearerAuth
-func GetSingleAgentModels(ctx *gin.Context) {
-	agentID := strings.TrimSpace(ctx.Param("agentId"))
-	if agentID == "" {
-		invalidParamRequestResponse(ctx, "agentId is required")
+func PublishSingleAgent(ctx *gin.Context) {
+	var req single_agent.PublishSingleAgentRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
 		return
 	}
 
-	agentResp, err := singleAgentSVC.DefaultFull().GetSingleAgent(
-		reqctx(ctx), &single_agent.GetSingleAgentRequest{AgentId: agentID},
-	)
-	if err != nil {
+	if err := singleAgentSVC.DefaultFull().CheckAgentManageAccess(reqctx(ctx), req.AgentId); err != nil {
 		internalServerErrorResponse(ctx, err)
 		return
 	}
 
-	builtinModels, err := llmhubsSVC.Default().ListBuiltinModels(reqctx(ctx))
+	resp, err := singleAgentSVC.DefaultFull().PublishSingleAgent(reqctx(ctx), &req)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
 		return
-	}
-
-	customEntries, err := llmhubsSVC.ListAgentCustomModelEntries(reqctx(ctx), agentID)
-	if err != nil {
-		internalServerErrorResponse(ctx, err)
-		return
-	}
-
-	resp := &single_agent.GetSingleAgentModelsResponse{
-		Data: &single_agent.GetSingleAgentModelsData{
-			BuiltinModels:  mapAgentModelOptions(builtinModels),
-			CustomModels:   mapAgentModelOptions(customEntries),
-			SelectedConfig: &single_agent.LLMHubConfig{},
-		},
-	}
-	if agentResp != nil && agentResp.Data != nil && agentResp.Data.Agent != nil {
-		if agentResp.Data.Agent.LlmhubConfig != nil {
-			resp.Data.SelectedConfig = agentResp.Data.Agent.LlmhubConfig
-		}
 	}
 
 	ctx.JSON(http.StatusOK, resp)
 }
 
-func mapAgentModelOptions(entries []*llmhubsDTO.ModelRegistryEntry) []*single_agent.AgentModelOption {
-	items := make([]*single_agent.AgentModelOption, 0, len(entries))
-	for _, entry := range entries {
-		if entry == nil {
-			continue
-		}
-		items = append(items, &single_agent.AgentModelOption{
-			ModelKey:             entry.ModelKey,
-			DisplayName:          entry.DisplayName,
-			Description:          entry.Description,
-			IconUri:              entry.IconUri,
-			ModelType:            entry.ModelType,
-			ProviderTemplateType: entry.ProviderTemplateType,
-		})
+// parsePublishStatusList parses a comma-separated publish-status query value
+// (e.g. "0,1") into a list of SingleAgentPublishStatus values.
+func parsePublishStatusList(list string) []single_agent.SingleAgentPublishStatus {
+	list = strings.TrimSpace(list)
+	if list == "" {
+		return nil
 	}
-	return items
+	var out []single_agent.SingleAgentPublishStatus
+	for _, part := range strings.Split(list, ",") {
+		if v, convErr := strconv.Atoi(strings.TrimSpace(part)); convErr == nil {
+			out = append(out, single_agent.SingleAgentPublishStatus(v))
+		}
+	}
+	return out
 }

@@ -1,36 +1,18 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package migration
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
 
 	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database"
 	mysqlmigrate "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
-	"sico-backend/internal/consts"
+	infraMysql "sico-backend/internal/infra/mysql"
 	"sico-backend/pkg/env"
 )
 
@@ -53,14 +35,10 @@ func NewMigrator() Migrator {
 func (m *migrator) Run() (uint, error) {
 	rootPath := env.FindBackendRootPath()
 
-	dbHost := env.MustGet(consts.DatabaseHost)
-	dbPort := env.MustGet(consts.DatabasePort)
-	dbUser := env.MustGet(consts.DatabaseUser)
-	dbPassword := env.MustGet(consts.DatabasePassword)
-	dbName := env.MustGet(consts.DatabaseName)
-
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&multiStatements=true",
-		dbUser, dbPassword, dbHost, dbPort, dbName)
+	dsn, err := infraMysql.DSNFromEnvironment(true)
+	if err != nil {
+		return 0, err
+	}
 
 	sqlDB, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -70,31 +48,65 @@ func (m *migrator) Run() (uint, error) {
 		_ = sqlDB.Close()
 	}()
 
-	driver, err := mysqlmigrate.WithInstance(sqlDB, &mysqlmigrate.Config{})
+	return runPublicMigrations(sqlDB, rootPath)
+}
+
+func runPublicMigrations(sqlDB *sql.DB, rootPath string) (uint, error) {
+	driver, err := newDatabaseDriver(sqlDB, &mysqlmigrate.Config{})
 	if err != nil {
 		return 0, fmt.Errorf("failed to init mysql migrate driver: %w", err)
 	}
-
 	migrationsPath := filepath.Join(rootPath, "configs", "migrations")
 	sourceURL := fmt.Sprintf("file://%s", filepath.ToSlash(migrationsPath))
-
 	mInstance, err := migrate.NewWithDatabaseInstance(sourceURL, "mysql", driver)
 	if err != nil {
+		_ = driver.Close()
 		return 0, fmt.Errorf("failed to create migrate instance: %w", err)
 	}
+	return applyAndClose(mInstance, "database")
+}
 
+func newDatabaseDriver(sqlDB *sql.DB, config *mysqlmigrate.Config) (database.Driver, error) {
+	ctx := context.Background()
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	driver, err := mysqlmigrate.WithConnection(ctx, conn, config)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return driver, nil
+}
+
+func applyAndClose(mInstance *migrate.Migrate, name string) (uint, error) {
+	version, runErr := apply(mInstance, name)
+	sourceErr, databaseErr := mInstance.Close()
+	if runErr != nil {
+		return 0, runErr
+	}
+	if sourceErr != nil || databaseErr != nil {
+		return 0, fmt.Errorf("close %s migrator: source=%v database=%v", name, sourceErr, databaseErr)
+	}
+	return version, nil
+}
+
+func apply(mInstance *migrate.Migrate, name string) (uint, error) {
 	if err := mInstance.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return 0, fmt.Errorf("failed to apply migrations: %w", err)
+		return 0, fmt.Errorf("apply %s migrations: %w", name, err)
 	}
-
-	if version, dirty, err := mInstance.Version(); err != nil {
-		return 0, fmt.Errorf("failed to query migration version: %w", err)
-	} else if dirty {
+	version, dirty, err := mInstance.Version()
+	if err != nil {
+		return 0, fmt.Errorf("query %s migration version: %w", name, err)
+	}
+	if dirty {
 		return 0, fmt.Errorf(
-			"database schema is dirty at version %d; fix with migrate force %d then rerun",
-			version, version,
+			"%s schema is dirty at version %d; fix with migrate force %d then rerun",
+			name,
+			version,
+			version,
 		)
-	} else {
-		return version, nil
 	}
+	return version, nil
 }

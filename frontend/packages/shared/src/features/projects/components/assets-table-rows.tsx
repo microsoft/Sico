@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   Button,
   Table,
@@ -55,7 +33,12 @@ import {
 import { useExtractionResultToast } from "../hooks/use-extraction-toasts";
 import { useTableScrollEdges } from "../hooks/use-table-scroll-edges";
 import type { AssetSearch } from "../schemas/asset-search";
-import type { AssetCategory, AssetRow as AssetRowData } from "../types";
+import type {
+  AssetCategory,
+  AssetCreator,
+  AssetRow as AssetRowData,
+} from "../types";
+import { sameIdentity } from "../utils/same-identity";
 
 export type AssetsTableRowsProps = {
   projectId: number;
@@ -70,6 +53,12 @@ export type AssetsTableRowsProps = {
    * keeping column widths aligned and the table from reflowing on resolve.
    */
   isFetchingNextPage?: boolean;
+  /** asset.manage — may delete ANY asset (admin). */
+  canManageAsset: boolean;
+  /** asset.manage.own — may delete OWN assets (member). */
+  canManageAssetOwn: boolean;
+  /** Current user's email, for the per-row `.own` delete check. */
+  userEmail: string | null;
 };
 
 // How many skeleton rows to append while the next page loads. Matches a
@@ -98,6 +87,21 @@ const CENTER = "flex min-h-0 flex-1 items-center justify-center";
 // so the table shrinks to its content and `CENTER` takes the rest. Scoped to the
 // container (Table's own `className` lands on the inner <table>).
 const EMPTY_TABLE = "[&_[data-slot=table-container]]:flex-none";
+
+// The `.own` delete check: does `userEmail` own this asset? A Knowledge doc is
+// uploaded by a user (match `creatorUsername`); a Deliverable/Experience is
+// produced by a DW, so the OWNER is the human operator who ran it
+// (`operatorUsername`, per the PRD "DW Operator may delete"). Fails CLOSED on an
+// unknown identity or an older row that predates the backend operator field —
+// `sameIdentity` returns false on a null/empty candidate or user.
+export function ownsAsset(
+  creator: AssetCreator,
+  userEmail: string | null,
+): boolean {
+  return creator.kind === "user"
+    ? sameIdentity(creator.username, userEmail)
+    : sameIdentity(creator.operatorUsername, userEmail);
+}
 
 // Free-text filter + createdAt sort applied to the ALREADY-LOADED rows. The
 // category split now lives in the route (one endpoint per path), so there is no
@@ -212,6 +216,7 @@ function renderAssetsTable({
   toggleSort,
   onOpen,
   onAction,
+  canDelete,
   hintTab,
   onDismissHint,
   emptyState,
@@ -223,6 +228,7 @@ function renderAssetsTable({
   toggleSort: () => void;
   onOpen: (row: AssetRowData) => void;
   onAction: (row: AssetRowData, kind: AssetActionKind) => void;
+  canDelete: (row: AssetRowData) => boolean;
   hintTab: HintTab | null;
   onDismissHint: (tab: HintTab) => void;
   emptyState: React.JSX.Element;
@@ -276,6 +282,7 @@ function renderAssetsTable({
               row={row}
               onOpen={() => onOpen(row)}
               onAction={(kind) => onAction(row, kind)}
+              canDelete={canDelete(row)}
             />
           ))}
           {isFetchingNextPage && visibleRows.length > 0
@@ -307,6 +314,9 @@ export function AssetsTableRows({
   search,
   onSearchChange,
   isFetchingNextPage = false,
+  canManageAsset,
+  canManageAssetOwn,
+  userEmail,
 }: AssetsTableRowsProps): React.JSX.Element {
   const query = useSuspenseAssetsInfiniteQuery(projectId, category);
   const rows = query.data.pages.flatMap((page) => page.items);
@@ -325,6 +335,8 @@ export function AssetsTableRows({
 
   const visibleRows = selectVisibleRows(rows, search);
   const hintTab = resolveHintTab(category, dismissedHints);
+  const canDelete = (row: AssetRowData): boolean =>
+    canManageAsset || (canManageAssetOwn && ownsAsset(row.creator, userEmail));
   const SortGlyph = search.sort === "asc" ? ArrowUp : ArrowDown;
   const ariaSort = search.sort === "asc" ? "ascending" : "descending";
   const toggleSort = (): void =>
@@ -364,6 +376,7 @@ export function AssetsTableRows({
             toggleSort,
             onOpen: rowActions.handleOpen,
             onAction: rowActions.handleAction,
+            canDelete,
             hintTab,
             onDismissHint: dismissHint,
             emptyState,

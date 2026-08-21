@@ -1,28 +1,9 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
+import pytest
 
 from app.tools.context import (
     ContextInput,
@@ -129,6 +110,16 @@ def test_load_scoped_to_directory(tmp_path: Path, monkeypatch) -> None:
     assert result["file_listing_mode"] == "full"
     assert result["total_file_count"] == 2
     assert all("results/batch-1" in f["path"] for f in result["files"])
+
+
+def test_load_rejects_internal_source_directory(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True)
+    monkeypatch.setattr("app.tools.context.CHAT_FS.get_workspace_path", lambda *_a: workspace)
+    monkeypatch.setattr("app.tools.context.CHAT_FS.list_files", lambda *_a: [])
+
+    with pytest.raises(ValueError, match="internal workspace storage"):
+        load_workspace_context(1, "user", directory=".source-repository")
 
 
 # ---------------------------------------------------------------------------

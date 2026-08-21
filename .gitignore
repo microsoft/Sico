@@ -348,6 +348,10 @@ dist
 backend/scripts/playground/
 
 __pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
 
 # Helm chart packages
 *.tgz

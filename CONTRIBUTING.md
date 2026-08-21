@@ -53,16 +53,9 @@ make setup-check
 The development guide lists platform-specific installer behavior, Make targets,
 service-specific commands, and troubleshooting notes.
 
-## License headers
+## Licensing
 
-Every new source file outside `labs/AgentStream` (Go, Python, TypeScript,
-JavaScript, proto, shell, YAML, Dockerfile, ...) must carry the MIT header. The
-pre-commit hook adds it automatically. Files under `labs/AgentStream` instead
-use the Apache-2.0 SPDX header described in the
-[AgentStream contribution guide](labs/AgentStream/exgentic/CONTRIBUTING.md).
-Generated files are intentionally excluded; see the
-[Development guide](docs/development.md#license-headers) and
-[pre-commit configuration](.pre-commit-config.yaml) for the exact ignore list.
+Sico is licensed under the MIT License in the repository root. Project-owned files do not require per-file license headers. Third-party copyright and license notices must be preserved.
 
 ## Commit & PR
 

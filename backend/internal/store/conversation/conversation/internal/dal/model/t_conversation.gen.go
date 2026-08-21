@@ -5,6 +5,8 @@
 package model
 
 import (
+	"sico-backend/internal/transport/http/dto/conversation"
+
 	"gorm.io/gorm"
 )
 
@@ -12,15 +14,16 @@ const TableNameTConversation = "t_conversation"
 
 // TConversation Conversation info
 type TConversation struct {
-	ID              int64          `gorm:"column:id;primaryKey;autoIncrement:true;comment:Primary key ID" json:"id"`                // Primary key ID
-	AgentID         string         `gorm:"column:agent_id;not null;comment:Agent ID" json:"agent_id"`                               // Agent ID
-	AgentInstanceID int64          `gorm:"column:agent_instance_id;not null;comment:Agent instance ID" json:"agent_instance_id"`    // Agent instance ID
-	Title           string         `gorm:"column:title;not null;comment:Conversation title" json:"title"`                           // Conversation title
-	CreatorUsername string         `gorm:"column:creator_username;comment:Creator Username" json:"creator_username"`                // Creator Username
-	Ext             string         `gorm:"column:ext;comment:Extension fields" json:"ext"`                                          // Extension fields
-	CreatedAt       int64          `gorm:"column:created_at;not null;autoCreateTime:milli;comment:Creation time" json:"created_at"` // Creation time
-	UpdatedAt       int64          `gorm:"column:updated_at;not null;autoUpdateTime:milli;comment:Update time" json:"updated_at"`   // Update time
-	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;comment:Deletion time" json:"deleted_at"`                               // Deletion time
+	ID              int64                               `gorm:"column:id;primaryKey;autoIncrement:true;comment:Primary key ID" json:"id"`                     // Primary key ID
+	AgentID         string                              `gorm:"column:agent_id;not null;comment:Agent ID" json:"agent_id"`                                    // Agent ID
+	AgentInstanceID int64                               `gorm:"column:agent_instance_id;not null;comment:Agent instance ID" json:"agent_instance_id"`         // Agent instance ID
+	Title           string                              `gorm:"column:title;not null;comment:Conversation title" json:"title"`                                // Conversation title
+	CreatorUsername string                              `gorm:"column:creator_username;comment:Creator Username" json:"creator_username"`                     // Creator Username
+	Ext             string                              `gorm:"column:ext;comment:Extension fields" json:"ext"`                                               // Extension fields
+	ExtraInfo       *conversation.ConversationExtraInfo `gorm:"column:extra_info;comment:Extensible conversation metadata;serializer:json" json:"extra_info"` // Extensible conversation metadata
+	CreatedAt       int64                               `gorm:"column:created_at;not null;autoCreateTime:milli;comment:Creation time" json:"created_at"`      // Creation time
+	UpdatedAt       int64                               `gorm:"column:updated_at;not null;autoUpdateTime:milli;comment:Update time" json:"updated_at"`        // Update time
+	DeletedAt       gorm.DeletedAt                      `gorm:"column:deleted_at;comment:Deletion time" json:"deleted_at"`                                    // Deletion time
 }
 
 // TableName TConversation's table name

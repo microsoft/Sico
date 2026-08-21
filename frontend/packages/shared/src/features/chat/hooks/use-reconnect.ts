@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { toast } from "@sico/ui";
 import { type createStore, useStore } from "jotai";
 import { useCallback, useEffect, useRef } from "react";
@@ -29,6 +7,7 @@ import { useSicoConfig } from "../../../services/sico-config-context";
 import { assertNever } from "../../../utils/assert-never";
 import {
   activeConversationAtom,
+  isFreshHomeSend,
   isStreamingAiMessage,
   isStreamingAtom,
   lastActivityAtom,
@@ -81,6 +60,12 @@ type UseReconnectOptions = {
   // In isolation an omitted handler is a correct no-op — the machine still
   // coalesces the buffer.
   onReplay?: (events: ChatEvent[]) => void;
+  // Reconnect stream opened / ended — drive the Thinking… placeholder that
+  // mirrors the live send. Both are owned by the same `createOnReplay` instance
+  // as `onReplay`, so the row lifecycle (mint on open, claim on first frame, drop
+  // on unclaimed end) stays in one place. Omitted → no-op (stories/tests).
+  onOpen?: () => void;
+  onStreamEnd?: () => void;
   // Fired once when a reconnect-resumed turn reaches a terminal state, symmetric
   // with the live-send path's `onSettle` (chat.ts). The caller invalidates the
   // history cache so a later remount refetches the now-persisted turn instead of
@@ -122,6 +107,10 @@ class ReconnectController {
     private readonly getters: {
       onReplay: () => ((events: ChatEvent[]) => void) | undefined;
       onSettle: () => (() => void) | undefined;
+      // Reconnect stream opened / ended — drive the Thinking… placeholder that
+      // mirrors the live send (createOnReplay owns the row lifecycle).
+      onOpen: () => (() => void) | undefined;
+      onStreamEnd: () => (() => void) | undefined;
       reconnectUrl: () => string;
     },
   ) {}
@@ -227,7 +216,14 @@ class ReconnectController {
       {
         url: this.getters.reconnectUrl(),
         signal: own.signal,
-        onOpen: () => this.dispatch({ type: "open" }),
+        onOpen: () => {
+          // Mirror the live send: on stream open, seed a Thinking… placeholder
+          // so the resumed turn shows immediately, before the (possibly slow)
+          // first frame. `createOnReplay` gates it (B) so a completed-turn
+          // revisit doesn't flash one.
+          this.getters.onOpen()?.();
+          this.dispatch({ type: "open" });
+        },
         // `onLive` fires on every frame (keepalive included) — pure liveness.
         onLive: () => {
           // Keep the shared activity clock fresh so the hook's staleness
@@ -236,41 +232,57 @@ class ReconnectController {
           this.store.set(lastActivityAtom, Date.now());
           this.dispatch({ type: "keepalive" });
         },
-        onEvent: (event) => {
-          // Terminal frames drive the settle path (symmetric with done); a
-          // data frame appends to the replay buffer. An error frame carries no
-          // Part (reduceFrame ignores it), so routing it to `error` rather than
-          // `frame` loses nothing and keeps the terminal handling in one place.
-          if (event.event === "done") {
-            this.dispatch({ type: "done", event });
-          } else if (event.event === "error") {
-            this.dispatch({ type: "error" });
-          } else {
-            this.dispatch({ type: "frame", event });
-          }
-        },
+        onEvent: (event) => this.onStreamEvent(event),
       },
     )
-      .then(() => {
-        if (this.controller !== own || this.terminated) {
-          return;
-        }
-        this.dispatch({ type: "close" });
-      })
-      .catch((err: unknown) => {
-        if (this.controller !== own) {
-          return;
-        }
-        // A dead session (401) exits via the logout flow, never backoff.
-        if (err instanceof ChatStreamHttpError && err.status === 401) {
-          this.dispatch({ type: "http401" });
-          return;
-        }
-        if (this.terminated) {
-          return;
-        }
-        this.dispatch({ type: "close" });
-      });
+      .then(() => this.onStreamClose(own))
+      .catch((err: unknown) => this.onStreamError(own, err));
+  }
+
+  // Route one transport frame. Terminal frames mark the stream `terminated` (the
+  // `.then` close handler then skips its `onStreamEnd`), so they drop any
+  // unclaimed placeholder here — the completed-turn revisit (open → placeholder →
+  // done with no turnId to claim it). A claimed row carries a turnId and is left
+  // intact by createOnReplay. A data frame appends to the replay buffer.
+  private onStreamEvent(event: ChatEvent): void {
+    if (event.event === "done") {
+      this.getters.onStreamEnd()?.();
+      this.dispatch({ type: "done", event });
+    } else if (event.event === "error") {
+      this.getters.onStreamEnd()?.();
+      this.dispatch({ type: "error" });
+    } else {
+      this.dispatch({ type: "frame", event });
+    }
+  }
+
+  // Clean close / caller-abort. Drop a never-claimed placeholder so no stuck
+  // Thinking… lingers, then feed the machine — guarded by controller identity so
+  // a superseded stream's late settle is ignored.
+  private onStreamClose(own: AbortController): void {
+    if (this.controller !== own || this.terminated) {
+      return;
+    }
+    this.getters.onStreamEnd()?.();
+    this.dispatch({ type: "close" });
+  }
+
+  // Transport failure. A dead session (401) exits via the logout flow, never
+  // backoff. Both paths drop a never-claimed placeholder first.
+  private onStreamError(own: AbortController, err: unknown): void {
+    if (this.controller !== own) {
+      return;
+    }
+    if (err instanceof ChatStreamHttpError && err.status === 401) {
+      this.getters.onStreamEnd()?.();
+      this.dispatch({ type: "http401" });
+      return;
+    }
+    if (this.terminated) {
+      return;
+    }
+    this.getters.onStreamEnd()?.();
+    this.dispatch({ type: "close" });
   }
 
   private clearStall(): void {
@@ -414,10 +426,14 @@ export function useReconnect(
   const reconnectUrlRef = useRef(reconnectStreamUrl);
   const onReplayRef = useRef(options?.onReplay);
   const onSettleRef = useRef(options?.onSettle);
+  const onOpenRef = useRef(options?.onOpen);
+  const onStreamEndRef = useRef(options?.onStreamEnd);
   useEffect(() => {
     reconnectUrlRef.current = reconnectStreamUrl;
     onReplayRef.current = options?.onReplay;
     onSettleRef.current = options?.onSettle;
+    onOpenRef.current = options?.onOpen;
+    onStreamEndRef.current = options?.onStreamEnd;
   });
 
   // `stop` is exposed through a ref so the handle stays stable across renders
@@ -432,6 +448,8 @@ export function useReconnect(
       {
         onReplay: () => onReplayRef.current,
         onSettle: () => onSettleRef.current,
+        onOpen: () => onOpenRef.current,
+        onStreamEnd: () => onStreamEndRef.current,
         reconnectUrl: () => reconnectUrlRef.current,
       },
     );
@@ -439,10 +457,10 @@ export function useReconnect(
     stopRef.current = () => controller.dispatch({ type: "stop" });
     const disposeTriggers = installTriggers(store, controller);
 
-    // One probe on mount — the entry trigger into the machine. A terminal frame
-    // (done/error) settles the loop, so a turn that's already finished (or an
-    // empty conversation) probes once and stops rather than spinning.
-    controller.dispatch({ type: "probe" });
+    // Entry probe — skipped for a home-originated first send (isFreshHomeSend).
+    if (!isFreshHomeSend(store, agentInstanceId, conversationId)) {
+      controller.dispatch({ type: "probe" });
+    }
 
     return () => {
       disposeTriggers();

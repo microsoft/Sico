@@ -7,43 +7,6 @@
         "version": "1.0"
     },
     "paths": {
-        "/api/dwp/conversation/onboard/recommendation_tasks": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Conversation"
-                ],
-                "parameters": [
-                    {
-                        "description": "Request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/sico/agent/roles": {
             "get": {
                 "security": [
@@ -241,6 +204,43 @@
                 }
             }
         },
+        "/api/sico/agent/single_agent/publish": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SingleAgent"
+                ],
+                "parameters": [
+                    {
+                        "description": "Publish single agent request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.PublishSingleAgentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.PublishSingleAgentResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/sico/agent/single_agent_infos": {
             "get": {
                 "security": [
@@ -256,6 +256,41 @@
                 ],
                 "tags": [
                     "SingleAgent"
+                ],
+                "parameters": [
+                    {
+                        "enum": [
+                            0,
+                            1
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-comments": {
+                            "ListAgentIntent_LIST_AGENT_INTENT_DEPLOY": "Operator: pick agents to deploy",
+                            "ListAgentIntent_LIST_AGENT_INTENT_MANAGE": "Developer: configure agents (default)"
+                        },
+                        "x-enum-descriptions": [
+                            "Developer: configure agents (default)",
+                            "Operator: pick agents to deploy"
+                        ],
+                        "x-enum-varnames": [
+                            "ListAgentIntent_LIST_AGENT_INTENT_MANAGE",
+                            "ListAgentIntent_LIST_AGENT_INTENT_DEPLOY"
+                        ],
+                        "name": "intent",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "organizationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated publish status values (e.g. \"0,1\"); parsed into publish_status_arr\nby the handler. Empty defaults to PUBLISHED only.",
+                        "name": "publishStatusList",
+                        "in": "query"
+                    }
                 ],
                 "responses": {
                     "200": {
@@ -403,6 +438,117 @@
                 }
             }
         },
+        "/api/sico/agent/single_agent_instance/dismiss": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SingleAgentInstance"
+                ],
+                "parameters": [
+                    {
+                        "description": "Dismiss request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DismissSingleAgentInstanceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DismissSingleAgentInstanceResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/agent/single_agent_instance/reassign": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SingleAgentInstance"
+                ],
+                "parameters": [
+                    {
+                        "description": "Reassign request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ReassignSingleAgentInstanceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ReassignSingleAgentInstanceResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/agent/single_agent_instance/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SingleAgentInstance"
+                ],
+                "parameters": [
+                    {
+                        "description": "Status update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceStatusResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/sico/agent/single_agent_instances": {
             "get": {
                 "security": [
@@ -421,8 +567,46 @@
                 ],
                 "parameters": [
                     {
+                        "type": "string",
+                        "name": "employerUsername",
+                        "in": "query"
+                    },
+                    {
                         "type": "boolean",
-                        "name": "isEmployer",
+                        "name": "fetchConversationStatus",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "operatorUsername",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            2,
+                            3
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-comments": {
+                            "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT": "ORDER BY status, updated_at",
+                            "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED": "Default: ID"
+                        },
+                        "x-enum-descriptions": [
+                            "Default: ID",
+                            "",
+                            "",
+                            "ORDER BY status, updated_at"
+                        ],
+                        "x-enum-varnames": [
+                            "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED",
+                            "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_ID",
+                            "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT",
+                            "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT"
+                        ],
+                        "name": "orderBy",
                         "in": "query"
                     },
                     {
@@ -439,6 +623,40 @@
                         "name": "pageSize",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "name": "projectId",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            2
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-comments": {
+                            "SortOrder_SORT_ORDER_UNSPECIFIED": "Default: DESC"
+                        },
+                        "x-enum-descriptions": [
+                            "Default: DESC",
+                            "",
+                            ""
+                        ],
+                        "x-enum-varnames": [
+                            "SortOrder_SORT_ORDER_UNSPECIFIED",
+                            "SortOrder_SORT_ORDER_ASC",
+                            "SortOrder_SORT_ORDER_DESC"
+                        ],
+                        "name": "sortOrder",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "statusList",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -469,19 +687,37 @@
                 ],
                 "parameters": [
                     {
-                        "minimum": 1,
+                        "enum": [
+                            0,
+                            1
+                        ],
                         "type": "integer",
-                        "name": "page",
-                        "in": "query",
-                        "required": true
+                        "format": "int32",
+                        "x-enum-comments": {
+                            "ListAgentIntent_LIST_AGENT_INTENT_DEPLOY": "Operator: pick agents to deploy",
+                            "ListAgentIntent_LIST_AGENT_INTENT_MANAGE": "Developer: configure agents (default)"
+                        },
+                        "x-enum-descriptions": [
+                            "Developer: configure agents (default)",
+                            "Operator: pick agents to deploy"
+                        ],
+                        "x-enum-varnames": [
+                            "ListAgentIntent_LIST_AGENT_INTENT_MANAGE",
+                            "ListAgentIntent_LIST_AGENT_INTENT_DEPLOY"
+                        ],
+                        "name": "intent",
+                        "in": "query"
                     },
                     {
-                        "maximum": 50,
-                        "minimum": 1,
                         "type": "integer",
-                        "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "name": "organizationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated publish status values (e.g. \"0,1\"); parsed into publish_status_arr\nby the handler. Empty defaults to PUBLISHED only.",
+                        "name": "publishStatusList",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -494,8 +730,77 @@
                 }
             }
         },
-        "/api/sico/agents/{agentId}/models": {
+        "/api/sico/auth-state": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth-state"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "accountKey",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "name": "siteHost",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.GetAuthStateResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/auth-state/import": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth-state"
+                ],
+                "parameters": [
+                    {
+                        "description": "Import Auth State",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.ImportAuthStateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.ImportAuthStateResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/auth-state/status": {
+            "post": {
                 "security": [
                     {
                         "BearerAuth": []
@@ -508,22 +813,24 @@
                     "application/json"
                 ],
                 "tags": [
-                    "SingleAgent"
+                    "auth-state"
                 ],
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Agent ID",
-                        "name": "agentId",
-                        "in": "path",
-                        "required": true
+                        "description": "Update Auth State Status",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.UpdateAuthStateStatusRequest"
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsResponse"
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.UpdateAuthStateStatusResponse"
                         }
                     }
                 }
@@ -808,6 +1115,11 @@
                         "required": true
                     },
                     {
+                        "type": "boolean",
+                        "name": "fetchConversationStatus",
+                        "in": "query"
+                    },
+                    {
                         "minimum": 0,
                         "type": "integer",
                         "default": 1,
@@ -931,6 +1243,43 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.GetUserMessageByUserAgentTurnIDResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/conversation/onboard/recommendation_tasks": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Conversation"
+                ],
+                "parameters": [
+                    {
+                        "description": "Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksResponse"
                         }
                     }
                 }
@@ -1316,6 +1665,52 @@
                 }
             }
         },
+        "/api/sico/knowledge/items": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "knowledge"
+                ],
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "name": "projectId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeItemsResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/sico/knowledge/playbook": {
             "get": {
                 "security": [
@@ -1377,6 +1772,35 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.UpdateKnowledgePlaybookResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "knowledge"
+                ],
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgePlaybookResponse"
                         }
                     }
                 }
@@ -1709,6 +2133,72 @@
                 }
             }
         },
+        "/api/sico/llm/org-config": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "llmhub"
+                ],
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "organizationId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_llmhubs.GetOrganizationLLMConfigResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "llmhub"
+                ],
+                "parameters": [
+                    {
+                        "description": "Set Org Config",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_llmhubs.SetOrganizationLLMConfigRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_llmhubs.SetOrganizationLLMConfigResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/sico/llm/runtime/generate": {
             "post": {
                 "consumes": [
@@ -1816,6 +2306,375 @@
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/notification": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "parameters": [
+                    {
+                        "description": "Create Notification Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.CreateNotificationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.CreateNotificationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/notification/read-all": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.ReadAllNotificationsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/notification/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "parameters": [
+                    {
+                        "description": "Update Notification Status Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.UpdateNotificationStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.UpdateNotificationStatusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.ListNotificationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/organization": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Get Organization",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Organization ID",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.GetOrganizationResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Update Organization",
+                "parameters": [
+                    {
+                        "description": "Update Organization",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.UpdateOrganizationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.UpdateOrganizationResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Create Organization",
+                "parameters": [
+                    {
+                        "description": "Create Organization",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Delete Organization",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Organization ID",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.DeleteOrganizationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/organization/user_organizations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Get User Organization List",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 10,
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "maxLength": 64,
+                        "type": "string",
+                        "name": "roleCode",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.GetUserOrganizationListResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/organizations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "List Organizations",
+                "parameters": [
+                    {
+                        "maxLength": 256,
+                        "type": "string",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 10,
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponse"
                         }
                     }
                 }
@@ -2020,6 +2879,70 @@
                 }
             }
         },
+        "/api/sico/project/asset/complete": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project"
+                ],
+                "parameters": [
+                    {
+                        "description": "Complete direct upload request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.CompleteProjectAssetUploadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.CompleteProjectAssetUploadResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/project/asset/upload_url": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project"
+                ],
+                "parameters": [
+                    {
+                        "description": "Create direct upload URL request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/sico/project/assets": {
             "get": {
                 "security": [
@@ -2063,6 +2986,251 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectAssetListResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/project/deliverable": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project"
+                ],
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectDeliverableResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project"
+                ],
+                "parameters": [
+                    {
+                        "description": "Create project deliverable request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project"
+                ],
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.DeleteProjectDeliverableResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/project/deliverables": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project"
+                ],
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 10,
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "projectId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ListProjectDeliverablesResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/project/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Project"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "creatorUsername",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "organizationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "ownerUsername",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ListProjectResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/project/notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notification"
+                ],
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 10,
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "projectId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.ListProjectNotificationsResponse"
                         }
                     }
                 }
@@ -2197,6 +3365,31 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.GetUserProjectListResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/rbac/enforcer/reload": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "RBAC"
+                ],
+                "summary": "Reload Casbin Enforcer",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -2501,146 +3694,6 @@
                 }
             }
         },
-        "/api/sico/rbac/role": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC"
-                ],
-                "summary": "Get Role",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC"
-                ],
-                "summary": "Update Role",
-                "parameters": [
-                    {
-                        "description": "Update Role",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC"
-                ],
-                "summary": "Create Role",
-                "parameters": [
-                    {
-                        "description": "Create Role",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC"
-                ],
-                "summary": "Delete Role",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "name": "id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.DeleteRoleResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/sico/rbac/role_users": {
             "get": {
                 "security": [
@@ -2675,8 +3728,25 @@
                         "in": "query"
                     },
                     {
-                        "type": "integer",
-                        "name": "roleId",
+                        "type": "string",
+                        "name": "roleCode",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "name": "scopeId",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "platform",
+                            "org",
+                            "project",
+                            "agent"
+                        ],
+                        "type": "string",
+                        "name": "scopeType",
                         "in": "query",
                         "required": true
                     }
@@ -2686,71 +3756,6 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.ListUsersByRoleResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/sico/rbac/roles": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC"
-                ],
-                "summary": "Query Roles",
-                "parameters": [
-                    {
-                        "maxLength": 64,
-                        "type": "string",
-                        "name": "code",
-                        "in": "query"
-                    },
-                    {
-                        "maxLength": 128,
-                        "type": "string",
-                        "name": "name",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 100,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 10,
-                        "name": "pageSize",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            0,
-                            1
-                        ],
-                        "type": "integer",
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponse"
                         }
                     }
                 }
@@ -3412,6 +4417,23 @@
                     "Sandbox-Management"
                 ],
                 "summary": "List all sandboxes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "instanceId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "organizationId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "projectId",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -3429,6 +4451,158 @@
                                     }
                                 }
                             ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/sandbox/org/assign": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandbox-Management"
+                ],
+                "summary": "Assign sandboxes to organization",
+                "parameters": [
+                    {
+                        "description": "Org assign request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxOrgAssignRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/sandbox/org/unassign": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandbox-Management"
+                ],
+                "summary": "Unassign sandboxes from organization",
+                "parameters": [
+                    {
+                        "description": "Org unassign request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxOrgUnassignRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/sandbox/project/assign": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandbox-Management"
+                ],
+                "summary": "Assign sandboxes to project",
+                "parameters": [
+                    {
+                        "description": "Project assign request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxProjectAssignRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/sandbox/project/unassign": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sandbox-Management"
+                ],
+                "summary": "Unassign sandboxes from project",
+                "parameters": [
+                    {
+                        "description": "Project unassign request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxProjectUnassignRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse"
                         }
                     }
                 }
@@ -3607,6 +4781,179 @@
                                     }
                                 }
                             ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/scheduled-tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-tasks"
+                ],
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.GetScheduledTaskResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-tasks"
+                ],
+                "parameters": [
+                    {
+                        "description": "Update Scheduled Task",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.UpdateScheduledTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.UpdateScheduledTaskResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-tasks"
+                ],
+                "parameters": [
+                    {
+                        "description": "Create Scheduled Task",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.CreateScheduledTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.CreateScheduledTaskResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-tasks"
+                ],
+                "parameters": [
+                    {
+                        "description": "Delete Scheduled Task",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.DeleteScheduledTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.DeleteScheduledTaskResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/scheduled-tasks/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "scheduled-tasks"
+                ],
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ListScheduledTasksResponse"
                         }
                     }
                 }
@@ -3824,29 +5171,6 @@
         }
     },
     "definitions": {
-        "sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "displayName": {
-                    "type": "string"
-                },
-                "iconUri": {
-                    "type": "string"
-                },
-                "modelKey": {
-                    "type": "string"
-                },
-                "modelType": {
-                    "type": "integer"
-                },
-                "providerTemplateType": {
-                    "type": "integer"
-                }
-            }
-        },
         "sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentData": {
             "type": "object",
             "properties": {
@@ -3872,8 +5196,8 @@
         "sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentInstanceRequest": {
             "type": "object",
             "required": [
-                "employerUsername",
-                "name"
+                "name",
+                "projectId"
             ],
             "properties": {
                 "agentId": {
@@ -3899,6 +5223,9 @@
                 },
                 "name": {
                     "type": "string"
+                },
+                "projectId": {
+                    "type": "integer"
                 },
                 "role": {
                     "type": "string"
@@ -3932,12 +5259,12 @@
                 "iconUri": {
                     "type": "string"
                 },
-                "llmhubConfig": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig"
-                },
                 "name": {
                     "type": "string",
                     "maxLength": 100
+                },
+                "organizationId": {
+                    "type": "integer"
                 },
                 "role": {
                     "type": "string"
@@ -4024,6 +5351,28 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.DismissSingleAgentInstanceRequest": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.DismissSingleAgentInstanceResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentData": {
             "type": "object",
             "properties": {
@@ -4054,40 +5403,6 @@
                 }
             }
         },
-        "sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsData": {
-            "type": "object",
-            "properties": {
-                "builtinModels": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption"
-                    }
-                },
-                "customModels": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption"
-                    }
-                },
-                "selectedConfig": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsData"
-                },
-                "msg": {
-                    "type": "string"
-                }
-            }
-        },
         "sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentResponse": {
             "type": "object",
             "properties": {
@@ -4102,19 +5417,25 @@
                 }
             }
         },
-        "sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig": {
-            "type": "object",
-            "properties": {
-                "defaultGlobalModelKey": {
-                    "type": "string"
-                },
-                "modelKeys": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
+        "sico-backend_internal_transport_http_dto_agent_single_agent.ListAgentIntent": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1
+            ],
+            "x-enum-comments": {
+                "ListAgentIntent_LIST_AGENT_INTENT_DEPLOY": "Operator: pick agents to deploy",
+                "ListAgentIntent_LIST_AGENT_INTENT_MANAGE": "Developer: configure agents (default)"
+            },
+            "x-enum-descriptions": [
+                "Developer: configure agents (default)",
+                "Operator: pick agents to deploy"
+            ],
+            "x-enum-varnames": [
+                "ListAgentIntent_LIST_AGENT_INTENT_MANAGE",
+                "ListAgentIntent_LIST_AGENT_INTENT_DEPLOY"
+            ]
         },
         "sico-backend_internal_transport_http_dto_agent_single_agent.ListRolesData": {
             "type": "object",
@@ -4228,6 +5549,54 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.PublishSingleAgentRequest": {
+            "type": "object",
+            "required": [
+                "agentId"
+            ],
+            "properties": {
+                "agentId": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.PublishSingleAgentResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.ReassignSingleAgentInstanceRequest": {
+            "type": "object",
+            "required": [
+                "id",
+                "newOperatorUsername"
+            ],
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "newOperatorUsername": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.ReassignSingleAgentInstanceResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgent": {
             "type": "object",
             "properties": {
@@ -4246,11 +5615,14 @@
                 "iconUri": {
                     "type": "string"
                 },
-                "llmhubConfig": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig"
-                },
                 "name": {
                     "type": "string"
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "publishStatus": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentPublishStatus"
                 },
                 "rawIconUri": {
                     "type": "string"
@@ -4304,6 +5676,9 @@
                         "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.Attachment"
                     }
                 },
+                "conversationStatus": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.ConversationRunStatus"
+                },
                 "createdAt": {
                     "type": "integer"
                 },
@@ -4346,13 +5721,90 @@
                 "sandboxes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_sandbox.InstanceSandboxStatusInfo"
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.SandboxDigest"
                     }
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstanceStatus"
                 },
                 "updatedAt": {
                     "type": "integer"
                 }
             }
+        },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstanceOrderBy": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-comments": {
+                "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT": "ORDER BY status, updated_at",
+                "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED": "Default: ID"
+            },
+            "x-enum-descriptions": [
+                "Default: ID",
+                "",
+                "",
+                "ORDER BY status, updated_at"
+            ],
+            "x-enum-varnames": [
+                "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED",
+                "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_ID",
+                "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT",
+                "SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstanceStatus": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+            ],
+            "x-enum-varnames": [
+                "SingleAgentInstanceStatus_INSTANCE_UNKNOWN",
+                "SingleAgentInstanceStatus_INSTANCE_ONBOARDING",
+                "SingleAgentInstanceStatus_INSTANCE_NEW",
+                "SingleAgentInstanceStatus_INSTANCE_ACTIVE",
+                "SingleAgentInstanceStatus_INSTANCE_INACTIVE",
+                "SingleAgentInstanceStatus_INSTANCE_ABORTED",
+                "SingleAgentInstanceStatus_INSTANCE_DELETED",
+                "SingleAgentInstanceStatus_INSTANCE_ONBOARDING_SAVED"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentPublishStatus": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "x-enum-comments": {
+                "SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_ARCHIVED": "Archived",
+                "SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_DRAFT": "Draft",
+                "SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED": "Published"
+            },
+            "x-enum-descriptions": [
+                "Draft",
+                "Published",
+                "Archived"
+            ],
+            "x-enum-varnames": [
+                "SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_DRAFT",
+                "SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED",
+                "SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_ARCHIVED"
+            ]
         },
         "sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceRequest": {
             "type": "object",
@@ -4394,6 +5846,31 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceStatusRequest": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstanceStatus"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceStatusResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentRequest": {
             "type": "object",
             "required": [
@@ -4409,9 +5886,6 @@
                 },
                 "iconUri": {
                     "type": "string"
-                },
-                "llmhubConfig": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig"
                 },
                 "name": {
                     "type": "string",
@@ -4429,6 +5903,205 @@
                     "type": "integer"
                 },
                 "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_authstate.AuthState": {
+            "type": "object",
+            "properties": {
+                "accountKey": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "expiresAt": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "lastValidatedAt": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "type": "string"
+                },
+                "siteHost": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.AuthStateStatus"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_authstate.AuthStateStatus": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-comments": {
+                "AuthStateStatus_AUTH_STATE_STATUS_DISABLED": "@gotag: json:\"AUTH_STATE_STATUS_DISABLED\"",
+                "AuthStateStatus_AUTH_STATE_STATUS_EXPIRED": "@gotag: json:\"AUTH_STATE_STATUS_EXPIRED\"",
+                "AuthStateStatus_AUTH_STATE_STATUS_UNKNOWN": "@gotag: json:\"AUTH_STATE_STATUS_UNKNOWN\"",
+                "AuthStateStatus_AUTH_STATE_STATUS_VALID": "@gotag: json:\"AUTH_STATE_STATUS_VALID\""
+            },
+            "x-enum-descriptions": [
+                "@gotag: json:\"AUTH_STATE_STATUS_UNKNOWN\"",
+                "@gotag: json:\"AUTH_STATE_STATUS_VALID\"",
+                "@gotag: json:\"AUTH_STATE_STATUS_EXPIRED\"",
+                "@gotag: json:\"AUTH_STATE_STATUS_DISABLED\""
+            ],
+            "x-enum-varnames": [
+                "AuthStateStatus_AUTH_STATE_STATUS_UNKNOWN",
+                "AuthStateStatus_AUTH_STATE_STATUS_VALID",
+                "AuthStateStatus_AUTH_STATE_STATUS_EXPIRED",
+                "AuthStateStatus_AUTH_STATE_STATUS_DISABLED"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_authstate.GetAuthStateData": {
+            "type": "object",
+            "properties": {
+                "authState": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.AuthState"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_authstate.GetAuthStateResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.GetAuthStateData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_authstate.ImportAuthStateData": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_authstate.ImportAuthStateRequest": {
+            "type": "object",
+            "required": [
+                "accountKey",
+                "siteHost",
+                "storageState"
+            ],
+            "properties": {
+                "accountKey": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "type": "string"
+                },
+                "siteHost": {
+                    "type": "string"
+                },
+                "storageState": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_authstate.ImportAuthStateResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.ImportAuthStateData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_authstate.UpdateAuthStateStatusRequest": {
+            "type": "object",
+            "required": [
+                "accountKey",
+                "siteHost",
+                "status"
+            ],
+            "properties": {
+                "accountKey": {
+                    "type": "string"
+                },
+                "siteHost": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_authstate.AuthStateStatus"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_authstate.UpdateAuthStateStatusResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_common.AgentDigest": {
+            "type": "object",
+            "properties": {
+                "agentId": {
+                    "type": "string"
+                },
+                "iconUri": {
+                    "type": "string"
+                },
+                "iconUrl": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_common.AgentInstanceDigest": {
+            "type": "object",
+            "properties": {
+                "agentIconUrl": {
+                    "type": "string"
+                },
+                "agentName": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "operatorUsername": {
                     "type": "string"
                 }
             }
@@ -4456,6 +6129,99 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_common.ConversationRunStatus": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "x-enum-varnames": [
+                "ConversationRunStatus_CONVERSATION_RUN_STATUS_UNKNOWN",
+                "ConversationRunStatus_CONVERSATION_RUN_STATUS_RUNNING",
+                "ConversationRunStatus_CONVERSATION_RUN_STATUS_IDLE"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_common.ProjectDigest": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_common.SandboxDigest": {
+            "type": "object",
+            "properties": {
+                "displayName": {
+                    "type": "string"
+                },
+                "docsUrl": {
+                    "type": "string"
+                },
+                "endpoint": {
+                    "type": "string"
+                },
+                "instanceId": {
+                    "type": "integer"
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "projectId": {
+                    "type": "integer"
+                },
+                "sandboxId": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "vncUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_common.ScheduledTaskDigest": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_common.SortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "x-enum-comments": {
+                "SortOrder_SORT_ORDER_UNSPECIFIED": "Default: DESC"
+            },
+            "x-enum-descriptions": [
+                "Default: DESC",
+                "",
+                ""
+            ],
+            "x-enum-varnames": [
+                "SortOrder_SORT_ORDER_UNSPECIFIED",
+                "SortOrder_SORT_ORDER_ASC",
+                "SortOrder_SORT_ORDER_DESC"
+            ]
+        },
         "sico-backend_internal_transport_http_dto_common.StandardResponse": {
             "type": "object",
             "properties": {
@@ -4464,6 +6230,26 @@
                 },
                 "data": {},
                 "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_common.UserDigest": {
+            "type": "object",
+            "properties": {
+                "alias": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "iconUrl": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -4636,6 +6422,9 @@
                 "creatorUsername": {
                     "type": "string"
                 },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationExtraInfo"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -4653,14 +6442,31 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_conversation.ConversationExtraInfo": {
+            "type": "object",
+            "properties": {
+                "scheduledTaskId": {
+                    "type": "integer"
+                },
+                "scheduledTaskRunId": {
+                    "type": "integer"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_conversation.ConversationListItem": {
             "type": "object",
             "properties": {
+                "conversationStatus": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.ConversationRunStatus"
+                },
                 "createdAt": {
                     "type": "integer"
                 },
                 "creatorUsername": {
                     "type": "string"
+                },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationExtraInfo"
                 },
                 "id": {
                     "type": "integer"
@@ -5238,10 +7044,15 @@
                 "acquiredSandbox": {
                     "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolDeliverableAcquiredSandbox"
                 },
+                "file": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolDeliverableFile"
+                },
                 "fileName": {
+                    "description": "Deprecated: Marked as deprecated in conversation/plan.proto.",
                     "type": "string"
                 },
                 "fileUrl": {
+                    "description": "Deprecated: Marked as deprecated in conversation/plan.proto.",
                     "type": "string"
                 },
                 "markdownContent": {
@@ -5280,6 +7091,20 @@
                     "type": "string"
                 },
                 "vncUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_conversation.ToolDeliverableFile": {
+            "type": "object",
+            "properties": {
+                "fileName": {
+                    "type": "string"
+                },
+                "fileSasUrl": {
+                    "type": "string"
+                },
+                "fileUri": {
                     "type": "string"
                 }
             }
@@ -5465,6 +7290,17 @@
             }
         },
         "sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgeDocumentResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgePlaybookResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -5710,6 +7546,54 @@
                 "KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK"
             ]
         },
+        "sico-backend_internal_transport_http_dto_knowledge.KnowledgeItem": {
+            "type": "object",
+            "properties": {
+                "deliverable": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ProjectDeliverable"
+                },
+                "document": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocument"
+                },
+                "playbook": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybook"
+                },
+                "type": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeItemType"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_knowledge.KnowledgeItemType": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-comments": {
+                "KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DELIVERABLE": "@gotag: json:\"KNOWLEDGE_ITEM_TYPE_DELIVERABLE\"",
+                "KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DOCUMENT": "@gotag: json:\"KNOWLEDGE_ITEM_TYPE_DOCUMENT\"",
+                "KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_PLAYBOOK": "@gotag: json:\"KNOWLEDGE_ITEM_TYPE_PLAYBOOK\"",
+                "KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_UNKNOWN": "@gotag: json:\"KNOWLEDGE_ITEM_TYPE_UNKNOWN\""
+            },
+            "x-enum-descriptions": [
+                "@gotag: json:\"KNOWLEDGE_ITEM_TYPE_UNKNOWN\"",
+                "@gotag: json:\"KNOWLEDGE_ITEM_TYPE_DOCUMENT\"",
+                "@gotag: json:\"KNOWLEDGE_ITEM_TYPE_PLAYBOOK\"",
+                "@gotag: json:\"KNOWLEDGE_ITEM_TYPE_DELIVERABLE\""
+            ],
+            "x-enum-varnames": [
+                "KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_UNKNOWN",
+                "KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DOCUMENT",
+                "KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_PLAYBOOK",
+                "KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DELIVERABLE"
+            ]
+        },
         "sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybook": {
             "type": "object",
             "properties": {
@@ -5718,6 +7602,9 @@
                 },
                 "createdAt": {
                     "type": "integer"
+                },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybookExtraInfo"
                 },
                 "id": {
                     "type": "integer"
@@ -5736,6 +7623,14 @@
                 },
                 "updatedAt": {
                     "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybookExtraInfo": {
+            "type": "object",
+            "properties": {
+                "agentInstance": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.AgentInstanceDigest"
                 }
             }
         },
@@ -5790,6 +7685,37 @@
                 },
                 "data": {
                     "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeDocumentData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeItemsData": {
+            "type": "object",
+            "properties": {
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeItem"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeItemsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeItemsData"
                 },
                 "msg": {
                     "type": "string"
@@ -6009,9 +7935,6 @@
                 "providerTemplateType"
             ],
             "properties": {
-                "agentId": {
-                    "type": "string"
-                },
                 "auth": {
                     "$ref": "#/definitions/sico-backend_internal_transport_http_dto_llmhubs.AuthConfig"
                 },
@@ -6032,6 +7955,9 @@
                     "type": "integer",
                     "maximum": 3,
                     "minimum": 1
+                },
+                "organizationId": {
+                    "type": "integer"
                 },
                 "providerTemplateType": {
                     "type": "integer",
@@ -6076,12 +8002,23 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_llmhubs.GetOrganizationLLMConfigResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfigData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_llmhubs.ModelRegistryEntry": {
             "type": "object",
             "properties": {
-                "agentId": {
-                    "type": "string"
-                },
                 "config": {
                     "$ref": "#/definitions/structpb.Struct"
                 },
@@ -6115,6 +8052,9 @@
                 "modelType": {
                     "type": "integer"
                 },
+                "organizationId": {
+                    "type": "integer"
+                },
                 "providerTemplateType": {
                     "type": "integer"
                 },
@@ -6126,6 +8066,31 @@
                 },
                 "updaterUsername": {
                     "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfig": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "integer"
+                },
+                "defaultModelKey": {
+                    "type": "string"
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfigData": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfig"
                 }
             }
         },
@@ -6360,6 +8325,617 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_llmhubs.SetOrganizationLLMConfigRequest": {
+            "type": "object",
+            "required": [
+                "organizationId"
+            ],
+            "properties": {
+                "defaultModelKey": {
+                    "type": "string"
+                },
+                "organizationId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_llmhubs.SetOrganizationLLMConfigResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfigData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.CreateNotificationData": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.CreateNotificationRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfo"
+                },
+                "receiverUsername": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationType"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.CreateNotificationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.CreateNotificationData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.ListNotificationData": {
+            "type": "object",
+            "properties": {
+                "hasMore": {
+                    "type": "boolean"
+                },
+                "notifications": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.Notification"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.ListNotificationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.ListNotificationData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.ListProjectNotificationsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.ListNotificationData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.Notification": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfo"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "projectId": {
+                    "type": "integer"
+                },
+                "receiverUsername": {
+                    "type": "string"
+                },
+                "senderUsername": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationStatus"
+                },
+                "type": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationType"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.NotificationExtraInfo": {
+            "type": "object",
+            "properties": {
+                "agentEditorUpdate": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoAgentEditorUpdate"
+                },
+                "deliverable": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoDeliverable"
+                },
+                "dwAction": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoDwAction"
+                },
+                "roleChange": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoRoleChange"
+                },
+                "scheduledTaskFinished": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoScheduledTaskFinished"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoAgentEditorUpdate": {
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.AgentDigest"
+                },
+                "operator": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.UserDigest"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoDeliverable": {
+            "type": "object",
+            "properties": {
+                "agentInstanceIconUri": {
+                    "type": "string"
+                },
+                "agentInstanceIconUrl": {
+                    "type": "string"
+                },
+                "agentInstanceId": {
+                    "type": "integer"
+                },
+                "agentInstanceName": {
+                    "type": "string"
+                },
+                "deliverableId": {
+                    "type": "integer"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "fileUri": {
+                    "type": "string"
+                },
+                "projectName": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoDwAction": {
+            "type": "object",
+            "properties": {
+                "agentInstanceIconUri": {
+                    "type": "string"
+                },
+                "agentInstanceIconUrl": {
+                    "type": "string"
+                },
+                "agentInstanceId": {
+                    "type": "integer"
+                },
+                "agentInstanceName": {
+                    "type": "string"
+                },
+                "newOperatorUsername": {
+                    "type": "string"
+                },
+                "oldOperatorUsername": {
+                    "type": "string"
+                },
+                "projectName": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoRoleChange": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.RoleChangeAction"
+                },
+                "project": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.ProjectDigest"
+                },
+                "roleCode": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoScheduledTaskFinished": {
+            "type": "object",
+            "properties": {
+                "conversationId": {
+                    "type": "integer"
+                },
+                "scheduledFor": {
+                    "type": "integer"
+                },
+                "scheduledTaskRunId": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_conversation.PlanStatus"
+                },
+                "task": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.ScheduledTaskDigest"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.NotificationStatus": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "x-enum-comments": {
+                "NotificationStatus_NOTIFICATION_STATUS_READ": "@gotag: json:\"NOTIFICATION_STATUS_READ\"",
+                "NotificationStatus_NOTIFICATION_STATUS_UNKNOWN": "@gotag: json:\"NOTIFICATION_STATUS_UNKNOWN\"",
+                "NotificationStatus_NOTIFICATION_STATUS_UNREAD": "@gotag: json:\"NOTIFICATION_STATUS_UNREAD\""
+            },
+            "x-enum-descriptions": [
+                "@gotag: json:\"NOTIFICATION_STATUS_UNKNOWN\"",
+                "@gotag: json:\"NOTIFICATION_STATUS_READ\"",
+                "@gotag: json:\"NOTIFICATION_STATUS_UNREAD\""
+            ],
+            "x-enum-varnames": [
+                "NotificationStatus_NOTIFICATION_STATUS_UNKNOWN",
+                "NotificationStatus_NOTIFICATION_STATUS_READ",
+                "NotificationStatus_NOTIFICATION_STATUS_UNREAD"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_notification.NotificationType": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+            ],
+            "x-enum-comments": {
+                "NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED": "@gotag: json:\"NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED\"",
+                "NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED": "@gotag: json:\"NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED\"",
+                "NotificationType_NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED": "@gotag: json:\"NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED\"",
+                "NotificationType_NOTIFICATION_TYPE_DW_DISMISSED": "@gotag: json:\"NOTIFICATION_TYPE_DW_DISMISSED\"",
+                "NotificationType_NOTIFICATION_TYPE_DW_REASSIGNED": "@gotag: json:\"NOTIFICATION_TYPE_DW_REASSIGNED\"",
+                "NotificationType_NOTIFICATION_TYPE_MEMBER_INVITATION": "@gotag: json:\"NOTIFICATION_TYPE_MEMBER_INVITATION\"",
+                "NotificationType_NOTIFICATION_TYPE_MEMBER_REMOVED": "@gotag: json:\"NOTIFICATION_TYPE_MEMBER_REMOVED\"",
+                "NotificationType_NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED": "@gotag: json:\"NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED\"",
+                "NotificationType_NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED": "@gotag: json:\"NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED\"",
+                "NotificationType_NOTIFICATION_TYPE_UNKNOWN": "@gotag: json:\"NOTIFICATION_TYPE_UNKNOWN\""
+            },
+            "x-enum-descriptions": [
+                "@gotag: json:\"NOTIFICATION_TYPE_UNKNOWN\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_DW_DISMISSED\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_DW_REASSIGNED\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_MEMBER_INVITATION\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_MEMBER_REMOVED\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED\"",
+                "@gotag: json:\"NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED\""
+            ],
+            "x-enum-varnames": [
+                "NotificationType_NOTIFICATION_TYPE_UNKNOWN",
+                "NotificationType_NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED",
+                "NotificationType_NOTIFICATION_TYPE_DW_DISMISSED",
+                "NotificationType_NOTIFICATION_TYPE_DW_REASSIGNED",
+                "NotificationType_NOTIFICATION_TYPE_MEMBER_INVITATION",
+                "NotificationType_NOTIFICATION_TYPE_MEMBER_REMOVED",
+                "NotificationType_NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED",
+                "NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED",
+                "NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED",
+                "NotificationType_NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_notification.ReadAllNotificationsData": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.ReadAllNotificationsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.ReadAllNotificationsData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.RoleChangeAction": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "x-enum-comments": {
+                "RoleChangeAction_ROLE_CHANGE_ACTION_ASSIGNED": "@gotag: json:\"ROLE_CHANGE_ACTION_ASSIGNED\"",
+                "RoleChangeAction_ROLE_CHANGE_ACTION_REMOVED": "@gotag: json:\"ROLE_CHANGE_ACTION_REMOVED\"",
+                "RoleChangeAction_ROLE_CHANGE_ACTION_UNSPECIFIED": "@gotag: json:\"ROLE_CHANGE_ACTION_UNSPECIFIED\""
+            },
+            "x-enum-descriptions": [
+                "@gotag: json:\"ROLE_CHANGE_ACTION_UNSPECIFIED\"",
+                "@gotag: json:\"ROLE_CHANGE_ACTION_ASSIGNED\"",
+                "@gotag: json:\"ROLE_CHANGE_ACTION_REMOVED\""
+            ],
+            "x-enum-varnames": [
+                "RoleChangeAction_ROLE_CHANGE_ACTION_UNSPECIFIED",
+                "RoleChangeAction_ROLE_CHANGE_ACTION_ASSIGNED",
+                "RoleChangeAction_ROLE_CHANGE_ACTION_REMOVED"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_notification.UpdateNotificationStatusRequest": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationStatus"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_notification.UpdateNotificationStatusResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.CreateOrganizationRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "maxLength": 2000
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.CreateOrganizationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationResponseData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.CreateOrganizationResponseData": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.DeleteOrganizationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.GetOrganizationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.GetOrganizationResponseData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.GetOrganizationResponseData": {
+            "type": "object",
+            "properties": {
+                "organization": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.Organization"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.GetUserOrganizationListResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.GetUserOrganizationListResponseData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.GetUserOrganizationListResponseData": {
+            "type": "object",
+            "properties": {
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "organizations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.Organization"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponseData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponseData": {
+            "type": "object",
+            "properties": {
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "organizations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.Organization"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.Organization": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "integer"
+                },
+                "creatorUsername": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isOwner": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roleCodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.UpdateOrganizationRequest": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "maxLength": 2000
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "minLength": 1
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.UpdateOrganizationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_project.AddProjectAssetData": {
             "type": "object",
             "properties": {
@@ -6391,11 +8967,159 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_project.CompleteProjectAssetUploadRequest": {
+            "type": "object",
+            "required": [
+                "fileName",
+                "objectKey"
+            ],
+            "properties": {
+                "contentType": {
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "fileSize": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "objectKey": {
+                    "type": "string"
+                },
+                "projectId": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.CompleteProjectAssetUploadResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.AddProjectAssetData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLData": {
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "type": "integer"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "metaInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.FileMetaInfo"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "objectKey": {
+                    "type": "string"
+                },
+                "uploadUrl": {
+                    "type": "string"
+                },
+                "uri": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLRequest": {
+            "type": "object",
+            "required": [
+                "fileName"
+            ],
+            "properties": {
+                "contentType": {
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "fileSize": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "projectId": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_project.CreateProjectData": {
             "type": "object",
             "properties": {
                 "id": {
                     "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableData": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableRequest": {
+            "type": "object",
+            "required": [
+                "agentInstanceId",
+                "fileName",
+                "fileUri",
+                "projectId"
+            ],
+            "properties": {
+                "agentInstanceId": {
+                    "type": "integer"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "fileUri": {
+                    "type": "string"
+                },
+                "projectId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableData"
+                },
+                "msg": {
+                    "type": "string"
                 }
             }
         },
@@ -6424,6 +9148,9 @@
                     "items": {
                         "type": "string"
                     }
+                },
+                "organizationId": {
+                    "type": "integer"
                 }
             }
         },
@@ -6442,6 +9169,17 @@
             }
         },
         "sico-backend_internal_transport_http_dto_project.DeleteProjectAssetResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.DeleteProjectDeliverableResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -6505,6 +9243,28 @@
                 },
                 "data": {
                     "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectAssetListData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.GetProjectDeliverableData": {
+            "type": "object",
+            "properties": {
+                "deliverable": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ProjectDeliverable"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.GetProjectDeliverableResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectDeliverableData"
                 },
                 "msg": {
                     "type": "string"
@@ -6581,6 +9341,68 @@
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_project.ListProjectData": {
+            "type": "object",
+            "properties": {
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "projects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.Project"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.ListProjectDeliverablesData": {
+            "type": "object",
+            "properties": {
+                "deliverables": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ProjectDeliverable"
+                    }
+                },
+                "hasMore": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.ListProjectDeliverablesResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ListProjectDeliverablesData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.ListProjectResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ListProjectData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_project.MemberType": {
             "type": "integer",
             "format": "int32",
@@ -6603,7 +9425,7 @@
                 "agentInstances": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ProjectAgentInstance"
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.AgentInstanceDigest"
                     }
                 },
                 "createdAt": {
@@ -6633,21 +9455,31 @@
                         "type": "string"
                     }
                 },
+                "organizationId": {
+                    "type": "integer"
+                },
                 "ownerUsername": {
                     "type": "string"
                 },
-                "updatedAt": {
-                    "type": "integer"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_project.ProjectAgentInstance": {
-            "type": "object",
-            "properties": {
-                "iconUrl": {
-                    "type": "string"
+                "projectAdmins": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.UserDigest"
+                    }
                 },
-                "id": {
+                "projectMembers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.UserDigest"
+                    }
+                },
+                "sandboxes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.SandboxDigest"
+                    }
+                },
+                "updatedAt": {
                     "type": "integer"
                 }
             }
@@ -6675,6 +9507,49 @@
                 },
                 "updatedAt": {
                     "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.ProjectDeliverable": {
+            "type": "object",
+            "properties": {
+                "agentInstanceId": {
+                    "type": "integer"
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "creatorUsername": {
+                    "type": "string"
+                },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_project.ProjectDeliverableExtraInfo"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "fileSasUrl": {
+                    "type": "string"
+                },
+                "fileUri": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "projectId": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_project.ProjectDeliverableExtraInfo": {
+            "type": "object",
+            "properties": {
+                "agentInstance": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.AgentInstanceDigest"
                 }
             }
         },
@@ -7016,7 +9891,7 @@
                 "roles": {
                     "type": "array",
                     "items": {
-                        "type": "string"
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_common.UserRoleInfo"
                     }
                 },
                 "status": {
@@ -7029,6 +9904,23 @@
                     "type": "integer"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_rbac_common.UserRoleInfo": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "roleCode": {
+                    "type": "string"
+                },
+                "scopeId": {
+                    "type": "string"
+                },
+                "scopeType": {
                     "type": "string"
                 }
             }
@@ -7046,183 +9938,6 @@
                 "UserStatus_USER_STATUS_ACTIVE",
                 "UserStatus_USER_STATUS_FROZEN"
             ]
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.CreateRoleRequest": {
-            "type": "object",
-            "required": [
-                "code",
-                "name"
-            ],
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "maxLength": 64,
-                    "minLength": 2
-                },
-                "description": {
-                    "type": "string",
-                    "maxLength": 1024
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 128,
-                    "minLength": 2
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponseData"
-                },
-                "msg": {
-                    "type": "string"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponseData": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.DeleteRoleResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "msg": {
-                    "type": "string"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponseData"
-                },
-                "msg": {
-                    "type": "string"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponseData": {
-            "type": "object",
-            "properties": {
-                "role": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {
-                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponseData"
-                },
-                "msg": {
-                    "type": "string"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponseData": {
-            "type": "object",
-            "properties": {
-                "hasNext": {
-                    "type": "boolean"
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.Role": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "integer"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer",
-                    "enum": [
-                        0,
-                        1
-                    ]
-                },
-                "updatedAt": {
-                    "type": "integer"
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleRequest": {
-            "type": "object",
-            "required": [
-                "id"
-            ],
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 1024
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 128,
-                    "minLength": 2
-                },
-                "status": {
-                    "type": "integer",
-                    "enum": [
-                        0,
-                        1
-                    ]
-                }
-            }
-        },
-        "sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "msg": {
-                    "type": "string"
-                }
-            }
         },
         "sico-backend_internal_transport_http_dto_rbac_token.LoginRequest": {
             "type": "object",
@@ -7542,12 +10257,25 @@
         "sico-backend_internal_transport_http_dto_rbac_user_role.AssignUserRoleRequest": {
             "type": "object",
             "required": [
-                "roleId",
+                "roleCode",
+                "scopeType",
                 "userId"
             ],
             "properties": {
-                "roleId": {
-                    "type": "integer"
+                "roleCode": {
+                    "type": "string"
+                },
+                "scopeId": {
+                    "type": "string"
+                },
+                "scopeType": {
+                    "type": "string",
+                    "enum": [
+                        "platform",
+                        "org",
+                        "project",
+                        "agent"
+                    ]
                 },
                 "userId": {
                     "type": "integer"
@@ -7588,7 +10316,7 @@
                 "roles": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role"
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.UserRole"
                     }
                 },
                 "total": {
@@ -7630,12 +10358,25 @@
         "sico-backend_internal_transport_http_dto_rbac_user_role.RemoveUserRoleRequest": {
             "type": "object",
             "required": [
-                "roleId",
+                "roleCode",
+                "scopeType",
                 "userId"
             ],
             "properties": {
-                "roleId": {
-                    "type": "integer"
+                "roleCode": {
+                    "type": "string"
+                },
+                "scopeId": {
+                    "type": "string"
+                },
+                "scopeType": {
+                    "type": "string",
+                    "enum": [
+                        "platform",
+                        "org",
+                        "project",
+                        "agent"
+                    ]
                 },
                 "userId": {
                     "type": "integer"
@@ -7650,6 +10391,35 @@
                 },
                 "msg": {
                     "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_rbac_user_role.UserRole": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "roleCode": {
+                    "type": "string"
+                },
+                "scopeId": {
+                    "type": "string"
+                },
+                "scopeType": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_rbac_common.User"
+                },
+                "userId": {
+                    "type": "integer"
                 }
             }
         },
@@ -7745,7 +10515,83 @@
                 "sandboxes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_sandbox.InstanceSandboxStatusInfo"
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.SandboxDigest"
+                    }
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_sandbox.SandboxOrgAssignRequest": {
+            "type": "object",
+            "required": [
+                "organization_id",
+                "sandbox_ids"
+            ],
+            "properties": {
+                "organization_id": {
+                    "type": "integer"
+                },
+                "sandbox_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_sandbox.SandboxOrgUnassignRequest": {
+            "type": "object",
+            "required": [
+                "organization_id",
+                "sandbox_ids"
+            ],
+            "properties": {
+                "organization_id": {
+                    "type": "integer"
+                },
+                "sandbox_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_sandbox.SandboxProjectAssignRequest": {
+            "type": "object",
+            "required": [
+                "project_id",
+                "sandbox_ids"
+            ],
+            "properties": {
+                "project_id": {
+                    "type": "integer"
+                },
+                "sandbox_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_sandbox.SandboxProjectUnassignRequest": {
+            "type": "object",
+            "required": [
+                "project_id",
+                "sandbox_ids"
+            ],
+            "properties": {
+                "project_id": {
+                    "type": "integer"
+                },
+                "sandbox_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
                     }
                 }
             }
@@ -7795,6 +10641,12 @@
                 },
                 "instance_name": {
                     "type": "string"
+                },
+                "organization_id": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "integer"
                 },
                 "sandbox_id": {
                     "type": "string"
@@ -7861,6 +10713,241 @@
                     "type": "string"
                 },
                 "vnc_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.CreateScheduledTaskRequest": {
+            "type": "object",
+            "required": [
+                "agentInstanceId",
+                "cronExpression",
+                "message",
+                "name",
+                "timezone"
+            ],
+            "properties": {
+                "agentInstanceId": {
+                    "type": "integer"
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.Attachment"
+                    }
+                },
+                "cronExpression": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTaskExtraInfo"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.CreateScheduledTaskResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.DeleteScheduledTaskRequest": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.DeleteScheduledTaskResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.GetScheduledTaskResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.ListScheduledTasksData": {
+            "type": "object",
+            "properties": {
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.ListScheduledTasksResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ListScheduledTasksData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask": {
+            "type": "object",
+            "properties": {
+                "agentInstanceId": {
+                    "type": "integer"
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.Attachment"
+                    }
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "creatorUsername": {
+                    "type": "string"
+                },
+                "cronExpression": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTaskExtraInfo"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "lastRunAt": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "nextRunAt": {
+                    "type": "integer"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTaskExtraInfo": {
+            "type": "object",
+            "properties": {
+                "sendEmailOnComplete": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.UpdateScheduledTaskRequest": {
+            "type": "object",
+            "required": [
+                "agentInstanceId",
+                "cronExpression",
+                "id",
+                "message",
+                "name",
+                "timezone"
+            ],
+            "properties": {
+                "agentInstanceId": {
+                    "type": "integer"
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_common.Attachment"
+                    }
+                },
+                "cronExpression": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "extraInfo": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTaskExtraInfo"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_scheduledtask.UpdateScheduledTaskResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask"
+                },
+                "msg": {
                     "type": "string"
                 }
             }

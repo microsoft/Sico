@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
@@ -155,5 +133,32 @@ describe("MarkdownFileViewer", () => {
     expect(capturedSignal?.aborted).toBe(false);
     unmount();
     expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  it("reports the document's H1 through onTitleResolved once loaded", async () => {
+    fetchMock.mockResolvedValue(textResponse("# Real Title\n\nbody"));
+    const onTitleResolved = vi.fn();
+    render(
+      <MarkdownFileViewer
+        fileUrl={FILE_URL}
+        onTitleResolved={onTitleResolved}
+      />,
+    );
+    await waitFor(() =>
+      expect(onTitleResolved).toHaveBeenCalledWith("Real Title"),
+    );
+  });
+
+  it("reports undefined through onTitleResolved when the body has no H1", async () => {
+    fetchMock.mockResolvedValue(textResponse("## Sub only\n\nbody"));
+    const onTitleResolved = vi.fn();
+    render(
+      <MarkdownFileViewer
+        fileUrl={FILE_URL}
+        onTitleResolved={onTitleResolved}
+      />,
+    );
+    await screen.findByText("body");
+    expect(onTitleResolved).toHaveBeenLastCalledWith(undefined);
   });
 });

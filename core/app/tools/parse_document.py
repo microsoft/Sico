@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Parse a document file using the configured document extractor."""
 
 import asyncio
@@ -34,6 +14,12 @@ from agent_framework._middleware import FunctionInvocationContext
 from pydantic import BaseModel, Field
 
 from app.document import build_doc_extractor
+from app.biz.source import (
+    SourceAccessContext,
+    WorkspaceSourceService,
+    is_supported_tabular_path,
+    workbook_manifest_payload,
+)
 from app.schemas.conversation.plan import (
     Plan,
     PlanExtra,
@@ -44,10 +30,6 @@ from app.schemas.conversation.plan import (
 )
 from app.storage.fs import CHAT_FS
 from app.tools.common import ToolContext, get_tool_context
-from app.tools.parse_document_hooks import (
-    ParseDocumentHookContext,
-    dispatch_post_parse_hooks,
-)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -160,17 +142,15 @@ async def _parse_document_uncached(ctx: ToolContext, file_path: str, extractor) 
         inline_limit = _inline_content_limit()
         inline_content = full_text[:inline_limit]
 
-        extras = dispatch_post_parse_hooks(
-            ParseDocumentHookContext(
-                ctx=ctx,
-                file_path=file_path,
-                abs_path=abs_path,
-                full_markdown_path=full_md_path,
-                full_text=full_text,
-                summary=summary,
-            )
+        response_fields, message_stats = await asyncio.to_thread(
+            _index_source_projection,
+            ctx,
+            file_path,
+            abs_path,
+            full_text,
+            summary,
         )
-        parse_message = _document_parse_message(file_path, full_md_path, full_text, extras.message_stats)
+        parse_message = _document_parse_message(file_path, full_md_path, full_text, message_stats)
         await _finish_parse_plan_tool_call(
             ctx,
             tool_call_id,
@@ -185,7 +165,7 @@ async def _parse_document_uncached(ctx: ToolContext, file_path: str, extractor) 
             "content": inline_content,
             "content_chars": len(full_text),
             "content_truncated": len(full_text) > inline_limit,
-            **extras.response_fields,
+            **response_fields,
         }
     except Exception as exc:
         _LOGGER.error("parse_document failed file_path=%s error=%s", file_path, exc)
@@ -196,6 +176,54 @@ async def _parse_document_uncached(ctx: ToolContext, file_path: str, extractor) 
 def _parse_document_cache_key(ctx: ToolContext, file_path: str) -> tuple[int, str, int, int, str]:
     normalized = Path(os.path.normpath(file_path)).as_posix()
     return (int(ctx.agent_instance_id or 0), ctx.username, int(ctx.conversation_id or 0), int(ctx.turn_id or 0), normalized)
+
+
+def _index_source_projection(
+    ctx: ToolContext,
+    file_path: str,
+    abs_path: Path,
+    full_text: str,
+    summary: str,
+) -> tuple[dict[str, Any], list[str]]:
+    access = SourceAccessContext(
+        username=ctx.username,
+        agent_instance_id=int(ctx.agent_instance_id or 0),
+        conversation_id=int(ctx.conversation_id or 0),
+    )
+    service = WorkspaceSourceService()
+    manifest = None
+    if is_supported_tabular_path(abs_path):
+        try:
+            workspace = CHAT_FS.get_workspace_path(access.agent_instance_id, access.username, access.conversation_id)
+            manifest = service.index_path(workspace, file_path, abs_path)
+        except Exception:  # noqa: BLE001 - source indexing must not fail document extraction.
+            _LOGGER.warning("parse_document tabular indexing failed file_path=%s", file_path, exc_info=True)
+    try:
+        manifest = service.index_text(access, file_path, abs_path, full_text, summary)
+    except Exception:  # noqa: BLE001 - source indexing must not fail document extraction.
+        _LOGGER.warning("parse_document source text indexing failed file_path=%s", file_path, exc_info=True)
+    if manifest is None or not manifest.sheets:
+        return {}, []
+    workbook_manifest = workbook_manifest_payload(manifest)
+    runnable_rows = int(workbook_manifest.get("runnable_data_rows") or 0)
+    return (
+        {"workbook_manifest": workbook_manifest},
+        [f"detected {runnable_rows:,} runnable data rows", _workbook_manifest_message(workbook_manifest)],
+    )
+
+
+def _workbook_manifest_message(manifest: dict[str, Any]) -> str:
+    sheets = manifest.get("sheets") or []
+    parts: list[str] = []
+    for sheet in sheets[:8]:
+        if not isinstance(sheet, dict):
+            continue
+        parts.append(
+            f"{sheet.get('name') or ''} ({int(sheet.get('data_rows') or 0):,} data rows, {sheet.get('kind') or ''})"
+        )
+    if len(sheets) > len(parts):
+        parts.append(f"+{len(sheets) - len(parts)} more")
+    return "workbook sheets: " + "; ".join(parts)
 
 
 async def _create_parse_plan_tool_call(ctx: ToolContext, file_path: str) -> int:

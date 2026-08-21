@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Default digital-worker (DW) trajectory parser.
 
 Builds one ``TrajectoryData`` from a run's captured stdout (``result.output``)
@@ -53,7 +33,7 @@ from app.experiences.runner import TrajectoryData, TrajectoryStep
 from .dw_registry import register_default_parser
 
 if TYPE_CHECKING:
-    from app.biz.task_runtime.models import TaskResult, TaskRun
+    from app.biz.task_runtime import TaskResult, TaskRun
 
 
 logger = logging.getLogger(__name__)
@@ -510,9 +490,10 @@ def _first_text(event: dict[str, Any], keys: tuple[str, ...]) -> str | None:
 
 
 def _skill_name(run: "TaskRun") -> str:
+    # Derived from the namespaced capability id: the dispatch itself no longer
+    # carries a skill name, and ``TaskRun`` never did.
     spec = getattr(run, "spec", None)
-    dispatch = getattr(spec, "dispatch", None)
-    return getattr(dispatch, "skill_name", None) or getattr(run, "skill_name", "") or ""
+    return getattr(spec, "skill_name", None) or ""
 
 
 def _run_instruction(run: "TaskRun") -> str:

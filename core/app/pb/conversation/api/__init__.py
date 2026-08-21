@@ -234,6 +234,13 @@ class ChatRequest(betterproto2.Message):
     @gotag: json:"submissionId,omitempty"
     """
 
+    model_definition: "_llmhubs__.RuntimeModelDefinition | None" = betterproto2.field(
+        19, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"modelDefinition,omitempty"
+    """
+
 
 default_message_pool.register_message("api", "ChatRequest", ChatRequest)
 
@@ -575,6 +582,11 @@ class ListConversationRequest(betterproto2.Message):
     @gotag: json:"pageSize" form:"pageSize" binding:"min=1,max=100" default:"10"
     """
 
+    fetch_conversation_status: "bool" = betterproto2.field(4, betterproto2.TYPE_BOOL)
+    """
+    @gotag: json:"fetchConversationStatus" form:"fetchConversationStatus"
+    """
+
 
 default_message_pool.register_message(
     "api", "ListConversationRequest", ListConversationRequest
@@ -810,5 +822,6 @@ default_message_pool.register_message(
 from ...conversation import chat as _chat__
 from ...common import common as _common__
 from ...conversation import conversation as _conversation__
+from ...llmhubs import llmhubs as _llmhubs__
 from ...conversation import msg as _msg__
 from ...conversation import plan as _plan__

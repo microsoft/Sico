@@ -13,7 +13,7 @@ type UserRoleFilter struct {
 	UserID    int64
 	RoleCode  string
 	ScopeType string
-	ScopeID   int64
+	ScopeID   string
 	Offset    int
 	Limit     int
 }
@@ -31,7 +31,7 @@ func (d *UserRoleDAO) Assign(ctx context.Context, ur *model.TUserRole) error {
 }
 
 func (d *UserRoleDAO) Remove(
-	ctx context.Context, userID int64, roleCode, scopeType string, scopeID int64,
+	ctx context.Context, userID int64, roleCode, scopeType string, scopeID string,
 ) error {
 	return d.db.WithContext(ctx).
 		Where("user_id = ? AND role_code = ? AND scope_type = ? AND scope_id = ?",
@@ -52,7 +52,7 @@ func (d *UserRoleDAO) List(ctx context.Context, filter *UserRoleFilter) ([]*mode
 	if filter.ScopeType != "" {
 		q = q.Where("scope_type = ?", filter.ScopeType)
 	}
-	if filter.ScopeID > 0 {
+	if filter.ScopeID != "" && filter.ScopeID != "0" {
 		q = q.Where("scope_id = ?", filter.ScopeID)
 	}
 

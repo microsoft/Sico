@@ -1,27 +1,8 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 
@@ -31,8 +12,10 @@ import (
 	"google.golang.org/grpc/status"
 
 	"sico-backend/internal/biz/agent"
+	conversationmodel "sico-backend/internal/biz/conversation/model"
 	singleagententity "sico-backend/internal/entity/agent/singleagent"
 	conventity "sico-backend/internal/entity/conversation/conversation"
+	messageentity "sico-backend/internal/entity/conversation/message"
 	"sico-backend/internal/infra/eventbus"
 	"sico-backend/internal/infra/sse"
 	conversationrpc "sico-backend/internal/transport/grpc/pb/conversation"
@@ -97,6 +80,31 @@ func (m *mockChatClient) StreamChat(
 
 type mockAgentService struct {
 	agent.Service
+}
+
+type headlessChatClient struct {
+	conversationrpc.ChatServiceClient
+	status    conversationdto.PlanStatus
+	plan      *conversationdto.Plan
+	streamErr error
+}
+
+func (m *headlessChatClient) StreamChat(
+	context.Context,
+	*conversationdto.ChatRequest,
+	...grpc.CallOption,
+) (*conversationdto.ChatDirectResponse, error) {
+	return &conversationdto.ChatDirectResponse{}, m.streamErr
+}
+
+func (m *headlessChatClient) GetPlan(
+	context.Context,
+	*conversationdto.GetPlanRequest,
+	...grpc.CallOption,
+) (*conversationdto.GetPlanResponse, error) {
+	return &conversationdto.GetPlanResponse{
+		Data: &conversationdto.GetPlanData{Status: m.status, Plan: m.plan},
+	}, nil
 }
 
 func (m *mockAgentService) GetSingleAgentInstance(ctx context.Context, id int64) (*singleagententity.SingleAgentInstance, error) {
@@ -245,6 +253,68 @@ func TestChat(t *testing.T) {
 
 		require.Equal(t, "done", sentEvents[3].Event)
 	})
+}
+
+func TestRunHeadlessChatReturnsFinalPlanStatus(t *testing.T) {
+	service := newTestConversationService()
+	service.agentSvc = &mockAgentService{}
+	service.chatClient = &headlessChatClient{
+		status: conversationdto.PlanStatus_PLAN_STATUS_CANCELLED,
+		plan: &conversationdto.Plan{Steps: []*conversationdto.PlanStep{{
+			Title: "Publish result",
+		}}},
+	}
+
+	resp, err := service.RunHeadlessChat(ctxWithUser("alice"), &conversationmodel.HeadlessChatRequest{
+		AgentInstanceID: 1,
+		Message:         "run scheduled task",
+		SubmissionID:    "scheduled-task:7:1000",
+		ScheduledTaskID: 7,
+	})
+
+	require.NoError(t, err)
+	require.NotZero(t, resp.ConversationID)
+	require.Equal(t, int64(1), resp.TurnID)
+	require.Equal(t, conversationdto.PlanStatus_PLAN_STATUS_CANCELLED, resp.PlanStatus)
+	require.Equal(t, "Publish result", resp.Plan.Steps[0].Title)
+}
+
+func TestRunHeadlessChatPreservesPlanStatusOnStreamError(t *testing.T) {
+	service := newTestConversationService()
+	service.agentSvc = &mockAgentService{}
+	service.chatClient = &headlessChatClient{
+		status:    conversationdto.PlanStatus_PLAN_STATUS_FAILED,
+		streamErr: errors.New("stream failed after plan finalization"),
+	}
+
+	resp, err := service.RunHeadlessChat(ctxWithUser("alice"), &conversationmodel.HeadlessChatRequest{
+		AgentInstanceID: 1,
+		Message:         "run scheduled task",
+		SubmissionID:    "scheduled-task:7:1000",
+		ScheduledTaskID: 7,
+	})
+
+	require.Error(t, err)
+	require.Equal(t, conversationdto.PlanStatus_PLAN_STATUS_FAILED, resp.PlanStatus)
+}
+
+func TestGetFinalAssistantResponseReturnsLatestText(t *testing.T) {
+	service := newTestConversationService()
+	ctx := context.Background()
+	for _, content := range []string{"partial response", "final response"} {
+		_, err := service.messageRepo.Create(ctx, &messageentity.Message{
+			ConversationId: 7,
+			TurnId:         1,
+			Role:           roleAssistant,
+			ContentType:    conversationdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT,
+			Content:        content,
+		})
+		require.NoError(t, err)
+	}
+
+	response := service.getFinalAssistantResponse(ctx, 7, 1)
+
+	require.Equal(t, "final response", response)
 }
 
 func TestReconnect(t *testing.T) {

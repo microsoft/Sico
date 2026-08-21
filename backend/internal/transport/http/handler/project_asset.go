@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package handler
 
 import (
@@ -43,9 +23,18 @@ import (
 // @Param file formData file true "File to upload"
 // @Success 200 {object} project.AddProjectAssetResponse
 func AddProjectAsset(ctx *gin.Context) {
-	// Check if user is authenticated and get user info
+	if !strings.EqualFold(ctx.ContentType(), "multipart/form-data") {
+		invalidParamRequestResponse(
+			ctx,
+			"unsupported content type; use /api/sico/project/asset/upload_url for direct uploads",
+		)
+		return
+	}
 	userInfo, _ := middleware.GetUserFromContext(ctx)
+	addProjectAssetMultipart(ctx, userInfo.Name)
+}
 
+func addProjectAssetMultipart(ctx *gin.Context, username string) {
 	err := ctx.Request.ParseMultipartForm(16 << 20) // 16 MB max memory
 	if err != nil {
 		invalidParamRequestResponse(ctx, "Failed to parse multipart form: "+err.Error())
@@ -54,6 +43,9 @@ func AddProjectAsset(ctx *gin.Context) {
 
 	// Get project_id from form
 	projectID := ctx.PostForm("project_id")
+	if projectID == "" {
+		projectID = ctx.PostForm("projectId")
+	}
 
 	// Get file from form
 	file, header, err := ctx.Request.FormFile("file")
@@ -78,12 +70,65 @@ func AddProjectAsset(ctx *gin.Context) {
 		ProjectId: projectID,
 	}
 
-	resp, err := projectSVC.Default().AddProjectAsset(reqctx(ctx), req, userInfo.Name, file, fileExtra)
+	resp, err := projectSVC.Default().AddProjectAsset(reqctx(ctx), req, username, file, fileExtra)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
 		return
 	}
 
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// CreateProjectAssetUploadURL creates a direct upload URL for a project asset.
+// @Router /api/sico/project/asset/upload_url [POST]
+// @Tags Project
+// @Accept json
+// @Produce json
+// @Param request body project.CreateProjectAssetUploadURLRequest true "Create direct upload URL request"
+// @Success 200 {object} project.CreateProjectAssetUploadURLResponse
+func CreateProjectAssetUploadURL(ctx *gin.Context) {
+	var uploadReq project.CreateProjectAssetUploadURLRequest
+	if err := ctx.ShouldBindJSON(&uploadReq); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+	fileExtra, err := buildFileExtraInfo(uploadReq.GetFileName(), uploadReq.GetFileSize(), uploadReq.GetContentType())
+	if err != nil {
+		invalidParamRequestResponse(ctx, "Failed to parse file info: "+err.Error())
+		return
+	}
+	resp, err := projectSVC.Default().CreateProjectAssetUploadURL(reqctx(ctx), &uploadReq, fileExtra)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// CompleteProjectAssetUpload completes a direct project asset upload.
+// @Router /api/sico/project/asset/complete [POST]
+// @Tags Project
+// @Accept json
+// @Produce json
+// @Param request body project.CompleteProjectAssetUploadRequest true "Complete direct upload request"
+// @Success 200 {object} project.CompleteProjectAssetUploadResponse
+func CompleteProjectAssetUpload(ctx *gin.Context) {
+	userInfo, _ := middleware.GetUserFromContext(ctx)
+	var completeReq project.CompleteProjectAssetUploadRequest
+	if err := ctx.ShouldBindJSON(&completeReq); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+	fileExtra, err := buildFileExtraInfo(completeReq.GetFileName(), completeReq.GetFileSize(), completeReq.GetContentType())
+	if err != nil {
+		invalidParamRequestResponse(ctx, "Failed to parse file info: "+err.Error())
+		return
+	}
+	resp, err := projectSVC.Default().CompleteProjectAssetUpload(reqctx(ctx), &completeReq, userInfo.Name, fileExtra)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
 	ctx.JSON(http.StatusOK, resp)
 }
 
@@ -113,9 +158,10 @@ func GetProjectSASAsset(ctx *gin.Context) {
 
 // parseFileInfo extracts file information and returns object_key, object_type, and extra JSON
 func parseFileInfo(header *multipart.FileHeader) (projectSVC.FileExtraInfo, error) {
-	fileName := header.Filename
-	fileSize := header.Size
-	contentType := header.Header.Get("Content-Type")
+	return buildFileExtraInfo(header.Filename, header.Size, header.Header.Get("Content-Type"))
+}
+
+func buildFileExtraInfo(fileName string, fileSize int64, contentType string) (projectSVC.FileExtraInfo, error) {
 	fileExt := strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), "."))
 	fileType := detectFileType(contentType, fileExt)
 

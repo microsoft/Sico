@@ -1,35 +1,19 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/store/project/repository"
 	projectdto "sico-backend/internal/transport/http/dto/project"
@@ -47,21 +31,18 @@ func TestMain(m *testing.M) {
 type mockProjectRepo struct {
 	repository.ProjectRepository // embed for unimplemented methods
 	projects                     map[int64]*repository.ProjectModel
-	users                        []*repository.ProjectUserModel
-	adminsByProj                 map[int64][]string
 	assets                       map[int64]*repository.ProjectAssetModel
 	deliverables                 []*repository.ProjectDeliverableModel
-	memberUsernames              []string
 	nextProjectID                int64
+	nextAssetID                  int64
 	deliverableTotal             int64
 	nextDeliverableID            int64
 }
 
 func newMockProjectRepo() *mockProjectRepo {
 	return &mockProjectRepo{
-		projects:     make(map[int64]*repository.ProjectModel),
-		adminsByProj: make(map[int64][]string),
-		assets:       make(map[int64]*repository.ProjectAssetModel),
+		projects: make(map[int64]*repository.ProjectModel),
+		assets:   make(map[int64]*repository.ProjectAssetModel),
 	}
 }
 
@@ -102,44 +83,32 @@ func (m *mockProjectRepo) UpdateProjectFields(_ context.Context, id int64, field
 	return nil
 }
 
-func (m *mockProjectRepo) AddProjectUser(_ context.Context, u *repository.ProjectUserModel) error {
-	m.users = append(m.users, u)
-	return nil
-}
-
-func (m *mockProjectRepo) DeleteProjectUsers(_ context.Context, _ int64) error {
-	return nil
-}
-
-func (m *mockProjectRepo) AddProjectAdminsByUsernames(_ context.Context, projectID int64, usernames []string) error {
-	m.adminsByProj[projectID] = append(m.adminsByProj[projectID], usernames...)
-	return nil
-}
-
-func (m *mockProjectRepo) GetProjectAdminUsernames(_ context.Context, projectIDs []int64) (map[int64][]string, error) {
-	result := make(map[int64][]string)
-	for _, id := range projectIDs {
-		if admins, ok := m.adminsByProj[id]; ok {
-			result[id] = admins
-		}
-	}
-	return result, nil
-}
-
-func (m *mockProjectRepo) DeleteProjectAdmins(_ context.Context, _ int64) error {
-	return nil
-}
-
-func (m *mockProjectRepo) DeleteProjectAdminsByUsernames(_ context.Context, _ int64, _ []string) error {
-	return nil
-}
-
 func (m *mockProjectRepo) GetProjectAsset(_ context.Context, id int64) (*repository.ProjectAssetModel, error) {
 	a, ok := m.assets[id]
 	if !ok {
 		return nil, gorm.ErrRecordNotFound
 	}
 	return a, nil
+}
+
+func (m *mockProjectRepo) AddProjectAsset(
+	_ context.Context, asset *repository.ProjectAssetModel,
+) (int64, error) {
+	m.nextAssetID++
+	asset.ID = m.nextAssetID
+	m.assets[asset.ID] = asset
+	return asset.ID, nil
+}
+
+func (m *mockProjectRepo) GetProjectAssetByObjectKey(
+	_ context.Context, projectID, objectKey string,
+) (*repository.ProjectAssetModel, error) {
+	for _, asset := range m.assets {
+		if asset.ProjectID == projectID && asset.ObjectKey == objectKey {
+			return asset, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 func (m *mockProjectRepo) DeleteProjectAsset(_ context.Context, id int64) error {
@@ -179,17 +148,70 @@ func (m *mockProjectRepo) DeleteProjectDeliverable(_ context.Context, id int64) 
 	return nil
 }
 
-func (m *mockProjectRepo) ListProjectMemberUsernames(_ context.Context, _ int64) ([]string, error) {
-	return m.memberUsernames, nil
+type mockIDGen struct {
+	nextID int64
 }
 
-type mockBlobClient struct{}
+func (m *mockIDGen) GenID(_ context.Context) (int64, error) {
+	m.nextID++
+	return m.nextID, nil
+}
+
+func (m *mockIDGen) GenMultiIDs(ctx context.Context, count int) ([]int64, error) {
+	ids := make([]int64, 0, count)
+	for range count {
+		id, err := m.GenID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+type mockBlobClient struct {
+	streamContent []byte
+	objectInfo    *storage.ObjectInfo
+}
 
 func (m *mockBlobClient) PutObject(_ context.Context, _ string, _ []byte, _ ...storage.PutOptFn) (string, error) {
 	return "blob://path", nil
 }
+func (m *mockBlobClient) UploadObject(
+	_ context.Context, objectKey string, content io.Reader, _ ...storage.PutOptFn,
+) (*storage.UploadedObject, error) {
+	data, err := io.ReadAll(content)
+	if err != nil {
+		return nil, err
+	}
+	m.streamContent = data
+	return &storage.UploadedObject{Path: "assets/" + objectKey}, nil
+}
+func (m *mockBlobClient) CreateUploadURL(
+	_ context.Context, objectKey string, _ ...storage.PutOptFn,
+) (*storage.UploadURL, error) {
+	return &storage.UploadURL{
+		Path:      "assets/" + objectKey,
+		URL:       "https://blob.example.com/upload/" + objectKey,
+		Method:    "PUT",
+		Headers:   map[string]string{"x-ms-blob-type": "BlockBlob"},
+		ExpiresAt: time.Now().Add(time.Hour),
+	}, nil
+}
 func (m *mockBlobClient) GetObject(_ context.Context, _ string, _ ...storage.GetOptFn) ([]byte, error) {
 	return nil, nil
+}
+func (m *mockBlobClient) GetObjectInfo(
+	_ context.Context, objectKey string, _ ...storage.GetOptFn,
+) (*storage.ObjectInfo, error) {
+	if m.objectInfo == nil {
+		return nil, storage.ErrObjectNotFound
+	}
+	info := *m.objectInfo
+	if info.Path == "" {
+		info.Path = "assets/" + objectKey
+	}
+	return &info, nil
 }
 func (m *mockBlobClient) DeleteObject(_ context.Context, _ string, _ ...storage.DelOptFn) error {
 	return nil
@@ -209,8 +231,13 @@ func (m *mockBlobClient) DelObjectByPath(_ context.Context, _ string) error { re
 func newProjectTestService(repo *mockProjectRepo) *Service {
 	return NewService(&Components{
 		ProjectRepo: repo,
+		IDGen:       &mockIDGen{},
 		BlobClient:  &mockBlobClient{},
 	})
+}
+
+func newProjectTestServiceWithBlob(repo *mockProjectRepo, blobClient *mockBlobClient) *Service {
+	return NewService(&Components{ProjectRepo: repo, IDGen: &mockIDGen{}, BlobClient: blobClient})
 }
 
 // ===========================================================================
@@ -240,11 +267,14 @@ func TestCreateProject(t *testing.T) {
 		assert.Equal(t, "creator1", p.OwnerUsername)
 		assert.Equal(t, "creator1", p.CreatorUsername)
 
-		// Note: Owner membership and admin assignments now go through RBAC
-		// (rbac.AssignProjectRole), which is not initialized in unit tests.
-		// The RBAC service returns nil when not initialized, so no assertions
-		// on repo.users or repo.adminsByProj here.
+		// Owner membership and admin assignments go through RBAC, which is not
+		// initialized in unit tests.
 	})
+}
+
+func TestProjectRolePriority(t *testing.T) {
+	assert.Greater(t, projectRolePriority(rbac.RoleProjectAdmin), projectRolePriority(rbac.RoleProjectMember))
+	assert.Greater(t, projectRolePriority(rbac.RoleProjectMember), projectRolePriority("unknown"))
 }
 
 func TestUpdateProject(t *testing.T) {
@@ -292,6 +322,96 @@ func TestDeleteProjectAsset(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
+}
+
+func TestAddProjectAsset(t *testing.T) {
+	repo := newMockProjectRepo()
+	blobClient := &mockBlobClient{}
+	svc := newProjectTestServiceWithBlob(repo, blobClient)
+
+	resp, err := svc.AddProjectAsset(
+		context.Background(),
+		&projectdto.AddProjectAssetRequest{ProjectId: "project-1"},
+		"creator1",
+		strings.NewReader("hello asset"),
+		FileExtraInfo{FileName: "asset.txt", FileSize: 11, ContentType: "text/plain", FileExt: "txt", FileType: "text"},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, []byte("hello asset"), blobClient.streamContent)
+	assert.Equal(t, int64(1), resp.Data.Id)
+	assert.Equal(t, "assets/1.txt", resp.Data.Uri)
+	assert.Equal(t, "asset.txt", resp.Data.MetaInfo.FileName)
+	assert.Len(t, repo.assets, 1)
+	assert.Equal(t, "1.txt", repo.assets[1].ObjectKey)
+}
+
+func TestCreateProjectAssetUploadURL(t *testing.T) {
+	repo := newMockProjectRepo()
+	svc := newProjectTestServiceWithBlob(repo, &mockBlobClient{})
+
+	resp, err := svc.CreateProjectAssetUploadURL(
+		context.Background(),
+		&projectdto.CreateProjectAssetUploadURLRequest{
+			ProjectId: "project-1", FileName: "video.mp4", FileSize: 20 << 20, ContentType: "video/mp4",
+		},
+		FileExtraInfo{
+			FileName: "video.mp4", FileSize: 20 << 20, ContentType: "video/mp4", FileExt: "mp4", FileType: "video",
+		},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, "https://blob.example.com/upload/1.mp4", resp.Data.UploadUrl)
+	assert.Equal(t, "assets/1.mp4", resp.Data.Uri)
+	assert.Equal(t, "1.mp4", resp.Data.ObjectKey)
+	assert.Equal(t, "PUT", resp.Data.Method)
+	assert.Equal(t, "BlockBlob", resp.Data.Headers["x-ms-blob-type"])
+	assert.Empty(t, repo.assets)
+}
+
+func TestCompleteProjectAssetUpload(t *testing.T) {
+	repo := newMockProjectRepo()
+	blobClient := &mockBlobClient{
+		objectInfo: &storage.ObjectInfo{Path: "project-1/1.mp4", Size: 20 << 20, ContentType: "video/mp4"},
+	}
+	svc := newProjectTestServiceWithBlob(repo, blobClient)
+
+	resp, err := svc.CompleteProjectAssetUpload(
+		context.Background(),
+		&projectdto.CompleteProjectAssetUploadRequest{
+			ProjectId:   "project-1",
+			ObjectKey:   "1.mp4",
+			FileName:    "video.mp4",
+			FileSize:    20 << 20,
+			ContentType: "video/mp4",
+		},
+		"creator1",
+		FileExtraInfo{
+			FileName: "video.mp4", FileSize: 20 << 20, ContentType: "video/mp4", FileExt: "mp4", FileType: "video",
+		},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, int64(1), resp.Data.Id)
+	assert.Equal(t, "project-1/1.mp4", resp.Data.Uri)
+	assert.Len(t, repo.assets, 1)
+	assert.Equal(t, "creator1", repo.assets[1].CreatorUsername)
+	assert.Equal(t, "1.mp4", repo.assets[1].ObjectKey)
+}
+
+func TestCompleteProjectAssetUploadMissingObject(t *testing.T) {
+	repo := newMockProjectRepo()
+	svc := newProjectTestServiceWithBlob(repo, &mockBlobClient{})
+
+	_, err := svc.CompleteProjectAssetUpload(
+		context.Background(),
+		&projectdto.CompleteProjectAssetUploadRequest{ProjectId: "project-1", ObjectKey: "1.mp4", FileName: "video.mp4"},
+		"creator1",
+		FileExtraInfo{FileName: "video.mp4", FileExt: "mp4", FileType: "video"},
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+	assert.Empty(t, repo.assets)
 }
 
 func TestGetProject(t *testing.T) {

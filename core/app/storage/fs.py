@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import json
 import logging
 import os
@@ -32,7 +12,7 @@ from app.utils.sanitize import sanitize_user_id
 _LOGGER = logging.getLogger(__name__)
 
 
-_WORKSPACE_HIDDEN_DIRS = {"history", ".tmp"}
+_WORKSPACE_HIDDEN_DIRS = {"history", ".tmp", ".source-repository"}
 
 
 class StorageFS:
@@ -427,8 +407,7 @@ class ChatFS:
         conversation_id: int = 0,
     ) -> Path:
         """Write a file to the workspace/ directory."""
-        workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
-        target = workspace / filepath
+        target = self._workspace_target(agent_instance_id, user_id, filepath, conversation_id)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding=encoding)
         return target
@@ -443,18 +422,14 @@ class ChatFS:
         conversation_id: int = 0,
     ) -> str:
         """Read a file from the workspace/ directory."""
-        workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
-        target = workspace / filename
+        target = self._workspace_target(agent_instance_id, user_id, filename, conversation_id)
         if not target.exists():
             raise FileNotFoundError(f"file not found at {target}")
         return target.read_text(encoding=encoding)
 
     def delete_file(self, agent_instance_id: int, user_id: str, filepath: str, *, conversation_id: int = 0) -> None:
         """Delete a file or directory from the workspace/ directory."""
-        workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
-        target = (workspace / filepath).resolve()
-        if not target.is_relative_to(workspace.resolve()):
-            raise ValueError("filepath must be within the workspace directory")
+        target = self._workspace_target(agent_instance_id, user_id, filepath, conversation_id)
         if target.is_file():
             target.unlink()
         elif target.is_dir():
@@ -483,6 +458,9 @@ class ChatFS:
 
     def resolve_workspace_file(self, agent_instance_id: int, user_id: str, filepath: str, conversation_id: int = 0) -> Path:
         """Resolve a workspace-relative path to an absolute path with traversal protection."""
+        return self._workspace_target(agent_instance_id, user_id, filepath, conversation_id)
+
+    def _workspace_target(self, agent_instance_id: int, user_id: str, filepath: str, conversation_id: int) -> Path:
         workspace = self.get_workspace_path(agent_instance_id, user_id, conversation_id)
         target = (workspace / filepath).resolve()
         if not target.is_relative_to(workspace.resolve()):

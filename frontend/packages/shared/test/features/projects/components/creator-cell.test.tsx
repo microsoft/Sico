@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -34,12 +12,12 @@ describe("<CreatorCell>", () => {
     expect(screen.getByTestId("avatar-root")).toBeInTheDocument();
   });
 
-  it("falls back to the 'Digital worker' label when an agent creator has no name", () => {
+  it("falls back to the 'Digital Worker' label when an agent creator has no name", () => {
     render(<CreatorCell creator={{ kind: "agent", agentInstanceId: 7 }} />);
 
     // Missing name (older rows) → the cell still names the creator with the
     // generic label beside a decorative avatar, never a blank cell.
-    expect(screen.getByText("Digital worker")).toBeInTheDocument();
+    expect(screen.getByText("Digital Worker")).toBeInTheDocument();
     expect(screen.getByTestId("avatar-root")).toBeInTheDocument();
   });
 
@@ -59,6 +37,6 @@ describe("<CreatorCell>", () => {
     // decorative avatar (mirrors the user branch), not the generic label.
     expect(screen.getByText("Max")).toBeInTheDocument();
     expect(screen.getByTestId("avatar-root")).toBeInTheDocument();
-    expect(screen.queryByText("Digital worker")).not.toBeInTheDocument();
+    expect(screen.queryByText("Digital Worker")).not.toBeInTheDocument();
   });
 });

@@ -1,28 +1,5 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { AxiosInstance } from "axios";
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod";
 
 import type { Plan } from "../../../../src/features/chat/schemas/plan";
 import {
@@ -30,6 +7,7 @@ import {
   fetchPlan,
   mergePlan,
 } from "../../../../src/features/chat/services/plan";
+import { EnvelopeError } from "../../../../src/schemas/api";
 
 function makeGetClient(response: unknown): AxiosInstance {
   return {
@@ -141,15 +119,15 @@ describe("fetchPlan", () => {
     expect(t1.subCalls[0]!.toolCallId).toBe("2");
   });
 
-  it("throws a ZodError when the envelope has a non-zero code and no data", async () => {
+  it("throws an EnvelopeError when the envelope has a non-zero code and no data", async () => {
     const client = makeGetClient({ code: 500, msg: "boom" });
-    // The ZodError TYPE is load-bearing: `classifyError` buckets it as "schema".
-    // A regression to `throw new Error(...)` would still match the regex but
-    // mis-bucket — so pin the instance, not just the message. `unwrapData`
-    // rejects the non-OK code first, surfacing the real failure code.
+    // The EnvelopeError TYPE is load-bearing: `classifyError` buckets it as
+    // "server" (a reachable backend that rejected), and it carries the backend
+    // code + msg so a toast can show the real reason. `unwrapData` rejects the
+    // non-OK code first, surfacing the real failure code.
     await expect(
       fetchPlan(client, { agentInstanceId: 1, turnId: 5, conversationId: 3 }),
-    ).rejects.toBeInstanceOf(z.ZodError);
+    ).rejects.toBeInstanceOf(EnvelopeError);
     await expect(
       fetchPlan(client, { agentInstanceId: 1, turnId: 5, conversationId: 3 }),
     ).rejects.toThrow(/rejected \(code 500\)/);

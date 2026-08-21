@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """-backed BaseChatClient for agent_framework integration."""
 
 from __future__ import annotations
@@ -35,7 +15,7 @@ from agent_framework._types import Annotation, ResponseStream, TextSpanRegion, U
 from app.llmhubs.errors import LLMHubRuntimeError
 from app.llmhubs.hub import LLMHub
 from app.llmhubs.response_format import build_response_format_option
-from app.llmhubs.types import Input, InputContent, OutputItem, Request, Response, StreamChunk
+from app.llmhubs.types import Input, InputContent, ModelRegistryEntry, OutputItem, Request, Response, StreamChunk
 
 logger = logging.getLogger(__name__)
 
@@ -110,10 +90,11 @@ def _compact_images(inputs: list[Input], max_images: int) -> list[Input]:
 class ChatClient(FunctionInvocationLayer, BaseChatClient):
     """A BaseChatClient backed by LLMHub — supports both sync and streaming."""
 
-    def __init__(self, hub: LLMHub, model: str) -> None:
+    def __init__(self, hub: LLMHub, model: str, resolved_entry: ModelRegistryEntry | None = None) -> None:
         super().__init__()
         self._hub = hub
         self._model = model
+        self._resolved_entry = resolved_entry
 
     def _inner_get_response(
         self,
@@ -138,7 +119,7 @@ class ChatClient(FunctionInvocationLayer, BaseChatClient):
         **kwargs: Any,
     ) -> ChatResponse:
         request = _chat_messages_to_llm_request(messages, self._model, options)
-        response = await self._hub.generate(request)
+        response = await self._hub.generate(request, resolved_entry=self._resolved_entry)
         if response.code != 0:
             raise LLMHubRuntimeError(
                 response.msg or f"LLMHub generate failed with code={response.code}",
@@ -163,7 +144,7 @@ class ChatClient(FunctionInvocationLayer, BaseChatClient):
         **kwargs: Any,
     ) -> AsyncIterable[ChatResponseUpdate]:
         request = _chat_messages_to_llm_request(messages, self._model, options)
-        async for chunk in self._hub.generate_stream(request):
+        async for chunk in self._hub.generate_stream(request, resolved_entry=self._resolved_entry):
             if chunk.finish_reason == "error":
                 logger.error("LLMHub streaming response error chunk=%s", chunk)
                 raise LLMHubRuntimeError(
@@ -186,14 +167,9 @@ def _scan_computer_call_ids(messages: MutableSequence[Message]) -> set[str]:
 
 
 def _build_text_input(c: Any) -> InputContent | None:
-    provider_metadata = _extract_provider_metadata(c)
-    if not c.text and not provider_metadata:
+    if not c.text:
         return None
-    return InputContent(
-        type="text",
-        text=str(c.text or ""),
-        provider_metadata=provider_metadata,
-    )
+    return InputContent(type="text", text=str(c.text), provider_metadata=_extract_provider_metadata(c))
 
 
 def _extract_provider_metadata(c: Any) -> dict[str, Any] | None:
@@ -323,15 +299,12 @@ _REQUEST_OPTION_PASSTHROUGH_KEYS: tuple[str, ...] = (
     "temperature",
     "top_p",
     "max_tokens",
-    "max_completion_tokens",
     "frequency_penalty",
     "presence_penalty",
     "request_timeout_ms",
     "stop",
     "seed",
     "tool_choice",
-    "reasoning_effort",
-    "thinking",
     "timeout_ms",
     "allow_multiple_tool_calls",
 )
@@ -438,7 +411,7 @@ def _response_outputs_to_contents(response: Response) -> list[Any]:
 
 
 def _output_text_to_content(output: OutputItem) -> Content | None:
-    if not (output.text or output.annotations or output.provider_metadata):
+    if not (output.text or output.annotations):
         return None
     annotations = _parse_url_citations(output.annotations) if output.annotations else None
     kwargs: dict[str, Any] = {}

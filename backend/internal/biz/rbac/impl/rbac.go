@@ -1,29 +1,10 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/redis/go-redis/v9"
@@ -33,6 +14,7 @@ import (
 	entity "sico-backend/internal/entity/rbac"
 	"sico-backend/internal/errcode"
 	"sico-backend/internal/shared/apperr"
+	projectrepo "sico-backend/internal/store/project/repository"
 	"sico-backend/internal/store/rbac/enforcer"
 	rolerepo "sico-backend/internal/store/rbac/repository"
 	"sico-backend/internal/transport/http/dto/rbac/casbin_rule"
@@ -51,6 +33,7 @@ type Components struct {
 	UserRepo     rolerepo.UserRepository
 	UserRoleRepo rolerepo.UserRoleRepository
 	CasbinRepo   rolerepo.CasbinRuleRepository
+	ProjectRepo  projectrepo.ProjectRepository
 	Enforcer     *casbin.Enforcer
 	Redis        *redis.Client
 }
@@ -311,12 +294,53 @@ func (s *Service) AssignUserRole(
 	if req.UserId <= 0 || req.RoleCode == "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "userId and roleCode are required")
 	}
+	if req.RoleCode == "project_member" {
+		if err := s.validateProjectOrganizationMembership(ctx, req); err != nil {
+			return nil, err
+		}
+	}
 
-	if err := s.doAssignUserRole(ctx, req); err != nil {
+	if err := s.AssignUserRoleInternal(ctx, req); err != nil {
 		return nil, err
 	}
 
 	return appresp.Success(&user_role.AssignUserRoleResponse{}), nil
+}
+
+func (s *Service) validateProjectOrganizationMembership(
+	ctx context.Context, req *user_role.AssignUserRoleRequest,
+) error {
+	if req.ScopeType != "project" || req.ScopeId == "" {
+		return apperr.New(errcode.CommonInvalidParam, "project scope required for project_member role")
+	}
+
+	projectID, err := strconv.ParseInt(req.ScopeId, 10, 64)
+	if err != nil || projectID <= 0 {
+		return apperr.New(errcode.CommonInvalidParam, "valid project scope ID required for project_member role")
+	}
+
+	project, err := s.ProjectRepo.GetProjectByID(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperr.New(errcode.CommonNotFound, "project not found")
+		}
+		return err
+	}
+
+	_, total, err := s.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		UserID:    req.UserId,
+		RoleCode:  "org_member",
+		ScopeType: "org",
+		ScopeID:   strconv.FormatInt(project.OrganizationID, 10),
+		Limit:     1,
+	})
+	if err != nil {
+		return err
+	}
+	if total == 0 {
+		return apperr.New(errcode.CommonForbidden, "user is not a member of the project's organization")
+	}
+	return nil
 }
 
 // RemoveUserRole removes a role from a user.
@@ -330,7 +354,7 @@ func (s *Service) RemoveUserRole(
 		return nil, apperr.New(errcode.CommonInvalidParam, "userId and roleCode are required")
 	}
 
-	if err := s.doRemoveUserRole(ctx, req); err != nil {
+	if err := s.RemoveUserRoleInternal(ctx, req); err != nil {
 		return nil, err
 	}
 
@@ -664,9 +688,18 @@ func (s *Service) doQueryUsers(ctx context.Context, req *user.QueryUsersRequest)
 	return users, int32(totalCount), hasNext, nil
 }
 
-// authorizeRoleChange checks that the current user has the required permission
-// to assign or remove the given role in the given scope.
-func (s *Service) authorizeRoleChange(ctx context.Context, roleCode, scopeType string, scopeID int64) error {
+// AuthorizeRoleChange checks that the current user has the required permission to
+// assign or remove the given role in the given scope. It covers the RBAC-native
+// roles (platform/org/project). Agent-scoped roles are authorized by the agent
+// domain (see agent.Service.CheckAgentOwner) and must not be passed here.
+//
+// Rules (permission-based, not role-based):
+//
+//	platform_admin                       → requires organization.admin at platform scope
+//	developer, org_member, org_admin     → requires organization.manage at the target org scope
+//	project_admin              → requires project.manage at the target project scope
+//	project_member             → requires project.manage at the target project scope
+func (s *Service) AuthorizeRoleChange(ctx context.Context, roleCode, scopeType string, scopeID string) error {
 	if s.Enforcer == nil {
 		return nil
 	}
@@ -683,15 +716,22 @@ func (s *Service) authorizeRoleChange(ctx context.Context, roleCode, scopeType s
 	)
 
 	switch roleCode {
-	case "platform_admin", "org_admin":
+	case "platform_admin":
 		checkDomain = "platform"
 		checkResource = "organization"
 		checkAction = "admin"
+	case "developer", "org_member", "org_admin":
+		if scopeType != "org" || scopeID == "" || scopeID == "0" {
+			return apperr.New(errcode.CommonInvalidParam, "org scope required for organization roles")
+		}
+		checkDomain = fmt.Sprintf("org:%s", scopeID)
+		checkResource = "organization"
+		checkAction = "manage"
 	case "project_admin", "project_member":
-		if scopeType != "project" || scopeID <= 0 {
+		if scopeType != "project" || scopeID == "" || scopeID == "0" {
 			return apperr.New(errcode.CommonInvalidParam, "project scope required for project roles")
 		}
-		checkDomain = fmt.Sprintf("project:%d", scopeID)
+		checkDomain = fmt.Sprintf("project:%s", scopeID)
 		checkResource = "project"
 		checkAction = "manage"
 	default:
@@ -706,13 +746,6 @@ func (s *Service) authorizeRoleChange(ctx context.Context, roleCode, scopeType s
 		return apperr.New(errcode.CommonForbidden, "insufficient permissions to manage this role")
 	}
 	return nil
-}
-
-func (s *Service) doAssignUserRole(ctx context.Context, req *user_role.AssignUserRoleRequest) error {
-	if err := s.authorizeRoleChange(ctx, req.RoleCode, req.ScopeType, req.ScopeId); err != nil {
-		return err
-	}
-	return s.AssignUserRoleInternal(ctx, req)
 }
 
 // AssignUserRoleInternal performs the actual role assignment without authorization checks.
@@ -751,7 +784,7 @@ func (s *Service) AssignUserRoleInternal(ctx context.Context, req *user_role.Ass
 	}
 
 	if s.Enforcer != nil && userModel != nil {
-		domain := fmt.Sprintf("%s:%d", req.ScopeType, req.ScopeId)
+		domain := fmt.Sprintf("%s:%s", req.ScopeType, req.ScopeId)
 		if req.ScopeType == "platform" {
 			domain = "platform"
 		}
@@ -764,13 +797,6 @@ func (s *Service) AssignUserRoleInternal(ctx context.Context, req *user_role.Ass
 	return nil
 }
 
-func (s *Service) doRemoveUserRole(ctx context.Context, req *user_role.RemoveUserRoleRequest) error {
-	if err := s.authorizeRoleChange(ctx, req.RoleCode, req.ScopeType, req.ScopeId); err != nil {
-		return err
-	}
-	return s.RemoveUserRoleInternal(ctx, req)
-}
-
 // RemoveUserRoleInternal performs the actual role removal without authorization checks.
 func (s *Service) RemoveUserRoleInternal(ctx context.Context, req *user_role.RemoveUserRoleRequest) error {
 	userModel, _ := s.UserRepo.GetUserByID(ctx, req.UserId)
@@ -780,7 +806,7 @@ func (s *Service) RemoveUserRoleInternal(ctx context.Context, req *user_role.Rem
 	}
 
 	if s.Enforcer != nil && userModel != nil {
-		domain := fmt.Sprintf("%s:%d", req.ScopeType, req.ScopeId)
+		domain := fmt.Sprintf("%s:%s", req.ScopeType, req.ScopeId)
 		if req.ScopeType == "platform" {
 			domain = "platform"
 		}

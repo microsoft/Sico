@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -193,6 +171,7 @@
   --gradient-sky: linear-gradient(180deg, rgba(255, 255, 255, 0.00) 54.06%, rgba(255, 255, 255, 0.50) 108.13%), #BDBFFF; /* Agent avatar halo */
   --gradient-dawn: radial-gradient(213.78% 164.07% at 97.89% 100%, #FFF0D6 4.08%, #ECC5FF 45.41%); /* Decorative warm gradient */
   --gradient-auth-page: linear-gradient(180deg, #EEF3FF 0%, #FFF 66.1%, #D7D4FC 100%); /* Login/auth page background */
+  --gradient-auth-page-developer: linear-gradient(180deg, #EEF3FF 0%, #FFF 66.1%, #EEF3FF 100%); /* Developer login/auth page background */
   --gradient-dune: linear-gradient(180deg, rgba(255, 255, 255, 0.00) 50%, rgba(255, 255, 255, 0.50) 100%), #EDCAA3; /* Warm decorative gradient */
   --gradient-icon-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.00) 0%, rgba(255, 255, 255, 0.40) 100%), var(--color-neutral-100); /* Attachment icon tile background */
   --gradient-shimmer-text: linear-gradient(90deg, color-mix(in srgb, var(--color-foreground-secondary) 100%, transparent) 35%, color-mix(in srgb, var(--color-foreground-secondary) 11%, transparent) 50%, color-mix(in srgb, var(--color-foreground-secondary) 100%, transparent) 65%); /* Clipped text-fill swept by @keyframes shimmer (thinking strip). Symmetric secondary→(11% secondary)→secondary; narrow 35%–65% gray band so the sweep reads as a strong dark→faint→dark ramp while the viewport still always contains a dark region. */
@@ -481,7 +460,6 @@
   --color-button-secondary-stroke-disabled: var(--color-overlay-tint-5);
   --color-button-secondary-foreground-rest: var(--color-foreground-primary);
   --color-button-secondary-foreground-disabled: var(--color-foreground-disabled);
-  --shadow-button-secondary: var(--shadow-s); /* @presenter Shadow */
 
   --color-button-subtle-fill-rest: transparent;
   --color-button-subtle-fill-hover: var(--color-overlay-tint-5);

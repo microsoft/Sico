@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   Button,
   DropdownMenu,
@@ -35,10 +13,12 @@ import { type JSX } from "react";
 import { AssetContentCard } from "./asset-content-card";
 import { AssetDetailLayout } from "./asset-detail-layout";
 import { AssetDetailMetaPanel } from "./asset-detail-meta-panel";
+import { DELETE_DENIED_TOOLTIP, GatedMenuItem } from "./gated-menu-item";
 import { MessageState } from "../../../components/message-state";
 import { downloadFile } from "../../../utils/download-file";
 import { UNPREVIEWABLE_ILLUSTRATION } from "../../file-preview";
 import { FilePreview } from "../../file-preview/components/file-preview";
+import { useAssetDeleteGate } from "../hooks/use-asset-delete-gate";
 import type { AssetDetail as AssetDetailData } from "../hooks/use-asset-detail-query";
 import { useAssetMutation } from "../hooks/use-asset-mutation";
 
@@ -57,10 +37,13 @@ const COPY = {
 } as const;
 
 // The deliverable `…` overflow menu — Download (when the file exists) + Delete,
-// in the shell's `actions` slot. A plain module-scope render helper (NOT a nested
-// component) so the component body stays under the line cap.
+// in the shell's `actions` slot. Delete stays visible but is gated (greyed +
+// reason tooltip) when the viewer isn't an admin and didn't create the asset. A
+// plain module-scope render helper (NOT a nested component) so the component
+// body stays under the line cap.
 function renderActions(
   onRequestDelete: () => void,
+  canDelete: boolean,
   onDownload?: () => void,
 ): JSX.Element {
   return (
@@ -79,10 +62,15 @@ function renderActions(
             {COPY.download}
           </DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem onClick={onRequestDelete}>
+        <GatedMenuItem
+          allowed={canDelete}
+          variant="destructive"
+          deniedTooltip={DELETE_DENIED_TOOLTIP}
+          onSelect={onRequestDelete}
+        >
           <Trash2 />
           Delete
-        </DropdownMenuItem>
+        </GatedMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -155,6 +143,7 @@ export function AssetDetailDeliverable({
 }: AssetDetailDeliverableProps): JSX.Element {
   const navigate = useNavigate();
   const { remove } = useAssetMutation(projectId);
+  const canDelete = useAssetDeleteGate(asset, projectId);
   const fileSasUrl = asset.fileSasUrl;
   const filename = asset.fileName;
 
@@ -178,11 +167,11 @@ export function AssetDetailDeliverable({
         />
       }
       actions={(onRequestDelete) =>
-        renderActions(onRequestDelete, handleDownload)
+        renderActions(onRequestDelete, canDelete, handleDownload)
       }
       confirm={{
         title: "Delete Deliverable",
-        body: "Permanently remove this deliverable across your organization.",
+        body: "Permanently remove this deliverable across your project.",
         onConfirm: () =>
           runDeliverableDelete(
             remove,

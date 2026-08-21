@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 syntax = "proto3";
 package project;
 
@@ -157,6 +137,47 @@ enum MemberType {
 message AddProjectAssetRequest {
   string project_id = 1;  // @gotag: json:"projectId" form:"projectId"
   // File will be handled in handler layer, not in proto
+}
+
+// Request message for creating a direct project asset upload URL
+message CreateProjectAssetUploadURLRequest {
+  string project_id = 1; // @gotag: json:"projectId"
+  string file_name = 2; // @gotag: json:"fileName" binding:"required"
+  int64 file_size = 3; // @gotag: json:"fileSize" binding:"min=0"
+  string content_type = 4; // @gotag: json:"contentType"
+}
+
+// Response message for creating a direct project asset upload URL
+message CreateProjectAssetUploadURLResponse {
+  CreateProjectAssetUploadURLData data = 1; // @gotag: json:"data"
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+message CreateProjectAssetUploadURLData {
+  string upload_url = 1; // @gotag: json:"uploadUrl"
+  string uri = 2; // @gotag: json:"uri"
+  string object_key = 3; // @gotag: json:"objectKey"
+  string method = 4; // @gotag: json:"method"
+  map<string, string> headers = 5; // @gotag: json:"headers"
+  int64 expires_at = 6; // @gotag: json:"expiresAt"
+  FileMetaInfo meta_info = 7; // @gotag: json:"metaInfo"
+}
+
+// Request message for completing a direct project asset upload
+message CompleteProjectAssetUploadRequest {
+  string project_id = 1; // @gotag: json:"projectId"
+  string object_key = 2; // @gotag: json:"objectKey" binding:"required"
+  string file_name = 3; // @gotag: json:"fileName" binding:"required"
+  int64 file_size = 4; // @gotag: json:"fileSize" binding:"min=0"
+  string content_type = 5; // @gotag: json:"contentType"
+}
+
+// Response message for completing a direct project asset upload
+message CompleteProjectAssetUploadResponse {
+  AddProjectAssetData data = 1; // @gotag: json:"data"
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
 }
 
 // Response message for adding a project asset

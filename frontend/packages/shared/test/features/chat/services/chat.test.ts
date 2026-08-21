@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { createStore } from "jotai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -653,7 +631,7 @@ const stopCtx = (
 });
 
 describe("stopTurn", () => {
-  it("plan path: cancels the plan FIRST, then stops reconnect, then aborts the chat handle", async () => {
+  it("plan path: cancels the turn FIRST, then stops reconnect, then aborts the chat handle", async () => {
     const store = createStore();
     const controller = new AbortController();
     const order: string[] = [];
@@ -668,6 +646,7 @@ describe("stopTurn", () => {
           id: "ai",
           author: "ai",
           streamingState: "streaming",
+          turnId: 42,
           content: [{ partId: "p", type: "plan", planId: "42" }],
         },
       ],
@@ -680,13 +659,13 @@ describe("stopTurn", () => {
 
     await stopTurn(store, stopCtx({ cancelPlan, reconnectStop }));
 
-    // G4 / §6 Path B: cancel the backend plan before tearing down the streams,
-    // and route the reconnect teardown through `stop()` (not a bare abort).
+    // Cancel the backend turn before tearing down the streams, and route the
+    // reconnect teardown through `stop()` (not a bare abort).
     expect(order).toEqual(["cancel:42", "stop", "abort"]);
     expect(abortSpy).toHaveBeenCalledOnce();
   });
 
-  it("plan path: on cancel failure, toasts and leaves the turn running (no stop, no abort)", async () => {
+  it("on cancel failure, toasts and leaves the turn running (no stop, no abort)", async () => {
     const store = createStore();
     const controller = new AbortController();
     const abortSpy = vi.spyOn(controller, "abort");
@@ -698,6 +677,7 @@ describe("stopTurn", () => {
           id: "ai",
           author: "ai",
           streamingState: "streaming",
+          turnId: 7,
           content: [{ partId: "p", type: "plan", planId: "7" }],
         },
       ],
@@ -715,16 +695,51 @@ describe("stopTurn", () => {
       }),
     );
 
-    // No silent return (design §6 Path B): surface a toast, and do NOT abort —
-    // killing the chat stream while the backend plan still runs would orphan it.
-    // The discarded cancel error is logged for diagnosis (not swallowed).
+    // No silent return: surface a toast, and do NOT abort — killing the chat
+    // stream while the backend turn still runs would orphan it (and a reload's
+    // reconnect probe would resume it). The discarded cancel error is logged.
     expect(warn).toHaveBeenCalledOnce();
     expect(toastError).toHaveBeenCalledOnce();
     expect(reconnectStop).not.toHaveBeenCalled();
     expect(abortSpy).not.toHaveBeenCalled();
   });
 
-  it("text-only path: stops reconnect and aborts, never calls cancelPlan", async () => {
+  it("text-only path: cancels the turn by turnId (no plan part needed)", async () => {
+    const store = createStore();
+    const controller = new AbortController();
+    const order: string[] = [];
+    const abortSpy = vi
+      .spyOn(controller, "abort")
+      .mockImplementation(() => order.push("abort"));
+    seedConversation(store, {
+      clientId: "c1",
+      history: [
+        {
+          id: "ai",
+          author: "ai",
+          streamingState: "streaming",
+          turnId: 9,
+          content: [{ partId: "p", type: "text", text: "partial" }],
+        },
+      ],
+      sendHandle: controller,
+    });
+    const cancelPlan = vi.fn(async (turnId: number) => {
+      order.push(`cancel:${turnId}`);
+    });
+    const reconnectStop = vi.fn(() => order.push("stop"));
+
+    await stopTurn(store, stopCtx({ cancelPlan, reconnectStop }));
+
+    // A plain text stream has a turnId but no plan part — it MUST still be
+    // cancelled, since `/plan/cancel` stops the whole turn's task runtime on the
+    // backend. Cancelling only when a plan part exists left text streams running
+    // server-side and let a reload's reconnect probe resume them.
+    expect(order).toEqual(["cancel:9", "stop", "abort"]);
+    expect(abortSpy).toHaveBeenCalledOnce();
+  });
+
+  it("no in-flight turnId: stops reconnect and aborts, never calls cancelPlan", async () => {
     const store = createStore();
     const controller = new AbortController();
     const abortSpy = vi.spyOn(controller, "abort");
@@ -745,8 +760,8 @@ describe("stopTurn", () => {
 
     await stopTurn(store, stopCtx({ cancelPlan, reconnectStop }));
 
-    // C1 path: nothing to cancel, but Stop must STILL route through `stop()`
-    // so a dropped-and-reconnecting turn doesn't silently resume.
+    // Nothing to cancel without a turnId, but Stop must STILL route through
+    // `stop()` so a dropped-and-reconnecting turn doesn't silently resume.
     expect(cancelPlan).not.toHaveBeenCalled();
     expect(reconnectStop).toHaveBeenCalledOnce();
     expect(abortSpy).toHaveBeenCalledOnce();

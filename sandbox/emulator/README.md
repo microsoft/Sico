@@ -68,7 +68,8 @@ macOS/Linux:
 ```bash
 pyinstaller --noconfirm --clean --onedir -n mumu-api app/main.py \
     --paths . --collect-submodules app \
-    --add-data "app/scrcpy/scrcpy-server:app/scrcpy"
+    --add-data "app/scrcpy/scrcpy-server:app/scrcpy" \
+    --add-data "../../LICENSE:."
 ```
 
 Windows:
@@ -76,10 +77,11 @@ Windows:
 ```powershell
 pyinstaller --noconfirm --clean --onedir -n mumu-api app\main.py `
     --paths . --collect-submodules app `
-    --add-data "app\scrcpy\scrcpy-server;app\scrcpy"
+    --add-data "app\scrcpy\scrcpy-server;app\scrcpy" `
+    --add-data "..\..\LICENSE;."
 ```
 
-> The `--add-data` flag bundles `scrcpy-server` for H264 streaming. Path separator is `:` on macOS/Linux, `;` on Windows.
+> The `--add-data` flags bundle `scrcpy-server` for H264 streaming and the repository MIT License. Path separator is `:` on macOS/Linux, `;` on Windows.
 
 ## Key Endpoints
 

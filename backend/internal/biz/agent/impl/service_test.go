@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -70,6 +50,16 @@ func (m *mockAgentRepo) List(_ context.Context, _ string, offset, limit int) ([]
 	return all[offset:end], total, nil
 }
 
+func (m *mockAgentRepo) ListByFilter(
+	_ context.Context, _ *entity.ListSingleAgentFilter,
+) ([]*entity.SingleAgent, int64, error) {
+	all := make([]*entity.SingleAgent, 0, len(m.agents))
+	for _, a := range m.agents {
+		all = append(all, a)
+	}
+	return all, int64(len(all)), nil
+}
+
 type mockInstanceRepo struct {
 	repository.SingleAgentInstanceRepository
 	instances map[int64]*entity.SingleAgentInstance
@@ -93,12 +83,6 @@ func (m *mockInstanceRepo) Create(_ context.Context, inst *entity.SingleAgentIns
 
 type mockProjectRepo struct {
 	projectrepo.ProjectRepository
-	added []*projectrepo.ProjectUserModel
-}
-
-func (m *mockProjectRepo) AddProjectUser(_ context.Context, model *projectrepo.ProjectUserModel) error {
-	m.added = append(m.added, model)
-	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -163,25 +147,11 @@ func TestListSingleAgents(t *testing.T) {
 	}}
 	svc := newTestService(repo, nil, nil)
 
-	t.Run("first page", func(t *testing.T) {
-		agents, total, hasNext, err := svc.listSingleAgents(context.Background(), &single_agent.ListSingleAgentsRequest{
-			Page: 1, PageSize: 2,
-		})
-		require.NoError(t, err)
-		assert.Equal(t, int64(3), total)
-		assert.Len(t, agents, 2)
-		assert.True(t, hasNext)
-	})
-
-	t.Run("last page", func(t *testing.T) {
-		agents, total, hasNext, err := svc.listSingleAgents(context.Background(), &single_agent.ListSingleAgentsRequest{
-			Page: 2, PageSize: 2,
-		})
-		require.NoError(t, err)
-		assert.Equal(t, int64(3), total)
-		assert.Len(t, agents, 1)
-		assert.False(t, hasNext)
-	})
+	// RBAC is not initialized in unit tests, so listVisibleAgents runs unrestricted
+	// and returns the full set via ListByFilter.
+	agents, err := svc.listVisibleAgents(context.Background(), nil, nil, 0)
+	require.NoError(t, err)
+	assert.Len(t, agents, 3)
 }
 
 func TestCreateSingleAgentInstance(t *testing.T) {

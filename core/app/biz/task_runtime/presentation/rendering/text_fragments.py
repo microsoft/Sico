@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Pure text/label builders for the task_runtime rendering layer.
 
 Leaf module of the ``rendering`` subpackage. Functions here take domain objects
@@ -33,8 +13,9 @@ from __future__ import annotations
 
 from app.schemas.conversation.plan import ToolDeliverable, ToolDeliverableType
 
-from ...models import PreparedTaskBatch
-from ...models import (
+from ...capabilities.ids import SKILL_PROVIDER_ID, provider_of
+from ...domain.models import PreparedTaskBatch
+from ...domain.models import (
     BatchRecord,
     BatchResult,
     BatchStatus,
@@ -42,7 +23,7 @@ from ...models import (
     TaskRun,
     TaskSpec,
 )
-from ...sandbox_types import SANDBOX_OSES
+from ...sandbox.types import SANDBOX_OSES
 from .artifact_links import (
     _artifact_link_line,
 )
@@ -110,7 +91,7 @@ def _delegate_plan_title(prepared: PreparedTaskBatch) -> str:
     task = tasks[0]
     if plan_title := _task_display_value(task, "plan_title"):
         return plan_title
-    if task.kind == "skill":
+    if _is_skill_task(task):
         return "Skill Task"
     return "Task"
 
@@ -124,9 +105,18 @@ def _delegate_plan_step_title(prepared: PreparedTaskBatch) -> str:
         return title or "Run delegated tasks"
     task = tasks[0]
     title = _task_display_value(task, "single_step_title")
-    if not title and task.kind == "skill":
+    if not title and _is_skill_task(task):
         title = "Run skill task"
     return title or "Run task"
+
+
+def _is_skill_task(task: TaskSpec) -> bool:
+    """Whether the task's capability comes from the skill registry.
+
+    Presentation still says "skill" where a skill is what the user recognises;
+    that is a label keyed off the capability's provider, not a dispatch kind.
+    """
+    return provider_of(task.capability_id) == SKILL_PROVIDER_ID
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +205,7 @@ def _environment_lines(task: TaskSpec) -> list[str]:
     if environment_label := _task_display_value(task, "environment_label"):
         return [f"Environment: {environment_label}"]
     if task.required_sandbox:
-        return [f"Environment: {task.required_sandbox} sandbox"]
+        return [f"Environment: {_task_sandbox_label(task)}"]
     return []
 
 
@@ -271,14 +261,14 @@ def _sandbox_releasing_message(run: TaskRun) -> str:
     releasing_label = _task_display_value(run.spec, "sandbox_releasing_label")
     if releasing_label:
         return releasing_label
-    sandbox_label = _task_display_value(run.spec, "sandbox_label") or f"{run.spec.required_sandbox or 'sandbox'} sandbox"
+    sandbox_label = _task_display_value(run.spec, "sandbox_label") or _task_sandbox_label(run.spec)
     return f"Releasing {sandbox_label}"
 
 
 def _sandbox_message(run: TaskRun, action: str) -> str:
     sandbox_label = _task_display_value(run.spec, "sandbox_label")
     if not sandbox_label:
-        sandbox_label = f"{run.spec.required_sandbox or 'sandbox'} sandbox"
+        sandbox_label = _task_sandbox_label(run.spec)
     if action == "ready":
         return f"{sandbox_label} ready"
     if action == "released":
@@ -396,7 +386,7 @@ def _batch_subject_label(
 
 
 def _batch_sandbox_type(prepared: PreparedTaskBatch) -> str | None:
-    sandbox_types = {task.required_sandbox for task in prepared.batch.tasks if task.required_sandbox}
+    sandbox_types = {task.selected_sandbox for task in prepared.batch.tasks if task.selected_sandbox}
     if len(sandbox_types) == 1:
         return next(iter(sandbox_types))
 
@@ -405,6 +395,16 @@ def _batch_sandbox_type(prepared: PreparedTaskBatch) -> str | None:
             return sandbox_os
 
     return None
+
+
+def _task_sandbox_label(task: TaskSpec) -> str:
+    selected = task.selected_sandbox
+    if selected:
+        return f"{selected} sandbox"
+    options = task.sandbox_options
+    if options:
+        return f"{'/'.join(options)} sandbox"
+    return "sandbox"
 
 
 def _finished_progress_label(finished: int, total: int, completed: int, failed: int, cancelled: int) -> str:

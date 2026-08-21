@@ -20,7 +20,6 @@ var (
 	TProject            *tProject
 	TProjectAsset       *tProjectAsset
 	TProjectDeliverable *tProjectDeliverable
-	TProjectUser        *tProjectUser
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
@@ -28,7 +27,6 @@ func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	TProject = &Q.TProject
 	TProjectAsset = &Q.TProjectAsset
 	TProjectDeliverable = &Q.TProjectDeliverable
-	TProjectUser = &Q.TProjectUser
 }
 
 func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
@@ -37,7 +35,6 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 		TProject:            newTProject(db, opts...),
 		TProjectAsset:       newTProjectAsset(db, opts...),
 		TProjectDeliverable: newTProjectDeliverable(db, opts...),
-		TProjectUser:        newTProjectUser(db, opts...),
 	}
 }
 
@@ -47,7 +44,6 @@ type Query struct {
 	TProject            tProject
 	TProjectAsset       tProjectAsset
 	TProjectDeliverable tProjectDeliverable
-	TProjectUser        tProjectUser
 }
 
 func (q *Query) Available() bool { return q.db != nil }
@@ -58,7 +54,6 @@ func (q *Query) clone(db *gorm.DB) *Query {
 		TProject:            q.TProject.clone(db),
 		TProjectAsset:       q.TProjectAsset.clone(db),
 		TProjectDeliverable: q.TProjectDeliverable.clone(db),
-		TProjectUser:        q.TProjectUser.clone(db),
 	}
 }
 
@@ -76,7 +71,6 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 		TProject:            q.TProject.replaceDB(db),
 		TProjectAsset:       q.TProjectAsset.replaceDB(db),
 		TProjectDeliverable: q.TProjectDeliverable.replaceDB(db),
-		TProjectUser:        q.TProjectUser.replaceDB(db),
 	}
 }
 
@@ -84,7 +78,6 @@ type queryCtx struct {
 	TProject            ITProjectDo
 	TProjectAsset       ITProjectAssetDo
 	TProjectDeliverable ITProjectDeliverableDo
-	TProjectUser        ITProjectUserDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
@@ -92,7 +85,6 @@ func (q *Query) WithContext(ctx context.Context) *queryCtx {
 		TProject:            q.TProject.WithContext(ctx),
 		TProjectAsset:       q.TProjectAsset.WithContext(ctx),
 		TProjectDeliverable: q.TProjectDeliverable.WithContext(ctx),
-		TProjectUser:        q.TProjectUser.WithContext(ctx),
 	}
 }
 

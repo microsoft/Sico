@@ -30,6 +30,8 @@ func newTSingleAgent(db *gorm.DB, opts ...gen.DOOption) tSingleAgent {
 	_tSingleAgent.ALL = field.NewAsterisk(tableName)
 	_tSingleAgent.ID = field.NewInt64(tableName, "id")
 	_tSingleAgent.AgentID = field.NewString(tableName, "agent_id")
+	_tSingleAgent.PublishStatus = field.NewInt64(tableName, "publish_status")
+	_tSingleAgent.OrganizationID = field.NewInt64(tableName, "organization_id")
 	_tSingleAgent.CreatorUsername = field.NewString(tableName, "creator_username")
 	_tSingleAgent.UpdaterUsername = field.NewString(tableName, "updater_username")
 	_tSingleAgent.Name = field.NewString(tableName, "name")
@@ -52,6 +54,8 @@ type tSingleAgent struct {
 	ALL             field.Asterisk
 	ID              field.Int64  // Primary Key ID
 	AgentID         field.String // Agent ID
+	PublishStatus   field.Int64  // Publish status
+	OrganizationID  field.Int64  // Organization ID (0 = platform-predefined)
 	CreatorUsername field.String // Creator Username
 	UpdaterUsername field.String // Updater Username
 	Name            field.String // Agent Name
@@ -79,6 +83,8 @@ func (t *tSingleAgent) updateTableName(table string) *tSingleAgent {
 	t.ALL = field.NewAsterisk(table)
 	t.ID = field.NewInt64(table, "id")
 	t.AgentID = field.NewString(table, "agent_id")
+	t.PublishStatus = field.NewInt64(table, "publish_status")
+	t.OrganizationID = field.NewInt64(table, "organization_id")
 	t.CreatorUsername = field.NewString(table, "creator_username")
 	t.UpdaterUsername = field.NewString(table, "updater_username")
 	t.Name = field.NewString(table, "name")
@@ -104,9 +110,11 @@ func (t *tSingleAgent) GetFieldByName(fieldName string) (field.OrderExpr, bool) 
 }
 
 func (t *tSingleAgent) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 11)
+	t.fieldMap = make(map[string]field.Expr, 13)
 	t.fieldMap["id"] = t.ID
 	t.fieldMap["agent_id"] = t.AgentID
+	t.fieldMap["publish_status"] = t.PublishStatus
+	t.fieldMap["organization_id"] = t.OrganizationID
 	t.fieldMap["creator_username"] = t.CreatorUsername
 	t.fieldMap["updater_username"] = t.UpdaterUsername
 	t.fieldMap["name"] = t.Name

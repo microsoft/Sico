@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package storage
 
 import (
@@ -29,6 +9,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"strings"
+	"time"
 
 	"sico-backend/pkg/logger"
 )
@@ -127,6 +108,119 @@ func (s *seaweedFSClient) PutObject(ctx context.Context, objectKey string, conte
 	}
 
 	return path, nil
+}
+
+func (s *seaweedFSClient) UploadObject(
+	ctx context.Context,
+	objectKey string,
+	content io.Reader,
+	opts ...PutOptFn,
+) (*UploadedObject, error) {
+	putOpt := &PutOption{}
+	for _, opt := range opts {
+		opt(putOpt)
+	}
+
+	prefix := s.prefix
+	if putOpt.PathPrefix != nil {
+		prefix = *putOpt.PathPrefix
+	}
+	path := buildObjectPath(prefix, objectKey)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, s.buildURL(path), content)
+	if err != nil {
+		return nil, fmt.Errorf("UploadObject: failed to create request: %v", err)
+	}
+	if putOpt.ContentType != nil {
+		req.Header.Set("Content-Type", *putOpt.ContentType)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("UploadObject failed: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.CtxError(ctx, "failed to close UploadObject response body: %v", closeErr)
+		}
+	}()
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("UploadObject failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return &UploadedObject{Path: path}, nil
+}
+
+func (s *seaweedFSClient) CreateUploadURL(
+	_ context.Context,
+	objectKey string,
+	opts ...PutOptFn,
+) (*UploadURL, error) {
+	putOpt := &PutOption{}
+	for _, opt := range opts {
+		opt(putOpt)
+	}
+
+	prefix := s.prefix
+	if putOpt.PathPrefix != nil {
+		prefix = *putOpt.PathPrefix
+	}
+	path := buildObjectPath(prefix, objectKey)
+	expiresAt := time.Now().Add(time.Hour)
+	if putOpt.Expires != nil {
+		expiresAt = *putOpt.Expires
+	}
+	headers := map[string]string{}
+	if putOpt.ContentType != nil && *putOpt.ContentType != "" {
+		headers["Content-Type"] = *putOpt.ContentType
+	}
+
+	return &UploadURL{
+		Path:      path,
+		URL:       buildPublicURL(path),
+		Method:    http.MethodPut,
+		Headers:   headers,
+		ExpiresAt: expiresAt,
+	}, nil
+}
+
+func (s *seaweedFSClient) GetObjectInfo(
+	ctx context.Context,
+	objectKey string,
+	opts ...GetOptFn,
+) (*ObjectInfo, error) {
+	getOpt := &GetOption{}
+	for _, opt := range opts {
+		opt(getOpt)
+	}
+
+	prefix := s.prefix
+	if getOpt.PathPrefix != nil {
+		prefix = *getOpt.PathPrefix
+	}
+	path := buildObjectPath(prefix, objectKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, s.buildURL(path), nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetObjectInfo: failed to create request: %v", err)
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GetObjectInfo failed: %v", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.CtxError(ctx, "failed to close GetObjectInfo response body: %v", closeErr)
+		}
+	}()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrObjectNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GetObjectInfo failed with status %d", resp.StatusCode)
+	}
+
+	return &ObjectInfo{Path: path, Size: resp.ContentLength, ContentType: resp.Header.Get("Content-Type")}, nil
 }
 
 func (s *seaweedFSClient) GetObject(ctx context.Context, objectKey string, opts ...GetOptFn) ([]byte, error) {
