@@ -212,13 +212,14 @@ func (sai *SingleAgentInstanceDAO) singleAgentInstanceDo2Po(do *entity.SingleAge
 		EmployerUsername: do.EmployerUsername,
 		OperatorUsername: do.OperatorUsername,
 		Name:             do.Name,
-		ProjectID:        do.ProjectId,
 		Role:             do.Role,
+		ProjectID:        do.ProjectId,
 		IconURI:          do.IconUri,
 		EmployerIconURI:  do.EmployerIconUri,
 		CreatedAt:        do.CreatedAt,
 		UpdatedAt:        do.UpdatedAt,
 		Attachments:      do.Attachments,
+		Status:           int32(do.Status),
 	}
 
 	if len(do.Desc) > 0 {

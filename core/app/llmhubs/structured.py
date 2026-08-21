@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Single-shot structured-output client over :class:`~app.llmhubs.hub.LLMHub`.
 
 This is the neutral, domain-agnostic counterpart to the streaming, tool-calling
@@ -33,13 +13,14 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Any, TypeVar
+from dataclasses import dataclass
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
 from app.llmhubs.hub import LLMHub
 from app.llmhubs.response_format import build_response_format_option
-from app.llmhubs.types import Input, InputContent, Request, Response
+from app.llmhubs.types import Input, InputContent, Request, Response, Trace, Usage
 
 T = TypeVar("T", bound=BaseModel)
 ContentBlocks = Sequence[dict[str, Any]]
@@ -47,10 +28,16 @@ ContentBlocks = Sequence[dict[str, Any]]
 DEFAULT_CHAT_MODEL = "gpt5.4"
 
 
+@dataclass(frozen=True, slots=True)
+class StructuredCompletion(Generic[T]):
+    value: T
+    usage: Usage
+    trace: Trace
+
+
 class LLMClient(ABC):
     """Abstract single-shot structured-output interface."""
 
-    @abstractmethod
     async def complete_structured(
         self,
         response_model: type[T],
@@ -59,7 +46,25 @@ class LLMClient(ABC):
         content_blocks: ContentBlocks | None = None,
         **kwargs: Any,
     ) -> T:
-        """Return a structured response from either a text prompt or explicit content blocks."""
+        """Return only the validated value for callers that do not need telemetry."""
+        completion = await self.complete_structured_result(
+            response_model,
+            prompt=prompt,
+            content_blocks=content_blocks,
+            **kwargs,
+        )
+        return completion.value
+
+    @abstractmethod
+    async def complete_structured_result(
+        self,
+        response_model: type[T],
+        *,
+        prompt: str | None = None,
+        content_blocks: ContentBlocks | None = None,
+        **kwargs: Any,
+    ) -> StructuredCompletion[T]:
+        """Return the validated value together with provider usage and trace."""
 
 
 class HubLLMClient(LLMClient):
@@ -69,14 +74,14 @@ class HubLLMClient(LLMClient):
         self.model = model
         self._hub = LLMHub()
 
-    async def complete_structured(
+    async def complete_structured_result(
         self,
         response_model: type[T],
         *,
         prompt: str | None = None,
         content_blocks: ContentBlocks | None = None,
         **kwargs: Any,
-    ) -> T:
+    ) -> StructuredCompletion[T]:
         user_content = _resolve_user_content(prompt=prompt, content_blocks=content_blocks)
 
         request = Request(
@@ -109,7 +114,11 @@ class HubLLMClient(LLMClient):
 
         raw_text = response.text
         parsed = json.loads(raw_text)
-        return response_model.model_validate(parsed)
+        return StructuredCompletion(
+            value=response_model.model_validate(parsed),
+            usage=response.usage,
+            trace=response.trace,
+        )
 
 
 def _resolve_user_content(
@@ -125,4 +134,4 @@ def _resolve_user_content(
     raise ValueError("Either prompt or content_blocks must be provided for structured completion.")
 
 
-__all__ = ["ContentBlocks", "DEFAULT_CHAT_MODEL", "LLMClient", "HubLLMClient"]
+__all__ = ["ContentBlocks", "DEFAULT_CHAT_MODEL", "HubLLMClient", "LLMClient", "StructuredCompletion"]

@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Tests for the field-agnostic default DW trajectory parser.
 
 The android-tester-shaped cases double as the regression that android-tester
@@ -30,17 +10,40 @@ plain (non-JSONL) stdout.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from app.biz.task_runtime.domain.models import CapabilityDispatch, TaskExecutionPolicy, TaskRun, TaskSpec
 from app.experiences.integrations.default_parser import parse_trajectory
 
 
-def _make_run(run_id: str = "run-1", batch_id: str = "batch-1", skill_name: str = "android-tester") -> SimpleNamespace:
-    return SimpleNamespace(run_id=run_id, batch_id=batch_id, skill_name=skill_name)
+def _make_run(run_id: str = "run-1", batch_id: str = "batch-1", skill_name: str = "android-tester") -> TaskRun:
+    """A *real* run, so the parser is exercised against the production shape.
+
+    The skill name is not a field: it is derived from the namespaced capability
+    id. A stand-in carrying ``skill_name`` directly would hide that.
+    """
+    capability_id = f"skill:{skill_name}.run" if skill_name else "builtin:echo"
+    return TaskRun(
+        run_id=run_id,
+        batch_id=batch_id,
+        parent_conversation_id=1,
+        parent_turn_id=1,
+        batch_item_index=0,
+        username="alice@example.com",
+        agent_id="agent",
+        agent_instance_id=1,
+        project_id=1,
+        spec=TaskSpec(task_id="t-1", title="T", dispatch=CapabilityDispatch(capability_id=capability_id)),
+        execution_policy=TaskExecutionPolicy(),
+        idempotency_key=run_id,
+        executor="in_process",
+        queued_at=int(time.time() * 1000),
+    )
 
 
 def _result(events: list[dict[str, Any]]) -> SimpleNamespace:

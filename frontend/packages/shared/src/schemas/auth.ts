@@ -1,39 +1,21 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // Auth zod schemas for `/api/sico/rbac/login`.
 import { z } from "zod";
 
-// A single role grant on the login user: a role code scoped to a resource
-// (`scopeType` + `scopeId`). The backend serialises `common.UserRoleInfo`.
-export const userRoleSchema = z.object({
-  // int64 role-grant id — safe in JS up to 2^53.
-  id: z.number().int(),
+// A single role grant embedded in the login `user`. The backend changed this
+// from a flat string list to structured grants (`{ id, roleCode, scopeType,
+// scopeId }`, each scoped to a project/platform/org). No field is read today —
+// project capabilities come from the `/rbac/user_roles` query — but the shape is
+// parsed (not dropped) so the contract is captured; every field is tolerant
+// (`.catch`) so an off-contract grant can't fail the whole login parse. Kept
+// local to the auth schema (not the rbac `userRoleSchema`, which carries a
+// `userId` the login payload omits).
+export const userRoleGrantSchema = z.object({
+  id: z.number().int().catch(0),
   roleCode: z.string(),
-  scopeType: z.string(),
-  // int64 scope id (e.g. the project id for a project-scoped role).
-  scopeId: z.number().int(),
+  scopeType: z.string().catch(""),
+  scopeId: z.number().int().catch(0),
 });
-export type UserRole = z.infer<typeof userRoleSchema>;
+export type UserRoleGrant = z.infer<typeof userRoleGrantSchema>;
 
 export const userSchema = z.object({
   // Backend `common.User.id` is `int64` — safe in JS up to 2^53.
@@ -48,12 +30,12 @@ export const userSchema = z.object({
     (v) => (v === "" ? undefined : v),
     z.string().optional(),
   ),
-  // Scoped role grants (`common.UserRoleInfo`). An unassigned slice may arrive
-  // as JSON `null` (backend serialises an empty slice as null) or be omitted
-  // entirely; `nullish` accepts both and coerces to `[]` so consumers can call
+  // Structured role grants. May arrive as JSON `null` (unassigned; sico backend
+  // dogfood QA Round 1 FIND-1) or be omitted entirely (DWP's backend sends no
+  // `roles` field). `nullish` accepts both; coerce to `[]` so consumers can call
   // array methods without null/undefined checks.
   roles: z
-    .array(userRoleSchema)
+    .array(userRoleGrantSchema)
     .nullish()
     .transform((v) => v ?? []),
 });
@@ -73,3 +55,11 @@ export const loginResponseSchema = z.object({
 
 export type User = z.infer<typeof userSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
+
+export const registerNewUserResponseSchema = z.object({
+  id: z.union([z.number().int().positive(), z.string().min(1)]),
+});
+
+export type RegisterNewUserResponse = z.infer<
+  typeof registerNewUserResponseSchema
+>;

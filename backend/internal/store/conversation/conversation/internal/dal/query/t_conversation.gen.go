@@ -34,6 +34,7 @@ func newTConversation(db *gorm.DB, opts ...gen.DOOption) tConversation {
 	_tConversation.Title = field.NewString(tableName, "title")
 	_tConversation.CreatorUsername = field.NewString(tableName, "creator_username")
 	_tConversation.Ext = field.NewString(tableName, "ext")
+	_tConversation.ExtraInfo = field.NewField(tableName, "extra_info")
 	_tConversation.CreatedAt = field.NewInt64(tableName, "created_at")
 	_tConversation.UpdatedAt = field.NewInt64(tableName, "updated_at")
 	_tConversation.DeletedAt = field.NewField(tableName, "deleted_at")
@@ -54,6 +55,7 @@ type tConversation struct {
 	Title           field.String // Conversation title
 	CreatorUsername field.String // Creator Username
 	Ext             field.String // Extension fields
+	ExtraInfo       field.Field  // Extensible conversation metadata
 	CreatedAt       field.Int64  // Creation time
 	UpdatedAt       field.Int64  // Update time
 	DeletedAt       field.Field  // Deletion time
@@ -79,6 +81,7 @@ func (t *tConversation) updateTableName(table string) *tConversation {
 	t.Title = field.NewString(table, "title")
 	t.CreatorUsername = field.NewString(table, "creator_username")
 	t.Ext = field.NewString(table, "ext")
+	t.ExtraInfo = field.NewField(table, "extra_info")
 	t.CreatedAt = field.NewInt64(table, "created_at")
 	t.UpdatedAt = field.NewInt64(table, "updated_at")
 	t.DeletedAt = field.NewField(table, "deleted_at")
@@ -98,13 +101,14 @@ func (t *tConversation) GetFieldByName(fieldName string) (field.OrderExpr, bool)
 }
 
 func (t *tConversation) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 9)
+	t.fieldMap = make(map[string]field.Expr, 10)
 	t.fieldMap["id"] = t.ID
 	t.fieldMap["agent_id"] = t.AgentID
 	t.fieldMap["agent_instance_id"] = t.AgentInstanceID
 	t.fieldMap["title"] = t.Title
 	t.fieldMap["creator_username"] = t.CreatorUsername
 	t.fieldMap["ext"] = t.Ext
+	t.fieldMap["extra_info"] = t.ExtraInfo
 	t.fieldMap["created_at"] = t.CreatedAt
 	t.fieldMap["updated_at"] = t.UpdatedAt
 	t.fieldMap["deleted_at"] = t.DeletedAt

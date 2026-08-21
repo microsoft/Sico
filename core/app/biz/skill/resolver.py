@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import annotations
 
 import json
@@ -68,7 +48,11 @@ _SCRIPT_FILE_SUFFIXES = {
     ".zsh",
 }
 _PLACEHOLDER_RE = re.compile(r"\{([^{}]+)\}")
-_BUILT_IN_STEP_PLACEHOLDERS = {"workspace_dir", "result_dir"}
+_SANDBOX_PLACEHOLDER = "_sandbox"
+_GENERATED_SANDBOX_PLACEHOLDERS = frozenset(
+    {"sandbox.android", "sandbox.windows", "sandbox.macos", "sandbox.ios", "sandbox.linux"}
+)
+_BUILT_IN_STEP_PLACEHOLDERS = {"workspace_dir", "result_dir", _SANDBOX_PLACEHOLDER}
 STRICT_SCHEMA_CONFIG = ConfigDict(extra="forbid")
 _PLATFORM_MANAGED_PARAMETER_NAMES = frozenset(
     {
@@ -203,6 +187,8 @@ class ResolvedAction(BaseModel):
         unused_parameters = sorted(parameter_names - used_placeholders)
         if unused_parameters:
             raise ValueError(f"unused parameters: {unused_parameters}")
+        if _SANDBOX_PLACEHOLDER in used_placeholders and not self.infra_requirements:
+            raise ValueError(f"{_SANDBOX_PLACEHOLDER} requires sandbox infra_requirements")
         return self
 
 
@@ -276,9 +262,10 @@ class SkillResolver:
             try:
                 payload = json.loads(text)
                 output = ResolvedSkillOutput.model_validate(payload)
+                validate_generated_sandbox_placeholders(output)
                 ensure_default_skill_docs(output, original_root)
                 return output
-            except (json.JSONDecodeError, ValidationError) as exc:
+            except (json.JSONDecodeError, ValidationError, ValueError) as exc:
                 last_error = exc
                 _LOGGER.warning(
                     "SkillResolver output failed validation attempt=%s/%s error=%s\nModel response:\n%s",
@@ -594,6 +581,29 @@ def infer_required_parameter_names(action: ResolvedAction) -> set[str]:
     return required
 
 
+def validate_generated_sandbox_placeholders(output: ResolvedSkillOutput) -> None:
+    for action in output.actions:
+        used_placeholders: set[str] = set()
+        for step in action.steps:
+            used_placeholders.update(_placeholder_names(step.argv))
+            for group in step.optional_argv:
+                used_placeholders.update(_placeholder_names(group))
+        sandbox_placeholders = sorted(used_placeholders & _GENERATED_SANDBOX_PLACEHOLDERS)
+        if sandbox_placeholders:
+            raise ValueError(
+                f"sandbox placeholders in generated action {action.name!r}: "
+                f"{sandbox_placeholders}; use {_SANDBOX_PLACEHOLDER}"
+            )
+        sandbox_parameters = sorted(
+            parameter.name for parameter in action.parameters if parameter.name in _GENERATED_SANDBOX_PLACEHOLDERS
+        )
+        if sandbox_parameters:
+            raise ValueError(
+                f"sandbox parameters in generated action {action.name!r}: "
+                f"{sandbox_parameters}; use {_SANDBOX_PLACEHOLDER}"
+            )
+
+
 def infer_optional_parameter_names(action: ResolvedAction) -> set[str]:
     return {parameter.name for parameter in action.parameters} - infer_required_parameter_names(action)
 
@@ -654,18 +664,23 @@ Rules:
     If SKILL.md says to install ADB, browsers, CLIs, system packages, or other non-Python runtime tools with a
     command/script such as ["sh", "scripts/install-adb.sh"], include that setup step; do not assume ["uv", "sync"]
     installs platform dependencies.
-- Built-in path placeholders are {workspace_dir} and {result_dir} only.
-- For files with fixed names, use literal paths such as {workspace_dir}/fixed.txt. For user-provided files, define
-    a parameter and wrap that parameter in braces, such as {workspace_dir}/{input_file}.
-- Every parameter you define must be referenced in step.argv or step.optional_argv with the parameter name wrapped
-    in braces.
+- Built-in parameter placeholders are {workspace_dir}, {result_dir}, and {_sandbox}.
+- Only for parameters that are actual workspace-relative file paths, pass them as {workspace_dir}/{parameter_name}.
+    Never prefix scalar text parameters such as instructions, task_name, title, prompt, query, or description with
+    {workspace_dir}; pass them directly as {instructions}, {task_name}, etc. Write final markdown or HTML
+    deliverables under {result_dir}.
+- Every parameter you define must be referenced in step.argv or step.optional_argv.
 - Optional parameters must not appear in argv. Put optional CLI flag/value groups in step.optional_argv.
-- Do not define reserved parameters in actions. These include sico_endpoint,
-    sico_agent_instance_id, and sico_app_name. These are injected automatically by the invoke_skill runtime.
-- For Android actions, set infra_requirements to ["sandbox.android"] and use {sandbox.android} directly anywhere
-    the CLI expects the Android device id / ADB serial / host:port, for example ["--device-id", "{sandbox.android}"].
+- Do not define environment variables in actions or platform parameters such as sico_endpoint,
+    sico_agent_instance_id, or sico_app_name. These are injected automatically by the invoke_skill runtime.
+- For Android actions, set infra_requirements to ["sandbox.android"] and use {_sandbox} directly anywhere
+    the CLI expects the Android device id / ADB serial / host:port, for example ["--device-id", "{_sandbox}"].
     Do not define extra device endpoint parameters such as device_id, android_device_id, adb_endpoint, deviceIP, or
-    sandbox_endpoint; the invoke_skill / task runtime injects sandbox.android automatically.
+    sandbox_endpoint; the invoke_skill / task runtime injects {_sandbox} automatically.
+- For Windows actions, set infra_requirements to ["sandbox.windows"] and use {_sandbox} in argv.
+- For macOS actions, set infra_requirements to ["sandbox.macos"] and use {_sandbox} in argv.
+- If one action can run on either Windows or macOS, set infra_requirements to ["sandbox.windows", "sandbox.macos"]
+    and use {_sandbox} in argv. Do not generate separate actions for each platform.
 - Default cwd is copied runtime folder. You can override it in actions.
 """.strip()
 
@@ -690,6 +705,7 @@ __all__ = [
     "infer_required_parameter_names",
     "list_original_files",
     "load_resolved_actions",
+    "validate_generated_sandbox_placeholders",
     "validate_relative_path",
     "validate_resolved_skill",
 ]

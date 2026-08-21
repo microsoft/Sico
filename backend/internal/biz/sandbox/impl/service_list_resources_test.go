@@ -1,23 +1,3 @@
-﻿// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -34,7 +14,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 
+	"sico-backend/internal/consts"
 	"sico-backend/internal/shared/enum"
+	sandboxdto "sico-backend/internal/transport/http/dto/sandbox"
 )
 
 type fakeProvider struct {
@@ -82,6 +64,30 @@ func (p *fakeProvider) ResetResource(ctx context.Context, resourceID string) err
 	}
 
 	return nil
+}
+
+func (p *fakeProvider) DisplayNamePrefix() string {
+	return "Android-Device"
+}
+
+func (p *fakeProvider) RenderEndpoints(resourceID string, metadata map[string]string) ProviderEndpoints {
+	if metadata == nil || metadata["providerBaseUrl"] == "" {
+		return ProviderEndpoints{}
+	}
+	endpoints := ProviderEndpoints{}
+	if metadata["adbPort"] != "" {
+		endpoints.Endpoint = extractHostFromURL(metadata["providerBaseUrl"]) + ":" + metadata["adbPort"]
+	}
+	endpoints.VNCURL = "/api/sico/sandbox/resources/emulator/" + hashResourceID(resourceID) + "/vnc"
+	endpoints.VNCOpenURL = endpoints.VNCURL
+	return endpoints
+}
+
+func (p *fakeProvider) OpenAPIURL(_ string, metadata map[string]string) string {
+	if metadata == nil || metadata["providerBaseUrl"] == "" {
+		return ""
+	}
+	return metadata["providerBaseUrl"] + enum.SandboxTypeEmulator.OpenAPIPath()
 }
 
 type blockingProvider struct {
@@ -157,7 +163,7 @@ func seedLease(t *testing.T, ctx context.Context, rds *redis.Client, lease *Leas
 func loadLease(t *testing.T, ctx context.Context, rds *redis.Client, sandboxID string) *Lease {
 	t.Helper()
 
-	val, err := rds.Get(ctx, resourceKeyPrefix+sandboxID).Result()
+	val, err := rds.Get(ctx, resourceLeaseKey(sandboxID)).Result()
 	require.NoError(t, err)
 
 	var lease Lease
@@ -271,6 +277,38 @@ func TestListAllResourcesReturnsErrorWhenSnapshotUnavailable(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "snapshot unavailable")
 	require.Equal(t, 0, provider.calls)
+}
+
+func TestListAllResourcesFilteredUsesProjectScopeAndIncludesScopeIDs(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	mr := miniredis.RunT(t)
+	rds := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() {
+		require.NoError(t, rds.Close())
+	})
+
+	resource := testEmulatorResource(ResourceStatusAvailable)
+	seedSnapshot(t, ctx, rds, resource.Type, time.Now(), resource)
+	pool := newTestPool(rds, &fakeProvider{providerType: resource.Type}, time.Minute)
+	svc := &Service{Pool: pool}
+	sandboxID := resource.Type + ":" + resource.ResourceID
+	require.NoError(t, rds.Set(ctx, orgAssignKey(sandboxID), "1", 0).Err())
+	require.NoError(t, rds.Set(ctx, projectAssignKey(sandboxID), "1", 0).Err())
+
+	projectID := int64(1)
+	result, err := svc.ListAllResourcesFiltered(ctx, &sandboxdto.ListSandboxResourcesFilter{ProjectId: &projectID})
+	require.NoError(t, err)
+	emulators := result[enum.SandboxTypeEmulator.String()].([]map[string]interface{})
+	require.Len(t, emulators, 1)
+	require.Equal(t, int64(1), emulators[0]["organization_id"])
+	require.Equal(t, int64(1), emulators[0]["project_id"])
+
+	otherProjectID := int64(2)
+	result, err = svc.ListAllResourcesFiltered(ctx, &sandboxdto.ListSandboxResourcesFilter{ProjectId: &otherProjectID})
+	require.NoError(t, err)
+	require.Empty(t, result[enum.SandboxTypeEmulator.String()])
 }
 
 func TestListAllResourcesKeepsRecentlyMissingAssignedResourceAssignedDuringGrace(t *testing.T) {
@@ -813,7 +851,7 @@ func TestRefreshResourcesSkipsProviderCallsWhenAnotherLeaderExists(t *testing.T)
 	require.Len(t, snapshot.Resources, 1)
 	require.Equal(t, ResourceStatusAvailable, snapshot.Resources[0].Status)
 
-	leaderID, getErr := rds.Get(ctx, resourceSnapshotLeaderKey).Result()
+	leaderID, getErr := rds.Get(ctx, resourceSnapshotLeaderLockKey()).Result()
 	require.NoError(t, getErr)
 	require.Equal(t, leaderPool.instanceID, leaderID)
 }
@@ -851,7 +889,7 @@ func TestRefreshResourcesReleasesLeadershipWhenAllProvidersFail(t *testing.T) {
 	require.NoError(t, followerPool.refreshResources(ctx))
 	require.Equal(t, 1, followerEmulator.calls)
 
-	leaderID, getErr := rds.Get(ctx, resourceSnapshotLeaderKey).Result()
+	leaderID, getErr := rds.Get(ctx, resourceSnapshotLeaderLockKey()).Result()
 	require.NoError(t, getErr)
 	require.Equal(t, followerPool.instanceID, leaderID)
 }
@@ -1318,15 +1356,71 @@ func TestUnassignSandboxReleasesInUseSandboxBeforeDeleting(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, provider.resetCalls)
 
-	_, getErr := rds.Get(ctx, resourceKeyPrefix+lease.SandboxID).Result()
+	_, getErr := rds.Get(ctx, resourceLeaseKey(lease.SandboxID)).Result()
 	require.ErrorIs(t, getErr, redis.Nil)
 	assignments, err := rds.HGetAll(ctx, assignKey(lease.User)).Result()
 	require.NoError(t, err)
 	require.NotContains(t, assignments, lease.SandboxID)
 
-	cooldownExists, err := rds.Exists(ctx, cooldownKeyPrefix+lease.SandboxID).Result()
+	cooldownExists, err := rds.Exists(ctx, cooldownKey(lease.SandboxID)).Result()
 	require.NoError(t, err)
 	require.Equal(t, int64(1), cooldownExists)
+}
+
+func TestUnassignSandboxFromProjectUnbindsAgentInstance(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	mr := miniredis.RunT(t)
+	rds := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() {
+		require.NoError(t, rds.Close())
+	})
+
+	const projectID = int64(42)
+	lease := testEmulatorLease()
+	lease.InUse = true
+	seedLease(t, ctx, rds, lease)
+	require.NoError(t, rds.Set(ctx, projectAssignKey(lease.SandboxID), "42", 0).Err())
+	require.NoError(t, rds.SAdd(ctx, projectSandboxesKey(projectID), lease.SandboxID).Err())
+
+	provider := &fakeProvider{providerType: enum.SandboxTypeEmulator.String()}
+	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
+
+	err := svc.UnassignSandboxFromProject(ctx, projectID, []string{lease.SandboxID})
+	require.NoError(t, err)
+
+	_, getErr := rds.Get(ctx, resourceLeaseKey(lease.SandboxID)).Result()
+	require.ErrorIs(t, getErr, redis.Nil)
+	require.False(t, rds.HExists(ctx, assignKey(lease.User), lease.SandboxID).Val())
+	require.False(t, rds.Exists(ctx, projectAssignKey(lease.SandboxID)).Val() > 0)
+	require.False(t, rds.SIsMember(ctx, projectSandboxesKey(projectID), lease.SandboxID).Val())
+	require.Equal(t, int64(1), rds.Exists(ctx, cooldownKey(lease.SandboxID)).Val())
+}
+
+func TestUnassignSandboxFromProjectWithoutAgentBinding(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	mr := miniredis.RunT(t)
+	rds := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() {
+		require.NoError(t, rds.Close())
+	})
+
+	const (
+		projectID = int64(42)
+		sandboxID = "emulator:unbound"
+	)
+	require.NoError(t, rds.Set(ctx, projectAssignKey(sandboxID), "42", 0).Err())
+	require.NoError(t, rds.SAdd(ctx, projectSandboxesKey(projectID), sandboxID).Err())
+
+	svc := &Service{Pool: newTestPool(rds, nil, time.Minute)}
+
+	err := svc.UnassignSandboxFromProject(ctx, projectID, []string{sandboxID})
+	require.NoError(t, err)
+	require.False(t, rds.Exists(ctx, projectAssignKey(sandboxID)).Val() > 0)
+	require.False(t, rds.SIsMember(ctx, projectSandboxesKey(projectID), sandboxID).Val())
 }
 
 func TestApplySandboxUsesStaleSnapshotWhenProviderWouldFail(t *testing.T) {
@@ -1672,7 +1766,7 @@ func TestReleaseSandboxDoesNotResetBeforeReleasingLease(t *testing.T) {
 	storedLease := loadLease(t, ctx, rds, lease.SandboxID)
 	require.False(t, storedLease.InUse)
 
-	cooldownExists, err := rds.Exists(ctx, cooldownKeyPrefix+lease.SandboxID).Result()
+	cooldownExists, err := rds.Exists(ctx, cooldownKey(lease.SandboxID)).Result()
 	require.NoError(t, err)
 	require.Equal(t, int64(1), cooldownExists)
 	require.Equal(t, 0, provider.resetCalls)
@@ -1699,7 +1793,7 @@ func TestReleaseSandboxDoesNotRequireConfiguredProvider(t *testing.T) {
 	storedLease := loadLease(t, ctx, rds, lease.SandboxID)
 	require.False(t, storedLease.InUse)
 
-	cooldownExists, cdErr := rds.Exists(ctx, cooldownKeyPrefix+lease.SandboxID).Result()
+	cooldownExists, cdErr := rds.Exists(ctx, cooldownKey(lease.SandboxID)).Result()
 	require.NoError(t, cdErr)
 	require.Equal(t, int64(1), cooldownExists)
 }
@@ -1822,47 +1916,6 @@ func TestApplySandboxDoesNotAcquireLeaseOwnedByAnotherInstance(t *testing.T) {
 	require.Equal(t, "456", storedLease.User)
 	require.False(t, storedLease.InUse)
 	require.Equal(t, 0, provider.calls)
-}
-
-func TestEmulatorProviderListResourcesReturnsErrorWhenAllEndpointsFail(t *testing.T) {
-	t.Parallel()
-
-	p := &EmulatorProvider{
-		BaseURLs: []string{"http://127.0.0.1:1"},
-		http:     newHTTPClient(200 * time.Millisecond),
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	resources, err := p.ListResources(ctx)
-	require.Error(t, err)
-	require.Nil(t, resources)
-}
-
-func TestEmulatorProviderListResourcesSucceedsWhenAnyEndpointSucceeds(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(
-			`{"devices":[{"device_index":3,"adb_host":"127.0.0.1",` +
-				`"adb_port":16480,"view_url":"/vnc/view/3"}]}`,
-		))
-	}))
-	defer server.Close()
-
-	p := &EmulatorProvider{
-		BaseURLs: []string{"http://127.0.0.1:1", server.URL},
-		http:     newHTTPClient(time.Second),
-	}
-
-	resources, err := p.ListResources(context.Background())
-	require.NoError(t, err)
-	require.Len(t, resources, 1)
-	require.Equal(t, server.URL+"|3", resources[0].ResourceID)
-	require.Equal(t, "16480", resources[0].Metadata["adbPort"])
-	require.Equal(t, server.URL, resources[0].Metadata["providerBaseUrl"])
 }
 
 func TestStaleSnapshotDegradesToUnhealthyAfterThreshold(t *testing.T) {
@@ -2018,11 +2071,11 @@ func TestRefreshResourcesRenewsLeadershipDuringLongRefresh(t *testing.T) {
 
 	require.NoError(t, pool.refreshResources(ctx))
 
-	leaderTTL := rds.TTL(ctx, resourceSnapshotLeaderKey).Val()
+	leaderTTL := rds.TTL(ctx, resourceSnapshotLeaderLockKey()).Val()
 	require.Greater(t, leaderTTL, time.Duration(0))
 	require.LessOrEqual(t, leaderTTL, 3*time.Second)
 
-	leaderID, err := rds.Get(ctx, resourceSnapshotLeaderKey).Result()
+	leaderID, err := rds.Get(ctx, resourceSnapshotLeaderLockKey()).Result()
 	require.NoError(t, err)
 	require.Equal(t, pool.instanceID, leaderID)
 }
@@ -2132,4 +2185,39 @@ func TestPendingShrinkMergesCurrentResourceState(t *testing.T) {
 		"present resource metadata should be updated from current provider response")
 	require.Nil(t, snapshotByID[resourceA.ResourceID].MissingSinceAt)
 	require.NotNil(t, snapshotByID[resourceB.ResourceID].MissingSinceAt)
+}
+
+func TestSandboxRedisKeysDefaultToLocalNamespace(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv(consts.SandboxRedisNamespace, "")
+
+	require.Equal(t, "sandbox:env:local:resource:aio:http://localhost:18080",
+		resourceKey(enum.SandboxTypeAio.String(), "http://localhost:18080"))
+	require.Equal(t, "sandbox:env:local:snapshot:resource:aio",
+		resourceSnapshotKey(enum.SandboxTypeAio.String()))
+	require.Equal(t, "sandbox:env:local:snapshot:resource:leader", resourceSnapshotLeaderLockKey())
+	require.Equal(t, "sandbox:env:local:assign:123", assignKey("123"))
+	require.Equal(t, "sandbox:env:local:instance-lock:123", instanceAssignLockKey("123"))
+	require.Equal(t, "sandbox:env:local:cooldown:aio:http://localhost:18080",
+		cooldownKey("aio:http://localhost:18080"))
+}
+
+func TestSandboxRedisKeysKeepLegacyPrefixOutsideLocal(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv(consts.SandboxRedisNamespace, "")
+
+	require.Equal(t, "sandbox:resource:aio:http://localhost:18080",
+		resourceKey(enum.SandboxTypeAio.String(), "http://localhost:18080"))
+	require.Equal(t, "sandbox:snapshot:resource:aio", resourceSnapshotKey(enum.SandboxTypeAio.String()))
+	require.Equal(t, "sandbox:snapshot:resource:leader", resourceSnapshotLeaderLockKey())
+	require.Equal(t, "sandbox:assign:123", assignKey("123"))
+}
+
+func TestSandboxRedisKeysRespectExplicitNamespace(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv(consts.SandboxRedisNamespace, "Jason Laptop")
+
+	require.Equal(t, "sandbox:env:jason-laptop:resource:aio:http://localhost:18080",
+		resourceKey(enum.SandboxTypeAio.String(), "http://localhost:18080"))
+	require.Equal(t, "sandbox:env:jason-laptop:assign:123", assignKey("123"))
 }

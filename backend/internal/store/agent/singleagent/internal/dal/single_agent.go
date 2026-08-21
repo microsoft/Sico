@@ -130,6 +130,81 @@ func (sa *SingleAgentDAO) List(
 	return entities, total, nil
 }
 
+// ListByFilter returns single agents matching the visibility filter used by the
+// list endpoints. No pagination is applied — the full matching set is returned.
+func (sa *SingleAgentDAO) ListByFilter(
+	ctx context.Context, filter *entity.ListSingleAgentFilter,
+) ([]*entity.SingleAgent, int64, error) {
+	sam := sa.dbQuery.TSingleAgent
+	q := sam.WithContext(ctx).UnderlyingDB().Model(&model.TSingleAgent{})
+
+	if filter != nil {
+		if !filter.Unrestricted {
+			q = q.Where(buildVisibilityGroup(q.Session(&gorm.Session{NewDB: true}), filter))
+		}
+		if len(filter.PublishStatuses) > 0 {
+			q = q.Where("publish_status IN ?", filter.PublishStatuses)
+		}
+		if filter.OrganizationID != nil {
+			q = q.Where("organization_id = ?", *filter.OrganizationID)
+		}
+	}
+
+	var total int64
+	if err := q.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var pos []*model.TSingleAgent
+	if err := q.Order("updated_at DESC").Find(&pos).Error; err != nil {
+		return nil, 0, err
+	}
+
+	entities := make([]*entity.SingleAgent, len(pos))
+	for i, po := range pos {
+		entities[i] = sa.singleAgentPo2Do(po)
+	}
+
+	return entities, total, nil
+}
+
+// buildVisibilityGroup renders the OR-of-groups visibility predicate as a single
+// grouped condition. When no group is populated it matches nothing (1 = 0).
+func buildVisibilityGroup(g *gorm.DB, filter *entity.ListSingleAgentFilter) *gorm.DB {
+	populated := false
+	add := func(query string, args ...interface{}) {
+		if populated {
+			g = g.Or(query, args...)
+		} else {
+			g = g.Where(query, args...)
+			populated = true
+		}
+	}
+
+	if filter.IncludeOrgFreeAgents {
+		add("organization_id = ?", 0)
+	}
+	if filter.IncludeOrgFreePublishedOnly {
+		add("(organization_id = ? AND publish_status = ?)", 0, 1)
+	}
+	if len(filter.VisibleOrgIDs) > 0 {
+		add("organization_id IN ?", filter.VisibleOrgIDs)
+	}
+	switch {
+	case filter.OwnerUsername != "" && len(filter.ManagedAgentIDs) > 0:
+		add("(creator_username = ? OR agent_id IN ?)", filter.OwnerUsername, filter.ManagedAgentIDs)
+	case filter.OwnerUsername != "":
+		add("creator_username = ?", filter.OwnerUsername)
+	case len(filter.ManagedAgentIDs) > 0:
+		add("agent_id IN ?", filter.ManagedAgentIDs)
+	}
+
+	if !populated {
+		g = g.Where("1 = 0")
+	}
+	return g
+}
+
 func (sa *SingleAgentDAO) ListInfos(ctx context.Context) ([]*single_agent.SingleAgentInfo, error) {
 	sam := sa.dbQuery.TSingleAgent
 
@@ -202,6 +277,8 @@ func (sa *SingleAgentDAO) singleAgentPo2Do(po *model.TSingleAgent) *entity.Singl
 			CreatedAt:       po.CreatedAt,
 			UpdatedAt:       po.UpdatedAt,
 			UpdaterUsername: po.UpdaterUsername,
+			OrganizationId:  po.OrganizationID,
+			PublishStatus:   single_agent.SingleAgentPublishStatus(po.PublishStatus),
 		},
 	}
 }
@@ -216,6 +293,8 @@ func (sa *SingleAgentDAO) singleAgentDo2Po(do *entity.SingleAgent) *model.TSingl
 		CreatedAt:       do.CreatedAt,
 		UpdatedAt:       do.UpdatedAt,
 		UpdaterUsername: do.UpdaterUsername,
+		OrganizationID:  do.OrganizationId,
+		PublishStatus:   int64(do.PublishStatus),
 	}
 
 	if len(do.Desc) > 0 {

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   type AnyRouter,
@@ -70,7 +48,8 @@ vi.mock("@/features/digital-worker/hooks/use-agents-query", async () => {
   >("@/features/digital-worker/hooks/use-agents-query");
   return {
     ...actual,
-    useSuspenseAgentsInfiniteQuery: () => mockSuspense(),
+    useSuspenseAgentsInfiniteQuery: (params?: { showInactive?: boolean }) =>
+      mockSuspense(params),
   };
 });
 
@@ -81,6 +60,24 @@ function returnPages(pages: { items: unknown[]; hasNext: boolean }[]): void {
     hasNextPage: false,
     fetchNextPage: vi.fn(),
   }));
+}
+
+// Distinct page sets per filter — mirrors the server, which returns only active
+// DWs when `showInactive` is false and all DWs when true. Lets a test assert the
+// toggle drives a re-query rather than a client-side filter.
+function returnPagesByFilter(byFilter: {
+  hide: { items: unknown[]; hasNext: boolean }[];
+  show: { items: unknown[]; hasNext: boolean }[];
+}): void {
+  mockSuspense.mockImplementation((params?: { showInactive?: boolean }) => {
+    const pages = params?.showInactive ? byFilter.show : byFilter.hide;
+    return {
+      data: { pages: pages.map((p) => ({ ...p, total: p.items.length })) },
+      isFetchingNextPage: false,
+      hasNextPage: false,
+      fetchNextPage: vi.fn(),
+    };
+  });
 }
 
 function throwError(error: unknown): void {
@@ -182,29 +179,42 @@ describe("<DigitalWorkers>", () => {
     expect(links[0]?.textContent).toContain("First");
   });
 
-  it("renders empty state when items array is empty", async () => {
+  it("shows the onboarding CTA and the reveal toggle when the list is empty", async () => {
+    // Empty in either filter → the onboarding empty state (Add-DW CTA) renders
+    // inline, so a brand-new user reaches it, while the reveal toggle stays
+    // mounted below for a user whose only workers are inactive.
     returnPages([{ items: [], hasNext: false }]);
     renderPage();
     await screen.findByText("Your crew is one hire away");
+    expect(
+      screen.getByRole("button", { name: /show inactive digital workers/i }),
+    ).toBeInTheDocument();
   });
 
-  it("hides inactive DWs behind a toggle that reveals them on click", async () => {
-    returnPages([
-      {
-        items: [
-          { id: 1, name: "ActiveOne", status: 3 },
-          { id: 2, name: "GoneOne", status: 4 },
-        ],
-        hasNext: false,
-      },
-    ]);
+  it("re-queries with inactive shown when the toggle is clicked", async () => {
+    // Server-side filter: hide returns only active; show returns all. The
+    // toggle flips `showInactive`, which re-queries — not a client-side filter.
+    returnPagesByFilter({
+      hide: [
+        { items: [{ id: 1, name: "ActiveOne", status: 3 }], hasNext: false },
+      ],
+      show: [
+        {
+          items: [
+            { id: 1, name: "ActiveOne", status: 3 },
+            { id: 2, name: "GoneOne", status: 4 },
+          ],
+          hasNext: false,
+        },
+      ],
+    });
     renderPage();
-    // Active shows immediately; inactive is hidden until the toggle is used.
+    // Hide mode: only the active DW; the inactive one isn't even fetched.
     await screen.findByText("ActiveOne");
     expect(screen.queryByText("GoneOne")).not.toBeInTheDocument();
 
     const toggle = screen.getByRole("button", {
-      name: /show 1 inactive digital workers/i,
+      name: /show inactive digital workers/i,
     });
     toggle.click();
     await screen.findByText("GoneOne");

@@ -1,30 +1,7 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
   toast,
 } from "@sico/ui";
@@ -35,7 +12,9 @@ import type * as React from "react";
 import { AssetContentCard } from "./asset-content-card";
 import { AssetDetailLayout } from "./asset-detail-layout";
 import { AssetDetailMetaPanel } from "./asset-detail-meta-panel";
+import { DELETE_DENIED_TOOLTIP, GatedMenuItem } from "./gated-menu-item";
 import { Markdown } from "../../../components/markdown";
+import { useAssetDeleteGate } from "../hooks/use-asset-delete-gate";
 import type { AssetDetail as AssetDetailData } from "../hooks/use-asset-detail-query";
 import { useAssetMutation } from "../hooks/use-asset-mutation";
 
@@ -48,9 +27,14 @@ export type AssetDetailExperienceProps = {
 };
 
 // The experience `…` overflow menu — Delete only (the body is read-only, so
-// there's no download). A plain module-scope render helper (NOT a nested
-// component) so the component body stays under the line cap.
-function renderActions(onRequestDelete: () => void): React.JSX.Element {
+// there's no download). Delete stays visible but is gated (greyed + reason
+// tooltip) when the viewer isn't an admin and didn't create the asset. A plain
+// module-scope render helper (NOT a nested component) so the body stays under
+// the line cap.
+function renderActions(
+  onRequestDelete: () => void,
+  canDelete: boolean,
+): React.JSX.Element {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -61,10 +45,15 @@ function renderActions(onRequestDelete: () => void): React.JSX.Element {
         <Ellipsis />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={onRequestDelete}>
+        <GatedMenuItem
+          allowed={canDelete}
+          variant="destructive"
+          deniedTooltip={DELETE_DENIED_TOOLTIP}
+          onSelect={onRequestDelete}
+        >
           <Trash2 />
           Delete
-        </DropdownMenuItem>
+        </GatedMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -110,6 +99,7 @@ export function AssetDetailExperience({
 }: AssetDetailExperienceProps): React.JSX.Element {
   const navigate = useNavigate();
   const { remove } = useAssetMutation(projectId);
+  const canDelete = useAssetDeleteGate(asset, projectId);
 
   return (
     <AssetDetailLayout
@@ -135,10 +125,10 @@ export function AssetDetailExperience({
           operator={asset.extraInfo?.agentInstance?.operatorUsername}
         />
       }
-      actions={renderActions}
+      actions={(onRequestDelete) => renderActions(onRequestDelete, canDelete)}
       confirm={{
         title: "Delete Experience",
-        body: "Permanently remove this experience across your organization.",
+        body: "Permanently remove this experience across your project.",
         onConfirm: () =>
           runExperienceDelete(
             remove,

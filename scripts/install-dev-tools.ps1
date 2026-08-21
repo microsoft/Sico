@@ -1,25 +1,3 @@
-<#
- Copyright (c) 2026 Sico Authors
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of this software and associated documentation files (the "Software"), to deal
- in the Software without restriction, including without limitation the rights
- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in
- all copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- SOFTWARE.
-#>
-
 #Requires -Version 5.1
 <#
 .SYNOPSIS
@@ -27,8 +5,8 @@
 
 .DESCRIPTION
     Uses winget (preferred) or Chocolatey to install Go, Python, Node.js, pnpm,
-    pre-commit, golangci-lint, and addlicense by default. Pass -WithHelm to
-    also install Helm, kubectl, and kind for Kind / Helm chart work.
+    pre-commit, and golangci-lint by default. Pass -WithHelm to also install
+    Helm, kubectl, and kind for Kind / Helm chart work.
     Idempotent.
 
 .PARAMETER Check
@@ -183,17 +161,6 @@ function Ensure-PreCommit {
     }
 }
 
-function Ensure-AddLicense {
-    if (Test-Command addlicense) { Write-Info "addlicense:  found"; return }
-    if ($Check) { Write-Warn2 "addlicense missing"; return }
-    Write-Info "Installing addlicense..."
-    $env:GO111MODULE = "on"
-    go install github.com/google/addlicense@v1.2.0
-    $gobin = go env GOBIN
-    if ([string]::IsNullOrEmpty($gobin)) { $gobin = (Join-Path (go env GOPATH) "bin") }
-    Write-Warn2 "Ensure $gobin is on your PATH."
-}
-
 function Ensure-Helm {
     if (Test-Command helm) { Write-Info ("helm:        " + (helm version --short)); return }
     if ($Check) { Write-Warn2 "helm missing"; return }
@@ -235,7 +202,6 @@ Ensure-Uv
 Ensure-Node
 Ensure-Pnpm
 Ensure-PreCommit
-Ensure-AddLicense
 if ($WithHelm) {
     Ensure-Helm
     Ensure-Kubectl

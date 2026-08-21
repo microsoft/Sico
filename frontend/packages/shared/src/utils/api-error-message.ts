@@ -1,27 +1,7 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import axios from "axios";
 import { z } from "zod";
+
+import { EnvelopeError } from "../schemas/api";
 
 const errorEnvelopeSchema = z.object({ msg: z.string().min(1) });
 
@@ -32,16 +12,33 @@ const errorEnvelopeSchema = z.object({ msg: z.string().min(1) });
 // which would swallow legitimate sentences like "Error: name already taken").
 const TECHNICAL_MSG = /Key:\s*'.+?'\s*Error:|validation for/i;
 
+// Per-code friendly overrides. Empty today — the hook exists so a specific
+// backend `code` can be mapped to nicer copy later WITHOUT touching call sites
+// (e.g. `101004: "This user is already a member of the project."`). An unmapped
+// code falls through to the backend `msg`.
+const CODE_MESSAGES: Record<number, string> = {};
+
+// A backend `msg` is user-facing unless it's empty or an internal validator
+// string — either case falls back to the caller's generic copy.
+function fromBackendMsg(msg: string, fallback: string): string {
+  return msg.length === 0 || TECHNICAL_MSG.test(msg) ? fallback : msg;
+}
+
 /**
  * Best-effort user-facing message from a mutation/query error, for a toast.
- * Prefers the backend envelope `msg` when it reads like a human sentence;
- * skips internal validator strings; falls back to the provided generic message.
+ * Order: a per-`code` friendly override → the backend envelope `msg` when it
+ * reads like a human sentence → the provided generic fallback. Handles both an
+ * `EnvelopeError` (non-OK `{code,msg}` surfaced by `assertOk` on an HTTP-200
+ * envelope) and a real HTTP error carrying `{ msg }` in its body.
  */
 export function apiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof EnvelopeError) {
+    return CODE_MESSAGES[error.code] ?? fromBackendMsg(error.msg, fallback);
+  }
   if (axios.isAxiosError(error)) {
     const parsed = errorEnvelopeSchema.safeParse(error.response?.data);
-    if (parsed.success && !TECHNICAL_MSG.test(parsed.data.msg)) {
-      return parsed.data.msg;
+    if (parsed.success) {
+      return fromBackendMsg(parsed.data.msg, fallback);
     }
   }
   return fallback;

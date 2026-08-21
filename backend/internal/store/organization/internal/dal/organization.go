@@ -36,6 +36,17 @@ func (d *OrganizationDAO) GetByID(ctx context.Context, id int64) (*model.TOrgani
 	return &org, nil
 }
 
+func (d *OrganizationDAO) GetByIDs(ctx context.Context, ids []int64) ([]*model.TOrganization, error) {
+	if len(ids) == 0 {
+		return []*model.TOrganization{}, nil
+	}
+	var organizations []*model.TOrganization
+	if err := d.db.WithContext(ctx).Where("id IN ?", ids).Find(&organizations).Error; err != nil {
+		return nil, err
+	}
+	return organizations, nil
+}
+
 func (d *OrganizationDAO) GetByName(ctx context.Context, name string) (*model.TOrganization, error) {
 	var org model.TOrganization
 	if err := d.db.WithContext(ctx).Where("name = ?", name).First(&org).Error; err != nil {

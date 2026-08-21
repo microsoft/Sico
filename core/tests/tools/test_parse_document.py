@@ -1,36 +1,12 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-# Side-effect import: registers the workbook post-parse hook with
-# ``parse_document`` so this module's tests can assert workbook archiving and
-# ``workbook_manifest`` response fields when run in isolation.
-import app.biz.chat.adapters.workbook  # noqa: F401
+from app.biz.source.persistence.repository import WorkspaceSourceRepository
 from app.schemas.conversation.plan import Plan
 from app.tools.common import ToolContext
 from app.tools.parse_document import (
@@ -117,12 +93,43 @@ async def test_parse_document_publishes_plan_progress(tmp_path: Path, monkeypatc
     assert "extracted 29 characters" in plan_editor.messages[1]
     assert 1 not in plan_editor.updated_tool_call_ids
 
-    manifests = list((tmp_path / "workspace_7" / "case_sources" / "parsed_documents").glob("*.json"))
-    assert len(manifests) == 1
-    payload = json.loads(manifests[0].read_text(encoding="utf-8"))
-    assert payload["case_ids"] == ["STCAQA-567"]
-    archived = manifests[0].with_name(payload["archived_markdown_path"])
-    assert archived.read_text(encoding="utf-8") == "STCAQA-567 full document text"
+    repository = WorkspaceSourceRepository(tmp_path / "workspace_7")
+    manifest = repository.find("attachments/cases.xlsx")
+    assert manifest is not None
+    assert manifest.case_ids == ("STCAQA-567",)
+    assert manifest.summary == "short summary"
+    assert manifest.content_chars == len("STCAQA-567 full document text")
+
+
+@pytest.mark.asyncio
+async def test_parse_document_succeeds_when_source_indexing_fails(tmp_path: Path, monkeypatch) -> None:
+    _PARSE_DOCUMENT_CACHE.clear()
+    document = tmp_path / "notes.pdf"
+    document.write_bytes(b"pdf")
+    ctx = ToolContext.model_construct(
+        username="alice@example.com",
+        agent_id="agent",
+        agent_instance_id=1,
+        turn_id=17,
+        project_id=1,
+        conversation_id=42,
+        response_queue=asyncio.Queue(),
+        plan_editor=_FakePlanEditor(),
+    )
+    invocation_ctx = SimpleNamespace(kwargs={"tool_context": ctx})
+    monkeypatch.setattr("app.tools.parse_document._get_extractor", lambda: _FakeExtractor())
+    monkeypatch.setattr("app.tools.parse_document.CHAT_FS.resolve_workspace_file", lambda *_args: document)
+    monkeypatch.setattr("app.tools.parse_document.CHAT_FS.get_workspace_path", lambda *_args: tmp_path / "workspace")
+    monkeypatch.setattr("app.tools.parse_document.CHAT_FS.write_file", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "app.tools.parse_document.WorkspaceSourceService.index_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("index unavailable")),
+    )
+
+    result = await _parse_document_func(invocation_ctx, file_path="attachments/notes.pdf")
+
+    assert result["error_message"] == ""
+    assert result["summary"] == "short summary"
 
 
 @pytest.mark.asyncio
@@ -323,18 +330,11 @@ async def test_parse_document_returns_workbook_manifest_for_multi_sheet_file(tmp
     assert "detected 3 runnable data rows" in plan_editor.messages[1]
     assert "workbook sheets: summary (1 data rows, summary); master (1 data rows, master)" in plan_editor.messages[1]
 
-    manifests = list((tmp_path / "workspace_10" / "case_sources" / "parsed_documents").glob("*.json"))
-    payload = json.loads(manifests[0].read_text(encoding="utf-8"))
-    assert payload["data_rows"] == 3
-    assert payload["workbook_manifest"]["multiple_data_sheets"] is True
-    assert payload["workbook_manifest"]["runnable_data_rows"] == 3
-    assert [(source["sheet_name"], source["case_count"]) for source in payload["workbook_case_sources"]] == [
-        ("master", 1),
-        ("cases_a", 1),
-        ("cases_b", 2),
-    ]
-    cases_b_source = next(source for source in payload["workbook_case_sources"] if source["sheet_name"] == "cases_b")
-    cases_b_path = manifests[0].with_name(cases_b_source["case_source_path"])
-    cases_b_lines = [json.loads(line) for line in cases_b_path.read_text(encoding="utf-8").splitlines()]
-    assert [case["case_id"] for case in cases_b_lines] == ["B-1", "B-2"]
-    assert "open settings" in cases_b_lines[0]["instructions"]
+    repository = WorkspaceSourceRepository(tmp_path / "workspace_10")
+    source_manifest = repository.find("attachments/multi_sheet_cases.xlsx")
+    assert source_manifest is not None
+    assert source_manifest.requires_scope_selection is True
+    assert source_manifest.case_ids == ("A-1", "B-1", "B-2", "STCAQA-567")
+    document = repository.load_document(source_manifest, ("cases_b",))
+    assert [row.values["ID"] for row in document.sheets[0].rows] == ["B-1", "B-2"]
+    assert document.sheets[0].rows[0].values["Steps"] == "open settings"

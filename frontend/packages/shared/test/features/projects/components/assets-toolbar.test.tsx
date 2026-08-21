@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type * as React from "react";
@@ -65,13 +43,20 @@ vi.mock("@tanstack/react-router", async (importActual) => {
 });
 
 function renderToolbar(
-  options: { category?: AssetCategory } & Partial<AssetSearch> = {},
+  options: {
+    category?: AssetCategory;
+    canAddKnowledge?: boolean;
+  } & Partial<AssetSearch> = {},
 ): {
   onSearchChange: ReturnType<typeof vi.fn>;
   onAddKnowledge: ReturnType<typeof vi.fn>;
   user: ReturnType<typeof userEvent.setup>;
 } {
-  const { category = "all", ...searchOverrides } = options;
+  const {
+    category = "all",
+    canAddKnowledge = true,
+    ...searchOverrides
+  } = options;
   const onSearchChange = vi.fn();
   const onAddKnowledge = vi.fn();
   const search: AssetSearch = { sort: "desc", q: "", ...searchOverrides };
@@ -82,6 +67,7 @@ function renderToolbar(
       search={search}
       onSearchChange={onSearchChange}
       onAddKnowledge={onAddKnowledge}
+      canAddKnowledge={canAddKnowledge}
     />,
   );
   return { onSearchChange, onAddKnowledge, user: userEvent.setup() };
@@ -128,6 +114,13 @@ describe("<AssetsToolbar>", () => {
     const { user, onAddKnowledge } = renderToolbar({ category: "knowledge" });
     await user.click(screen.getByRole("button", { name: "Add Knowledge" }));
     expect(onAddKnowledge).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides Add Knowledge when the viewer cannot add (no capability)", () => {
+    renderToolbar({ category: "knowledge", canAddKnowledge: false });
+    expect(
+      screen.queryByRole("button", { name: "Add Knowledge" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders each category tab as a link to its path", () => {

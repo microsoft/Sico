@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -25,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/casbin/casbin/v2"
+	casbinmodel "github.com/casbin/casbin/v2/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -32,11 +14,13 @@ import (
 
 	"sico-backend/internal/errcode"
 	"sico-backend/internal/shared/apperr"
+	projectrepo "sico-backend/internal/store/project/repository"
 	rolerepo "sico-backend/internal/store/rbac/repository"
 	rbacCommon "sico-backend/internal/transport/http/dto/rbac/common"
 	"sico-backend/internal/transport/http/dto/rbac/token"
 	"sico-backend/internal/transport/http/dto/rbac/user"
 	"sico-backend/internal/transport/http/dto/rbac/user_role"
+	"sico-backend/internal/transport/http/middleware"
 	"sico-backend/pkg/crypto/hash"
 	"sico-backend/pkg/jwtx"
 
@@ -109,7 +93,7 @@ type mockUserRoleRepo struct{ mock.Mock }
 func (m *mockUserRoleRepo) Assign(ctx context.Context, ur *rolerepo.UserRoleModel) error {
 	return m.Called(ctx, ur).Error(0)
 }
-func (m *mockUserRoleRepo) Remove(ctx context.Context, userID int64, roleCode, scopeType string, scopeID int64) error {
+func (m *mockUserRoleRepo) Remove(ctx context.Context, userID int64, roleCode, scopeType string, scopeID string) error {
 	return m.Called(ctx, userID, roleCode, scopeType, scopeID).Error(0)
 }
 func (m *mockUserRoleRepo) List(ctx context.Context, filter *rolerepo.UserRoleFilter) ([]*rolerepo.UserRoleModel, int64, error) {
@@ -118,6 +102,19 @@ func (m *mockUserRoleRepo) List(ctx context.Context, filter *rolerepo.UserRoleFi
 		return nil, 0, args.Error(2)
 	}
 	return args.Get(0).([]*rolerepo.UserRoleModel), args.Get(1).(int64), args.Error(2)
+}
+
+type mockProjectRepo struct {
+	projectrepo.ProjectRepository
+	mock.Mock
+}
+
+func (m *mockProjectRepo) GetProjectByID(ctx context.Context, projectID int64) (*projectrepo.ProjectModel, error) {
+	args := m.Called(ctx, projectID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*projectrepo.ProjectModel), args.Error(1)
 }
 
 type mockCasbinRepo struct{ mock.Mock }
@@ -207,6 +204,46 @@ func newTestService() (*Service, *mockUserRepo, *mockUserRoleRepo, *mockCasbinRe
 func hashedPassword(pw string) string {
 	h, _ := hash.GeneratePassword(pw)
 	return h
+}
+
+func TestAuthorizeRoleChangeOrgAdmin(t *testing.T) {
+	model, err := casbinmodel.NewModelFromString(`
+[request_definition]
+r = sub, dom, obj, act
+[policy_definition]
+p = sub, dom, obj, act
+[role_definition]
+g = _, _, _
+[policy_effect]
+e = some(where (p.eft == allow))
+[matchers]
+m = g(r.sub, p.sub, r.dom) && (r.dom == p.dom || p.dom == "*") && r.obj == p.obj && r.act == p.act
+`)
+	require.NoError(t, err)
+
+	enforcer, err := casbin.NewEnforcer(model)
+	require.NoError(t, err)
+	_, err = enforcer.AddPolicy("org_admin", "*", "organization", "manage")
+	require.NoError(t, err)
+	_, err = enforcer.AddGroupingPolicy("alice", "org_admin", "org:42")
+	require.NoError(t, err)
+
+	service := &Service{Components: &Components{Enforcer: enforcer}}
+	ctx := context.WithValue(context.Background(), middleware.ContextUserKey, jwtx.UserInfo{Name: "alice"})
+
+	require.NoError(t, service.AuthorizeRoleChange(ctx, "org_admin", "org", "42"))
+
+	err = service.AuthorizeRoleChange(ctx, "org_admin", "org", "43")
+	require.Error(t, err)
+	appError, ok := apperr.As(err)
+	require.True(t, ok)
+	assert.Equal(t, errcode.CommonForbidden, appError.Code())
+
+	err = service.AuthorizeRoleChange(ctx, "org_admin", "platform", "0")
+	require.Error(t, err)
+	appError, ok = apperr.As(err)
+	require.True(t, ok)
+	assert.Equal(t, errcode.CommonInvalidParam, appError.Code())
 }
 
 // ─── CreateUser ─────────────────────────────────────────────────────────────────
@@ -395,7 +432,7 @@ func TestGetUser(t *testing.T) {
 			Return(&rolerepo.UserModel{ID: 1, Username: "alice", Alias_: "Alice", Email: "a@b.com", Status: 1}, nil)
 		urr.On("List", mock.Anything, mock.Anything).
 			Return([]*rolerepo.UserRoleModel{{
-				ID: 1, UserID: 1, RoleCode: "project_admin", ScopeType: "project", ScopeID: 1,
+				ID: 1, UserID: 1, RoleCode: "project_admin", ScopeType: "project", ScopeID: "1",
 			}}, int64(1), nil)
 
 		resp, err := svc.GetUser(context.Background(), &user.GetUserRequest{Username: "alice"})
@@ -404,7 +441,7 @@ func TestGetUser(t *testing.T) {
 		require.Len(t, resp.Data.User.Roles, 1)
 		assert.Equal(t, "project_admin", resp.Data.User.Roles[0].RoleCode)
 		assert.Equal(t, "project", resp.Data.User.Roles[0].ScopeType)
-		assert.Equal(t, int64(1), resp.Data.User.Roles[0].ScopeId)
+		assert.Equal(t, "1", resp.Data.User.Roles[0].ScopeId)
 	})
 }
 
@@ -630,6 +667,55 @@ func TestAssignUserRole(t *testing.T) {
 		_, err := svc.AssignUserRole(context.Background(), &user_role.AssignUserRoleRequest{UserId: 0, RoleCode: "admin"})
 		require.Error(t, err)
 	})
+
+	t.Run("project member must belong to project organization", func(t *testing.T) {
+		svc, ur, urr, _, _ := newTestService()
+		projectRepo := new(mockProjectRepo)
+		svc.ProjectRepo = projectRepo
+		projectRepo.On("GetProjectByID", mock.Anything, int64(7)).
+			Return(&projectrepo.ProjectModel{ID: 7, OrganizationID: 42}, nil)
+		urr.On("List", mock.Anything, mock.MatchedBy(func(filter *rolerepo.UserRoleFilter) bool {
+			return filter.UserID == 9 && filter.RoleCode == "org_member" &&
+				filter.ScopeType == "org" && filter.ScopeID == "42"
+		})).Return([]*rolerepo.UserRoleModel{}, int64(0), nil)
+
+		_, err := svc.AssignUserRole(context.Background(), &user_role.AssignUserRoleRequest{
+			UserId: 9, RoleCode: "project_member", ScopeType: "project", ScopeId: "7",
+		})
+
+		require.Error(t, err)
+		appError, ok := apperr.As(err)
+		require.True(t, ok)
+		assert.Equal(t, errcode.CommonForbidden, appError.Code())
+		ur.AssertNotCalled(t, "GetUserByID", mock.Anything, mock.Anything)
+	})
+
+	t.Run("project member belongs to project organization", func(t *testing.T) {
+		svc, ur, urr, _, _ := newTestService()
+		projectRepo := new(mockProjectRepo)
+		svc.ProjectRepo = projectRepo
+		projectRepo.On("GetProjectByID", mock.Anything, int64(7)).
+			Return(&projectrepo.ProjectModel{ID: 7, OrganizationID: 42}, nil)
+		urr.On("List", mock.Anything, mock.MatchedBy(func(filter *rolerepo.UserRoleFilter) bool {
+			return filter.RoleCode == "org_member" && filter.ScopeType == "org" && filter.ScopeID == "42"
+		})).Return([]*rolerepo.UserRoleModel{{UserID: 9}}, int64(1), nil).Once()
+		ur.On("GetUserByID", mock.Anything, int64(9)).
+			Return(&rolerepo.UserModel{ID: 9, Username: "member"}, nil)
+		urr.On("List", mock.Anything, mock.MatchedBy(func(filter *rolerepo.UserRoleFilter) bool {
+			return filter.RoleCode == "project_member" && filter.ScopeType == "project" && filter.ScopeID == "7"
+		})).Return([]*rolerepo.UserRoleModel{}, int64(0), nil).Once()
+		urr.On("Assign", mock.Anything, mock.MatchedBy(func(role *rolerepo.UserRoleModel) bool {
+			return role.UserID == 9 && role.RoleCode == "project_member" &&
+				role.ScopeType == "project" && role.ScopeID == "7"
+		})).Return(nil)
+
+		_, err := svc.AssignUserRole(context.Background(), &user_role.AssignUserRoleRequest{
+			UserId: 9, RoleCode: "project_member", ScopeType: "project", ScopeId: "7",
+		})
+
+		require.NoError(t, err)
+		urr.AssertExpectations(t)
+	})
 }
 
 // ─── RemoveUserRole ─────────────────────────────────────────────────────────────
@@ -649,7 +735,7 @@ func TestListUserRoles(t *testing.T) {
 		svc, _, urr, _, _ := newTestService()
 		urr.On("List", mock.Anything, mock.Anything).
 			Return([]*rolerepo.UserRoleModel{{
-				ID: 1, UserID: 1, RoleCode: "project_admin", ScopeType: "project", ScopeID: 1,
+				ID: 1, UserID: 1, RoleCode: "project_admin", ScopeType: "project", ScopeID: "1",
 			}}, int64(1), nil)
 
 		resp, err := svc.ListUserRoles(

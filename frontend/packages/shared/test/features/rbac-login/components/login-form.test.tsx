@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -83,6 +61,21 @@ describe("<LoginForm>", () => {
       capturedOptions = options;
       return mockLoginReturn();
     });
+  });
+
+  it("preserves the login credential presentation defaults", () => {
+    render(<LoginForm onSuccess={vi.fn()} />, {
+      wrapper: TestProviders,
+    });
+
+    expect(screen.getByPlaceholderText("Enter email address")).toHaveAttribute(
+      "id",
+      "login-email",
+    );
+    expect(screen.getByPlaceholderText("Enter your password")).toHaveAttribute(
+      "id",
+      "login-password",
+    );
   });
 
   it("stays quiet on blur for an empty email — no shouting at empty fields", async () => {
@@ -235,18 +228,7 @@ describe("<LoginForm>", () => {
     await user.click(screen.getByRole("button", { name: /continue/i }));
     const payload = {
       tokenInfo: { accessToken: "tok", expiresAt: 1_900_000_000 },
-      user: {
-        id: 1,
-        email: "a@b.co",
-        roles: [
-          {
-            id: 1,
-            roleCode: "project_admin",
-            scopeType: "project",
-            scopeId: 1,
-          },
-        ],
-      },
+      user: { id: 1, email: "a@b.co", roles: [] },
     };
     capturedOptions!.onSuccess(payload);
     // Single-mode (default) always reports "operator".
@@ -261,6 +243,30 @@ describe("<LoginForm>", () => {
     expect(
       screen.getByRole("heading", { name: "Sign in" }),
     ).toBeInTheDocument();
+  });
+
+  it("reports operator mode when Sign up is clicked", async () => {
+    const user = userEvent.setup();
+    const onRegister = vi.fn();
+    render(<LoginForm onSuccess={vi.fn()} onRegister={onRegister} />, {
+      wrapper: TestProviders,
+    });
+
+    expect(screen.getByText("Don't have an account?")).toHaveClass(
+      "inline-flex",
+      "gap-3",
+    );
+    expect(
+      screen.getByRole("button", { name: "Go to SICO.Dev" }).parentElement,
+    ).toHaveClass("flex", "flex-col", "gap-20");
+    expect(screen.getByRole("button", { name: "Sign up" })).toHaveClass(
+      "text-button-link-foreground-rest",
+      "hover:text-button-link-foreground-hover",
+      "active:text-button-link-foreground-pressed",
+    );
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+
+    expect(onRegister).toHaveBeenCalledWith("operator");
   });
 });
 
@@ -306,21 +312,24 @@ describe("<LoginForm> dual-mode (SICO ⇄ SICO.Dev)", () => {
     await user.click(screen.getByRole("button", { name: /continue/i }));
     const payload = {
       tokenInfo: { accessToken: "tok", expiresAt: 1_900_000_000 },
-      user: {
-        id: 1,
-        email: "dev@b.co",
-        roles: [
-          {
-            id: 1,
-            roleCode: "project_admin",
-            scopeType: "project",
-            scopeId: 1,
-          },
-        ],
-      },
+      user: { id: 1, email: "dev@b.co", roles: [] },
     };
     capturedOptions!.onSuccess(payload);
     expect(onSuccess).toHaveBeenCalledWith(payload, "developer");
+  });
+
+  it("reports developer mode when Sign up is clicked after switching", async () => {
+    const user = userEvent.setup();
+    const onRegister = vi.fn();
+    render(<LoginForm onSuccess={vi.fn()} onRegister={onRegister} />, {
+      wrapper: TestProviders,
+    });
+    await user.click(screen.getByRole("button", { name: /go to sico\.dev/i }));
+    await screen.findByRole("heading", { name: "Welcome to SICO.Dev" });
+
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+
+    expect(onRegister).toHaveBeenCalledWith("developer");
   });
 
   it("reports the SUBMITTED mode, not a mode toggled while the request is in flight", async () => {
@@ -335,18 +344,7 @@ describe("<LoginForm> dual-mode (SICO ⇄ SICO.Dev)", () => {
     await user.click(screen.getByRole("button", { name: /go to sico$/i }));
     const payload = {
       tokenInfo: { accessToken: "tok", expiresAt: 1_900_000_000 },
-      user: {
-        id: 1,
-        email: "dev@b.co",
-        roles: [
-          {
-            id: 1,
-            roleCode: "project_admin",
-            scopeType: "project",
-            scopeId: 1,
-          },
-        ],
-      },
+      user: { id: 1, email: "dev@b.co", roles: [] },
     };
     capturedOptions!.onSuccess(payload);
     expect(onSuccess).toHaveBeenCalledWith(payload, "developer");

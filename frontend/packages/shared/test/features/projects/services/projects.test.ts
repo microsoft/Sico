@@ -1,30 +1,9 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { AxiosInstance } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createProject,
+  deleteProject,
   fetchProjectDetail,
   fetchProjects,
   updateProject,
@@ -123,8 +102,10 @@ describe("fetchProjectDetail", () => {
 });
 
 describe("updateProject", () => {
-  it("issues PUT /project with the exact body (incl. operatorAdmins) and returns the id", async () => {
-    put.mockResolvedValue({ data: makeOkEnvelope({ id: 7 }) });
+  it("issues PUT /project with the exact body (incl. operatorAdmins) and resolves on a bare OK envelope", async () => {
+    // PUT /project returns `{ code: 0, msg: "success" }` — NO `data.id`, unlike
+    // POST. The service must assert the code only, not require `data`.
+    put.mockResolvedValue({ data: { code: 0, msg: "success" } });
     const body = {
       id: 7,
       name: "Renamed",
@@ -132,9 +113,15 @@ describe("updateProject", () => {
       iconUri: "/storage/x.svg",
       operatorAdmins: ["alice", "bob"],
     };
-    const result = await updateProject(apiClient, body);
+    await expect(updateProject(apiClient, body)).resolves.toBeUndefined();
     expect(put).toHaveBeenCalledWith("/project", body);
-    expect(result).toBe(7);
+  });
+
+  it("throws on a non-OK envelope code", async () => {
+    put.mockResolvedValue({ data: { code: 101_008, msg: "denied" } });
+    await expect(
+      updateProject(apiClient, { id: 7, operatorAdmins: [] }),
+    ).rejects.toThrow();
   });
 });
 
@@ -163,5 +150,24 @@ describe("createProject", () => {
       .mockResolvedValue({ data: { code: 101_008, msg: "denied" } });
     const client = { post } as Partial<AxiosInstance> as AxiosInstance;
     await expect(createProject(client, { name: "X" })).rejects.toThrow();
+  });
+});
+
+describe("deleteProject", () => {
+  it("issues DELETE /project with the id as a query param and resolves on OK", async () => {
+    const del = vi
+      .fn()
+      .mockResolvedValue({ data: { code: 0, msg: "success" } });
+    const client = { delete: del } as Partial<AxiosInstance> as AxiosInstance;
+    await expect(deleteProject(client, 7)).resolves.toBeUndefined();
+    expect(del).toHaveBeenCalledWith("/project", { params: { id: 7 } });
+  });
+
+  it("throws on a non-OK envelope code", async () => {
+    const del = vi
+      .fn()
+      .mockResolvedValue({ data: { code: 101_008, msg: "denied" } });
+    const client = { delete: del } as Partial<AxiosInstance> as AxiosInstance;
+    await expect(deleteProject(client, 7)).rejects.toThrow();
   });
 });

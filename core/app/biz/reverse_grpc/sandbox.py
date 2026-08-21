@@ -1,26 +1,4 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-import json
 from dataclasses import dataclass
-from typing import Any
 
 import grpc
 
@@ -71,23 +49,9 @@ class ApplySandboxResult:
     device_id: str
     display_name: str
     vnc_url: str
+    os: str
+    provider_type: str
     message: str
-
-
-@dataclass
-class AioSandboxHttpFormField:
-    name: str
-    text_value: str = ""
-    bytes_value: bytes = b""
-    file_name: str = ""
-    content_type: str = ""
-
-
-@dataclass
-class AioSandboxHttpResult:
-    status_code: int
-    content_type: str
-    body_text: str
 
 
 class ReverseSandboxService:
@@ -160,6 +124,8 @@ class ReverseSandboxService:
             device_id=resp.device_id,
             display_name=resp.display_name,
             vnc_url=resp.vnc_url,
+            os=resp.os,
+            provider_type=resp.provider_type,
             message=resp.msg,
         )
 
@@ -211,44 +177,3 @@ class ReverseSandboxService:
         )
         self._raise_on_error("get_instance_sandboxes", resp)
         return [SandboxInfo.from_pb(sb) for sb in resp.sandboxes]
-
-    def proxy_aio_http(
-        self,
-        *,
-        agent_instance_id: str,
-        proxy_base_path: str,
-        method: str,
-        path: str,
-        query: dict[str, Any] | None = None,
-        json_body: dict[str, Any] | None = None,
-        form_fields: list[AioSandboxHttpFormField] | None = None,
-    ) -> AioSandboxHttpResult:
-        if not hasattr(self, "stub"):
-            raise RuntimeError("ReverseSandboxService is not initialized")
-
-        resp = self.stub.rpc_proxy_aio_sandbox_http(
-            pb.AioSandboxHttpRequest(
-                agent_instance_id=agent_instance_id,
-                proxy_base_path=proxy_base_path,
-                method=method,
-                path=path,
-                query_json=json.dumps(query or {}, ensure_ascii=True),
-                json_body_json=json.dumps(json_body, ensure_ascii=True) if json_body is not None else "",
-                form_fields=[
-                    pb.AioSandboxHttpFormField(
-                        name=field.name,
-                        text_value=field.text_value,
-                        bytes_value=field.bytes_value,
-                        file_name=field.file_name,
-                        content_type=field.content_type,
-                    )
-                    for field in (form_fields or [])
-                ],
-            )
-        )
-        self._raise_on_error("proxy_aio_http", resp)
-        return AioSandboxHttpResult(
-            status_code=resp.status_code,
-            content_type=resp.content_type,
-            body_text=resp.body_text,
-        )

@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import asyncio
 import logging
 import os
@@ -31,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.conversation.plan import ToolExecutionInfo, ToolType
 from app.storage.fs import CHAT_FS
-from app.tools.common import ToolContext, get_tool_context
+from app.tools.common import ToolContext, get_tool_context, normalize_workspace_relative_path
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -227,17 +207,14 @@ def _resolve_search_targets(workspace: Path, files: list[str]) -> list[Path]:
     targets: list[Path] = []
     seen: set[Path] = set()
     for file in files:
-        normalized = file.replace("\\", "/").strip()
-        path = Path(normalized)
-        if (
-            not normalized
-            or normalized == "."
-            or normalized.startswith("/")
-            or "//" in normalized
-            or path.is_absolute()
-            or any(part in ("", ".", "..") for part in path.parts)
-        ):
+        raw = file.replace("\\", "/").strip()
+        if "//" in raw:
             raise ValueError(f"files must be workspace-relative paths without traversal: {file}")
+        try:
+            normalized = normalize_workspace_relative_path(raw)
+        except ValueError as exc:
+            raise ValueError(f"files must be workspace-relative paths without traversal: {file}") from exc
+        path = Path(normalized)
 
         target = (workspace / path).resolve()
         try:

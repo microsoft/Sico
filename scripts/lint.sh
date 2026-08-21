@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Copyright (c) 2026 Sico Authors
-#
 # Local lint runner — mirrors CI configuration.
 #
 # Usage:
@@ -47,6 +45,9 @@ missing() { printf '\033[1;33m==> %s\033[0m\n' "$*" >&2; FAILED=1; }
 skipped() { printf '\033[1;33m==> %s\033[0m\n' "$*" >&2; }
 
 if $RUN_BACKEND; then
+  section "Backend: OpenTelemetry wrapper generation"
+  (cd "$REPO_ROOT/backend" && go run ./cmd/otelwrapgen -check) || FAILED=1
+
   section "Backend: golangci-lint"
   if command -v golangci-lint >/dev/null 2>&1; then
     if command -v swag >/dev/null 2>&1; then
@@ -90,6 +91,9 @@ if $RUN_FRONTEND; then
   if [[ ! -f "$REPO_ROOT/frontend/package.json" ]]; then
     skipped "frontend/package.json is not included in this public checkout; skipping frontend lint because the frontend source package is distributed separately."
   elif command -v pnpm >/dev/null 2>&1; then
+    source "$REPO_ROOT/scripts/load-env.sh"
+    load_env_file "$REPO_ROOT/.env"
+    require_env_vars NPM_REGISTRY
     if [[ ! -d "$REPO_ROOT/frontend/node_modules" ]]; then
       echo "frontend/node_modules missing — running 'pnpm install'..."
       (cd "$REPO_ROOT/frontend" && pnpm install --frozen-lockfile) || FAILED=1

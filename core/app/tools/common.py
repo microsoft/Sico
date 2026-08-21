@@ -1,26 +1,8 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import asyncio
 import json
 import logging
+import posixpath
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -36,6 +18,29 @@ from .plan import PlanEditor, begin_tool_call_status_tracking, finish_tool_call_
 
 _TOOL_CONTEXT_KWARGS_KEY = "tool_context"
 _LOGGER = logging.getLogger(__name__)
+_INTERNAL_WORKSPACE_DIRS = frozenset((".source-repository",))
+_INTERNAL_SOURCE_SCHEMES = ("sico-source://",)
+
+
+def is_internal_workspace_path(value: str) -> bool:
+    if value.strip().startswith(_INTERNAL_SOURCE_SCHEMES):
+        return True
+    normalized = posixpath.normpath(value.replace("\\", "/").strip())
+    parts = normalized.split("/")
+    return bool(normalized and parts[0] in _INTERNAL_WORKSPACE_DIRS)
+
+
+def normalize_workspace_relative_path(value: str) -> str:
+    raw = value.replace("\\", "/").strip()
+    if not raw or raw.startswith("/") or re.match(r"^[A-Za-z]:/", raw):
+        raise ValueError("path must be relative and within the workspace directory")
+    normalized = posixpath.normpath(raw)
+    parts = normalized.split("/")
+    if normalized in {"", "."} or any(part in {"", ".", ".."} for part in parts):
+        raise ValueError("path must be relative and within the workspace directory")
+    if is_internal_workspace_path(normalized):
+        raise ValueError("path points to internal workspace storage")
+    return normalized
 
 
 def get_tool_context(ctx: FunctionInvocationContext | None = None) -> "ToolContext | None":
@@ -148,6 +153,8 @@ def _result_indicates_failure(result: Any) -> bool:
 
 
 def _payload_indicates_failure(payload: dict[str, Any]) -> bool:
+    if payload.get("outcome") == "needs_clarification":
+        return False
     if payload.get("success") is False:
         return True
     for key in ("error_message", "errorMessage", "error"):

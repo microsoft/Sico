@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 # sico -- Docker Compose local stack
 # Usage: docker compose -p sico --env-file .env -f deploy/docker/docker-compose.yaml up --build -d
 # Reads .env from repo root for configuration (copy from .env.example)
@@ -62,6 +42,8 @@ services:
     build:
       context: ../../frontend
       dockerfile: deployments/docker/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:?NPM_REGISTRY must be set in .env}
     container_name: sico-frontend
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/index.html || exit 1"]
@@ -88,15 +70,27 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_AUTH_TYPE=${REDIS_AUTH_TYPE:-password}
       - SANDBOX_CLIENT_SECRET_TEST_CLIENT=${SANDBOX_CLIENT_SECRET_TEST_CLIENT:-}
       - CORE_GRPC_ADDRESS=core:50053
       - REVERSE_GRPC_SERVE_ADDRESS=0.0.0.0:50054
       - REVERSE_GRPC_ADDRESS=backend:50054
+      - STORAGE_TYPE=${STORAGE_TYPE:-seaweedfs}
       - SEAWEEDFS_ENDPOINT=http://seaweedfs-filer:${SEAWEEDFS_FILER_PORT:-14003}
+      - AZURE_BLOB_ENDPOINT=${AZURE_BLOB_ENDPOINT:-}
+      - AZURE_BLOB_CONTAINER=${AZURE_BLOB_CONTAINER:-}
+      - AZURE_BLOB_CDN_ENDPOINT=${AZURE_BLOB_CDN_ENDPOINT:-}
       - SICO_PUBLIC_ENDPOINT=${SICO_PUBLIC_ENDPOINT:-http://localhost:${SICO_PORT:-8080}}
       - EVENT_BUS_TYPE=${EVENT_BUS_TYPE:-kafka}
       - EVENT_BUS_TOPIC=core-backend
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - AZURE_SERVICE_BUS_NAMESPACE=${AZURE_SERVICE_BUS_NAMESPACE:-}
+      - AZURE_SERVICE_BUS_AUTO_DELETE_ON_IDLE=${AZURE_SERVICE_BUS_AUTO_DELETE_ON_IDLE:-}
+      - MAIL_ENDPOINT=${MAIL_ENDPOINT:-}
+      - MAIL_ACCESS_KEY=${MAIL_ACCESS_KEY:-}
+      - MAIL_SENDER_ADDRESS=${MAIL_SENDER_ADDRESS:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-false}
       # Sandbox emulator endpoint (e.g. MuMu running on the developer's host machine).
       # Use host.docker.internal in the URL; the extra_hosts entry below makes it work on Linux too.
       - SANDBOX_EMULATOR_BASE_URL=${SANDBOX_EMULATOR_BASE_URL:-}
@@ -127,6 +121,8 @@ services:
     build:
       context: ../../
       dockerfile: core/deployments/docker/Dockerfile
+      args:
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:?PYPI_INDEX_URL must be set in .env}
     container_name: sico-core
     environment:
       - LOGLEVEL=${LOGLEVEL:-info}
@@ -139,8 +135,12 @@ services:
       - EVENT_BUS_TYPE=${EVENT_BUS_TYPE:-kafka}
       - EVENT_BUS_TOPIC=core-backend
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - AZURE_SERVICE_BUS_NAMESPACE=${AZURE_SERVICE_BUS_NAMESPACE:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-false}
       - MEM0_QDRANT_HOST=qdrant
       - EXPERIENCES_ENABLED=${EXPERIENCES_ENABLED:-true}
+      - UV_DEFAULT_INDEX=${PYPI_INDEX_URL:?PYPI_INDEX_URL must be set in .env}
       - RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE=${RUN_PYTHON_TOOL_SANDBOX_LOCAL_MODE:-false}
       - CHAT_AGENT_MAX_ITERATIONS=${CHAT_AGENT_MAX_ITERATIONS:-1000}
       - TASK_RUNTIME_RUN_STORE=${TASK_RUNTIME_RUN_STORE:-backend}
@@ -151,7 +151,11 @@ services:
       # image with skill dependencies (e.g. adb/fastboot for Android skills)
       # so the LLM does not have to ``apk add`` them on every turn.
       - TASK_RUNTIME_PYTHON_RUNNER_IMAGE=${TASK_RUNTIME_PYTHON_RUNNER_IMAGE:-ghcr.io/astral-sh/uv:python3.14-alpine}
+      - STORAGE_TYPE=${STORAGE_TYPE:-seaweedfs}
       - SEAWEEDFS_ENDPOINT=http://seaweedfs-filer:${SEAWEEDFS_FILER_PORT:-14003}
+      - AZURE_BLOB_ENDPOINT=${AZURE_BLOB_ENDPOINT:-}
+      - AZURE_BLOB_CONTAINER=${AZURE_BLOB_CONTAINER:-}
+      - AZURE_BLOB_CDN_ENDPOINT=${AZURE_BLOB_CDN_ENDPOINT:-}
       - SICO_APP_NAME=${SICO_APP_NAME:-sico}
       - SICO_ENDPOINT=http://backend:8080
     volumes:

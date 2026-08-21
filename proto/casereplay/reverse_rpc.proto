@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package reverse_rpc;
+
+option go_package = "sico-backend/internal/transport/reverse_grpc/pb/casereplay/reverse_rpc";
+
+service ReverseCaseReplayRPC {
+  rpc RpcGetActiveCaseReplay(GetActiveCaseReplayRequest) returns (GetActiveCaseReplayResponse) {}
+  rpc RpcGetOrCreateCaseReplay(GetOrCreateCaseReplayRequest) returns (GetOrCreateCaseReplayResponse) {}
+  rpc RpcCreateCaseReplayVersion(CreateCaseReplayVersionRequest) returns (CreateCaseReplayVersionResponse) {}
+  rpc RpcSetCaseReplayVersionActions(SetCaseReplayVersionActionsRequest) returns (EmptyCaseReplayResponse) {}
+  rpc RpcActivateCaseReplayVersion(ActivateCaseReplayVersionRequest) returns (EmptyCaseReplayResponse) {}
+  rpc RpcMarkCaseReplayStale(MarkCaseReplayStaleRequest) returns (EmptyCaseReplayResponse) {}
+}
+
+enum CaseReplayStatus {
+  CASE_REPLAY_STATUS_UNKNOWN = 0;
+  CASE_REPLAY_STATUS_ACTIVE = 1;
+  CASE_REPLAY_STATUS_STALE = 2;
+  CASE_REPLAY_STATUS_DISABLED = 3;
+}
+
+message EmptyCaseReplayResponse {
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}
+
+message CaseReplay {
+  int64 id = 1;                    // @gotag: json:"id"
+  string case_id = 2;              // @gotag: json:"caseId"
+  string site_host = 3;            // @gotag: json:"siteHost"
+  string platform = 4;             // @gotag: json:"platform"
+  int64 active_version_id = 5;     // @gotag: json:"activeVersionId"
+  CaseReplayStatus status = 6;     // @gotag: json:"status"
+  int64 created_at = 7;            // @gotag: json:"createdAt"
+  int64 updated_at = 8;            // @gotag: json:"updatedAt"
+}
+
+message CaseReplayVersion {
+  int64 id = 1;                    // @gotag: json:"id"
+  int64 case_replay_id = 2;        // @gotag: json:"caseReplayId"
+  string version = 3;              // @gotag: json:"version"
+  string actions_blob_path = 4;    // @gotag: json:"actionsBlobPath"
+  string metadata = 5;             // @gotag: json:"metadata"
+  int64 created_at = 6;            // @gotag: json:"createdAt"
+  int64 updated_at = 7;            // @gotag: json:"updatedAt"
+}
+
+message GetActiveCaseReplayRequest {
+  string case_id = 1;    // @gotag: json:"caseId"
+  string site_host = 2;  // @gotag: json:"siteHost"
+  string platform = 3;   // @gotag: json:"platform"
+}
+
+message GetActiveCaseReplayResponse {
+  bool found = 1;                          // @gotag: json:"found"
+  CaseReplay case_replay = 2;              // @gotag: json:"caseReplay"
+  CaseReplayVersion active_version = 3;    // @gotag: json:"activeVersion"
+  int32 code = 253;                        // @gotag: json:"code"
+  string msg = 254;                        // @gotag: json:"msg"
+}
+
+message GetOrCreateCaseReplayRequest {
+  string case_id = 1;    // @gotag: json:"caseId"
+  string site_host = 2;  // @gotag: json:"siteHost"
+  string platform = 3;   // @gotag: json:"platform"
+}
+
+message GetOrCreateCaseReplayResponse {
+  int64 case_replay_id = 1;  // @gotag: json:"caseReplayId"
+  bool created = 2;          // @gotag: json:"created"
+  int32 code = 253;          // @gotag: json:"code"
+  string msg = 254;          // @gotag: json:"msg"
+}
+
+message CreateCaseReplayVersionRequest {
+  int64 case_replay_id = 1;       // @gotag: json:"caseReplayId"
+  string version = 2;             // @gotag: json:"version"
+  string actions_blob_path = 3;   // @gotag: json:"actionsBlobPath"
+  string metadata = 4;            // @gotag: json:"metadata"
+  bool activate = 5;              // @gotag: json:"activate"
+}
+
+message CreateCaseReplayVersionResponse {
+  int64 version_id = 1;  // @gotag: json:"versionId"
+  int32 code = 253;      // @gotag: json:"code"
+  string msg = 254;      // @gotag: json:"msg"
+}
+
+message SetCaseReplayVersionActionsRequest {
+  int64 version_id = 1;          // @gotag: json:"versionId"
+  string actions_blob_path = 2;  // @gotag: json:"actionsBlobPath"
+}
+
+message ActivateCaseReplayVersionRequest {
+  int64 case_replay_id = 1;  // @gotag: json:"caseReplayId"
+  int64 version_id = 2;      // @gotag: json:"versionId"
+}
+
+message MarkCaseReplayStaleRequest {
+  int64 case_replay_id = 1;  // @gotag: json:"caseReplayId"
+}

@@ -1,54 +1,15 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-"""Per-turn Kubernetes pod lifecycle for sandboxed command execution.
+"""Per-run Kubernetes pod lifecycle for sandboxed command execution.
 
 This module is the single source of truth for "spin up an isolated container,
 exec into it, clean up afterwards" infrastructure. The :class:`SandboxPod`
 abstraction is consumed by the task-runtime ``K8sPodBackend`` (see
-:mod:`app.biz.task_runtime.executors.command_backend`), which owns one pod per
+:mod:`app.biz.task_runtime.execution.command.kubernetes`), which owns one pod per
 ``TaskRun`` and deletes it when the run's :class:`CommandSession` closes.
 
 Pods are created per run (ensure -> exec -> delete) and live in a dedicated
 namespace so blast radius is contained; the per-run session deletes its pod in
 a ``finally`` path. Pods leaked by process crashes can be GC'd by an
 out-of-band controller using the standard labels exposed below.
-
-.. _skill-executor-followup:
-
-SkillExecutor integration (follow-up)
--------------------------------------
-The task-runtime ``SkillExecutor`` currently runs skill subprocesses inside
-the core container via :func:`asyncio.create_subprocess_exec`. Routing those
-subprocesses through this pod is the right end-state for production
-deployments - but requires two changes that are out of scope for the initial
-refactor:
-
-1. The pod mounts only the chat workspace (``/app``). Skill scratch dirs
-   live under ``{user_root}/turn/{turn_id}/results/{batch}/runs/{run_id}``
-   which is *outside* the workspace mount. Adding a second mount for the
-   turn root (e.g. ``/sico/turn``) is the minimum change.
-2. ``SkillLoader`` renders ``argv`` with absolute host paths today, which
-   would resolve incorrectly inside the pod. Skills must either receive
-   pod-translated paths (resolver-side change) or rely solely on relative
-   paths via ``SICO_TASK_WORKSPACE``.
 
 Longer term we plan to replace ``kubectl exec`` with a thin gRPC agent
 running in the pod so command execution becomes a proper RPC (with
@@ -108,7 +69,7 @@ LABEL_AGENT_INSTANCE = "sico-agent-instance-id"
 LABEL_USER = "sico-user-id"
 
 # Per-run task-runtime runner pods carry this ``app`` label value (see
-# ``K8sPodBackend`` in app.biz.task_runtime.executors.command_backend); the
+# ``K8sPodBackend`` in app.biz.task_runtime.execution.command.kubernetes); the
 # default ``run-command`` value is used by the per-turn run_command pods. The
 # reaper reclaims both so a pod leaked by either backend is swept the same way.
 LABEL_APP_VALUE_TASK_RUNTIME = "task-runner"

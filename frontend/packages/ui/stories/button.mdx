@@ -300,13 +300,13 @@ All sizes inherit `text-sm` from the cva base class (14px). `xs` overrides to
 ### Shadow tokens
 
 Applied as `shadow-button-*` classes on the variants that need surface
-elevation. All three resolve to `--shadow-s` today and are removed by
-`disabled:shadow-none`.
+elevation (`primary` and `destructive-outline`). Both resolve to `--shadow-s`
+today and are removed by `disabled:shadow-none`. `secondary` is intentionally
+flat — no shadow — so it reads as a quiet affordance next to primary.
 
 | Token                                | Used by                | Resolves to    |
 | ------------------------------------ | ---------------------- | -------------- |
 | `--shadow-button-primary`            | `primary`              | `--shadow-s`   |
-| `--shadow-button-secondary`          | `secondary`            | `--shadow-s`   |
 | `--shadow-button-destructive-outline`| `destructive-outline`  | `--shadow-s`   |
 
 ### Missing tokens

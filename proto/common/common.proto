@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 syntax = "proto3";
 package common;
 
@@ -90,6 +70,12 @@ enum SortOrder {
     SORT_ORDER_DESC = 2;
 }
 
+enum ConversationRunStatus {
+    CONVERSATION_RUN_STATUS_UNKNOWN = 0;
+    CONVERSATION_RUN_STATUS_RUNNING = 1;
+    CONVERSATION_RUN_STATUS_IDLE = 2;
+}
+
 // AgentInstanceDigest holds display information about an agent instance.
 message AgentInstanceDigest {
     string agent_name = 1;        // @gotag: json:"agentName"
@@ -105,6 +91,28 @@ message UserDigest {
     string username = 3;   // @gotag: json:"username"
     string email = 4;      // @gotag: json:"email"
     string icon_url = 5;   // @gotag: json:"iconUrl"
+}
+
+// ProjectDigest holds summary information about a project.
+message ProjectDigest {
+    int64 id = 1;            // @gotag: json:"id"
+    string name = 2;         // @gotag: json:"name"
+}
+
+// ScheduledTaskDigest holds display information about a scheduled task.
+message ScheduledTaskDigest {
+    int64 id = 1;             // @gotag: json:"id"
+    string title = 2;         // @gotag: json:"title"
+}
+
+// AgentDigest holds summary information about an agent.
+message AgentDigest {
+    string agent_id = 1;        // @gotag: json:"agentId"
+    string name = 2;            // @gotag: json:"name"
+    string icon_uri = 3;        // @gotag: json:"iconUri"
+    string icon_url = 4;        // @gotag: json:"iconUrl"
+    string role = 5;            // @gotag: json:"role"
+    int64 organization_id = 6;  // @gotag: json:"organizationId"
 }
 
 // SandboxDigest holds summary information about a sandbox.

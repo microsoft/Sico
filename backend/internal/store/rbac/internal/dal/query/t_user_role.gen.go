@@ -32,7 +32,7 @@ func newTUserRole(db *gorm.DB, opts ...gen.DOOption) tUserRole {
 	_tUserRole.UserID = field.NewInt64(tableName, "user_id")
 	_tUserRole.RoleCode = field.NewString(tableName, "role_code")
 	_tUserRole.ScopeType = field.NewString(tableName, "scope_type")
-	_tUserRole.ScopeID = field.NewInt64(tableName, "scope_id")
+	_tUserRole.ScopeID = field.NewString(tableName, "scope_id")
 	_tUserRole.CreatedAt = field.NewInt64(tableName, "created_at")
 	_tUserRole.UpdatedAt = field.NewInt64(tableName, "updated_at")
 	_tUserRole.DeletedAt = field.NewField(tableName, "deleted_at")
@@ -51,7 +51,7 @@ type tUserRole struct {
 	UserID    field.Int64  // From User.ID
 	RoleCode  field.String // Role code: platform_admin, org_admin, project_admin, project_member
 	ScopeType field.String // platform|org|project
-	ScopeID   field.Int64  // Organization or Project ID (0 for platform scope)
+	ScopeID   field.String // Scope identifier: org/project numeric ID or agent UUID (0 for platform scope)
 	CreatedAt field.Int64  // Create Time in Milliseconds
 	UpdatedAt field.Int64  // Update Time in Milliseconds
 	DeletedAt field.Field  // Delete Time
@@ -75,7 +75,7 @@ func (t *tUserRole) updateTableName(table string) *tUserRole {
 	t.UserID = field.NewInt64(table, "user_id")
 	t.RoleCode = field.NewString(table, "role_code")
 	t.ScopeType = field.NewString(table, "scope_type")
-	t.ScopeID = field.NewInt64(table, "scope_id")
+	t.ScopeID = field.NewString(table, "scope_id")
 	t.CreatedAt = field.NewInt64(table, "created_at")
 	t.UpdatedAt = field.NewInt64(table, "updated_at")
 	t.DeletedAt = field.NewField(table, "deleted_at")

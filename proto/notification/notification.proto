@@ -1,0 +1,163 @@
+syntax = "proto3";
+package notification;
+
+import "common/common.proto";
+import "conversation/plan.proto";
+
+option go_package = "sico-backend/internal/transport/http/dto/notification";
+
+enum NotificationType {
+    reserved 1 to 6;
+
+    NOTIFICATION_TYPE_UNKNOWN = 0; // @gotag: json:"NOTIFICATION_TYPE_UNKNOWN"
+    NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED = 7; // @gotag: json:"NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED"
+    NOTIFICATION_TYPE_DW_DISMISSED = 8; // @gotag: json:"NOTIFICATION_TYPE_DW_DISMISSED"
+    NOTIFICATION_TYPE_DW_REASSIGNED = 9; // @gotag: json:"NOTIFICATION_TYPE_DW_REASSIGNED"
+    NOTIFICATION_TYPE_MEMBER_INVITATION = 10; // @gotag: json:"NOTIFICATION_TYPE_MEMBER_INVITATION"
+    NOTIFICATION_TYPE_MEMBER_REMOVED = 11; // @gotag: json:"NOTIFICATION_TYPE_MEMBER_REMOVED"
+    NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED = 12; // @gotag: json:"NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED"
+    NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED = 13; // @gotag: json:"NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED"
+    NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED = 14; // @gotag: json:"NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED"
+    NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED = 15; // @gotag: json:"NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED"
+}
+
+enum NotificationStatus {
+    NOTIFICATION_STATUS_UNKNOWN = 0; // @gotag: json:"NOTIFICATION_STATUS_UNKNOWN"
+    NOTIFICATION_STATUS_READ = 1; // @gotag: json:"NOTIFICATION_STATUS_READ"
+    NOTIFICATION_STATUS_UNREAD = 2; // @gotag: json:"NOTIFICATION_STATUS_UNREAD"
+}
+
+message NotificationExtraInfoDeliverable {
+    int64 deliverable_id = 1; // @gotag: json:"deliverableId"
+    string file_name = 2; // @gotag: json:"fileName"
+    string file_uri = 3; // @gotag: json:"fileUri"
+    int64 agent_instance_id = 4; // @gotag: json:"agentInstanceId"
+    string agent_instance_name = 5; // @gotag: json:"agentInstanceName,omitempty"
+    string project_name = 6; // @gotag: json:"projectName,omitempty"
+    string agent_instance_icon_uri = 7; // @gotag: json:"agentInstanceIconUri"
+    string agent_instance_icon_url = 8; // @gotag: json:"agentInstanceIconUrl"
+}
+
+message NotificationExtraInfo {
+    reserved 1, 2;
+
+    optional NotificationExtraInfoDeliverable deliverable = 3; // @gotag: json:"deliverable,omitempty"
+    optional NotificationExtraInfoDwAction dw_action = 4; // @gotag: json:"dwAction,omitempty"
+    optional NotificationExtraInfoRoleChange role_change = 5; // @gotag: json:"roleChange,omitempty"
+    optional NotificationExtraInfoAgentEditorUpdate agent_editor_update = 6; // @gotag: json:"agentEditorUpdate,omitempty"
+    optional NotificationExtraInfoScheduledTaskFinished scheduled_task_finished = 7; // @gotag: json:"scheduledTaskFinished,omitempty"
+}
+
+message NotificationExtraInfoDwAction {
+    int64 agent_instance_id = 1; // @gotag: json:"agentInstanceId"
+    string agent_instance_name = 2; // @gotag: json:"agentInstanceName"
+    string project_name = 3; // @gotag: json:"projectName"
+    string old_operator_username = 4; // @gotag: json:"oldOperatorUsername"
+    string new_operator_username = 5; // @gotag: json:"newOperatorUsername"
+    string agent_instance_icon_uri = 6; // @gotag: json:"agentInstanceIconUri"
+    string agent_instance_icon_url = 7; // @gotag: json:"agentInstanceIconUrl"
+}
+
+enum RoleChangeAction {
+    ROLE_CHANGE_ACTION_UNSPECIFIED = 0; // @gotag: json:"ROLE_CHANGE_ACTION_UNSPECIFIED"
+    ROLE_CHANGE_ACTION_ASSIGNED = 1; // @gotag: json:"ROLE_CHANGE_ACTION_ASSIGNED"
+    ROLE_CHANGE_ACTION_REMOVED = 2; // @gotag: json:"ROLE_CHANGE_ACTION_REMOVED"
+}
+
+message NotificationExtraInfoRoleChange {
+    optional common.ProjectDigest project = 1; // @gotag: json:"project,omitempty"
+    string role_code = 2; // @gotag: json:"roleCode"
+    RoleChangeAction action = 3; // @gotag: json:"action"
+}
+
+message NotificationExtraInfoAgentEditorUpdate {
+    common.UserDigest operator = 1; // @gotag: json:"operator"
+    common.AgentDigest agent = 2; // @gotag: json:"agent"
+}
+
+message NotificationExtraInfoScheduledTaskFinished {
+    common.ScheduledTaskDigest task = 1; // @gotag: json:"task"
+    plan.PlanStatus status = 2; // @gotag: json:"status"
+    int64 scheduled_task_run_id = 3; // @gotag: json:"scheduledTaskRunId"
+    int64 conversation_id = 4; // @gotag: json:"conversationId,omitempty"
+    int64 scheduled_for = 5; // @gotag: json:"scheduledFor"
+}
+
+message Notification {
+    int64 id = 1; // @gotag: json:"id"
+    string sender_username = 2; // @gotag: json:"senderUsername"
+    string receiver_username = 3; // @gotag: json:"receiverUsername"
+    NotificationType type = 4; // @gotag: json:"type"
+    NotificationStatus status = 5; // @gotag: json:"status"
+    string content = 6; // @gotag: json:"content"
+    NotificationExtraInfo extra_info = 7; // @gotag: json:"extraInfo"
+    int64 created_at = 8; // @gotag: json:"createdAt"
+    int64 updated_at = 9; // @gotag: json:"updatedAt"
+    int64 project_id = 10; // @gotag: json:"projectId"
+}
+
+message CreateNotificationRequest {
+    string receiver_username = 2; // @gotag: json:"receiverUsername"
+    NotificationType type = 3; // @gotag: json:"type"
+    string content = 4; // @gotag: json:"content"
+    NotificationExtraInfo extra_info = 5; // @gotag: json:"extraInfo"
+}
+
+message CreateNotificationData {
+    int64 id = 1; // @gotag: json:"id"
+}
+
+message CreateNotificationResponse {
+    CreateNotificationData data = 1; // @gotag: json:"data"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message ListNotificationRequest {
+    int32 page = 4; // @gotag: form:"page" binding:"required,min=1"
+    int32 page_size = 5; // @gotag: form:"pageSize" binding:"required,min=1,max=100"
+}
+
+message ListNotificationResponse {
+    ListNotificationData data = 1; // @gotag: json:"data"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message ListNotificationData {
+    int32 total = 1; // @gotag: json:"total"
+    bool has_more = 2; // @gotag: json:"hasMore"
+    repeated Notification notifications = 3; // @gotag: json:"notifications"
+}
+
+message UpdateNotificationStatusRequest {
+    int64 id = 1; // @gotag: json:"id"
+    NotificationStatus status = 2; // @gotag: json:"status"
+}
+
+message UpdateNotificationStatusResponse {
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message ListProjectNotificationsRequest {
+    int64 project_id = 1; // @gotag: form:"projectId" binding:"required"
+    int32 page = 2; // @gotag: form:"page" binding:"min=1" default:"1"
+    int32 page_size = 3; // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+}
+
+message ListProjectNotificationsResponse {
+    ListNotificationData data = 1; // @gotag: json:"data"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
+message ReadAllNotificationsData {
+    repeated int64 ids = 1; // @gotag: json:"ids"
+}
+
+message ReadAllNotificationsResponse {
+    ReadAllNotificationsData data = 1; // @gotag: json:"data"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}

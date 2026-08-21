@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package handler
 
 import (
@@ -203,6 +183,63 @@ func DeleteModelRegistry(ctx *gin.Context) {
 	}
 
 	resp, err := svc.DeleteModel(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// SetOrganizationLLMConfig sets the default model for an organization.
+// @Router /api/sico/llm/org-config [POST]
+// @Tags llmhub
+// @Accept json
+// @Produce json
+// @Param request body dto.SetOrganizationLLMConfigRequest true "Set Org Config"
+// @Success 200 {object} dto.SetOrganizationLLMConfigResponse
+// @Security BearerAuth
+func SetOrganizationLLMConfig(ctx *gin.Context) {
+	var req dto.SetOrganizationLLMConfigRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	svc, ok := llmhubsService(ctx)
+	if !ok {
+		return
+	}
+
+	resp, err := svc.SetOrganizationLLMConfig(reqctx(ctx), &req)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// GetOrganizationLLMConfig retrieves the default model config for an organization.
+// @Router /api/sico/llm/org-config [GET]
+// @Tags llmhub
+// @Produce json
+// @Param request query dto.GetOrganizationLLMConfigRequest true "Get Org Config"
+// @Success 200 {object} dto.GetOrganizationLLMConfigResponse
+// @Security BearerAuth
+func GetOrganizationLLMConfig(ctx *gin.Context) {
+	var req dto.GetOrganizationLLMConfigRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+
+	svc, ok := llmhubsService(ctx)
+	if !ok {
+		return
+	}
+
+	resp, err := svc.GetOrganizationLLMConfig(reqctx(ctx), &req)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
 		return

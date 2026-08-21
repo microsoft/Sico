@@ -1,33 +1,13 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createStore, Provider } from "jotai";
 import { type ReactNode } from "react";
+import type * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProjectWorkspace } from "@/features/projects/components/project-workspace";
+import { useDeleteProjectMutation } from "@/features/projects/hooks/use-delete-project-mutation";
 import { useKnowledgeTagsQuery } from "@/features/projects/hooks/use-knowledge-tags-query";
 import { useProjectMutation } from "@/features/projects/hooks/use-project-mutation";
 import { useProjectDetailQuery } from "@/features/projects/hooks/use-project-query";
@@ -42,9 +22,10 @@ import {
 } from "@/features/projects/schemas/project";
 import type { AssetCategory } from "@/features/projects/types";
 
-const { navigateMock, mutateMock } = vi.hoisted(() => ({
+const { navigateMock, mutateMock, deleteMutateMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   mutateMock: vi.fn(),
+  deleteMutateMock: vi.fn(),
 }));
 
 vi.mock("@/features/projects/hooks/use-project-query", () => ({
@@ -55,13 +36,75 @@ vi.mock("@/features/projects/hooks/use-project-mutation", () => ({
   useProjectMutation: vi.fn(),
 }));
 
+vi.mock("@/features/projects/hooks/use-delete-project-mutation", () => ({
+  useDeleteProjectMutation: vi.fn(),
+}));
+
 vi.mock("@/features/projects/hooks/use-knowledge-tags-query", () => ({
   useKnowledgeTagsQuery: vi.fn(),
 }));
 
+// The drawer's Sandbox section pulls real device data through this query; stub
+// it so the workspace test never needs an ApiClientProvider. Partial mock keeps
+// the barrel's other exports (types, etc.) intact.
+vi.mock("@/features/sandbox-devices", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@/features/sandbox-devices")>();
+  return {
+    ...actual,
+    useProjectDevicesQuery: vi.fn(() => ({ data: [] })),
+    // The drawer's Sandbox section reads the suspense variant.
+    useProjectDevicesSuspenseQuery: vi.fn(() => ({ data: [] })),
+  };
+});
+
+vi.mock("@/features/rbac", async (importActual) => {
+  const actual = await importActual<typeof import("@/features/rbac")>();
+  return {
+    ...actual,
+    useProjectPermission: vi.fn(() => ({
+      ...actual.deriveCapabilities("project_admin"),
+      userEmail: "me@company.com",
+      isLoading: false,
+      isError: false,
+    })),
+    // The drawer's Team section + edit button read the suspense variant.
+    useProjectPermissionSuspense: vi.fn(() => ({
+      ...actual.deriveCapabilities("project_admin"),
+      userEmail: "me@company.com",
+    })),
+  };
+});
+
 vi.mock("@tanstack/react-router", async (importActual) => {
   const actual = await importActual<typeof import("@tanstack/react-router")>();
-  return { ...actual, useNavigate: () => navigateMock };
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+    // The drawer's "view more" affordances are real `<Link>`s; stub to a plain
+    // `<a>` (resolving `$projectId`) so they render without a router.
+    Link: ({
+      to,
+      params,
+      children,
+      className,
+      "aria-label": ariaLabel,
+    }: {
+      to: string;
+      params?: { projectId: string };
+      children?: React.ReactNode;
+      className?: string;
+      "aria-label"?: string;
+    }): React.JSX.Element => (
+      <a
+        href={params ? to.replace("$projectId", params.projectId) : to}
+        className={className}
+        aria-label={ariaLabel}
+      >
+        {children}
+      </a>
+    ),
+  };
 });
 
 // Stub the heavy table so the workspace under test never fires its own query.
@@ -90,6 +133,16 @@ vi.mock("@/features/projects/components/edit-project-dialog", () => ({
     open ? <div>edit-project-open</div> : null,
 }));
 
+vi.mock("@/features/team/components/invite-member-dialog", () => ({
+  InviteMemberDialog: ({ open }: { open: boolean }) =>
+    open ? <div>invite-human-open</div> : null,
+}));
+
+vi.mock("@/features/team/components/invite-dw-dialog", () => ({
+  InviteDwDialog: ({ open }: { open: boolean }) =>
+    open ? <div>invite-dw-open</div> : null,
+}));
+
 function makeProject(partial: Partial<ProjectDetail> = {}): ProjectDetail {
   return {
     id: 1,
@@ -104,6 +157,9 @@ function makeProject(partial: Partial<ProjectDetail> = {}): ProjectDetail {
     ownerUsername: "owner@microsoft.com",
     creatorUsername: "amy@microsoft.com",
     operatorAdmins: ["jessica@microsoft.com", "michael@microsoft.com"],
+    projectMembers: [],
+    projectAdmins: [],
+    sandboxes: [],
     createdAt: 0,
     updatedAt: 0,
     ...partial,
@@ -166,6 +222,10 @@ beforeEach(() => {
   vi.mocked(useProjectMutation).mockReturnValue({
     mutate: mutateMock,
   } as never);
+  vi.mocked(useDeleteProjectMutation).mockReturnValue({
+    mutate: deleteMutateMock,
+    isPending: false,
+  } as never);
 });
 
 describe("ProjectWorkspace", () => {
@@ -203,7 +263,7 @@ describe("ProjectWorkspace", () => {
     expect(screen.getByText("add-knowledge-open")).toBeInTheDocument();
   });
 
-  it("opens the edit-project dialog from the drawer's edit control", async () => {
+  it("opens the edit-project dialog from the drawer's edit button", async () => {
     vi.mocked(useProjectDetailQuery).mockReturnValue({
       data: makeProject({ memberType: MemberTypeSchema.enum.OWNER }),
     } as never);
@@ -213,7 +273,18 @@ describe("ProjectWorkspace", () => {
     expect(screen.getByText("edit-project-open")).toBeInTheDocument();
   });
 
-  it("navigates to the knowledge-tags route from View all", async () => {
+  it("deletes the project from the drawer's actions menu and confirm", async () => {
+    const { user } = renderWorkspace();
+    await user.click(screen.getByRole("button", { name: "Project actions" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Delete project" }),
+    );
+    // The confirm dialog's destructive button carries the "Delete" verb.
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(deleteMutateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("links View all to the knowledge-tags route", () => {
     const knowledgeTags = [1, 2, 3, 4].map((n) =>
       makeKnowledgeTag({ id: n, name: `Knowledge tag ${n}` }),
     );
@@ -224,31 +295,10 @@ describe("ProjectWorkspace", () => {
         hasNext: false,
       },
     } as never);
-    const { user } = renderWorkspace();
-    await user.click(screen.getByRole("button", { name: "View all" }));
-    expect(navigateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "/project/$projectId/knowledge-tags",
-        params: { projectId: String(PROJECT_ID) },
-      }),
-    );
-  });
-
-  it("removes an operator by sending the full remaining set to the mutation", async () => {
-    const { user } = renderWorkspace();
-
-    await user.click(
-      screen.getByRole("button", {
-        name: "Actions for jessica@microsoft.com",
-      }),
-    );
-    await user.click(await screen.findByRole("menuitem", { name: "Remove" }));
-
-    // The next full operatorAdmins set (jessica dropped) is sent — an omission
-    // would let syncProjectAdmins wipe the rest.
-    expect(mutateMock).toHaveBeenCalledWith(
-      { operatorAdmins: ["michael@microsoft.com"] },
-      expect.objectContaining({ onError: expect.any(Function) }),
+    renderWorkspace();
+    expect(screen.getByRole("link", { name: "View all" })).toHaveAttribute(
+      "href",
+      `/project/${PROJECT_ID}/knowledge-tags`,
     );
   });
 

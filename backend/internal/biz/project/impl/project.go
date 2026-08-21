@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -26,16 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"strconv"
+	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
 	singleAgentService "sico-backend/internal/biz/agent"
 	appresp "sico-backend/internal/biz/common/response"
+	notificationService "sico-backend/internal/biz/notification"
 	rbac "sico-backend/internal/biz/rbac"
 	sandboxbiz "sico-backend/internal/biz/sandbox"
 	singleAgentEntity "sico-backend/internal/entity/agent/singleagent"
+	notificationEntity "sico-backend/internal/entity/notification"
 	"sico-backend/internal/infra/idgen"
 	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/shared/apperr"
@@ -44,12 +27,16 @@ import (
 	agentrepo "sico-backend/internal/store/agent/singleagent/repository"
 	"sico-backend/internal/store/project/repository"
 	"sico-backend/internal/transport/http/dto/common"
+	notificationdto "sico-backend/internal/transport/http/dto/notification"
 	projectdto "sico-backend/internal/transport/http/dto/project"
 	userdto "sico-backend/internal/transport/http/dto/rbac/user"
 	sandboxdto "sico-backend/internal/transport/http/dto/sandbox"
 	"sico-backend/pkg/logger"
+	"sico-backend/pkg/safego"
 	"sico-backend/pkg/slicesx"
 )
+
+const projectAssetUploadURLTTL = time.Hour
 
 // Components gathers dependencies required by the project service implementation.
 type Components struct {
@@ -255,7 +242,7 @@ func (s *Service) AddProjectAsset(
 	ctx context.Context,
 	req *projectdto.AddProjectAssetRequest,
 	creator string,
-	file multipart.File,
+	file io.Reader,
 	fileExtra FileExtraInfo,
 ) (*projectdto.AddProjectAssetResponse, error) {
 	id, url, sasURL, meta, err := s.doAddProjectAsset(ctx, req, creator, file, fileExtra)
@@ -264,6 +251,56 @@ func (s *Service) AddProjectAsset(
 	}
 
 	return appresp.Success(&projectdto.AddProjectAssetResponse{
+		Data: &projectdto.AddProjectAssetData{
+			Id:       id,
+			SasUrl:   sasURL,
+			Uri:      url,
+			MetaInfo: meta,
+		},
+	}), nil
+}
+
+// CreateProjectAssetUploadURL returns a write URL for direct upload without creating a visible asset record.
+func (s *Service) CreateProjectAssetUploadURL(
+	ctx context.Context,
+	req *projectdto.CreateProjectAssetUploadURLRequest,
+	fileExtra FileExtraInfo,
+) (*projectdto.CreateProjectAssetUploadURLResponse, error) {
+	objectKey, uploadURL, meta, err := s.doCreateProjectAssetUploadURL(ctx, req, fileExtra)
+	if err != nil {
+		return nil, err
+	}
+	expiresAt := uploadURL.ExpiresAt.Unix()
+	if uploadURL.ExpiresAt.IsZero() {
+		expiresAt = time.Now().Add(projectAssetUploadURLTTL).Unix()
+	}
+
+	return appresp.Success(&projectdto.CreateProjectAssetUploadURLResponse{
+		Data: &projectdto.CreateProjectAssetUploadURLData{
+			UploadUrl: uploadURL.URL,
+			Uri:       uploadURL.Path,
+			ObjectKey: objectKey,
+			Method:    uploadURL.Method,
+			Headers:   uploadURL.Headers,
+			ExpiresAt: expiresAt,
+			MetaInfo:  meta,
+		},
+	}), nil
+}
+
+// CompleteProjectAssetUpload verifies a direct upload and persists its metadata.
+func (s *Service) CompleteProjectAssetUpload(
+	ctx context.Context,
+	req *projectdto.CompleteProjectAssetUploadRequest,
+	creator string,
+	fileExtra FileExtraInfo,
+) (*projectdto.CompleteProjectAssetUploadResponse, error) {
+	id, url, sasURL, meta, err := s.doCompleteProjectAssetUpload(ctx, req, creator, fileExtra)
+	if err != nil {
+		return nil, err
+	}
+
+	return appresp.Success(&projectdto.CompleteProjectAssetUploadResponse{
 		Data: &projectdto.AddProjectAssetData{
 			Id:       id,
 			SasUrl:   sasURL,
@@ -338,11 +375,25 @@ func (s *Service) doCreateProject(
 		return 0, err
 	}
 
-	// Assign creator as project_admin via RBAC.
+	// Project admins are also project members.
+	if err := rbac.AssignProjectRole(ctx, creator, rbac.RoleProjectMember, projectModel.ID); err != nil {
+		logger.CtxError(ctx, "failed to assign project member role to creator: projectId=%d, creator=%s, err=%v",
+			projectModel.ID, creator, err)
+		if delErr := s.ProjectRepo.DeleteProject(ctx, projectModel.ID); delErr != nil {
+			logger.CtxError(ctx, "failed to roll back project after RBAC failure: projectId=%d, err=%v",
+				projectModel.ID, delErr)
+		}
+		return 0, err
+	}
+
 	if err := rbac.AssignProjectRole(ctx, creator, rbac.RoleProjectAdmin, projectModel.ID); err != nil {
 		logger.CtxError(ctx, "failed to assign project admin role to creator: projectId=%d, creator=%s, err=%v",
 			projectModel.ID, creator, err)
-		// Roll back the project row to avoid an orphaned project without any admin.
+		if removeErr := rbac.RemoveAllProjectRoles(ctx, projectModel.ID); removeErr != nil {
+			logger.CtxError(
+				ctx, "failed to roll back project roles: projectId=%d, err=%v", projectModel.ID, removeErr,
+			)
+		}
 		if delErr := s.ProjectRepo.DeleteProject(ctx, projectModel.ID); delErr != nil {
 			logger.CtxError(ctx, "failed to roll back project after RBAC failure: projectId=%d, err=%v",
 				projectModel.ID, delErr)
@@ -422,11 +473,13 @@ func (s *Service) doGetUserProjectList(
 	roleByProject := make(map[int64]string, len(memberships))
 	projectIDs := make([]int64, 0, len(memberships))
 	for _, m := range memberships {
-		if _, exists := roleByProject[m.ProjectID]; exists {
-			continue
+		currentRole, exists := roleByProject[m.ProjectID]
+		if !exists {
+			projectIDs = append(projectIDs, m.ProjectID)
 		}
-		roleByProject[m.ProjectID] = m.RoleCode
-		projectIDs = append(projectIDs, m.ProjectID)
+		if !exists || projectRolePriority(m.RoleCode) > projectRolePriority(currentRole) {
+			roleByProject[m.ProjectID] = m.RoleCode
+		}
 	}
 
 	// Apply pagination on the project IDs.
@@ -528,80 +581,219 @@ func roleCodeToMemberType(roleCode string) projectdto.MemberType {
 	}
 }
 
+func projectRolePriority(roleCode string) int {
+	switch roleCode {
+	case rbac.RoleProjectAdmin:
+		return 2
+	case rbac.RoleProjectMember:
+		return 1
+	default:
+		return 0
+	}
+}
+
 func (s *Service) doAddProjectAsset(
 	ctx context.Context,
 	req *projectdto.AddProjectAssetRequest,
 	creator string,
-	file multipart.File,
+	file io.Reader,
 	fileExtra FileExtraInfo,
 ) (int64, string, string, *projectdto.FileMetaInfo, error) {
-	id, err := s.IDGen.GenID(ctx)
+	if file == nil {
+		return 0, "", "", nil, apperr.New(errcode.CommonInvalidParam, "file is required")
+	}
+	projectID := normalizeProjectID(req.GetProjectId())
+
+	objectKey, putOpts, err := s.prepareProjectAssetStorage(ctx, projectID, fileExtra)
 	if err != nil {
-		logger.CtxError(ctx, "failed to generate project asset ID: err=%v", err)
 		return 0, "", "", nil, err
 	}
 
-	objectKey := strconv.FormatInt(id, 10)
-	putOpts := make([]storage.PutOptFn, 0, 1)
-
-	if fileExtra.FileExt != "" {
-		objectKey = fmt.Sprintf("%s.%s", objectKey, fileExtra.FileExt)
-	}
-
-	if len(fileExtra.ContentType) > 0 {
-		putOpts = append(putOpts, storage.WithContentType(fileExtra.ContentType))
-	}
-
-	// Normalize empty ProjectId to the storage default so that the value we
-	// persist matches both the actual storage prefix and the t_project_asset
-	// column default. Without this, dedup queries with the original empty
-	// value miss the rows that MySQL stored as "default_space".
-	if req.ProjectId == "" {
-		req.ProjectId = storage.DefaultPathPrefix
-	}
-	putOpts = append(putOpts, storage.WithPutPathPrefix(req.ProjectId))
-
-	content, err := io.ReadAll(file)
-	if err != nil {
-		logger.CtxError(
-			ctx, "failed to read file content: projectId=%s, err=%v",
-			req.ProjectId, err,
-		)
-		return 0, "", "", nil, err
-	}
-
-	path, err := s.BlobClient.PutObject(ctx, objectKey, content, putOpts...)
+	uploaded, err := s.BlobClient.UploadObject(ctx, objectKey, file, putOpts...)
 	if err != nil {
 		logger.CtxError(
 			ctx,
 			"failed to upload project asset: projectId=%s, objectKey=%s, err=%v",
-			req.ProjectId, objectKey, err,
+			projectID, objectKey, err,
 		)
 		return 0, "", "", nil, err
 	}
+	if uploaded == nil || uploaded.Path == "" {
+		return 0, "", "", nil, apperr.New(errcode.CommonUnavailable, "project asset upload returned empty path")
+	}
+	path := uploaded.Path
 
 	sasURL, err := storage.PathToUrl(path)
 	if err != nil {
 		logger.CtxError(
 			ctx,
 			"failed to build CDN URL for project asset: projectId=%s, path=%s, err=%v",
-			req.ProjectId, path, err,
+			projectID, path, err,
 		)
 		return 0, "", "", nil, err
 	}
 
-	extraJSON, err := json.Marshal(fileExtra)
+	assetID, meta, err := s.saveProjectAsset(ctx, projectID, creator, objectKey, fileExtra)
+	if err != nil {
+		return 0, "", "", nil, err
+	}
+
+	return assetID, path, sasURL, meta, nil
+}
+
+func (s *Service) doCreateProjectAssetUploadURL(
+	ctx context.Context,
+	req *projectdto.CreateProjectAssetUploadURLRequest,
+	fileExtra FileExtraInfo,
+) (string, *storage.UploadURL, *projectdto.FileMetaInfo, error) {
+	projectID := normalizeProjectID(req.GetProjectId())
+	objectKey, putOpts, err := s.prepareProjectAssetStorage(ctx, projectID, fileExtra)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	putOpts = append(putOpts, storage.WithExpires(time.Now().Add(projectAssetUploadURLTTL)))
+	uploadURL, err := s.BlobClient.CreateUploadURL(ctx, objectKey, putOpts...)
 	if err != nil {
 		logger.CtxError(
 			ctx,
-			"failed to marshal asset metadata: projectId=%s, err=%v",
-			req.ProjectId, err,
+			"failed to create project asset upload URL: projectId=%s, objectKey=%s, err=%v",
+			projectID,
+			objectKey,
+			err,
 		)
-		return 0, "", "", nil, apperr.Wrap(errcode.CommonInvalidParam, "invalid file metadata", err)
+		return "", nil, nil, err
+	}
+	if uploadURL == nil || uploadURL.Path == "" || uploadURL.URL == "" {
+		return "", nil, nil, apperr.New(errcode.CommonUnavailable, "project asset upload URL is incomplete")
+	}
+	return objectKey, uploadURL, fileMetaInfoFromExtra(fileExtra), nil
+}
+
+func (s *Service) doCompleteProjectAssetUpload(
+	ctx context.Context,
+	req *projectdto.CompleteProjectAssetUploadRequest,
+	creator string,
+	fileExtra FileExtraInfo,
+) (int64, string, string, *projectdto.FileMetaInfo, error) {
+	projectID := normalizeProjectID(req.GetProjectId())
+	objectKey := strings.TrimSpace(req.GetObjectKey())
+	if objectKey == "" || strings.Contains(objectKey, "/") {
+		return 0, "", "", nil, apperr.New(errcode.CommonInvalidParam, "invalid object key")
+	}
+	if _, err := s.ProjectRepo.GetProjectAssetByObjectKey(ctx, projectID, objectKey); err == nil {
+		return 0, "", "", nil, apperr.New(errcode.CommonConflict, "project asset upload already completed")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, "", "", nil, err
 	}
 
+	objectInfo, err := s.verifyUploadedAsset(ctx, projectID, objectKey, &fileExtra)
+	if err != nil {
+		return 0, "", "", nil, err
+	}
+	sasURL, err := storage.PathToUrl(objectInfo.Path)
+	if err != nil {
+		logger.CtxError(
+			ctx,
+			"failed to build CDN URL for completed project asset: projectId=%s, path=%s, err=%v",
+			projectID,
+			objectInfo.Path,
+			err,
+		)
+		return 0, "", "", nil, err
+	}
+	assetID, meta, err := s.saveProjectAsset(ctx, projectID, creator, objectKey, fileExtra)
+	if err != nil {
+		return 0, "", "", nil, err
+	}
+	return assetID, objectInfo.Path, sasURL, meta, nil
+}
+
+func (s *Service) verifyUploadedAsset(
+	ctx context.Context,
+	projectID, objectKey string,
+	fileExtra *FileExtraInfo,
+) (*storage.ObjectInfo, error) {
+	objectInfo, err := s.BlobClient.GetObjectInfo(ctx, objectKey, storage.WithGetPathPrefix(projectID))
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotFound) {
+			return nil, apperr.New(errcode.CommonNotFound, "uploaded project asset not found")
+		}
+		logger.CtxError(
+			ctx,
+			"failed to verify project asset upload: projectId=%s, objectKey=%s, err=%v",
+			projectID,
+			objectKey,
+			err,
+		)
+		return nil, err
+	}
+	if objectInfo == nil || objectInfo.Path == "" {
+		return nil, apperr.New(errcode.CommonUnavailable, "project asset verification returned empty path")
+	}
+	if fileExtra.FileSize > 0 && objectInfo.Size > 0 && fileExtra.FileSize != objectInfo.Size {
+		return nil, apperr.New(errcode.CommonInvalidParam, "uploaded project asset size does not match metadata")
+	}
+	if fileExtra.FileSize == 0 {
+		fileExtra.FileSize = objectInfo.Size
+	}
+	if fileExtra.ContentType == "" {
+		fileExtra.ContentType = objectInfo.ContentType
+	}
+	return objectInfo, nil
+}
+
+func (s *Service) prepareProjectAssetStorage(
+	ctx context.Context,
+	projectID string,
+	fileExtra FileExtraInfo,
+) (string, []storage.PutOptFn, error) {
+	if s == nil || s.Components == nil || s.ProjectRepo == nil || s.IDGen == nil || s.BlobClient == nil {
+		return "", nil, apperr.New(errcode.CommonUnavailable, "project service not initialized")
+	}
+	projectID = normalizeProjectID(projectID)
+	id, err := s.IDGen.GenID(ctx)
+	if err != nil {
+		logger.CtxError(ctx, "failed to generate project asset ID: err=%v", err)
+		return "", nil, err
+	}
+	objectKey := strconv.FormatInt(id, 10)
+	putOpts := make([]storage.PutOptFn, 0, 2)
+	if fileExtra.FileExt != "" {
+		objectKey = fmt.Sprintf("%s.%s", objectKey, fileExtra.FileExt)
+	}
+	if fileExtra.ContentType != "" {
+		putOpts = append(putOpts, storage.WithContentType(fileExtra.ContentType))
+	}
+	putOpts = append(putOpts, storage.WithPutPathPrefix(projectID))
+	return objectKey, putOpts, nil
+}
+
+func normalizeProjectID(projectID string) string {
+	if projectID == "" {
+		return storage.DefaultPathPrefix
+	}
+	return projectID
+}
+
+func fileMetaInfoFromExtra(fileExtra FileExtraInfo) *projectdto.FileMetaInfo {
+	return &projectdto.FileMetaInfo{
+		FileName: fileExtra.FileName, FileSize: fileExtra.FileSize, FileType: fileExtra.FileType,
+		FileExt: fileExtra.FileExt, ContentType: fileExtra.ContentType,
+	}
+}
+
+func (s *Service) saveProjectAsset(
+	ctx context.Context,
+	projectID, creator, objectKey string,
+	fileExtra FileExtraInfo,
+) (int64, *projectdto.FileMetaInfo, error) {
+	extraJSON, err := json.Marshal(fileExtra)
+	if err != nil {
+		logger.CtxError(ctx, "failed to marshal asset metadata: projectId=%s, err=%v", projectID, err)
+		return 0, nil, apperr.Wrap(errcode.CommonInvalidParam, "invalid file metadata", err)
+	}
 	asset := &repository.ProjectAssetModel{
-		ProjectID:       req.ProjectId,
+		ProjectID:       projectID,
 		ObjectKey:       objectKey,
 		CreatorUsername: creator,
 		Extra:           string(extraJSON),
@@ -612,20 +804,13 @@ func (s *Service) doAddProjectAsset(
 		logger.CtxError(
 			ctx,
 			"failed to save project asset: projectId=%s, objectKey=%s, err=%v",
-			req.ProjectId, objectKey, err,
+			projectID,
+			objectKey,
+			err,
 		)
-		return 0, "", "", nil, err
+		return 0, nil, err
 	}
-
-	meta := &projectdto.FileMetaInfo{
-		FileName:    fileExtra.FileName,
-		FileSize:    fileExtra.FileSize,
-		FileType:    fileExtra.FileType,
-		FileExt:     fileExtra.FileExt,
-		ContentType: fileExtra.ContentType,
-	}
-
-	return assetID, path, sasURL, meta, nil
+	return assetID, fileMetaInfoFromExtra(fileExtra), nil
 }
 
 func (s *Service) doGetUserProjectAssetList(
@@ -975,9 +1160,95 @@ func (s *Service) CreateProjectDeliverable(
 		return nil, err
 	}
 
+	notifyCtx := context.WithoutCancel(ctx)
+	safego.Go(notifyCtx, func() {
+		s.notifyDeliverablePublished(notifyCtx, id, req, creator)
+	})
+
 	return appresp.Success(&projectdto.CreateProjectDeliverableResponse{
 		Data: &projectdto.CreateProjectDeliverableData{Id: id},
 	}), nil
+}
+
+func (s *Service) notifyDeliverablePublished(
+	ctx context.Context,
+	deliverableID int64,
+	req *projectdto.CreateProjectDeliverableRequest,
+	creator string,
+) {
+	project, err := s.ProjectRepo.GetProjectByID(ctx, req.ProjectId)
+	if err != nil {
+		logger.CtxError(ctx, "notifyDeliverablePublished: failed to get project %d: %v", req.ProjectId, err)
+		return
+	}
+
+	var agentInstanceName string
+	var agentInstanceIconUri string
+	agentSvc := singleAgentService.Default()
+	if agentSvc != nil && req.AgentInstanceId > 0 {
+		names, nameErr := agentSvc.GetSingleAgentInstanceNames(ctx, []int64{req.AgentInstanceId})
+		if nameErr != nil {
+			logger.CtxError(ctx, "notifyDeliverablePublished: failed to get agent instance name: %v", nameErr)
+		} else {
+			agentInstanceName = names[req.AgentInstanceId]
+		}
+		icons, iconErr := agentSvc.GetSingleAgentInstanceIconURIs(ctx, []int64{req.AgentInstanceId})
+		if iconErr != nil {
+			logger.CtxError(ctx, "notifyDeliverablePublished: failed to get agent instance icon URI: %v", iconErr)
+		} else {
+			agentInstanceIconUri = icons[req.AgentInstanceId]
+		}
+	}
+
+	extraInfo := &notificationdto.NotificationExtraInfo{
+		Deliverable: &notificationdto.NotificationExtraInfoDeliverable{
+			DeliverableId:        deliverableID,
+			FileName:             req.FileName,
+			FileUri:              req.FileUri,
+			AgentInstanceId:      req.AgentInstanceId,
+			AgentInstanceName:    agentInstanceName,
+			AgentInstanceIconUri: agentInstanceIconUri,
+			ProjectName:          project.Name,
+		},
+	}
+
+	notifSvc := notificationService.Default()
+	if notifSvc == nil {
+		logger.CtxError(ctx, "notifyDeliverablePublished: notification service not initialized")
+		return
+	}
+
+	members, err := rbac.ListProjectMemberUsernames(ctx, req.ProjectId)
+	if err != nil {
+		logger.CtxError(ctx, "notifyDeliverablePublished: failed to list project members: %v", err)
+		return
+	}
+
+	for _, username := range members {
+		if username == creator {
+			continue
+		}
+		_, err := notifSvc.Create(ctx, &notificationEntity.Notification{
+			Type:             notificationdto.NotificationType_NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED,
+			SenderUsername:   creator,
+			ReceiverUsername: username,
+			ExtraInfo:        extraInfo,
+			ProjectId:        req.ProjectId,
+		})
+		if err != nil {
+			logger.CtxError(ctx, "notifyDeliverablePublished: failed to notify user %s: %v", username, err)
+		}
+	}
+
+	_, err = notifSvc.Create(ctx, &notificationEntity.Notification{
+		Type:           notificationdto.NotificationType_NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED,
+		SenderUsername: creator,
+		ExtraInfo:      extraInfo,
+		ProjectId:      req.ProjectId,
+	})
+	if err != nil {
+		logger.CtxError(ctx, "notifyDeliverablePublished: failed to create project notification: %v", err)
+	}
 }
 
 // ListProjectDeliverables retrieves paginated deliverables for a project.

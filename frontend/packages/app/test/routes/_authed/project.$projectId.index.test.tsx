@@ -1,28 +1,7 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   type AssetSearch,
   assetSearchSchema,
+  knowledgeTagsQueryOptions,
   projectDetailQueryOptions,
 } from "@sico/shared/features/projects/index.ts";
 import { QueryClient } from "@tanstack/react-query";
@@ -77,7 +56,7 @@ describe("/_authed/project/$projectId/", () => {
     });
   });
 
-  it("loader fire-and-forget prefetches the project detail + first asset page", () => {
+  it("loader fire-and-forget prefetches the project detail, knowledge tags, and first asset page", () => {
     const prefetchQuery = vi.fn().mockResolvedValue(undefined);
     const prefetchInfiniteQuery = vi.fn().mockResolvedValue(undefined);
     const queryClient = { prefetchQuery, prefetchInfiniteQuery };
@@ -88,10 +67,20 @@ describe("/_authed/project/$projectId/", () => {
       params: { projectId: "42" },
     });
 
-    expect(prefetchQuery).toHaveBeenCalledTimes(1);
-    const arg = prefetchQuery.mock.calls[0]![0] as { queryKey: unknown };
-    expect(arg.queryKey).toEqual(
+    // Project detail + the drawer's knowledge-tags prefetch in parallel so the
+    // drawer resolves from cache behind the single skeleton instead of a
+    // post-mount client waterfall. The drawer's Sandbox + Team sections read
+    // `project.sandboxes` / `project.projectMembers` inline from the detail
+    // payload, so no separate devices/members prefetch is needed here.
+    expect(prefetchQuery).toHaveBeenCalledTimes(2);
+    const prefetchedKeys = prefetchQuery.mock.calls.map(
+      (call) => (call[0] as { queryKey: unknown }).queryKey,
+    );
+    expect(prefetchedKeys).toContainEqual(
       projectDetailQueryOptions(42, apiClient as never).queryKey,
+    );
+    expect(prefetchedKeys).toContainEqual(
+      knowledgeTagsQueryOptions(42, apiClient as never).queryKey,
     );
     // The ALL category's first page is prefetched in parallel so the suspense
     // rows resolve from cache instead of fetch-on-render.

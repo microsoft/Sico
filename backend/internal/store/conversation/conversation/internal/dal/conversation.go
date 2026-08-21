@@ -28,7 +28,6 @@ func NewConversationDAO(db *gorm.DB, generator idgen.IDGenerator) *ConversationD
 
 func (dao *ConversationDAO) Create(ctx context.Context, msg *entity.Conversation) (*entity.Conversation, error) {
 	poData := dao.conversationDO2PO(msg)
-
 	err := dao.query.TConversation.WithContext(ctx).Create(poData)
 	if err != nil {
 		return nil, err
@@ -155,6 +154,7 @@ func (dao *ConversationDAO) conversationDO2PO(conversation *entity.Conversation)
 		CreatorUsername: conversation.CreatorUsername,
 		Title:           conversation.Title,
 		Ext:             conversation.Ext,
+		ExtraInfo:       conversation.ExtraInfo,
 		CreatedAt:       time.Now().UnixMilli(),
 		UpdatedAt:       time.Now().UnixMilli(),
 	}
@@ -168,6 +168,7 @@ func (dao *ConversationDAO) conversationPO2DO(c *model.TConversation) *entity.Co
 		Title:           c.Title,
 		CreatorUsername: c.CreatorUsername,
 		Ext:             c.Ext,
+		ExtraInfo:       c.ExtraInfo,
 		CreatedAt:       c.CreatedAt,
 		UpdatedAt:       c.UpdatedAt,
 	}
@@ -182,6 +183,7 @@ func (dao *ConversationDAO) conversationBatchPO2DO(conversations []*model.TConve
 			AgentInstanceID: c.AgentInstanceID,
 			CreatorUsername: c.CreatorUsername,
 			Ext:             c.Ext,
+			ExtraInfo:       c.ExtraInfo,
 			CreatedAt:       c.CreatedAt,
 			UpdatedAt:       c.UpdatedAt,
 		}

@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import asyncio
 
 import pytest
@@ -142,6 +122,21 @@ async def test_tool_call_status_middleware_marks_tool_result_failures_failed():
     await ToolCallStatusMiddleware().process(invocation_context, call_next)
 
     assert plan_editor.statuses[1] == ToolCallStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_tool_call_status_middleware_does_not_mark_clarification_failed():
+    plan_editor = _FakePlanEditor()
+    invocation_context = _build_invocation_context(plan_editor)
+
+    async def call_next():
+        ctx = get_tool_context(invocation_context)
+        await ctx.plan_editor.create_tool_call("Delegate", "Choosing a sheet")
+        invocation_context.result = [Content.from_text('{"outcome":"needs_clarification","error_message":"Choose a sheet"}')]
+
+    await ToolCallStatusMiddleware().process(invocation_context, call_next)
+
+    assert plan_editor.statuses[1] == ToolCallStatus.SUCCESSFUL
 
 
 @pytest.mark.asyncio

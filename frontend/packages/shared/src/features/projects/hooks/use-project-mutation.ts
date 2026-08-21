@@ -1,31 +1,11 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   useMutation,
   type UseMutationResult,
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { projectDetailQueryKey } from "./use-project-query";
+import { PROJECTS_LIST_QUERY_KEY } from "./use-projects-query";
 import { useApiClient } from "../../../services/api-client-context";
 import type { ProjectDetail } from "../schemas/project";
 import { updateProject } from "../services/projects";
@@ -43,23 +23,30 @@ type ProjectMutationVars = {
 
 export function useProjectMutation(
   id: number,
-): UseMutationResult<number, Error, ProjectMutationVars> {
+): UseMutationResult<void, Error, ProjectMutationVars> {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: ProjectMutationVars) => {
-      const cached = queryClient.getQueryData<ProjectDetail>([
-        "projects",
-        "detail",
-        id,
-      ]);
+      const cached = queryClient.getQueryData<ProjectDetail>(
+        projectDetailQueryKey(id),
+      );
       const operatorAdmins =
         vars.operatorAdmins ?? cached?.operatorAdmins ?? [];
       return updateProject(apiClient, { ...vars, id, operatorAdmins });
     },
+    // Refresh BOTH the drawer/detail (name, icon, operators) AND the project
+    // cards in the list — an edit changes a project's list-card fields too, so a
+    // detail-only invalidation would leave the list stale. Scoped to
+    // `["projects","list"]` (not the whole `["projects"]` prefix) so the
+    // project's asset/knowledge caches aren't needlessly refetched.
     onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: ["projects", "detail", id],
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: projectDetailQueryKey(id) }),
+        queryClient.invalidateQueries({
+          queryKey: PROJECTS_LIST_QUERY_KEY,
+          exact: false,
+        }),
+      ]),
   });
 }

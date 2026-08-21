@@ -4,9 +4,6 @@
 # This file has been @generated
 
 __all__ = (
-    "AioSandboxHttpFormField",
-    "AioSandboxHttpRequest",
-    "AioSandboxHttpResponse",
     "ApplySandboxRequest",
     "ApplySandboxResponse",
     "GetInstanceSandboxesRequest",
@@ -38,117 +35,6 @@ betterproto2.check_compiler_version(_COMPILER_VERSION)
 
 
 @dataclass(eq=False, repr=False)
-class AioSandboxHttpFormField(betterproto2.Message):
-    name: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"name"
-    """
-
-    text_value: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"textValue"
-    """
-
-    bytes_value: "bytes" = betterproto2.field(3, betterproto2.TYPE_BYTES)
-    """
-    @gotag: json:"bytesValue"
-    """
-
-    file_name: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"fileName"
-    """
-
-    content_type: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"contentType"
-    """
-
-
-default_message_pool.register_message(
-    "reverse_rpc", "AioSandboxHttpFormField", AioSandboxHttpFormField
-)
-
-
-@dataclass(eq=False, repr=False)
-class AioSandboxHttpRequest(betterproto2.Message):
-    proxy_base_path: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"proxyBasePath"
-    """
-
-    method: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"method"
-    """
-
-    path: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"path"
-    """
-
-    query_json: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"queryJson"
-    """
-
-    json_body_json: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"jsonBodyJson"
-    """
-
-    form_fields: "list[AioSandboxHttpFormField]" = betterproto2.field(
-        6, betterproto2.TYPE_MESSAGE, repeated=True
-    )
-    """
-    @gotag: json:"formFields"
-    """
-
-    agent_instance_id: "str" = betterproto2.field(7, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"agentInstanceId"
-    """
-
-
-default_message_pool.register_message(
-    "reverse_rpc", "AioSandboxHttpRequest", AioSandboxHttpRequest
-)
-
-
-@dataclass(eq=False, repr=False)
-class AioSandboxHttpResponse(betterproto2.Message):
-    status_code: "int" = betterproto2.field(1, betterproto2.TYPE_INT32)
-    """
-    @gotag: json:"statusCode"
-    """
-
-    content_type: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"contentType"
-    """
-
-    body_text: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"bodyText"
-    """
-
-    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
-    """
-    @gotag: json:"code"
-    """
-
-    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
-    """
-    @gotag: json:"msg"
-    """
-
-
-default_message_pool.register_message(
-    "reverse_rpc", "AioSandboxHttpResponse", AioSandboxHttpResponse
-)
-
-
-@dataclass(eq=False, repr=False)
 class ApplySandboxRequest(betterproto2.Message):
     instance_id: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
     """
@@ -157,7 +43,7 @@ class ApplySandboxRequest(betterproto2.Message):
 
     type: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
     """
-    @gotag: json:"type"            // required: the sandbox type to acquire
+    @gotag: json:"type"            // required: the OS capability to acquire
     """
 
 
@@ -203,6 +89,16 @@ class ApplySandboxResponse(betterproto2.Message):
     @gotag: json:"vncUrl"
     """
 
+    os: "str" = betterproto2.field(8, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"os"
+    """
+
+    provider_type: "str" = betterproto2.field(9, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"providerType"
+    """
+
     code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
     """
     @gotag: json:"code"
@@ -228,7 +124,7 @@ class GetInstanceSandboxesRequest(betterproto2.Message):
 
     type: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
     """
-    @gotag: json:"type"            // optional: filter by sandbox type (emulator|aio|wincua)
+    @gotag: json:"type"            // optional: filter by OS selector
     """
 
 
@@ -385,8 +281,8 @@ class ReverseSandboxRpcStub:
         self, message: "ApplySandboxRequest"
     ) -> "ApplySandboxResponse":
         """
-        RpcApplySandbox acquires a sandbox of the given type for the instance.
-        type is required. Returns whether the acquisition succeeded and the sandbox ID.
+        RpcApplySandbox acquires a sandbox supplying the requested OS for the instance.
+        type carries the required OS selector. The response returns the concrete provider type.
         """
 
         return self._channel.unary_unary(
@@ -413,7 +309,7 @@ class ReverseSandboxRpcStub:
     ) -> "GetInstanceSandboxesResponse":
         """
         RpcGetInstanceSandboxes returns all sandboxes assigned to an instance with type and status.
-        If type is empty, returns all types. Used by core service to query sandbox state.
+        If type is empty, returns all sandboxes; otherwise type carries an OS selector.
         """
 
         return self._channel.unary_unary(
@@ -436,28 +332,14 @@ class ReverseSandboxRpcStub:
             ResetSandboxResponse.FromString,
         )(message)
 
-    def rpc_proxy_aio_sandbox_http(
-        self, message: "AioSandboxHttpRequest"
-    ) -> "AioSandboxHttpResponse":
-        """
-        RpcProxyAioSandboxHttp forwards an AIO sandbox HTTP API request through backend.
-        This is intended for core-side tool execution against backend-proxied AIO resources.
-        """
-
-        return self._channel.unary_unary(
-            "/reverse_rpc.ReverseSandboxRPC/RpcProxyAioSandboxHttp",
-            AioSandboxHttpRequest.SerializeToString,
-            AioSandboxHttpResponse.FromString,
-        )(message)
-
 
 class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
     async def rpc_apply_sandbox(
         self, message: "ApplySandboxRequest"
     ) -> "ApplySandboxResponse":
         """
-        RpcApplySandbox acquires a sandbox of the given type for the instance.
-        type is required. Returns whether the acquisition succeeded and the sandbox ID.
+        RpcApplySandbox acquires a sandbox supplying the requested OS for the instance.
+        type carries the required OS selector. The response returns the concrete provider type.
         """
 
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
@@ -476,7 +358,7 @@ class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
     ) -> "GetInstanceSandboxesResponse":
         """
         RpcGetInstanceSandboxes returns all sandboxes assigned to an instance with type and status.
-        If type is empty, returns all types. Used by core service to query sandbox state.
+        If type is empty, returns all sandboxes; otherwise type carries an OS selector.
         """
 
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
@@ -487,16 +369,6 @@ class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
         """
         RpcResetSandbox soft-resets a sandbox (e.g. close apps, go home for emulator).
         The lease and assignment are preserved — only the sandbox environment is reset.
-        """
-
-        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
-
-    async def rpc_proxy_aio_sandbox_http(
-        self, message: "AioSandboxHttpRequest"
-    ) -> "AioSandboxHttpResponse":
-        """
-        RpcProxyAioSandboxHttp forwards an AIO sandbox HTTP API request through backend.
-        This is intended for core-side tool execution against backend-proxied AIO resources.
         """
 
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
@@ -535,15 +407,6 @@ class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
         response = await self.rpc_reset_sandbox(request)
         await stream.send_message(response)
 
-    async def __rpc_rpc_proxy_aio_sandbox_http(
-        self,
-        stream: "grpclib.server.Stream[AioSandboxHttpRequest, AioSandboxHttpResponse]",
-    ) -> None:
-        request = await stream.recv_message()
-        assert request is not None
-        response = await self.rpc_proxy_aio_sandbox_http(request)
-        await stream.send_message(response)
-
     def __mapping__(self) -> "dict[str, grpclib.const.Handler]":
         return {
             "/reverse_rpc.ReverseSandboxRPC/RpcApplySandbox": grpclib.const.Handler(
@@ -569,11 +432,5 @@ class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
                 grpclib.const.Cardinality.UNARY_UNARY,
                 ResetSandboxRequest,
                 ResetSandboxResponse,
-            ),
-            "/reverse_rpc.ReverseSandboxRPC/RpcProxyAioSandboxHttp": grpclib.const.Handler(
-                self.__rpc_rpc_proxy_aio_sandbox_http,
-                grpclib.const.Cardinality.UNARY_UNARY,
-                AioSandboxHttpRequest,
-                AioSandboxHttpResponse,
             ),
         }

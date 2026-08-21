@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // A Digital Worker's conversation list for the sidebar's conversation mode. A
 // SUSPENSE infinite query: `ConversationModeMenu` wraps this in a local
 // <Suspense> (skeleton rows) + <ErrorBoundary fallback={null}>, so the FIRST
@@ -43,11 +21,19 @@ import {
   listConversations,
 } from "../services/conversation";
 
-type ConversationListQueryKey = readonly [
+export type ConversationListQueryKey = readonly [
   "conversations",
   "list",
   { agentInstanceId: number },
 ];
+
+// Single builder for the list key so the query options, the bump helper, and
+// any invalidation can't drift (mirrors history.ts's `historyQueryKey`).
+export function conversationListQueryKey(
+  agentInstanceId: number,
+): ConversationListQueryKey {
+  return ["conversations", "list", { agentInstanceId }] as const;
+}
 
 type Options = UseSuspenseInfiniteQueryOptions<
   ConversationListPage,
@@ -62,9 +48,9 @@ export function conversationListQueryOptions(
   apiClient: AxiosInstance,
 ): Options {
   return {
-    queryKey: ["conversations", "list", { agentInstanceId }] as const,
+    queryKey: conversationListQueryKey(agentInstanceId),
     queryFn: ({ pageParam }): Promise<ConversationListPage> =>
-      listConversations(apiClient, agentInstanceId, pageParam),
+      listConversations(apiClient, agentInstanceId, { page: pageParam }),
     initialPageParam: 1,
     getNextPageParam: (lastPage, _allPages, lastPageParam) =>
       lastPage.hasNext ? lastPageParam + 1 : undefined,

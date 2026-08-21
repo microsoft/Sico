@@ -1,39 +1,26 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package reverse_grpc
 
 import (
 	"google.golang.org/grpc"
 
+	"sico-backend/internal/biz/authstate"
+	"sico-backend/internal/biz/casereplay"
 	"sico-backend/internal/biz/conversation"
 	"sico-backend/internal/biz/knowledge"
+	"sico-backend/internal/biz/notification"
 	"sico-backend/internal/biz/sandbox"
+	sandboxproviders "sico-backend/internal/biz/sandbox/providers"
 	"sico-backend/internal/biz/taskruntime"
+	authStateRGRPC "sico-backend/internal/transport/reverse_grpc/pb/authstate"
+	caseReplayRGRPC "sico-backend/internal/transport/reverse_grpc/pb/casereplay"
 	conversationRgrpc "sico-backend/internal/transport/reverse_grpc/pb/conversation"
 	knowledgeRgrpc "sico-backend/internal/transport/reverse_grpc/pb/knowledge"
+	notificationRgrpc "sico-backend/internal/transport/reverse_grpc/pb/notification"
 	sandboxRgrpc "sico-backend/internal/transport/reverse_grpc/pb/sandbox"
 	taskruntimeRgrpc "sico-backend/internal/transport/reverse_grpc/pb/taskruntime"
 )
 
-func RegisterReverseGRPCServer(grpcServer *grpc.Server) {
+func RegisterReverseGRPCServer(grpcServer *grpc.Server, sandboxIntegration sandboxproviders.Integration) {
 	// knowledge
 	knowledgeSvc := knowledge.Default()
 	knowledgeRgrpc.RegisterReverseKnowledgeRPCServer(grpcServer, knowledgeSvc)
@@ -49,4 +36,13 @@ func RegisterReverseGRPCServer(grpcServer *grpc.Server) {
 	// task runtime
 	taskRuntimeSvc := taskruntime.Default()
 	taskruntimeRgrpc.RegisterReverseTaskRuntimeRPCServer(grpcServer, taskRuntimeSvc)
+
+	// notification
+	notificationSvc := notification.Default()
+	notificationRgrpc.RegisterReverseNotificationRPCServer(grpcServer, notificationSvc)
+
+	authStateRGRPC.RegisterReverseAuthStateRPCServer(grpcServer, authstate.Default())
+	caseReplayRGRPC.RegisterReverseCaseReplayRPCServer(grpcServer, casereplay.Default())
+
+	sandboxIntegration.RegisterReverseGRPCServices(grpcServer)
 }

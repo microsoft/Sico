@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import asyncio
 import json
 import shutil
@@ -25,10 +5,15 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from app.biz.chat import workspace_init
 from app.biz.chat.prompt import compose_system_prompt
-from app.biz.chat.service import ChatService
-from app.biz.task_runtime.skill_loader import SkillLoader
+from app.biz.chat.service import ChatService, _load_prior_rerun_sources
+from app.biz.source.persistence.repository import WorkspaceSourceRepository
+from app.biz.source import SourceAccessContext, SourceError, WorkspaceSourceService
+from app.biz.task_runtime.capabilities.loader import SkillLoader
+from app.biz.task_runtime.workspace.rerun_sources import compact_rerun_source_payload
 from app.pb.conversation.api import ChatRequest
 from app.pb.conversation.chat import ChatContent, ChatContentType
 
@@ -55,8 +40,8 @@ def test_copy_attachments_retains_previous_turn_files_when_requested(tmp_path: P
         sas_url="https://blob.example/cases.xlsx",
     )
 
-    workspace_init._copy_attachments(tmp_path, [attachment], turn_id=7)
-    workspace_init._copy_attachments(tmp_path, None, turn_id=8, retain_previous=True)
+    workspace_init._copy_attachments(tmp_path, [attachment])
+    workspace_init._copy_attachments(tmp_path, None, retain_previous=True)
 
     assert calls == ["https://blob.example/cases.xlsx:60"]
     assert (tmp_path / "attachments" / "cases.xlsx").read_bytes() == b"case data"
@@ -80,10 +65,51 @@ def test_copy_attachments_clears_previous_turn_files_by_default(tmp_path: Path, 
     monkeypatch.setattr(workspace_init.requests, "get", fake_get)
     attachment = SimpleNamespace(name="cases.xlsx", type="text/csv", sas_url="https://blob.example/cases.xlsx")
 
-    workspace_init._copy_attachments(tmp_path, [attachment], turn_id=7)
-    workspace_init._copy_attachments(tmp_path, None, turn_id=8)
+    workspace_init._copy_attachments(tmp_path, [attachment])
+    workspace_init._copy_attachments(tmp_path, None)
 
     assert not (tmp_path / "attachments").exists()
+
+
+def test_copy_attachments_clears_active_refs_when_not_retained(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "attachments" / "cases.csv"
+    source.parent.mkdir()
+    source.write_text("Name\nAlice\n", encoding="utf-8")
+    WorkspaceSourceService().index_path(tmp_path, "attachments/cases.csv", source)
+
+    workspace_init._copy_attachments(tmp_path, None, retain_previous=False)
+
+    assert WorkspaceSourceRepository(tmp_path).find("attachments/cases.csv") is None
+
+
+def test_copy_attachments_clears_active_refs_when_attachment_directory_is_already_missing(tmp_path: Path) -> None:
+    source = tmp_path / "attachments" / "cases.csv"
+    source.parent.mkdir()
+    source.write_text("Name\nAlice\n", encoding="utf-8")
+    WorkspaceSourceService().index_path(tmp_path, "attachments/cases.csv", source)
+    shutil.rmtree(source.parent)
+
+    workspace_init._copy_attachments(tmp_path, None, retain_previous=False)
+
+    assert WorkspaceSourceRepository(tmp_path).find("attachments/cases.csv") is None
+
+
+def test_copy_attachments_retains_existing_text_source_ref(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "attachments" / "notes.pdf"
+    source.parent.mkdir()
+    source.write_bytes(b"pdf")
+    (source.parent / "index.json").write_text(
+        json.dumps([{"name": "notes.pdf", "path": "attachments/notes.pdf"}]),
+        encoding="utf-8",
+    )
+    access = SourceAccessContext(username="alice", agent_instance_id=1)
+    service = WorkspaceSourceService()
+    monkeypatch.setattr("app.biz.source.service.CHAT_FS.get_workspace_path", lambda *_args: tmp_path)
+    service.index_text(access, "attachments/notes.pdf", source, "QA-1 details", "Summary")
+
+    workspace_init._copy_attachments(tmp_path, None, retain_previous=True)
+
+    assert WorkspaceSourceRepository(tmp_path).find("attachments/notes.pdf") is not None
 
 
 def test_copy_attachments_replaces_previous_files_for_new_upload(tmp_path: Path, monkeypatch) -> None:
@@ -94,14 +120,14 @@ def test_copy_attachments_replaces_previous_files_for_new_upload(tmp_path: Path,
     first = SimpleNamespace(name="old.xlsx", type="text/csv", sas_url="https://blob.example/old.xlsx")
     second = SimpleNamespace(name="new.xlsx", type="text/csv", sas_url="https://blob.example/new.xlsx")
 
-    workspace_init._copy_attachments(tmp_path, [first], turn_id=7)
-    workspace_init._copy_attachments(tmp_path, [second], turn_id=8)
+    workspace_init._copy_attachments(tmp_path, [first])
+    workspace_init._copy_attachments(tmp_path, [second])
 
     assert not (tmp_path / "attachments" / "old.xlsx").exists()
     assert (tmp_path / "attachments" / "new.xlsx").exists()
 
 
-def test_copy_attachments_archives_workbook_case_sources(tmp_path: Path, monkeypatch) -> None:
+def test_copy_attachments_indexes_canonical_source_snapshot(tmp_path: Path, monkeypatch) -> None:
     from openpyxl import Workbook
 
     workbook = Workbook()
@@ -125,33 +151,100 @@ def test_copy_attachments_archives_workbook_case_sources(tmp_path: Path, monkeyp
         sas_url="https://blob.example/cases.xlsx",
     )
 
-    workspace_init._copy_attachments(workspace_root, [attachment], turn_id=7, agent_instance_id=1, username="alice")
+    workspace_init._copy_attachments(workspace_root, [attachment])
 
-    parsed_dir = workspace_root / "case_sources" / "parsed_documents"
-    manifests = list(parsed_dir.glob("cases.xlsx-*.json"))
-    assert len(manifests) == 1
-    manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
-    assert manifest["source"] == "workbook_attachment"
-    assert manifest["workbook_manifest"]["runnable_data_rows"] == 2
-    source = manifest["workbook_case_sources"][0]
-    assert source["sheet_name"] == "rewritten_userdata"
-    assert source["case_count"] == 2
-    jsonl_path = parsed_dir / source["case_source_path"]
-    rows = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines()]
-    assert [row["case_id"] for row in rows] == ["45894791", "31229175"]
+    repository = WorkspaceSourceRepository(workspace_root)
+    manifest = repository.find("attachments/cases.xlsx")
+    assert manifest is not None
+    assert manifest.format == "xlsx"
+    assert manifest.sheets[0].name == "rewritten_userdata"
+    assert manifest.sheets[0].data_rows == 2
+    document = repository.load_document(manifest, ())
+    assert [row.values["ID"] for row in document.sheets[0].rows] == ["45894791", "31229175"]
+
+
+def test_index_tabular_tree_indexes_knowledge_sources(tmp_path: Path) -> None:
+    from openpyxl import Workbook
+
+    workspace = tmp_path / "workspace"
+    source = workspace / "knowledge" / "1" / "original" / "cases.xlsx"
+    source.parent.mkdir(parents=True)
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Cases"
+    sheet.append(["Case ID", "Steps"])
+    sheet.append(["QA-1", "Open app"])
+    workbook.save(source)
+
+    workspace_init._index_tabular_tree(workspace, workspace / "knowledge")
+
+    manifest = WorkspaceSourceRepository(workspace).find("knowledge/1/original/cases.xlsx")
+    assert manifest is not None
+    assert manifest.sheets[0].name == "Cases"
+    assert manifest.case_ids == ("QA-1",)
+
+
+def test_next_knowledge_staging_removes_revoked_source_ref(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    first = workspace / "knowledge" / "1" / "first.csv"
+    second = workspace / "knowledge" / "2" / "second.csv"
+    for index, path in enumerate((first, second), start=1):
+        path.parent.mkdir(parents=True)
+        path.write_text(f"Case ID\nQA-{index}\n", encoding="utf-8")
+    manifests = workspace_init._index_tabular_tree(workspace, workspace / "knowledge")
+    repository = WorkspaceSourceRepository(workspace)
+    repository.replace_refs("knowledge/", manifests)
+    shutil.rmtree(first.parent)
+    remaining = workspace_init._index_tabular_tree(workspace, workspace / "knowledge")
+    repository.replace_refs("knowledge/", remaining)
+    monkeypatch.setattr("app.biz.source.service.CHAT_FS.get_workspace_path", lambda *_args: workspace)
+
+    assert repository.find("knowledge/1/first.csv") is None
+    assert repository.find("knowledge/2/second.csv") is not None
+    with pytest.raises(SourceError, match="not found"):
+        WorkspaceSourceService().select(
+            SourceAccessContext(username="alice", agent_instance_id=1),
+            "knowledge/1/first.csv",
+        )
+
+
+def test_copy_attachments_keeps_download_when_source_indexing_fails(tmp_path: Path, monkeypatch) -> None:
+    def fake_get(_url: str, timeout: int) -> FakeResponse:
+        return FakeResponse(b"Name\nAlice\n")
+
+    def fail_index(*_args, **_kwargs):
+        raise RuntimeError("index unavailable")
+
+    monkeypatch.setattr(workspace_init.requests, "get", fake_get)
+    monkeypatch.setattr(workspace_init.WorkspaceSourceService, "index_path", fail_index)
+    attachment = SimpleNamespace(name="cases.csv", type="text/csv", sas_url="https://blob.example/cases.csv")
+
+    workspace_init._copy_attachments(tmp_path, [attachment])
+
+    assert (tmp_path / "attachments" / "cases.csv").read_bytes() == b"Name\nAlice\n"
+    index = json.loads((tmp_path / "attachments" / "index.json").read_text(encoding="utf-8"))
+    assert [item["name"] for item in index] == ["cases.csv"]
 
 
 def test_task_workspace_profile_clears_heavy_snapshots(tmp_path: Path, monkeypatch) -> None:
     called: list[str] = []
     for name in ("knowledge", "history", "playbooks"):
         (tmp_path / name).mkdir()
+    knowledge_source = tmp_path / "knowledge" / "1" / "rows.csv"
+    knowledge_source.parent.mkdir(parents=True)
+    knowledge_source.write_text("Name\nAlice\n", encoding="utf-8")
+    WorkspaceSourceService().index_path(tmp_path, "knowledge/1/rows.csv", knowledge_source)
 
     monkeypatch.setattr(workspace_init.CHAT_FS, "migrate_legacy_session", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init.CHAT_FS, "get_workspace_path", lambda *_args, **_kwargs: tmp_path)
     monkeypatch.setattr(workspace_init, "_copy_skills", lambda *_args, **_kwargs: called.append("skills"))
     monkeypatch.setattr(workspace_init, "_copy_attachments", lambda *_args, **_kwargs: called.append("attachments"))
     monkeypatch.setattr(workspace_init, "_copy_knowledge", lambda *_args, **_kwargs: called.append("knowledge"))
-    monkeypatch.setattr(workspace_init, "_copy_history", lambda *_args, **_kwargs: called.append("history"))
+    monkeypatch.setattr(
+        workspace_init,
+        "_copy_rerun_sources_history",
+        lambda *_args, **_kwargs: called.append("history"),
+    )
     monkeypatch.setattr(workspace_init, "_copy_playbooks", lambda *_args, **_kwargs: called.append("playbooks"))
 
     workspace_init._init_workspace_sync(
@@ -172,9 +265,10 @@ def test_task_workspace_profile_clears_heavy_snapshots(tmp_path: Path, monkeypat
     assert not (tmp_path / "knowledge").exists()
     assert not (tmp_path / "history").exists()
     assert not (tmp_path / "playbooks").exists()
+    assert WorkspaceSourceRepository(tmp_path).find("knowledge/1/rows.csv") is None
 
 
-def test_workspace_init_removes_history_but_retains_results_and_case_sources(tmp_path: Path, monkeypatch) -> None:
+def test_workspace_init_copies_only_rerun_history_and_retains_runtime_outputs(tmp_path: Path, monkeypatch) -> None:
     called: list[str] = []
     (tmp_path / "history").mkdir()
     (tmp_path / "results").mkdir()
@@ -185,7 +279,11 @@ def test_workspace_init_removes_history_but_retains_results_and_case_sources(tmp
     monkeypatch.setattr(workspace_init, "_copy_skills", lambda *_args, **_kwargs: called.append("skills"))
     monkeypatch.setattr(workspace_init, "_copy_attachments", lambda *_args, **_kwargs: called.append("attachments"))
     monkeypatch.setattr(workspace_init, "_copy_knowledge", lambda *_args, **_kwargs: called.append("knowledge"))
-    monkeypatch.setattr(workspace_init, "_copy_history", lambda *_args, **_kwargs: called.append("history"))
+    monkeypatch.setattr(
+        workspace_init,
+        "_copy_rerun_sources_history",
+        lambda *_args, **_kwargs: called.append("history"),
+    )
     monkeypatch.setattr(workspace_init, "_copy_playbooks", lambda *_args, **_kwargs: called.append("playbooks"))
 
     workspace_init._init_workspace_sync(
@@ -198,7 +296,7 @@ def test_workspace_init_removes_history_but_retains_results_and_case_sources(tmp
         options=workspace_init.WorkspaceInitOptions(include_history=True),
     )
 
-    assert called == ["skills", "knowledge", "playbooks", "attachments"]
+    assert called == ["skills", "knowledge", "history", "playbooks", "attachments"]
     assert not (tmp_path / "history").exists()
     # ``results/`` and ``case_sources/`` are content-addressed and persist
     # across turns so prior delegate runs and parsed workbooks remain visible.
@@ -206,7 +304,7 @@ def test_workspace_init_removes_history_but_retains_results_and_case_sources(tmp
     assert (tmp_path / "case_sources").exists()
 
 
-def test_copy_history_includes_rerun_sources(tmp_path: Path, monkeypatch) -> None:
+def test_copy_rerun_history_includes_sources(tmp_path: Path, monkeypatch) -> None:
     user_root = tmp_path / "chat" / "agent" / "alice"
     turn_7 = user_root / "turn" / "7"
     source_dir = turn_7 / "rerun_sources"
@@ -234,14 +332,20 @@ def test_copy_history_includes_rerun_sources(tmp_path: Path, monkeypatch) -> Non
         lambda _agent_instance_id, _username, tid, _conversation_id: user_root / "turn" / str(tid),
     )
 
-    workspace_init._copy_history(workspace, agent_instance_id=1, username="alice", current_turn_id=8, conversation_id=22)
+    workspace_init._copy_rerun_sources_history(
+        workspace,
+        agent_instance_id=1,
+        username="alice",
+        current_turn_id=8,
+        conversation_id=22,
+    )
 
     copied = workspace / "history" / "turn-7" / "rerun_sources" / "batch-1.json"
     assert copied.exists()
     assert json.loads(copied.read_text(encoding="utf-8"))["tasks"][0]["title"] == "Case 1"
 
 
-def test_copy_history_scans_older_rerun_sources(tmp_path: Path, monkeypatch) -> None:
+def test_copy_rerun_history_scans_older_sources(tmp_path: Path, monkeypatch) -> None:
     user_root = tmp_path / "chat" / "agent" / "alice"
     source_dir = user_root / "turn" / "1" / "rerun_sources"
     source_dir.mkdir(parents=True)
@@ -267,7 +371,7 @@ def test_copy_history_scans_older_rerun_sources(tmp_path: Path, monkeypatch) -> 
         lambda _agent_instance_id, _username, tid, _conversation_id: user_root / "turn" / str(tid),
     )
 
-    workspace_init._copy_history(
+    workspace_init._copy_rerun_sources_history(
         tmp_path / "workspace",
         agent_instance_id=1,
         username="alice",
@@ -277,6 +381,113 @@ def test_copy_history_scans_older_rerun_sources(tmp_path: Path, monkeypatch) -> 
 
     copied = tmp_path / "workspace" / "history" / "turn-1" / "rerun_sources" / "batch-old.json"
     assert copied.exists()
+
+
+def test_copy_rerun_history_is_bounded_to_latest_source_turns(tmp_path: Path, monkeypatch) -> None:
+    user_root = tmp_path / "chat" / "agent" / "alice"
+    for turn_id in range(1, 6):
+        source_dir = user_root / "turn" / str(turn_id) / "rerun_sources"
+        source_dir.mkdir(parents=True)
+        (source_dir / f"batch-{turn_id}.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(workspace_init.CHAT_FS, "list_turn_ids", lambda *_args: list(range(1, 7)))
+    monkeypatch.setattr(
+        workspace_init.CHAT_FS,
+        "get_turn_path",
+        lambda _agent_instance_id, _username, tid, _conversation_id: user_root / "turn" / str(tid),
+    )
+
+    copied = workspace_init._copy_rerun_sources_history(
+        tmp_path / "workspace",
+        agent_instance_id=1,
+        username="alice",
+        current_turn_id=6,
+        conversation_id=22,
+    )
+
+    history_turns = sorted(path.name for path in (tmp_path / "workspace" / "history").iterdir())
+    assert copied == 3
+    assert history_turns == ["turn-3", "turn-4", "turn-5"]
+
+
+def test_copy_rerun_history_bounds_total_source_files(tmp_path: Path, monkeypatch) -> None:
+    user_root = tmp_path / "chat" / "agent" / "alice"
+    source_dir = user_root / "turn" / "5" / "rerun_sources"
+    source_dir.mkdir(parents=True)
+    for index in range(3):
+        (source_dir / f"batch-{index}.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(workspace_init, "RERUN_HISTORY_MAX_SOURCES", 2)
+    monkeypatch.setattr(workspace_init.CHAT_FS, "list_turn_ids", lambda *_args: [5, 6])
+    monkeypatch.setattr(
+        workspace_init.CHAT_FS,
+        "get_turn_path",
+        lambda _agent_instance_id, _username, tid, _conversation_id: user_root / "turn" / str(tid),
+    )
+
+    workspace_init._copy_rerun_sources_history(
+        tmp_path / "workspace",
+        agent_instance_id=1,
+        username="alice",
+        current_turn_id=6,
+        conversation_id=22,
+    )
+
+    copied = list((tmp_path / "workspace" / "history" / "turn-5" / "rerun_sources").glob("*.json"))
+    assert len(copied) == 2
+
+
+def test_prior_rerun_loader_skips_oversized_file_before_json_parse(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    source_dir = workspace / "history" / "turn-5" / "rerun_sources"
+    source_dir.mkdir(parents=True)
+    (source_dir / "batch-large.json").write_text("not-json-but-too-large", encoding="utf-8")
+    monkeypatch.setattr("app.biz.chat.service.RERUN_SOURCE_MAX_BYTES", 4)
+
+    assert _load_prior_rerun_sources(workspace) == []
+
+
+def test_prior_rerun_loader_bounds_source_count(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    source_dir = workspace / "history" / "turn-5" / "rerun_sources"
+    source_dir.mkdir(parents=True)
+    for index in range(3):
+        (source_dir / f"batch-{index}.json").write_text(
+            json.dumps(
+                {
+                    "turn_id": 5,
+                    "batch_id": f"batch-{index}",
+                    "tasks": [{"task_id": f"task-{index}", "title": f"Task {index}", "kind": "tool", "tool_name": "echo"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr("app.biz.chat.service.RERUN_HISTORY_MAX_SOURCES", 2)
+
+    assert len(_load_prior_rerun_sources(workspace)) == 2
+
+
+def test_prior_rerun_loader_charges_invalid_files_to_source_limit(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    source_dir = workspace / "history" / "turn-5" / "rerun_sources"
+    source_dir.mkdir(parents=True)
+    (source_dir / "source-0.json").write_text(
+        json.dumps(
+            {
+                "turn_id": 5,
+                "batch_id": "valid",
+                "tasks": [{"task_id": "task-0", "title": "Task 0", "kind": "tool", "tool_name": "echo"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    for index in (1, 2):
+        (source_dir / f"source-{index}.json").write_text("invalid-json", encoding="utf-8")
+    monkeypatch.setattr("app.biz.chat.service.RERUN_HISTORY_MAX_SOURCES", 2)
+    monkeypatch.setattr(
+        "app.biz.chat.service._rerun_source_mtime",
+        lambda path: int(path.stem.rsplit("-", 1)[-1]),
+    )
+
+    assert _load_prior_rerun_sources(workspace) == []
 
 
 def test_repeat_user_message_injects_prior_rerun_source_without_attachments(tmp_path: Path, monkeypatch) -> None:
@@ -314,7 +525,8 @@ def test_repeat_user_message_injects_prior_rerun_source_without_attachments(tmp_
 
     assert "Prior delegated task sources" in section
     assert "history/turn-7/rerun_sources/batch-1.json" in section
-    assert "rerun_input_json" in section
+    assert "rerun_request_json" in section
+    assert '"sources"' in section
     assert "STCAQA-001" in section
 
     message = asyncio.run(
@@ -326,9 +538,8 @@ def test_repeat_user_message_injects_prior_rerun_source_without_attachments(tmp_
             ),
         )
     )
-    assert "Prior delegated task sources" not in message.text
-    assert "Launch Copilot" not in message.text
-    assert "Workspace attachments available:" not in message.text
+    assert "Prior delegated task sources" in message.text
+    assert "Launch Copilot" in message.text
 
 
 def test_case_source_user_message_injects_bounded_source_context(tmp_path: Path, monkeypatch) -> None:
@@ -366,10 +577,78 @@ def test_case_source_user_message_injects_bounded_source_context(tmp_path: Path,
 
     message = asyncio.run(service._build_user_message(request))
 
-    assert "Case source resolver context" not in message.text
-    assert "history/turn-7/case_sources/parsed_documents/cases.md" not in message.text
-    assert "Project Knowledge" not in message.text
-    assert "knowledge/1/original/cases.xlsx" not in message.text
+    assert "Case source resolver context" in message.text
+    assert "history/turn-7/case_sources/parsed_documents/cases.md" in message.text
+    assert "Project Knowledge" in message.text
+    assert "knowledge/1/original/cases.xlsx" in message.text
+
+
+def test_prior_rerun_source_with_inactive_logical_source_is_hidden(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    source_dir = workspace / "history" / "turn-7" / "rerun_sources"
+    source_dir.mkdir(parents=True)
+    (source_dir / "batch-1.json").write_text(
+        json.dumps(
+            {
+                "turn_id": 7,
+                "batch_id": "batch-1",
+                "tasks": [
+                    {
+                        "task_id": "case-1",
+                        "title": "Case 1",
+                        "args": {"input_file": "sico-source://objects/" + "d" * 64 + "/source.xlsx"},
+                        "metadata": {"tabular": {"source_ref": "knowledge/1/cases.xlsx"}},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert _load_prior_rerun_sources(workspace) == []
+
+
+@pytest.mark.parametrize("source_ref", ["attachments/cases.csv", "imports/cases.csv"])
+def test_prior_snapshot_rerun_requires_matching_active_content(tmp_path: Path, source_ref: str) -> None:
+    workspace = tmp_path / "workspace"
+    source_path = workspace / source_ref
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text("Case ID\nQA-1\n", encoding="utf-8")
+    service = WorkspaceSourceService()
+    original = service.index_path(workspace, source_ref, source_path)
+    repository = WorkspaceSourceRepository(workspace)
+    object_ref = repository.object_ref(original)
+    payload = compact_rerun_source_payload(
+        {
+            "turn_id": 7,
+            "batch_id": "batch-1",
+            "tasks": [
+                {
+                    "task_id": "case-1",
+                    "title": "Case 1",
+                    "dispatch": {"type": "capability", "capability_id": "skill:cases.run"},
+                    "args": {"input_file": object_ref},
+                    "metadata": {
+                        "tabular": {
+                            "source_ref": source_ref,
+                            "source_object_ref": object_ref,
+                        }
+                    },
+                }
+            ],
+        }
+    )
+    rerun_dir = workspace / "history" / "turn-7" / "rerun_sources"
+    rerun_dir.mkdir(parents=True)
+    (rerun_dir / "batch-1.json").write_text(json.dumps(payload), encoding="utf-8")
+    source_path.unlink()
+
+    assert len(_load_prior_rerun_sources(workspace)) == 1
+
+    source_path.write_text("Case ID\nQA-2\n", encoding="utf-8")
+    service.index_path(workspace, source_ref, source_path)
+
+    assert _load_prior_rerun_sources(workspace) == []
 
 
 def test_capability_cards_read_actions_from_skill_storage(tmp_path: Path, monkeypatch) -> None:

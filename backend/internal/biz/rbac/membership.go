@@ -1,28 +1,10 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package rbac
 
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 
 	"sico-backend/internal/errcode"
 	"sico-backend/internal/shared/apperr"
@@ -30,6 +12,130 @@ import (
 	"sico-backend/internal/transport/http/dto/rbac/user_role"
 	"sico-backend/pkg/logger"
 )
+
+// AssignOrganizationRole assigns an organization-scoped role to a user identified by username.
+func AssignOrganizationRole(ctx context.Context, username, roleCode string, organizationID int64) error {
+	impl := defaultImplService()
+	if impl == nil {
+		return nil
+	}
+
+	userID, err := resolveUserID(ctx, username)
+	if err != nil {
+		return err
+	}
+
+	return impl.AssignUserRoleInternal(ctx, &user_role.AssignUserRoleRequest{
+		UserId:    userID,
+		RoleCode:  roleCode,
+		ScopeType: ScopeOrg,
+		ScopeId:   strconv.FormatInt(organizationID, 10),
+	})
+}
+
+// RemoveAllOrganizationRoles removes every role assignment in an organization scope.
+func RemoveAllOrganizationRoles(ctx context.Context, organizationID int64) error {
+	impl := defaultImplService()
+	if impl == nil {
+		return nil
+	}
+
+	scopeID := strconv.FormatInt(organizationID, 10)
+	list, _, err := impl.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		ScopeType: ScopeOrg,
+		ScopeID:   scopeID,
+	})
+	if err != nil {
+		return err
+	}
+
+	seen := make(map[string]struct{}, len(list))
+	for _, userRole := range list {
+		key := fmt.Sprintf("%d:%s", userRole.UserID, userRole.RoleCode)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if err := impl.RemoveUserRoleInternal(ctx, &user_role.RemoveUserRoleRequest{
+			UserId:    userRole.UserID,
+			RoleCode:  userRole.RoleCode,
+			ScopeType: ScopeOrg,
+			ScopeId:   scopeID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetUserOrganizationListByUsername returns all organization-scoped roles grouped by organization.
+// roleCodeFilter limits organizations to those containing the role while preserving every role in each result.
+func GetUserOrganizationListByUsername(
+	ctx context.Context, username, roleCodeFilter string,
+) ([]OrganizationMembership, error) {
+	svc := defaultImplService()
+	if svc == nil {
+		return nil, nil
+	}
+
+	userID, err := resolveUserID(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+
+	list, _, err := svc.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		UserID:    userID,
+		ScopeType: ScopeOrg,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return groupOrganizationMemberships(list, roleCodeFilter), nil
+}
+
+func groupOrganizationMemberships(
+	list []*rolerepo.UserRoleModel, roleCodeFilter string,
+) []OrganizationMembership {
+	rolesByOrganization := make(map[int64]map[string]struct{})
+	for _, userRole := range list {
+		organizationID, err := strconv.ParseInt(userRole.ScopeID, 10, 64)
+		if err != nil || organizationID <= 0 {
+			continue
+		}
+		if rolesByOrganization[organizationID] == nil {
+			rolesByOrganization[organizationID] = make(map[string]struct{})
+		}
+		rolesByOrganization[organizationID][userRole.RoleCode] = struct{}{}
+	}
+
+	memberships := make([]OrganizationMembership, 0, len(rolesByOrganization))
+	for organizationID, roleSet := range rolesByOrganization {
+		if roleCodeFilter != "" {
+			if _, ok := roleSet[roleCodeFilter]; !ok {
+				continue
+			}
+		}
+		roleCodes := make([]string, 0, len(roleSet))
+		for roleCode := range roleSet {
+			roleCodes = append(roleCodes, roleCode)
+		}
+		sort.Strings(roleCodes)
+		memberships = append(memberships, OrganizationMembership{
+			OrganizationID: organizationID,
+			RoleCodes:      roleCodes,
+		})
+	}
+	sort.Slice(memberships, func(i, j int) bool {
+		return memberships[i].OrganizationID > memberships[j].OrganizationID
+	})
+	return memberships
+}
+
+// OrganizationMembership represents all roles a user has in an organization.
+type OrganizationMembership struct {
+	OrganizationID int64
+	RoleCodes      []string
+}
 
 // AssignProjectRole assigns a project-scoped role to a user identified by username.
 // It creates both the t_user_role record and the Casbin grouping policy.
@@ -49,7 +155,7 @@ func AssignProjectRole(ctx context.Context, username, roleCode string, projectID
 		UserId:    userID,
 		RoleCode:  roleCode,
 		ScopeType: ScopeProject,
-		ScopeId:   projectID,
+		ScopeId:   strconv.FormatInt(projectID, 10),
 	})
 }
 
@@ -70,7 +176,7 @@ func RemoveProjectRole(ctx context.Context, username, roleCode string, projectID
 		UserId:    userID,
 		RoleCode:  roleCode,
 		ScopeType: ScopeProject,
-		ScopeId:   projectID,
+		ScopeId:   strconv.FormatInt(projectID, 10),
 	})
 }
 
@@ -87,7 +193,7 @@ func RemoveAllProjectRoles(ctx context.Context, projectID int64) error {
 		list, _, err := impl.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 			RoleCode:  roleCode,
 			ScopeType: ScopeProject,
-			ScopeID:   projectID,
+			ScopeID:   strconv.FormatInt(projectID, 10),
 		})
 		if err != nil {
 			return err
@@ -97,7 +203,7 @@ func RemoveAllProjectRoles(ctx context.Context, projectID int64) error {
 				UserId:    ur.UserID,
 				RoleCode:  roleCode,
 				ScopeType: ScopeProject,
-				ScopeId:   projectID,
+				ScopeId:   strconv.FormatInt(projectID, 10),
 			})
 			if err != nil {
 				logger.CtxError(ctx,
@@ -134,7 +240,7 @@ func ListProjectMemberUsernames(ctx context.Context, projectID int64) ([]string,
 		list, _, err := svc.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 			RoleCode:  roleCode,
 			ScopeType: ScopeProject,
-			ScopeID:   projectID,
+			ScopeID:   strconv.FormatInt(projectID, 10),
 		})
 		if err != nil {
 			return nil, err
@@ -205,6 +311,11 @@ func resolveUsername(ctx context.Context, userID int64) (string, error) {
 	return user.Username, nil
 }
 
+// ResolveUsername returns the username for a given user ID.
+func ResolveUsername(ctx context.Context, userID int64) (string, error) {
+	return resolveUsername(ctx, userID)
+}
+
 func listProjectRoleUsernames(ctx context.Context, roleCode string, projectIDs []int64) (map[int64][]string, error) {
 	svc := defaultImplService()
 	if svc == nil {
@@ -216,7 +327,7 @@ func listProjectRoleUsernames(ctx context.Context, roleCode string, projectIDs [
 		list, _, err := svc.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 			RoleCode:  roleCode,
 			ScopeType: ScopeProject,
-			ScopeID:   pid,
+			ScopeID:   strconv.FormatInt(pid, 10),
 		})
 		if err != nil {
 			return nil, err
@@ -258,7 +369,11 @@ func getProjectIDsByUsername(ctx context.Context, username, roleCode string) ([]
 
 	ids := make([]int64, 0, len(list))
 	for _, ur := range list {
-		ids = append(ids, ur.ScopeID)
+		pid, err := strconv.ParseInt(ur.ScopeID, 10, 64)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, pid)
 	}
 	return ids, nil
 }
@@ -280,8 +395,12 @@ func getUserProjectMemberships(ctx context.Context, userID int64, roleCodeFilter
 
 	memberships := make([]ProjectMembership, 0, len(list))
 	for _, ur := range list {
+		pid, err := strconv.ParseInt(ur.ScopeID, 10, 64)
+		if err != nil {
+			continue
+		}
 		memberships = append(memberships, ProjectMembership{
-			ProjectID: ur.ScopeID,
+			ProjectID: pid,
 			RoleCode:  ur.RoleCode,
 		})
 	}

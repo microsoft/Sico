@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package enum
 
 import "strings"
@@ -30,7 +10,11 @@ import "strings"
 type SandboxOS string
 
 const (
+	SandboxOSWindows SandboxOS = "windows"
+	SandboxOSMacOS   SandboxOS = "macos"
+	SandboxOSIOS     SandboxOS = "ios"
 	SandboxOSAndroid SandboxOS = "android"
+	SandboxOSLinux   SandboxOS = "linux"
 )
 
 func (o SandboxOS) String() string { return string(o) }
@@ -38,13 +22,19 @@ func (o SandboxOS) String() string { return string(o) }
 // AllSandboxOSes returns the canonical OS selectors a task can request.
 func AllSandboxOSes() []string {
 	return []string{
+		SandboxOSWindows.String(),
+		SandboxOSMacOS.String(),
+		SandboxOSIOS.String(),
 		SandboxOSAndroid.String(),
+		SandboxOSLinux.String(),
 	}
 }
 
 // typeOS maps a SandboxType to the single OS it always provides.
 var typeOS = map[string]SandboxOS{
 	SandboxTypeEmulator.String(): SandboxOSAndroid,
+	SandboxTypeWinCUA.String():   SandboxOSWindows,
+	SandboxTypeAio.String():      SandboxOSLinux,
 }
 
 // MetadataOSKey is the resource-metadata key carrying a device's OS.
@@ -56,8 +46,16 @@ const MetadataOSKey = "os"
 // rather than mis-routing a task.
 func ParseSandboxOS(value string) (SandboxOS, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "windows", "win", "win32", "win64":
+		return SandboxOSWindows, true
+	case "macos", "mac", "osx", "darwin":
+		return SandboxOSMacOS, true
+	case "ios", "iphoneos", "ipados":
+		return SandboxOSIOS, true
 	case "android":
 		return SandboxOSAndroid, true
+	case "linux":
+		return SandboxOSLinux, true
 	default:
 		return "", false
 	}
@@ -69,19 +67,35 @@ func ParseSandboxOS(value string) (SandboxOS, bool) {
 // so the resource is simply not matched rather than matched incorrectly.
 func ResolveResourceOS(sandboxType string, metadata map[string]string) (SandboxOS, bool) {
 	sandboxType = strings.TrimSpace(sandboxType)
+	if sandboxType == SandboxTypePhysical.String() {
+		if metadata == nil {
+			return "", false
+		}
+		return ParseSandboxOS(metadata[MetadataOSKey])
+	}
+
 	os, ok := typeOS[sandboxType]
 	return os, ok
 }
 
 // EligibleTypesForOS returns the SandboxTypes that can supply the given OS.
 func EligibleTypesForOS(os SandboxOS) []string {
-	var result []string
+	var fixed []string
+	physicalEligible := false
 	for _, t := range AllSandboxTypes() {
+		if t == SandboxTypePhysical.String() {
+			physicalEligible = true
+			continue
+		}
 		if typeOS[t] == os {
-			result = append(result, t)
+			fixed = append(fixed, t)
 		}
 	}
-	return result
+
+	if physicalEligible {
+		return append(fixed, SandboxTypePhysical.String())
+	}
+	return fixed
 }
 
 // IsOSSelector reports whether selector names an OS capability (e.g. "android").

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   Button,
   DropdownMenu,
@@ -45,6 +23,7 @@ import { createElement } from "react";
 import type * as React from "react";
 
 import { CreatorCell } from "./creator-cell";
+import { DELETE_DENIED_TOOLTIP, GatedMenuItem } from "./gated-menu-item";
 import { CREATOR_MAX, PIN_LEFT, PIN_RIGHT } from "./pinned-columns";
 import { FAILED_TEXT, FAILED_TIP, ShimmerName } from "./poll-indicator";
 import { iconForFilename } from "../../../utils/file-icon";
@@ -75,6 +54,10 @@ export type AssetRowProps = {
    * consumer wires the items' dialogs / download.
    */
   onAction?: (kind: AssetActionKind) => void;
+  /** Whether the viewer may delete THIS asset (asset.manage, or
+   * asset.manage.own when they created it). The Delete item stays visible but
+   * is gated (greyed + reason tooltip) when false. */
+  canDelete?: boolean;
 };
 
 // Display name (§8 C): `name`, falling back to the link URL — then to an
@@ -281,7 +264,21 @@ function renderActionsMenu(items: React.ReactNode): React.JSX.Element {
 function renderActionsCell(
   row: AssetRowData,
   onAction?: (kind: AssetActionKind) => void,
+  canDelete = true,
 ): React.JSX.Element {
+  // Delete always shows; it's gated (greyed + reason tooltip) when the viewer
+  // isn't an admin and didn't create the asset — discoverable, not hidden.
+  const deleteItem = (
+    <GatedMenuItem
+      allowed={canDelete}
+      variant="destructive"
+      deniedTooltip={DELETE_DENIED_TOOLTIP}
+      onSelect={() => onAction?.("delete")}
+    >
+      <Trash2 />
+      Delete
+    </GatedMenuItem>
+  );
   let menu: React.JSX.Element;
   if (row.type === "knowledge") {
     const isLink = row.documentType === DocumentTypeSchema.enum.LINK;
@@ -303,10 +300,7 @@ function renderActionsCell(
             Download
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onClick={() => onAction?.("delete")}>
-          <Trash2 />
-          Delete
-        </DropdownMenuItem>
+        {deleteItem}
       </>,
     );
   } else if (row.type === "deliverable") {
@@ -323,20 +317,13 @@ function renderActionsCell(
           <Download />
           Download
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction?.("delete")}>
-          <Trash2 />
-          Delete
-        </DropdownMenuItem>
+        {deleteItem}
       </>,
     );
   } else {
-    // Experience — the playbook body is read-only, but the row can be deleted.
-    menu = renderActionsMenu(
-      <DropdownMenuItem onClick={() => onAction?.("delete")}>
-        <Trash2 />
-        Delete
-      </DropdownMenuItem>,
-    );
+    // Experience — the playbook body is read-only, so its only action is Delete
+    // (gated, but always shown).
+    menu = renderActionsMenu(deleteItem);
   }
   return (
     <TableCell className={cn("px-2 text-right", PIN_RIGHT)}>{menu}</TableCell>
@@ -366,6 +353,7 @@ export function AssetRow({
   row,
   onOpen,
   onAction,
+  canDelete = true,
 }: AssetRowProps): React.JSX.Element {
   const name = resolveName(row);
   const navigable = isNavigable(row);
@@ -421,7 +409,7 @@ export function AssetRow({
       <TableCell className="leading-body text-foreground-primary px-6 whitespace-nowrap">
         {formatDateTime(row.createdAt)}
       </TableCell>
-      {renderActionsCell(row, onAction)}
+      {renderActionsCell(row, onAction, canDelete)}
     </TableRow>
   );
 }

@@ -1,28 +1,8 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { toast } from "@sico/ui";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { AxiosInstance } from "axios";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EditProjectDialog } from "@/features/projects/components/edit-project-dialog";
@@ -31,6 +11,7 @@ import {
   MemberTypeSchema,
   type ProjectDetail,
 } from "@/features/projects/schemas/project";
+import { ApiClientProvider } from "@/services/api-client-context";
 
 vi.mock("@sico/ui", async (importActual) => {
   const actual = await importActual<typeof import("@sico/ui")>();
@@ -40,6 +21,16 @@ vi.mock("@sico/ui", async (importActual) => {
 vi.mock("@/features/projects/hooks/use-project-mutation", () => ({
   useProjectMutation: vi.fn(),
 }));
+
+// CoverField (reused from create-project-fields) reads `useApiClient`; wrap so
+// the dialog mounts without a real client (uploads aren't exercised here).
+function Wrapper({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    <ApiClientProvider client={{} as AxiosInstance}>
+      {children}
+    </ApiClientProvider>
+  );
+}
 
 const mockedUseProjectMutation = vi.mocked(useProjectMutation);
 
@@ -66,6 +57,9 @@ function makeProject(partial: Partial<ProjectDetail> = {}): ProjectDetail {
     ownerUsername: "owner@microsoft.com",
     creatorUsername: "amy@microsoft.com",
     operatorAdmins: ["jess@microsoft.com"],
+    projectMembers: [],
+    projectAdmins: [],
+    sandboxes: [],
     createdAt: 0,
     updatedAt: 0,
     ...partial,
@@ -78,12 +72,13 @@ beforeEach(() => {
 });
 
 describe("EditProjectDialog", () => {
-  it("submits name/description/iconUri but never operatorAdmins", async () => {
+  it("submits name/description, omits an unchanged cover, and never operatorAdmins", async () => {
     const mutate = vi.fn();
     mockedUseProjectMutation.mockReturnValue(mockMutation({ mutate }));
     const user = userEvent.setup();
     render(
       <EditProjectDialog project={makeProject()} open onOpenChange={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     const name = screen.getByLabelText("Name");
@@ -96,11 +91,16 @@ describe("EditProjectDialog", () => {
         expect.objectContaining({
           name: "Renamed",
           description: "A short project summary.",
-          iconUri: "",
         }),
         // The success path passes a mutate options object (onSuccess toast + close).
         expect.objectContaining({ onSuccess: expect.any(Function) }),
       ),
+    );
+    // The cover wasn't touched, so `iconUri` is OMITTED — echoing the seeded
+    // (absolute) URL back would make the backend blank the icon.
+    expect(mutate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ iconUri: expect.anything() }),
+      expect.anything(),
     );
     expect(mutate).toHaveBeenCalledWith(
       expect.not.objectContaining({ operatorAdmins: expect.anything() }),
@@ -119,6 +119,7 @@ describe("EditProjectDialog", () => {
         open
         onOpenChange={onOpenChange}
       />,
+      { wrapper: Wrapper },
     );
 
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -131,10 +132,31 @@ describe("EditProjectDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("closes the dialog without mutating when Cancel is clicked", async () => {
+    const mutate = vi.fn();
+    mockedUseProjectMutation.mockReturnValue(mockMutation({ mutate }));
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <EditProjectDialog
+        project={makeProject()}
+        open
+        onOpenChange={onOpenChange}
+      />,
+      { wrapper: Wrapper },
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
   it("disables Save and shows the busy label while pending", () => {
     mockedUseProjectMutation.mockReturnValue(mockMutation({ isPending: true }));
     render(
       <EditProjectDialog project={makeProject()} open onOpenChange={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     const save = screen.getByRole("button", { name: "Saving…" });
@@ -146,6 +168,7 @@ describe("EditProjectDialog", () => {
     mockedUseProjectMutation.mockReturnValue(mockMutation({ isError: true }));
     render(
       <EditProjectDialog project={makeProject()} open onOpenChange={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     expect(
@@ -159,6 +182,7 @@ describe("EditProjectDialog", () => {
     const user = userEvent.setup();
     render(
       <EditProjectDialog project={makeProject()} open onOpenChange={vi.fn()} />,
+      { wrapper: Wrapper },
     );
 
     await user.clear(screen.getByLabelText("Name"));
@@ -168,86 +192,32 @@ describe("EditProjectDialog", () => {
     expect(mutate).not.toHaveBeenCalled();
   });
 
-  it("adds operators as the full deduped set via the inline control", async () => {
-    const mutate = vi.fn();
-    mockedUseProjectMutation.mockReturnValue(mockMutation({ mutate }));
-    const user = userEvent.setup();
-    render(
-      <EditProjectDialog
-        project={makeProject({ operatorAdmins: ["jess@microsoft.com"] })}
-        open
-        onOpenChange={vi.fn()}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "Add operator" }));
-    await user.type(
-      screen.getByPlaceholderText("Add comma separated emails"),
-      "jess@microsoft.com, amy@microsoft.com",
-    );
-    await user.click(screen.getByRole("button", { name: "Confirm operators" }));
-
-    // jess already exists → deduped to one; amy appended.
-    expect(mutate).toHaveBeenCalledWith({
-      operatorAdmins: ["jess@microsoft.com", "amy@microsoft.com"],
-    });
-  });
-
-  it("re-seeds fields and collapses the operator adder when reopened", async () => {
-    const user = userEvent.setup();
+  it("re-seeds fields from the project when reopened", () => {
     const { rerender } = render(
       <EditProjectDialog project={makeProject()} open onOpenChange={vi.fn()} />,
+      { wrapper: Wrapper },
     );
-    await user.clear(screen.getByLabelText("Name"));
-    await user.type(screen.getByLabelText("Name"), "Renamed");
-    await user.click(screen.getByRole("button", { name: "Add operator" }));
-    expect(screen.getByLabelText("Name")).toHaveValue("Renamed");
-
-    rerender(
-      <EditProjectDialog
-        project={makeProject()}
-        open={false}
-        onOpenChange={vi.fn()}
-      />,
-    );
-    rerender(
-      <EditProjectDialog project={makeProject()} open onOpenChange={vi.fn()} />,
-    );
-
     expect(screen.getByLabelText("Name")).toHaveValue("E-commerce Platform");
-    expect(
-      screen.getByRole("button", { name: "Add operator" }),
-    ).toBeInTheDocument();
-  });
 
-  it("discards typed operators on cancel without mutating", async () => {
-    const mutate = vi.fn();
-    mockedUseProjectMutation.mockReturnValue(mockMutation({ mutate }));
-    const user = userEvent.setup();
-    render(
-      <EditProjectDialog project={makeProject()} open onOpenChange={vi.fn()} />,
+    rerender(
+      <Wrapper>
+        <EditProjectDialog
+          project={makeProject({ name: "Atlas" })}
+          open={false}
+          onOpenChange={vi.fn()}
+        />
+      </Wrapper>,
     );
-    await user.click(screen.getByRole("button", { name: "Add operator" }));
-    await user.type(
-      screen.getByPlaceholderText("Add comma separated emails"),
-      "x@y.com",
+    rerender(
+      <Wrapper>
+        <EditProjectDialog
+          project={makeProject({ name: "Atlas" })}
+          open
+          onOpenChange={vi.fn()}
+        />
+      </Wrapper>,
     );
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(mutate).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole("button", { name: "Add operator" }),
-    ).toBeInTheDocument();
-  });
 
-  it("does not mutate when confirming an empty operator input", async () => {
-    const mutate = vi.fn();
-    mockedUseProjectMutation.mockReturnValue(mockMutation({ mutate }));
-    const user = userEvent.setup();
-    render(
-      <EditProjectDialog project={makeProject()} open onOpenChange={vi.fn()} />,
-    );
-    await user.click(screen.getByRole("button", { name: "Add operator" }));
-    await user.click(screen.getByRole("button", { name: "Confirm operators" }));
-    expect(mutate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Name")).toHaveValue("Atlas");
   });
 });

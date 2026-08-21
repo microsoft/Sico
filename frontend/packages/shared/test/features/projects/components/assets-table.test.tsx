@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { toast, TooltipProvider } from "@sico/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
@@ -44,6 +22,7 @@ import type {
   AssetCategory,
   AssetRow as AssetRowData,
 } from "@/features/projects/types";
+import { deriveCapabilities, useProjectPermission } from "@/features/rbac";
 import {
   ASSETS_HINT_DISMISSED_LS,
   safeGetItemFromLocalStorage,
@@ -53,6 +32,21 @@ import {
 const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
 vi.mock("@/features/projects/hooks/use-assets-query");
+
+// AssetsTable now reads project capabilities to gate Add Knowledge + per-row
+// Delete. Return an all-true admin set so the wiring tests keep every action.
+vi.mock("@/features/rbac", async (importActual) => {
+  const actual = await importActual<typeof import("@/features/rbac")>();
+  return {
+    ...actual,
+    useProjectPermission: vi.fn(() => ({
+      ...actual.deriveCapabilities("project_admin"),
+      userEmail: "me@company.com",
+      isLoading: false,
+      isError: false,
+    })),
+  };
+});
 
 vi.mock("@/features/projects/hooks/use-asset-mutation", () => ({
   useAssetMutation: vi.fn(),
@@ -306,6 +300,14 @@ beforeEach(() => {
   // throw) never leaks into the next test's default.
   vi.mocked(useSuspenseAssetsInfiniteQuery).mockReset();
   vi.mocked(useAssetsInfiniteQuery).mockReset();
+  // Re-establish the admin permission default so a per-test member override
+  // (the ACTIONS-column drop test) never leaks into the next test.
+  vi.mocked(useProjectPermission).mockReturnValue({
+    ...deriveCapabilities("project_admin"),
+    userEmail: "me@company.com",
+    isLoading: false,
+    isError: false,
+  });
   mockRows([]);
   mockPager();
   mockHook(mockMutation());
@@ -573,6 +575,36 @@ describe("<AssetsTable>", () => {
     await user.click(screen.getByRole("button", { name: "Asset actions" }));
     const items = await screen.findAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual(["Delete"]);
+  });
+
+  it("keeps the ACTIONS column + a gated Delete on an Experience a member can't delete", async () => {
+    // Member (own-only) on an experience produced by someone else → the column
+    // and menu stay, but Delete is gated (greyed + reason tooltip).
+    const user = userEvent.setup();
+    vi.mocked(useProjectPermission).mockReturnValue({
+      ...deriveCapabilities("project_member"),
+      userEmail: "me@company.com",
+      isLoading: false,
+      isError: false,
+    });
+    mockRows([
+      makeExperience({
+        creator: {
+          kind: "agent",
+          agentName: "Nova",
+          operatorUsername: "other@company.com",
+        },
+      }),
+    ]);
+    renderTable({ category: "experience" });
+
+    expect(
+      screen.getByRole("columnheader", { name: "Actions" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Asset actions" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "Delete" }),
+    ).toHaveAttribute("aria-disabled", "true");
   });
 
   it("an experience's ··· Delete confirms with the Experience title, then fires remove.mutate", async () => {

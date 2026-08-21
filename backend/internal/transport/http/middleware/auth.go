@@ -1,43 +1,18 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package middleware
 
 import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 
-	"sico-backend/internal/consts"
 	"sico-backend/internal/infra/cache"
 	cachememory "sico-backend/internal/infra/cache/memory"
 	cacheredis "sico-backend/internal/infra/cache/redis"
 	"sico-backend/pkg/jwtx"
-	"sico-backend/pkg/logger"
 )
 
 // UserInfo alias for jwtx.UserInfo
@@ -87,6 +62,8 @@ func getDefaultConfig() *AuthConfig {
 				{Path: "/api/sico/llm/runtime/generate", Method: http.MethodPost},
 				{Path: "/api/sico/llm/runtime/generate/stream", Method: http.MethodPost},
 				{Path: "/api/sico/project/asset", Method: http.MethodPost},
+				{Path: "/api/sico/project/asset/upload_url", Method: http.MethodPost},
+				{Path: "/api/sico/project/asset/complete", Method: http.MethodPost},
 				{Path: "/api/sico/project/sas_asset", Method: http.MethodGet},
 				{Path: "/api/sico/project/asset", Method: http.MethodDelete},
 			},
@@ -95,6 +72,7 @@ func getDefaultConfig() *AuthConfig {
 				"/api/sico/sandbox/apply",
 				"/api/sico/sandbox/release",
 				"/api/sico/sandbox/resources/",
+				"/api/sico/sandbox/device/",
 			},
 			JWTAuth: jwtx.New(jwtx.NewStoreWithCache(newCacheFromEnv())),
 		}
@@ -105,36 +83,12 @@ func getDefaultConfig() *AuthConfig {
 // newCacheFromEnv returns a Redis-backed cache when REDIS_HOST is configured,
 // otherwise an in-process memory cache.
 func newCacheFromEnv() cache.Cache {
-	host := os.Getenv(consts.RedisHost)
-	port := os.Getenv(consts.RedisPort)
-	password := os.Getenv(consts.RedisPassword)
-
-	addr := host + ":" + port
-	rc, err := cacheredis.Dial(addr, redis.Options{
-		DB: 0, // Default database
-
-		// Authentication
-		Username: "", // No username for default Redis setup
-		Password: password,
-
-		// Connection pool settings
-		PoolSize:        100,             // Max connections (recommended: CPU cores * 10)
-		MinIdleConns:    10,              // Min idle connections
-		MaxIdleConns:    30,              // Max idle connections
-		ConnMaxIdleTime: 5 * time.Minute, // Idle connection timeout
-
-		// Timeouts
-		DialTimeout:  5 * time.Second, // Connection establishment timeout
-		ReadTimeout:  3 * time.Second, // Read operation timeout
-		WriteTimeout: 3 * time.Second, // Write operation timeout
-	})
-	if err != nil {
-		logger.Warn("Redis not reachable at %s, falling back to in-memory cache: %v", addr, err)
+	client := cacheredis.GetRedisFromEnvironment()
+	if client == nil {
 		return cachememory.New()
 	}
 
-	logger.Info("JWT store using Redis at %s", addr)
-	return rc
+	return cacheredis.New(client)
 }
 
 // InitAuthConfig allows overriding the default auth configuration

@@ -1,0 +1,29 @@
+---
+# Copy this file to <profile_id>.md in this directory. The filename stem must
+# exactly match profile_id. This .example file is not loaded by Core.
+schema_version: 1
+
+# Lowercase letters, digits, and hyphens only; at most 63 characters.
+profile_id: example-profile
+
+# Planner-visible selection guidance; required and at most 1536 characters.
+when_to_use: Tasks that need focused domain-specific reasoning.
+
+# Use "*" for every caller-granted capability, [] for reasoning only, or a
+# unique list of namespaced capability IDs to narrow the profile.
+capability_ceiling:
+  - builtin:run_command
+  - skill:example-skill.run
+
+# Policy types are allowlisted by Core. No invocation policy types are
+# currently registered.
+invocation_policies: []
+completion_policy:
+  type: accept_model
+
+# Restart Core after adding or changing a profile.
+---
+# System prompt
+
+You are a focused sub-agent for this domain. Follow the task instructions,
+stay within the available capabilities, and report uncertainty explicitly.

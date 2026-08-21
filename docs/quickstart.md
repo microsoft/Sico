@@ -30,6 +30,7 @@ Edit `.env`:
 
 - Set `DB_PASSWORD`, `REDIS_PASSWORD`, and other secrets (the defaults are only safe for quick local use).
 - Keep `APP_ENV=development` for verbose logs locally.
+- Set `PYPI_INDEX_URL` and `NPM_REGISTRY` to the package mirrors available in your environment; local installs and image builds read both values from this file.
 
 ### LLM provider configuration
 

@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import asyncio
 import json
 import logging
@@ -31,7 +11,7 @@ from agent_framework._middleware import FunctionInvocationContext
 from pydantic import BaseModel, Field
 
 from app.storage.fs import CHAT_FS
-from app.tools.common import ToolContext, get_tool_context
+from app.tools.common import ToolContext, get_tool_context, normalize_workspace_relative_path
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,6 +108,7 @@ def load_workspace_context(  # noqa: PLR0913
 
     # Scope to subdirectory if requested.
     if directory:
+        directory = normalize_workspace_relative_path(directory)
         prefix = directory.rstrip("/") + "/"
         all_files = [f for f in all_files if f["path"].startswith(prefix) or f["path"] == directory.rstrip("/")]
 
@@ -229,17 +210,14 @@ CONTEXT_TOOL = FunctionTool(
         "Notable top-level subfolders to look for in the listing:\n"
         "- `skills/` — staged skill bundles (one folder per skill id; metadata in `skills/index.json`).\n"
         "- `knowledge/` — staged knowledge docs (one folder per knowledge id; metadata in `knowledge/index.json`).\n"
-        "- `playbooks/` — distilled rules/lessons grouped by section.\n"
         "- `attachments/` — files the user attached this turn (plus their original SAS URLs in `*_url.txt`).\n"
         "- `results/` — per-batch outputs produced by the `delegate` task tool. Each `results/<batch_id>/` "
         "folder holds the run records (status, payloads) and `results/<batch_id>/artifacts/` holds any "
         "files the runs produced. Use `read`/`grep` on these to inspect prior delegate runs.\n"
-        "- `case_sources/parsed_documents/` — archived workbook / parsed-document manifests (`*.json`) and "
-        "per-sheet JSONL case sources written by the workbook adapter when an attachment or `parse_document` "
-        "call indexes a workbook. Each `<slug>.json` summarises the source and points at sibling `*.jsonl` "
-        "files with the individual cases.\n"
-        "- `history/turn-<id>/` — snapshots of prior turns (plan, conversation, reports, and prior "
-        "`results/` + `case_sources/` snapshots if any). Hidden from this file listing — read explicitly when needed."
+        "- `case_sources/` — read-only legacy workbook snapshots retained for older conversations. New sources "
+        "are never written here.\n"
+        "- `history/turn-<id>/` — hidden bounded projection containing compact `rerun_sources/` metadata only. "
+        "Full prior plans, conversations, and reports remain in turn storage and are not copied here."
     ),
     additional_properties={"max_output_length": 50_000},
     input_model=ContextInput,

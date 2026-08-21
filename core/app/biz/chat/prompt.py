@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import annotations
 
 import logging
@@ -41,9 +21,42 @@ _PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
 _BASE_PROMPT_FILE = PromptFile.SYSTEM.value
 _PROMPT_FRAGMENTS_BY_MODE = {
     "fast": (_BASE_PROMPT_FILE, "fast_rules.md"),
-    "inspect": (_BASE_PROMPT_FILE, "inspect_rules.md"),
     "task": (_BASE_PROMPT_FILE, "task_rules.md"),
 }
+
+# Optional override directory for hot-reloading prompts without redeploying.
+# When ``CHAT_PROMPTS_DIR`` points at a writable location (defaults to
+# ``/mnt/storage/chat/prompts``), any prompt file present there wins over the
+# packaged copy, and edits are picked up on the next read - no image rebuild or
+# pod restart required.
+_PROMPT_DIR_ENV = "CHAT_PROMPTS_DIR"
+
+# Cache of resolved-path -> (mtime, text). Keeps repeated reads cheap while
+# still reflecting on-disk edits: a changed mtime invalidates the entry.
+_PROMPT_CACHE: dict[str, tuple[float, str]] = {}
+
+
+def _override_prompt_dir() -> Path | None:
+    raw = os.getenv(_PROMPT_DIR_ENV, "/mnt/storage/chat/prompts").strip()
+    return Path(raw) if raw else None
+
+
+def _resolve_prompt_path(filename: str | Path) -> Path:
+    """Resolve a prompt filename to a concrete path.
+
+    If ``CHAT_PROMPTS_DIR`` is set and contains the file, that override copy is
+    used so prompts can be hot-updated on a mounted volume. Otherwise fall back
+    to the packaged ``prompts/`` directory.
+    """
+    override_dir = _override_prompt_dir()
+    if override_dir is not None:
+        candidate = override_dir / filename
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            _LOGGER.warning("Failed to stat override prompt; using packaged copy", extra={"file": str(candidate)})
+    return _PROMPT_DIR / filename
 
 
 def _render_template(text: str, **kwargs) -> str:
@@ -55,12 +68,26 @@ def _render_template(text: str, **kwargs) -> str:
 
 
 def read_prompt_file(filename: str | Path, *, fallback: str = "You are a helpful AI assistant.\n\n") -> str:
-    path = _PROMPT_DIR / filename
+    path = _resolve_prompt_path(filename)
     try:
-        return path.read_text(encoding="utf-8")
-    except FileNotFoundError:
+        mtime = path.stat().st_mtime
+    except OSError:
         _LOGGER.warning("Prompt file not found; using fallback", extra={"file": str(path)})
         return fallback
+
+    key = str(path)
+    cached = _PROMPT_CACHE.get(key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        _LOGGER.warning("Prompt file not readable; using fallback", extra={"file": str(path)})
+        return fallback
+
+    _PROMPT_CACHE[key] = (mtime, text)
+    return text
 
 
 def render_prompt_file(prompt: PromptFile | str | Path, *, fallback: str = "", **kwargs) -> str:

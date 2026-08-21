@@ -1,45 +1,25 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from app.biz.chat.adapters.workbook.archive import (
-    CASE_SOURCES_DIR,
-    PARSED_DOCUMENTS_DIR,
-    extract_case_ids,
-    _archive_workbook_case_sources,
-)
-from app.biz.chat.adapters.workbook.manifests import (
+from app.biz.chat.source_context import (
     CaseIntent,
     CaseSourcePreference,
     infer_case_intent,
     infer_source_preference,
-    is_prior_workbook_execution_reference,
-    prior_case_source_manifest_paths,
-    render_prior_parsed_workbook_sources_section,
+    render_prior_tabular_sources_section,
     render_case_source_resolution_section,
+    render_available_source_manifests_section,
     resolve_case_sources,
 )
+from app.biz.source.persistence.legacy.workbook_case_snapshot_v1 import (
+    LEGACY_CASE_SOURCES_DIR as CASE_SOURCES_DIR,
+    LEGACY_PARSED_DOCUMENTS_DIR as PARSED_DOCUMENTS_DIR,
+    extract_case_ids,
+    legacy_manifest_paths,
+)
+from app.biz.source import WorkspaceSourceService
 
 
 def test_extract_case_ids_deduplicates_and_normalizes() -> None:
@@ -66,6 +46,42 @@ def test_resolve_case_sources_marks_project_and_history_ambiguous(tmp_path: Path
     assert {candidate.source_type for candidate in resolution.candidates} == {"project_knowledge", "history_attachment"}
 
 
+def test_current_attachment_does_not_hide_same_named_knowledge_source(tmp_path: Path) -> None:
+    attachments = tmp_path / "attachments"
+    knowledge = tmp_path / "knowledge" / "42"
+    attachments.mkdir()
+    knowledge.mkdir(parents=True)
+    current = attachments / "cases.csv"
+    historical = knowledge / "cases.csv"
+    current.write_text("Case ID\nCUR-1\n", encoding="utf-8")
+    historical.write_text("Case ID\nQA-1\n", encoding="utf-8")
+    (attachments / "index.json").write_text(
+        json.dumps([{"name": "cases.csv", "path": "attachments/cases.csv"}]),
+        encoding="utf-8",
+    )
+    service = WorkspaceSourceService()
+    service.index_path(tmp_path, "attachments/cases.csv", current)
+    service.index_path(tmp_path, "knowledge/42/cases.csv", historical)
+
+    resolution = resolve_case_sources(tmp_path, "QA-1的内容是什么？", current_attachment_names=("cases.csv",))
+
+    assert resolution is not None
+    assert any(candidate.paths == ("knowledge/42/cases.csv",) for candidate in resolution.candidates)
+
+
+def test_source_manifest_section_includes_indexed_knowledge(tmp_path: Path) -> None:
+    source = tmp_path / "knowledge" / "42" / "cases.csv"
+    source.parent.mkdir(parents=True)
+    source.write_text("Case ID,Steps\nQA-1,Open app\n", encoding="utf-8")
+    WorkspaceSourceService().index_path(tmp_path, "knowledge/42/cases.csv", source)
+
+    section = render_available_source_manifests_section(tmp_path, ())
+
+    assert "Source manifests available" in section
+    assert "knowledge/42/cases.csv" in section
+    assert '"name": "table"' in section
+
+
 def test_render_case_source_section_forbids_historical_parse(tmp_path: Path) -> None:
     _write_knowledge_index(tmp_path)
     _write_history_manifest(tmp_path, case_ids=["STCAQA-567"])
@@ -78,7 +94,7 @@ def test_render_case_source_section_forbids_historical_parse(tmp_path: Path) -> 
     assert '"ambiguous": true' in section
 
 
-def test_project_knowledge_candidate_lists_workbook_paths(tmp_path: Path) -> None:
+def test_project_knowledge_candidate_lists_tabular_paths(tmp_path: Path) -> None:
     _write_knowledge_index(tmp_path)
     source_dir = tmp_path / "knowledge" / "1" / "original"
     source_dir.mkdir(parents=True)
@@ -90,10 +106,10 @@ def test_project_knowledge_candidate_lists_workbook_paths(tmp_path: Path) -> Non
     project_candidates = [candidate for candidate in resolution.candidates if candidate.source_type == "project_knowledge"]
     assert len(project_candidates) == 1
     assert project_candidates[0].paths == ("knowledge/1/original/cases.xlsx",)
-    assert project_candidates[0].confidence == "workbook_path"
+    assert project_candidates[0].confidence == "tabular_path"
 
 
-def test_render_prior_parsed_workbook_sources_for_sheet_followup(tmp_path: Path) -> None:
+def test_render_prior_tabular_sources_for_sheet_followup(tmp_path: Path) -> None:
     source_dir = tmp_path / "history" / "turn-7" / CASE_SOURCES_DIR / PARSED_DOCUMENTS_DIR
     source_dir.mkdir(parents=True)
     (source_dir / "cases__sheet_rewritten_userdata.jsonl").write_text(
@@ -126,15 +142,15 @@ def test_render_prior_parsed_workbook_sources_for_sheet_followup(tmp_path: Path)
         encoding="utf-8",
     )
 
-    section = render_prior_parsed_workbook_sources_section(tmp_path, "跑rewritten_userdata")
+    section = render_prior_tabular_sources_section(tmp_path, "跑rewritten_userdata")
 
-    assert "Prior parsed workbook sources available" in section
-    assert "workbook_cases.source_path" in section
+    assert "Prior indexed tabular sources available" in section
+    assert "type=tabular document source_ref" in section
     assert "rewritten_userdata" in section
     assert "history/turn-7/case_sources/parsed_documents/cases__sheet_rewritten_userdata.jsonl" in section
 
 
-def test_render_prior_parsed_workbook_sources_for_localized_sheet_followup(tmp_path: Path) -> None:
+def test_render_prior_tabular_sources_for_localized_sheet_followup(tmp_path: Path) -> None:
     source_dir = tmp_path / "history" / "turn-7" / CASE_SOURCES_DIR / PARSED_DOCUMENTS_DIR
     source_dir.mkdir(parents=True)
     (source_dir / "cases__sheet_user_data.jsonl").write_text(json.dumps({"title": "case one"}), encoding="utf-8")
@@ -159,69 +175,40 @@ def test_render_prior_parsed_workbook_sources_for_localized_sheet_followup(tmp_p
         encoding="utf-8",
     )
 
-    section = render_prior_parsed_workbook_sources_section(tmp_path, "跑 用户数据")
+    section = render_prior_tabular_sources_section(tmp_path, "跑 用户数据")
 
-    assert "Prior parsed workbook sources available" in section
+    assert "Prior indexed tabular sources available" in section
     assert "用户数据" in section
 
 
-def test_prior_workbook_reference_uses_turn_store_for_generic_sheet_name(tmp_path: Path, monkeypatch) -> None:
-    workspace = tmp_path / "workspace"
-    source_dir = workspace / "history" / "turn-7" / CASE_SOURCES_DIR / PARSED_DOCUMENTS_DIR
-    source_dir.mkdir(parents=True)
-    (source_dir / "cases.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "file_path": "attachments/cases.xlsx",
-                "workbook_manifest": {"sheets": [{"name": "用户数据", "kind": "data", "data_rows": 2}]},
-                "workbook_case_sources": [{"sheet_name": "用户数据", "case_count": 2, "case_source_path": "cases.jsonl"}],
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        "app.biz.chat.adapters.workbook.manifests.CHAT_FS.get_workspace_path",
-        lambda _agent_instance_id, _username, _conversation_id: workspace,
-    )
-
-    assert is_prior_workbook_execution_reference(
-        agent_instance_id=1,
-        username="alice",
-        conversation_id=22,
-        current_turn_id=11,
-        message="跑 用户数据",
-    )
-
-
-def test_prior_case_source_manifest_paths_sort_turns_numerically(tmp_path: Path) -> None:
+def test_legacy_manifest_paths_sort_turns_numerically(tmp_path: Path) -> None:
     for turn_id in (9, 10):
         source_dir = tmp_path / "history" / f"turn-{turn_id}" / CASE_SOURCES_DIR / PARSED_DOCUMENTS_DIR
         source_dir.mkdir(parents=True)
         (source_dir / "cases.json").write_text("{}", encoding="utf-8")
 
-    paths = prior_case_source_manifest_paths(tmp_path)
+    paths = legacy_manifest_paths(tmp_path)
 
     assert [path.parts[-4] for path in paths] == ["turn-10", "turn-9"]
 
 
-def test_archive_workbook_case_sources_avoids_sheet_filename_collisions(tmp_path: Path) -> None:
-    archived = _archive_workbook_case_sources(
-        tmp_path,
-        "cases",
-        [
-            {"sheet_name": "登录/用例", "cases": [{"case_id": "QA-1"}]},
-            {"sheet_name": "登录_用例", "cases": [{"case_id": "QA-2"}]},
-        ],
+def test_source_snapshot_avoids_sheet_filename_collisions(tmp_path: Path) -> None:
+    source = tmp_path / "cases.jsonl"
+    source.write_text(
+        "\n".join(
+            (
+                json.dumps({"sheet_name": "登录/用例", "values": {"Case ID": "QA-1"}}, ensure_ascii=False),
+                json.dumps({"sheet_name": "登录_用例", "values": {"Case ID": "QA-2"}}, ensure_ascii=False),
+            )
+        ),
+        encoding="utf-8",
     )
 
-    source_names = [source["case_source_path"] for source in archived]
-    assert len(source_names) == len(set(source_names))
-    assert [json.loads((tmp_path / source_name).read_text(encoding="utf-8"))["case_id"] for source_name in source_names] == [
-        "QA-1",
-        "QA-2",
-    ]
+    manifest = WorkspaceSourceService().index_path(tmp_path, "attachments/cases.jsonl", source)
+
+    snapshot_paths = [sheet.snapshot_path for sheet in manifest.sheets]
+    assert len(snapshot_paths) == len(set(snapshot_paths)) == 2
+    assert manifest.case_ids == ("QA-1", "QA-2")
 
 
 def test_history_document_candidates_ignore_empty_case_id_indexes(tmp_path: Path) -> None:
@@ -233,7 +220,7 @@ def test_history_document_candidates_ignore_empty_case_id_indexes(tmp_path: Path
     assert resolution.candidates == ()
 
 
-def test_render_prior_parsed_workbook_sources_ignores_unstructured_legacy_manifest(tmp_path: Path) -> None:
+def test_render_prior_tabular_sources_ignores_unstructured_legacy_manifest(tmp_path: Path) -> None:
     source_dir = tmp_path / "history" / "turn-7" / CASE_SOURCES_DIR / PARSED_DOCUMENTS_DIR
     source_dir.mkdir(parents=True)
     (source_dir / "legacy.json").write_text(
@@ -250,7 +237,7 @@ def test_render_prior_parsed_workbook_sources_ignores_unstructured_legacy_manife
         encoding="utf-8",
     )
 
-    section = render_prior_parsed_workbook_sources_section(tmp_path, "跑rewritten_userdata")
+    section = render_prior_tabular_sources_section(tmp_path, "跑rewritten_userdata")
 
     assert section == ""
 

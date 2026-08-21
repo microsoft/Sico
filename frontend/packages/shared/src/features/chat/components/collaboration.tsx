@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   useQueryClient,
   useQueryErrorResetBoundary,
@@ -56,6 +34,7 @@ import { useReconnect } from "../hooks/use-reconnect";
 import { useSidebarCollapseOnSidepane } from "../hooks/use-sidebar-collapse-on-sidepane";
 import { ChatAgentProvider } from "../services/chat-agent-context";
 import { createOnReplay } from "../services/replay";
+import { refreshActivityListsAfterSettle } from "../utils/refresh-activity-lists";
 
 type Props = {
   agentInstanceId: number;
@@ -168,15 +147,30 @@ export function Collaboration({
   // fire `onSettle`), so invalidate history here too — symmetric with the live
   // send path (use-chat) — else a revisit within staleTime re-serves the
   // pre-reload cache, which is missing the resumed turn.
-  const onReconnectSettle = useCallback(
-    () => invalidateHistory(queryClient, agentInstanceId, conversationId),
-    [queryClient, agentInstanceId, conversationId],
-  );
+  //
+  // ORDERING CONTRACT (load-bearing): this MUST stay declared BEFORE
+  // `useConsumePendingMessage` below. Both are passive effects, so React flushes
+  // them in declaration order; the reconnect mount probe reads `pendingMessageAtom`
+  // (via isFreshHomeSend) to skip the doomed probe on a fresh home send, and that
+  // read is only correct while the pending is STILL parked — i.e. before the
+  // consumer drains it. Reorder these two and the probe gate silently breaks.
+  const onReconnectSettle = useCallback(() => {
+    invalidateHistory(queryClient, agentInstanceId, conversationId);
+    // Symmetric with the live-send path (use-chat): a reconnect-resumed turn
+    // still counts as activity, so re-order the activity-sorted lists.
+    refreshActivityListsAfterSettle(
+      queryClient,
+      agentInstanceId,
+      conversationId,
+    );
+  }, [queryClient, agentInstanceId, conversationId]);
   const { stop: reconnectStop } = useReconnect(
     agentInstanceId,
     conversationId,
     {
       onReplay: replay.onReplay,
+      onOpen: replay.onOpen,
+      onStreamEnd: replay.onStreamEnd,
       onSettle: onReconnectSettle,
     },
   );
@@ -184,7 +178,9 @@ export function Collaboration({
   // Drain a message composed on the empty-state home (parked in
   // pendingMessageAtom, then navigated here). Runs as a passive effect —
   // i.e. AFTER the reset layout-effect above — so the send lands in the
-  // freshly-reset store instead of being wiped.
+  // freshly-reset store instead of being wiped. Declared AFTER useReconnect on
+  // purpose (see its ordering-contract note): the reconnect probe must read the
+  // pending BEFORE this drains it.
   useConsumePendingMessage(agentInstanceId, conversationId);
 
   // Collapse the main Sidebar while the preview Sidepane is open (it takes ~75%

@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package errcode
 
 // Error code conventions
@@ -40,6 +20,7 @@ package errcode
 //   102000-102999: Agent
 //   103000-103999: Conversation
 //   104000-104999: Knowledge
+//   105000-105999: Notification
 //   106000-106999: Project
 //   110000-110999: LLM
 //   112000-112999: Sandbox
@@ -97,6 +78,11 @@ const (
 )
 
 const (
+	// Notification (105000-105999)
+	NotificationInvalidReceiver int32 = 105001
+)
+
+const (
 	// LLM (110000-110999)
 	LLMGenerateFailed int32 = 110001
 
@@ -113,4 +99,9 @@ const (
 	SandboxLeaseNotFound       int32 = 112002
 	SandboxProviderUnavailable int32 = 112003
 	SandboxResetFailed         int32 = 112004
+)
+
+const (
+	// GUI automation assets (113000-113999)
+	AuthStateNotFound int32 = 113001
 )

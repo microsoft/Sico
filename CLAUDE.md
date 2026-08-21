@@ -120,10 +120,9 @@ Proto definitions are organized by domain in `proto/`: agent, chat, common, conv
 
 ## Code Style
 
-### Source file headers
+### Licensing
 
-- Every source/config file (`.go`, `.py`, `.proto`, `.yaml`, shell scripts, etc.) must start with the standard 19-line MIT header from `LICENSE` (`# Copyright (c) 2026 Sico Authors` for `#`-style languages, `// Copyright (c) 2026 Sico Authors` for `//`-style languages).
-- The `addlicense` pre-commit hook (`.pre-commit-config.yaml`) inserts/refreshes the header automatically — run `pre-commit run addlicense --all-files` (or `pre-commit run --files <new-file>`) before committing new files.
+Sico is licensed under the MIT License in the repository root. Project-owned files do not require per-file license headers. Third-party copyright and license notices must be preserved.
 
 ### Go function signatures
 

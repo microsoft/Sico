@@ -1,30 +1,8 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { useStore } from "jotai";
 import { useEffect } from "react";
 
 import { useChat } from "./use-chat";
-import { pendingMessageAtom } from "../atoms/chat-atom";
+import { isPendingForView, pendingMessageAtom } from "../atoms/chat-atom";
 
 // Drains the hand-off slot parked by the empty-state DigitalWorkerHome and
 // fires the send, exactly once, AFTER Collaboration has mounted and reset its
@@ -65,11 +43,11 @@ export function useConsumePendingMessage(
 
   useEffect(() => {
     const pending = store.get(pendingMessageAtom);
-    if (
-      pending === null ||
-      pending.agentInstanceId !== agentInstanceId ||
-      pending.conversationId !== conversationId
-    ) {
+    // `isPendingForView` is the shared (agent, conversation) match — the same
+    // predicate the reconnect probe gate (`isFreshHomeSend`) reads, so a stale
+    // park for another view never fires here. Its guard narrows `pending` to
+    // non-null for the send below.
+    if (!isPendingForView(pending, agentInstanceId, conversationId)) {
       return;
     }
     store.set(pendingMessageAtom, null);

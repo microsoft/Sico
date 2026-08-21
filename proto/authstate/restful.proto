@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package authstate;
+
+option go_package = "sico-backend/internal/transport/http/dto/authstate";
+
+enum AuthStateStatus {
+  AUTH_STATE_STATUS_UNKNOWN = 0;   // @gotag: json:"AUTH_STATE_STATUS_UNKNOWN"
+  AUTH_STATE_STATUS_VALID = 1;     // @gotag: json:"AUTH_STATE_STATUS_VALID"
+  AUTH_STATE_STATUS_EXPIRED = 2;   // @gotag: json:"AUTH_STATE_STATUS_EXPIRED"
+  AUTH_STATE_STATUS_DISABLED = 3;  // @gotag: json:"AUTH_STATE_STATUS_DISABLED"
+}
+
+message AuthState {
+  int64 id = 1;                   // @gotag: json:"id"
+  string account_key = 2;         // @gotag: json:"accountKey"
+  string site_host = 3;           // @gotag: json:"siteHost"
+  reserved 4;                     // was state_url; never expose a storageState download URL
+  AuthStateStatus status = 5;     // @gotag: json:"status"
+  int64 expires_at = 6;           // @gotag: json:"expiresAt"
+  int64 last_validated_at = 7;    // @gotag: json:"lastValidatedAt"
+  string metadata = 8;            // @gotag: json:"metadata"
+  int64 created_at = 9;           // @gotag: json:"createdAt"
+  int64 updated_at = 10;          // @gotag: json:"updatedAt"
+}
+
+message ImportAuthStateRequest {
+  string account_key = 1;    // @gotag: json:"accountKey" binding:"required"
+  string site_host = 2;      // @gotag: json:"siteHost" binding:"required"
+  string storage_state = 3;  // @gotag: json:"storageState" binding:"required"
+  int64 expires_at = 4;      // @gotag: json:"expiresAt"
+  string metadata = 5;       // @gotag: json:"metadata"
+}
+
+message ImportAuthStateResponse {
+  ImportAuthStateData data = 1;  // @gotag: json:"data"
+  int32 code = 253;              // @gotag: json:"code"
+  string msg = 254;              // @gotag: json:"msg"
+}
+
+message ImportAuthStateData {
+  int64 id = 1;  // @gotag: json:"id"
+  reserved 2;    // was state_url; never expose a storageState download URL
+}
+
+message GetAuthStateRequest {
+  string account_key = 1;  // @gotag: form:"accountKey" binding:"required"
+  string site_host = 2;    // @gotag: form:"siteHost" binding:"required"
+}
+
+message GetAuthStateResponse {
+  GetAuthStateData data = 1;  // @gotag: json:"data"
+  int32 code = 253;           // @gotag: json:"code"
+  string msg = 254;           // @gotag: json:"msg"
+}
+
+message GetAuthStateData {
+  AuthState auth_state = 1;  // @gotag: json:"authState"
+}
+
+message UpdateAuthStateStatusRequest {
+  string account_key = 1;      // @gotag: json:"accountKey" binding:"required"
+  string site_host = 2;        // @gotag: json:"siteHost" binding:"required"
+  AuthStateStatus status = 3;  // @gotag: json:"status" binding:"required"
+}
+
+message UpdateAuthStateStatusResponse {
+  int32 code = 253;  // @gotag: json:"code"
+  string msg = 254;  // @gotag: json:"msg"
+}

@@ -1,33 +1,16 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
+import { Button } from "@sico/ui";
 import { useQueryErrorResetBoundary } from "@tanstack/react-query";
+import { useAtom } from "jotai";
+import { Plus } from "lucide-react";
 import type * as React from "react";
 import { type RefObject, Suspense, useRef } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 
+import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectsGrid } from "./projects-grid";
 import { ProjectsGridSkeleton } from "./projects-grid-skeleton";
 import { ErrorView } from "../../../components/error-view";
+import { createProjectDialogOpenAtom } from "../atoms/create-project-dialog-atom";
 
 /**
  * Feature root for `/project`. `useQueryErrorResetBoundary` is critical:
@@ -37,10 +20,15 @@ import { ErrorView } from "../../../components/error-view";
  *
  * Layout: the header stays fixed while the grid scrolls inside a bounded
  * `scrollRef` container (local scroll), mirroring `<DigitalWorkers>`.
+ *
+ * The create-project dialog's open state lives in `createProjectDialogOpenAtom`
+ * so the Add DW dialog can raise it via a plain `/project` navigation (no URL
+ * search param).
  */
 export function Projects(): React.JSX.Element {
   const { reset } = useQueryErrorResetBoundary();
   const scrollRef: RefObject<HTMLDivElement | null> = useRef(null);
+  const [createOpen, setCreateOpen] = useAtom(createProjectDialogOpenAtom);
 
   return (
     <div className="flex h-full w-full flex-col gap-6 pt-10 pb-2">
@@ -53,9 +41,13 @@ export function Projects(): React.JSX.Element {
             Projects
           </h1>
           <p className="text-foreground-secondary text-sm leading-normal">
-            Track project performance and knowledge.
+            Manage hybrid teams and shared assets.
           </p>
         </div>
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
+          <Plus aria-hidden="true" />
+          Create Project
+        </Button>
       </header>
       <div
         ref={scrollRef}
@@ -63,10 +55,16 @@ export function Projects(): React.JSX.Element {
       >
         <ErrorBoundary FallbackComponent={ErrorView} onReset={reset}>
           <Suspense fallback={<ProjectsGridSkeleton />}>
-            <ProjectsGrid rootRef={scrollRef} />
+            <ProjectsGrid
+              rootRef={scrollRef}
+              onCreate={() => setCreateOpen(true)}
+            />
           </Suspense>
         </ErrorBoundary>
       </div>
+      {createOpen && (
+        <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
+      )}
     </div>
   );
 }

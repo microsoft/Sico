@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package seeds
 
 import (
@@ -100,10 +80,10 @@ func (s seedSkillFile) asExtraInfo() types.FileExtraInfo {
 
 func getDefaultProject(iconURI string) *projectrepo.ProjectModel {
 	return &projectrepo.ProjectModel{
-		ID:              defaultProjectId,
-		OrganizationID:  defaultOrganizationId,
-		OwnerUsername:   defaultSystemUser,
-		Name:            "SICO",
+		ID:             defaultProjectId,
+		OrganizationID: defaultOrganizationId,
+		OwnerUsername:  defaultSystemUser,
+		Name:           "SICO",
 		Description: "This is the default project that contains all assets without specific project assignment. " +
 			"It is created by the system and cannot be deleted.",
 		IconURI:         iconURI,
@@ -135,6 +115,7 @@ func getAgentSimpleChat(iconURI string) (*agententity.SingleAgent, *agententity.
 			Desc:             "This is the default chat agent instance that is created by the system.",
 			IconUri:          iconURI,
 			ProjectId:        defaultProjectId,
+			Status:           agentdto.SingleAgentInstanceStatus_INSTANCE_ACTIVE,
 		},
 	}
 	return agent, instance
@@ -164,6 +145,7 @@ func getAgentAndroidTester(iconURI string) (*agententity.SingleAgent, *agententi
 			Desc:             "This is an Android tester agent instance for testing purposes.",
 			IconUri:          iconURI,
 			ProjectId:        defaultProjectId,
+			Status:           agentdto.SingleAgentInstanceStatus_INSTANCE_ACTIVE,
 		},
 	}
 	return agent, instance
@@ -193,6 +175,7 @@ func getAgent3DArtist(iconURI string) (*agententity.SingleAgent, *agententity.Si
 			Desc:             "This is a 3D artist agent instance",
 			IconUri:          iconURI,
 			ProjectId:        defaultProjectId,
+			Status:           agentdto.SingleAgentInstanceStatus_INSTANCE_ACTIVE,
 		},
 	}
 	return agent, instance
@@ -223,6 +206,7 @@ func getAgentProductManager(iconURI string) (*agententity.SingleAgent, *agentent
 			Desc:             "This is a product manager agent instance",
 			IconUri:          iconURI,
 			ProjectId:        defaultProjectId,
+			Status:           agentdto.SingleAgentInstanceStatus_INSTANCE_ACTIVE,
 		},
 	}
 	return agent, instance
@@ -253,6 +237,7 @@ func getAgentMarketing(iconURI string) (*agententity.SingleAgent, *agententity.S
 			Desc:             "This is a marketing agent instance",
 			IconUri:          iconURI,
 			ProjectId:        defaultProjectId,
+			Status:           agentdto.SingleAgentInstanceStatus_INSTANCE_ACTIVE,
 		},
 	}
 	return agent, instance

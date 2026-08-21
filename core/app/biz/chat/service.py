@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import annotations
 
 import asyncio
@@ -26,6 +6,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -41,27 +22,26 @@ from pydantic import BaseModel
 import pydantic
 
 import app.schemas.conversation
-from app.biz.chat.adapters import build_default_adapters
 from app.biz.chat.chat import build_error_response
-from app.biz.chat.prompt_sections import (
-    PromptSectionContext,
-    collect_prompt_sections,
-)
-from app.biz.chat.router import hard_guard_route, llm_intent_check, tools_for_route
+from app.biz.chat.preparation import build_default_preparation_service
+from app.biz.chat.source_context import build_source_sections
+from app.biz.chat.router import ChatRouteRequest, default_chat_router
+from app.biz.chat.tool_registry import default_tool_registry
 from app.biz.chat.turn_timing import begin_turn, time_awaitable, time_sync
-from app.biz.task_runtime.rerun_sources import (
+from app.biz.task_runtime import default_agent_profile_resolver
+from app.biz.task_runtime.workspace.rerun_sources import (
+    RERUN_HISTORY_MAX_BYTES,
+    RERUN_HISTORY_MAX_SOURCES,
+    RERUN_SOURCE_MAX_BYTES,
     RERUN_SOURCE_INLINE_MAX_CHARS,
     RERUN_SOURCES_DIR,
     compact_rerun_source_payload,
+    delegate_request_from_rerun_source,
 )
-from app.biz.task_runtime.skill_loader import SkillLoader
-from app.biz.chat.types import (
-    AdapterExcerpt,
-    ChatIntentCheckerInput,
-    ChatIntentCheckerOutput,
-    ChatRouteMode,
-    ToolExcerpt,
-)
+from app.biz.source import is_supported_tabular_path
+from app.biz.source.persistence.repository import WorkspaceSourceRepository
+from app.biz.task_runtime.capabilities.loader import SkillLoader
+from app.biz.chat.types import ChatIntentCheckerInput, ChatRouteMode, ToolExcerpt
 from app.biz.chat.workspace_init import WorkspaceInitOptions, init_workspace
 from app.tools import (
     CONTEXT_TOOL,
@@ -93,6 +73,7 @@ from app.pb.conversation.api import (
     GenerateOnboardRecommendationTasksResponse,
 )
 import app.llmhubs
+from app.biz.llm.service import _model_definition_to_entry
 from app.pb.common.common import Attachment
 from app.schemas.common.common import Attachment as SchemaAttachment
 from app.schemas.conversation.chat import TopicMessage
@@ -100,7 +81,7 @@ from app.schemas.conversation.plan import Plan, PlanStatus
 from app.storage import redis
 from app.storage.fs import CHAT_FS
 from app.tools.common import ToolContext
-from app.tools.delegate import build_adapter_tools
+from app.tools.delegate import build_delegate_tool
 from app.tools.plan import PlanEditor, read_plan
 from app.tools.plan import cancel_plan as cancel_plan_async
 from app.utils.eventbus import EventBus
@@ -246,10 +227,12 @@ class ChatService(ChatServiceBase):
         redis_client = redis.get_shared_redis()
         cache_key = _get_ongoing_chat_cache_key(chat_request.conversation_id, chat_request.turn_id)
         await redis_client.set(cache_key.turn_id_cache_key, chat_request.turn_id, ex=ONGOING_CHAT_CACHE_TIME_TO_LIVE)
+        await self._add_agent_instance_ongoing_conversation(redis_client, chat_request)
 
         async def clear_ongoing_chat_cache():
             await redis_client.delete(cache_key.turn_id_cache_key)
             await redis_client.delete(cache_key.chat_responses_cache_key)
+            await self._remove_agent_instance_ongoing_conversation(redis_client, chat_request)
 
         self._logger.info(
             "chat_stream_request_received "
@@ -313,7 +296,8 @@ class ChatService(ChatServiceBase):
             )
             timings.record("workspace_init_ms", workspace_started_at)
 
-            # Build rendered context sections once for router input.
+            # Skills feed both the classifier and the system prompt; the remaining
+            # context sections are classifier-only and are built lazily below.
             workspace = CHAT_FS.get_workspace_path(
                 chat_request.agent_instance_id,
                 chat_request.username,
@@ -325,62 +309,66 @@ class ChatService(ChatServiceBase):
                 agent_id=chat_request.agent_id,
             )
             tool_context.skill_loader = skill_loader
-            sections = self._build_context_sections(chat_request, skill_loader)
+            skills_section = skill_loader.render_cards_section()
 
-            # Adapter registry for routing.
-            adapters = build_default_adapters()
-            adapter_excerpts = [AdapterExcerpt.from_adapter(a) for a in adapters.values()]
+            preparation_service = build_default_preparation_service(default_agent_profile_resolver())
+            delegate_tool = build_delegate_tool(preparation_service)
+            delegate_excerpt = ToolExcerpt.from_agent_framework_function_tool(delegate_tool)
             direct_tool_excerpts = self._direct_tool_excerpts()
 
             # --- routing ---
-            route_started_at = time.perf_counter()
-            hard = hard_guard_route(
-                chat_request.message.content or "",
-                has_attachments=bool(chat_request.message.attachments or chat_request.agent_attachments),
-            )
-            intent: ChatIntentCheckerOutput
+            context_sections: dict[str, str] | None = None
 
-            import app.schemas.common.common
+            def get_context_sections() -> dict[str, str]:
+                nonlocal context_sections
+                if context_sections is None:
+                    context_sections = self._build_context_sections(chat_request, skill_loader)
+                return context_sections
 
-            attachments = [
-                app.schemas.common.common.Attachment.from_pb(item)
-                for item in list(chat_request.message.attachments) + list(chat_request.agent_attachments)
-            ]
+            def build_intent_input() -> ChatIntentCheckerInput:
+                import app.schemas.common.common
 
-            if hard.route != ChatRouteMode.UNSPECIFIED:
-                intent = ChatIntentCheckerOutput(route=hard.route, confidence=1.0, reason=f"hard_guard:{hard.reason}")
-                timings.record("route_ms", route_started_at)
-            else:
-                # UNSPECIFIED → normal LLM routing. Hard-guard FAST/TASK
-                # decisions skip the LLM intent check entirely.
-                timings.record("route_ms", route_started_at)
-                intent_started_at = time.perf_counter()
-                intent = await llm_intent_check(
-                    ChatIntentCheckerInput(
-                        user_prompt=chat_request.message.content or "",
-                        attachments=attachments,
-                        adapters=adapter_excerpts,
-                        direct_tools=direct_tool_excerpts,
-                        workspace_attachments_section=sections.get("workspace_attachments", ""),
-                        workspace_knowledge_section=sections.get("workspace_knowledge", ""),
-                        prior_rerun_sources_section=sections.get("prior_rerun_sources", ""),
-                        prior_parsed_workbook_sources_section=sections.get("prior_parsed_workbook_sources", ""),
-                        prior_conversation_section=self._build_prior_conversation_section(chat_request),
-                        skills_section=sections.get("skills", ""),
-                    )
+                sections = get_context_sections()
+                attachments = [
+                    app.schemas.common.common.Attachment.from_pb(item)
+                    for item in list(chat_request.message.attachments) + list(chat_request.agent_attachments)
+                ]
+                return ChatIntentCheckerInput(
+                    user_prompt=chat_request.message.content or "",
+                    attachments=attachments,
+                    delegate=delegate_excerpt,
+                    direct_tools=direct_tool_excerpts,
+                    workspace_attachments_section=sections.get("workspace_attachments", ""),
+                    source_manifests_section=sections.get("source_manifests", ""),
+                    workspace_knowledge_section=sections.get("workspace_knowledge", ""),
+                    prior_rerun_sources_section=sections.get("prior_rerun_sources", ""),
+                    prior_tabular_sources_section=sections.get("prior_tabular_sources", ""),
+                    prior_conversation_section=self._build_prior_conversation_section(chat_request),
+                    skills_section=skills_section,
                 )
-                timings.record("intent_check_ms", intent_started_at)
-            route = intent.route
+
+            decision = await time_awaitable(
+                timings,
+                "route_ms",
+                default_chat_router().decide(
+                    ChatRouteRequest(
+                        user_prompt=chat_request.message.content or "",
+                        has_attachments=bool(chat_request.message.attachments or chat_request.agent_attachments),
+                        build_intent_input=build_intent_input,
+                    )
+                ),
+            )
+            route = decision.route
             self._logger.info(
-                "chat_route_decided conversation_id=%s turn_id=%s route=%s confidence=%.2f reason=%s",
+                "chat_route_decided conversation_id=%s turn_id=%s route=%s reason=%s",
                 chat_request.conversation_id,
                 chat_request.turn_id,
                 route.value,
-                intent.confidence,
-                intent.reason,
+                decision.reason,
             )
 
             # Build common chat agent + user message + system prompt.
+            resolved_entry = _model_definition_to_entry(getattr(chat_request, "model_definition", None))
             agent = await time_awaitable(
                 timings,
                 "agent_build_ms",
@@ -391,6 +379,7 @@ class ChatService(ChatServiceBase):
                     self._mem_runner,
                     tool_context=tool_context,
                     model=_model_for_route(route, chat_request.model or None),
+                    resolved_entry=resolved_entry,
                 ),
             )
             system_message = time_sync(
@@ -401,19 +390,18 @@ class ChatService(ChatServiceBase):
                 name=chat_request.agent_instance_name,
                 role_name=chat_request.agent_role,
                 project_name=chat_request.project_name,
-                skills_section=sections.get("skills", ""),
+                skills_section=skills_section,
             )
             user_msg_started_at = time.perf_counter()
-            user_message = await asyncio.to_thread(self._build_user_message_from_sections, chat_request)
+            agent_sections = get_context_sections() if route == ChatRouteMode.TASK else {}
+            user_message = await asyncio.to_thread(self._build_user_message_from_sections, chat_request, agent_sections)
             timings.record("user_message_build_ms", user_msg_started_at)
 
-            if route == ChatRouteMode.TASK:
-                adapter_tools = build_adapter_tools(adapters)
-            else:
-                adapter_tools = []
-
             tools_started_at = time.perf_counter()
-            all_tools = tools_for_route(route) + adapter_tools
+            registry = default_tool_registry()
+            all_tools = registry.tools_for_route(route)
+            if registry.may_delegate(route):
+                all_tools.append(delegate_tool)
             tool_context.all_tools = all_tools
             timings.record("tools_build_ms", tools_started_at)
 
@@ -479,6 +467,36 @@ class ChatService(ChatServiceBase):
             send_keepalive_task.cancel()
 
         return ChatDirectResponse()
+
+    async def _add_agent_instance_ongoing_conversation(self, redis_client, chat_request: ChatRequest) -> None:
+        if not chat_request.agent_instance_id:
+            return
+        key = _get_agent_instance_ongoing_conversations_cache_key(chat_request.agent_instance_id)
+        try:
+            expires_at = time.time() + ONGOING_CHAT_CACHE_TIME_TO_LIVE
+            await redis_client.zadd(key, {str(chat_request.conversation_id): expires_at})
+            await redis_client.expire(key, ONGOING_CHAT_CACHE_TIME_TO_LIVE)
+        except Exception:
+            self._logger.warning(
+                "chat_agent_instance_status_add_failed agent_instance_id=%s conversation_id=%s",
+                chat_request.agent_instance_id,
+                chat_request.conversation_id,
+                exc_info=True,
+            )
+
+    async def _remove_agent_instance_ongoing_conversation(self, redis_client, chat_request: ChatRequest) -> None:
+        if not chat_request.agent_instance_id:
+            return
+        key = _get_agent_instance_ongoing_conversations_cache_key(chat_request.agent_instance_id)
+        try:
+            await redis_client.zrem(key, str(chat_request.conversation_id))
+        except Exception:
+            self._logger.warning(
+                "chat_agent_instance_status_remove_failed agent_instance_id=%s conversation_id=%s",
+                chat_request.agent_instance_id,
+                chat_request.conversation_id,
+                exc_info=True,
+            )
 
     async def _try_update_conversation_title(
         self,
@@ -557,7 +575,7 @@ class ChatService(ChatServiceBase):
                     title = str(parsed["title"])
             except json.JSONDecodeError:
                 pass
-        title = title.strip().strip('"\'`').strip()
+        title = title.strip().strip("\"'`").strip()
         title = re.sub(r"\s+", " ", title).strip()
         if not title:
             return ""
@@ -886,16 +904,42 @@ class ChatService(ChatServiceBase):
         chat_request: ChatRequest,
     ) -> Message:
         """Compatibility wrapper: build the downstream chat agent user message."""
-        return await asyncio.to_thread(self._build_user_message_from_sections, chat_request)
+        workspace = CHAT_FS.get_workspace_path(
+            chat_request.agent_instance_id,
+            chat_request.username,
+            chat_request.conversation_id,
+        )
+        skill_loader = SkillLoader(
+            workspace,
+            project_id=int(chat_request.project_id or 0),
+            agent_id=chat_request.agent_id,
+        )
+        sections = self._build_context_sections(chat_request, skill_loader)
+        return await asyncio.to_thread(self._build_user_message_from_sections, chat_request, sections)
 
     def _build_user_message_from_sections(
         self,
         chat_request: ChatRequest,
+        sections: Mapping[str, str] | None = None,
     ) -> Message:
         msg = chat_request.message.content or ""
         if chat_request.message.attachments:
             attachment_names = ", ".join(att.name for att in chat_request.message.attachments)
             msg += f"\nMy Attachments: {attachment_names}"
+        visible_sections = [
+            value
+            for name in (
+                "workspace_attachments",
+                "workspace_knowledge",
+                "prior_rerun_sources",
+                "source_manifests",
+                "case_source_resolution",
+                "prior_tabular_sources",
+            )
+            if (value := (sections or {}).get(name, ""))
+        ]
+        if visible_sections:
+            msg += "\n\n" + "\n\n".join(visible_sections)
         self._logger.info(
             "chat_user_message_build conversation_id=%s turn_id=%s text_len=%d attachment_count=%d",
             chat_request.conversation_id,
@@ -925,11 +969,16 @@ class ChatService(ChatServiceBase):
                 chat_request.username,
                 chat_request.conversation_id,
             )
-            adapter_sections = collect_prompt_sections(PromptSectionContext(chat_request=chat_request, workspace=workspace))
+            attachments = list(chat_request.message.attachments) + list(chat_request.agent_attachments)
+            feature_sections = build_source_sections(
+                workspace,
+                chat_request.message.content or "",
+                tuple(attachment.name for attachment in attachments),
+            )
         except Exception as exc:
-            self._logger.warning("Failed to collect adapter prompt sections: %s", exc)
-            adapter_sections = {}
-        for name, value in adapter_sections.items():
+            self._logger.warning("Failed to build source context sections: %s", exc)
+            feature_sections = {}
+        for name, value in feature_sections.items():
             if value:
                 sections[name] = value
         return sections
@@ -947,11 +996,9 @@ class ChatService(ChatServiceBase):
             return ""
 
     def _direct_tool_excerpts(self) -> list[ToolExcerpt]:
-        # A compact list of frequently-used tools so the intent LLM can choose
-        # between the INSPECT and TASK routes. The chat agent later receives the
-        # full tool list selected by the route.
-        # TODO: command execution is no longer a main-loop tool; it is unified
-        # under the task runtime (TaskManager.submit_prepared -> command_backend).
+        # A compact list of frequently-used tools so the intent LLM can judge
+        # whether the turn needs any tool at all. The chat agent later receives
+        # the full tool list the route grants.
         tools = [
             CONTEXT_TOOL,
             READ_TOOL,
@@ -1048,10 +1095,10 @@ class ChatService(ChatServiceBase):
                     continue
                 label = f"{name} ({knowledge_type})" if knowledge_type else name
                 lines.append(f"- {label}: knowledge/{knowledge_id}")
-            workbook_paths = _workspace_knowledge_workbook_paths(workspace)
-            if workbook_paths:
-                lines.append("Knowledge workbook sources available for delegate kind=workbook:")
-                for path in workbook_paths[:8]:
+            tabular_paths = _workspace_knowledge_tabular_paths(workspace)
+            if tabular_paths:
+                lines.append("Knowledge tabular sources available for delegate request_json:")
+                for path in tabular_paths[:8]:
                     lines.append(f"- {path}")
             return "\n".join(lines) if len(lines) > 1 else ""
         except Exception as exc:
@@ -1219,11 +1266,13 @@ def _get_ongoing_chat_cache_key(conversation_id: int, turn_id: int) -> _CacheKey
     )
 
 
+def _get_agent_instance_ongoing_conversations_cache_key(agent_instance_id: int) -> str:
+    return f"ongoing-chat:agent-instance:{agent_instance_id}:conversations"
+
+
 def _prompt_mode_for_route(route: ChatRouteMode) -> str:
     if route == ChatRouteMode.FAST:
         return "fast"
-    if route == ChatRouteMode.INSPECT:
-        return "inspect"
     return "task"
 
 
@@ -1240,25 +1289,36 @@ def _load_prior_rerun_sources(workspace: Path) -> list[dict[str, Any]]:
     if not history_dir.exists():
         return []
     sources: list[dict[str, Any]] = []
+    scanned_sources = 0
+    scanned_bytes = 0
     for turn_dir in sorted(history_dir.glob("turn-*"), key=_history_turn_sort_key, reverse=True):
         source_dir = turn_dir / RERUN_SOURCES_DIR
         if not source_dir.exists():
             continue
-        for source_path in sorted(source_dir.glob("*.json"), reverse=True):
+        for source_path in sorted(source_dir.glob("*.json"), key=_rerun_source_mtime, reverse=True):
+            try:
+                size_bytes = source_path.stat().st_size
+            except OSError:
+                continue
+            if scanned_sources >= RERUN_HISTORY_MAX_SOURCES:
+                return sorted(sources, key=_prior_rerun_source_sort_key, reverse=True)
+            scanned_sources += 1
+            if size_bytes > RERUN_SOURCE_MAX_BYTES or scanned_bytes + size_bytes > RERUN_HISTORY_MAX_BYTES:
+                continue
+            scanned_bytes += size_bytes
             source = _load_prior_rerun_source(source_path, workspace)
             if source:
                 sources.append(source)
     return sorted(sources, key=_prior_rerun_source_sort_key, reverse=True)
 
 
-def _workspace_knowledge_workbook_paths(workspace: Path) -> list[str]:
+def _workspace_knowledge_tabular_paths(workspace: Path) -> list[str]:
     knowledge_dir = workspace / "knowledge"
     if not knowledge_dir.exists():
         return []
-    suffixes = {".xlsx", ".xlsm", ".csv"}
     paths: list[str] = []
     for path in sorted(knowledge_dir.rglob("*")):
-        if path.is_file() and path.suffix.lower() in suffixes:
+        if path.is_file() and is_supported_tabular_path(path):
             paths.append(path.relative_to(workspace).as_posix())
     return paths
 
@@ -1270,16 +1330,46 @@ def _history_turn_sort_key(path: Path) -> int:
         return -1
 
 
+def _rerun_source_mtime(path: Path) -> int:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return -1
+
+
 def _load_prior_rerun_source(source_path: Path, workspace: Path) -> dict[str, Any] | None:
     try:
+        if source_path.stat().st_size > RERUN_SOURCE_MAX_BYTES:
+            return None
         loaded = json.loads(source_path.read_text(encoding="utf-8"))
     except Exception:
         return None
     if not isinstance(loaded, dict) or not isinstance(loaded.get("tasks"), list) or not loaded["tasks"]:
         return None
     loaded = compact_rerun_source_payload(loaded)
+    if not _rerun_source_refs_are_active(loaded, workspace):
+        return None
     loaded["workspace_path"] = source_path.relative_to(workspace).as_posix()
     return loaded
+
+
+def _rerun_source_refs_are_active(source: dict[str, Any], workspace: Path) -> bool:
+    repository = WorkspaceSourceRepository(workspace)
+    for task in source.get("tasks") or ():
+        if not isinstance(task, dict):
+            continue
+        metadata = task.get("metadata")
+        tabular = metadata.get("tabular") if isinstance(metadata, dict) else None
+        source_ref = str(tabular.get("source_ref") or "") if isinstance(tabular, dict) else ""
+        materialize_object = bool(tabular.get("materialize_object")) if isinstance(tabular, dict) else False
+        if source_ref.startswith(("attachments/", "knowledge/")) or materialize_object:
+            manifest = repository.find(source_ref)
+            if manifest is None:
+                return False
+            expected_hash = str(tabular.get("content_hash") or "") if isinstance(tabular, dict) else ""
+            if materialize_object and expected_hash and manifest.content_hash != expected_hash:
+                return False
+    return True
 
 
 def _prior_rerun_source_sort_key(source: dict[str, Any]) -> tuple[int, int]:
@@ -1303,12 +1393,13 @@ def _format_prior_rerun_source(source: dict[str, Any]) -> list[str]:
         f"  reason: {source.get('reason') or ''}",
     ]
     lines.append(f"  task titles: {_prior_rerun_task_titles(source)}")
-    inline_payload = _inline_prior_rerun_payload(source)
+    request = delegate_request_from_rerun_source(source)
+    inline_payload = _inline_prior_rerun_payload(request) if request is not None else ""
     if inline_payload:
-        lines.append("  Use rerun_input_json directly; do not read the source JSON unless this payload is missing.")
-        lines.append(f"  rerun_input_json: {inline_payload}")
+        lines.append("  Pass rerun_request_json directly as delegate.request_json.")
+        lines.append(f"  rerun_request_json: {inline_payload}")
     else:
-        lines.append("  Read the source JSON path above to recover the full TaskSpec list before delegating.")
+        lines.append("  This legacy source cannot be translated safely; ask the user to restate the execution target.")
     return lines
 
 
@@ -1319,11 +1410,6 @@ def _prior_rerun_task_titles(source: dict[str, Any], *, limit: int = 8) -> str:
     return "; ".join(shown) + suffix if shown else "unknown"
 
 
-def _inline_prior_rerun_payload(source: dict[str, Any], *, max_chars: int = RERUN_SOURCE_INLINE_MAX_CHARS) -> str:
-    payload = {
-        "reason": source.get("reason") or "rerun previous delegated tests",
-        "join_strategy": source.get("join_strategy") or "partial_ok",
-        "tasks": source.get("tasks") or [],
-    }
-    serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+def _inline_prior_rerun_payload(request: dict[str, Any], *, max_chars: int = RERUN_SOURCE_INLINE_MAX_CHARS) -> str:
+    serialized = json.dumps(request, ensure_ascii=False, separators=(",", ":"))
     return serialized if len(serialized) <= max_chars else ""

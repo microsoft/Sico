@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -34,6 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	conversationmodel "sico-backend/internal/biz/conversation/model"
 	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/consts"
 	conventity "sico-backend/internal/entity/conversation/conversation"
@@ -42,9 +23,12 @@ import (
 	"sico-backend/internal/infra/sse"
 	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/errcode"
+	messageRepo "sico-backend/internal/store/conversation/message/repository"
+	llmhubpb "sico-backend/internal/transport/grpc/pb/llmhubs"
 	singleagentpb "sico-backend/internal/transport/http/dto/agent/single_agent"
 	commondto "sico-backend/internal/transport/http/dto/common"
 	conversationdto "sico-backend/internal/transport/http/dto/conversation"
+	llmhubdto "sico-backend/internal/transport/http/dto/llmhubs"
 	projectdto "sico-backend/internal/transport/http/dto/project"
 	"sico-backend/internal/transport/http/middleware"
 	"sico-backend/pkg/env"
@@ -432,6 +416,124 @@ func (s *Service) Chat(ctx context.Context, sender sse.SSESender, req *conversat
 	return nil
 }
 
+func (s *Service) ValidateAgentInstanceAccess(ctx context.Context, agentInstanceID int64) error {
+	_, _, err := s.resolveAndAuthorizeAgent(ctx, agentInstanceID)
+	return err
+}
+
+func (s *Service) RunHeadlessChat(
+	ctx context.Context,
+	req *conversationmodel.HeadlessChatRequest,
+) (*conversationmodel.HeadlessChatResponse, error) {
+	if s.chatClient == nil {
+		return nil, apperr.New(errcode.ConversationChatServiceUnavailable, "chat service client is not configured")
+	}
+	singleAgent, agentInstance, err := s.resolveAndAuthorizeAgent(ctx, req.AgentInstanceID)
+	if err != nil {
+		return nil, err
+	}
+	username := middleware.MustGetUsernameFromCtx(ctx)
+	created, err := s.conversationRepo.Create(ctx, &conventity.Conversation{
+		CreatorUsername: username,
+		AgentInstanceID: req.AgentInstanceID,
+		AgentID:         singleAgent.GetAgentId(),
+		Title:           DefaultConversationTitle,
+		ExtraInfo: &conversationdto.ConversationExtraInfo{
+			ScheduledTaskId:    req.ScheduledTaskID,
+			ScheduledTaskRunId: req.ScheduledTaskRunID,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	request := &conversationdto.ChatRequestHttp{
+		Message: req.Message, AgentInstanceID: req.AgentInstanceID,
+		ConversationID: created.ID, Attachments: req.Attachments,
+	}
+	s.ensureChatAttachmentSAS(ctx, request.Attachments)
+	agentAttachments := agentInstance.GetAttachments()
+	s.ensureChatAttachmentSAS(ctx, agentAttachments)
+	turnID := s.nextTurnID(ctx, created)
+	result := &conversationmodel.HeadlessChatResponse{
+		ConversationID:    created.ID,
+		TurnID:            turnID,
+		DigitalWorkerName: agentInstance.GetName(),
+	}
+	if err := s.persistChatUserMessage(ctx, created, request, username, turnID, request.Attachments); err != nil {
+		return result, err
+	}
+	chatReq := s.buildChatRequest(
+		ctx, request, username, singleAgent, agentInstance, created, turnID,
+		request.Attachments, agentAttachments,
+	)
+	chatReq.SubmissionId = req.SubmissionID
+	_, streamErr := s.chatClient.StreamChat(ctx, chatReq)
+	planResp, err := s.chatClient.GetPlan(ctx, &conversationdto.GetPlanRequest{
+		Username:        username,
+		AgentInstanceId: req.AgentInstanceID,
+		TurnId:          turnID,
+		ConversationId:  created.ID,
+	})
+	if err == nil && planResp.GetData() != nil {
+		result.PlanStatus = planResp.GetData().GetStatus()
+		result.Plan = planResp.GetData().GetPlan()
+		normalizePlanDeliverables(result.Plan)
+	}
+	result.FinalResponse = s.getFinalAssistantResponse(ctx, created.ID, turnID)
+	if streamErr != nil {
+		return result, streamErr
+	}
+	if err != nil || planResp.GetData() == nil {
+		return result, apperr.New(errcode.CommonUnavailable, "failed to query final plan status")
+	}
+	return result, nil
+}
+
+func (s *Service) getFinalAssistantResponse(ctx context.Context, conversationID, turnID int64) string {
+	role := roleAssistant
+	messages, _, err := s.messageRepo.ListByFilter(ctx, &messageRepo.MessageFilter{
+		ConversationId:  &conversationID,
+		TurnId:          &turnID,
+		Role:            &role,
+		ContentTypeList: []conversationdto.ChatContentType{conversationdto.ChatContentType_CHAT_CONTENT_TYPE_TEXT},
+		IdDescending:    true,
+		UsePagination:   true,
+		Page:            1,
+		PageSize:        1,
+	})
+	if err != nil {
+		logger.CtxWarn(ctx, "headless chat final response lookup failed conversationId=%d turnId=%d err=%v",
+			conversationID, turnID, err)
+		return ""
+	}
+	if len(messages) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(messages[0].GetContent())
+}
+
+func (s *Service) resolveAndAuthorizeAgent(
+	ctx context.Context,
+	agentInstanceID int64,
+) (*singleagentpb.SingleAgent, *singleagentpb.SingleAgentInstance, error) {
+	if agentInstanceID == 0 {
+		return nil, nil, apperr.New(errcode.ConversationAgentInstanceRequired, "agentInstanceId is required")
+	}
+	singleAgent, agentInstance, err := s.resolveAgentContext(ctx, agentInstanceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if singleAgent == nil {
+		return nil, nil, apperr.New(errcode.ConversationAgentRequired, "agent not found for the given agent instance")
+	}
+	if agentInstance.GetProjectId() != 0 {
+		if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, agentInstance.GetProjectId(), "dw", "use"); err != nil {
+			return nil, nil, err
+		}
+	}
+	return singleAgent, agentInstance, nil
+}
+
 // Reconnect bridges the HTTP SSE endpoint to the gRPC ChatService StreamChat call.
 func (s *Service) Reconnect(ctx context.Context, sender sse.SSESender, req *conversationdto.ReconnectRequest) error {
 	username := middleware.MustGetUsernameFromCtx(ctx)
@@ -749,20 +851,38 @@ func (s *Service) nextTurnID(ctx context.Context, conversation *conventity.Conve
 	return lastTurnID + 1
 }
 
-// resolveAgentModel returns the agent's configured default model key.
-// If the agent has no LLMHub config or no default set, returns empty string
-// so that the core service falls back to the platform default model.
-func resolveAgentModel(agent *singleagentpb.SingleAgent) string {
-	if agent == nil {
+// resolveOrgModel resolves the organization's configured default model key.
+// Resolution path: agentInstance → project → organization → org LLM config.
+// If org_id is 0 (platform-predefined) or no config exists, returns empty
+// string so that the core service falls back to the platform default model.
+func (s *Service) resolveOrgModel(ctx context.Context, agentInstance *singleagentpb.SingleAgentInstance) string {
+	if agentInstance == nil || agentInstance.GetProjectId() == 0 {
+		return ""
+	}
+	if s.projectSvc == nil {
 		return ""
 	}
 
-	cfg := agent.GetLlmhubConfig()
-	if cfg == nil {
+	project, err := s.projectSvc.GetProject(ctx, &projectdto.GetProjectDetailRequest{Id: agentInstance.GetProjectId()})
+	if err != nil || project == nil || project.GetData() == nil {
+		return ""
+	}
+	orgID := project.GetData().GetOrganizationId()
+	if orgID <= 0 {
 		return ""
 	}
 
-	return cfg.GetDefaultGlobalModelKey()
+	if s.llmhubSvc == nil {
+		return ""
+	}
+	orgConfigResp, err := s.llmhubSvc.GetOrganizationLLMConfig(ctx, &llmhubdto.GetOrganizationLLMConfigRequest{
+		OrganizationId: orgID,
+	})
+	if err != nil || orgConfigResp == nil || orgConfigResp.Data == nil || orgConfigResp.Data.Config == nil {
+		return ""
+	}
+
+	return orgConfigResp.Data.Config.DefaultModelKey
 }
 
 func buildUserChatContent(message string, attachments []*commondto.Attachment) *conversationdto.ChatContent {
@@ -806,6 +926,20 @@ func (s *Service) buildChatRequest(
 		}
 	}
 
+	modelKey := s.resolveOrgModel(ctx, agentInstance)
+
+	// If the model is a custom DB model, resolve its full definition so core
+	// can use it directly without a separate fetch.
+	var modelDefinition *llmhubpb.RuntimeModelDefinition
+	if modelKey != "" && s.llmhubSvc != nil {
+		def, err := s.llmhubSvc.ResolveRuntimeModelDefinition(ctx, modelKey)
+		if err != nil {
+			logger.CtxWarn(ctx, "chat_resolve_model_definition_failed model=%s err=%v", modelKey, err)
+		} else {
+			modelDefinition = def
+		}
+	}
+
 	return &conversationdto.ChatRequest{
 		Username:          username,
 		Message:           buildUserChatContent(req.Message, requestAttachments),
@@ -818,7 +952,8 @@ func (s *Service) buildChatRequest(
 		TurnId:            turnID,
 		AgentAttachments:  agentAttachments,
 		ProjectId:         projectId,
-		Model:             resolveAgentModel(singleAgent),
+		Model:             modelKey,
+		ModelDefinition:   modelDefinition,
 		AgentRole:         agentRole,
 		NeedUpdateTitle:   conversation.Title == DefaultConversationTitle,
 		SubmissionId:      uuid.NewString(),

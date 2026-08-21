@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { AxiosInstance } from "axios";
@@ -85,9 +63,13 @@ describe("useAgentsQuery", () => {
     expect(result.current.data?.pages[0]?.items).toHaveLength(1);
     expect(get).toHaveBeenCalledWith("/agent/single_agent_instances", {
       params: {
-        isEmployer: false,
         page: 1,
         pageSize: DEFAULT_AGENTS_PAGE_SIZE,
+        orderBy: 3,
+        sortOrder: 1,
+        // Default (hide inactive) → concrete statuses except INACTIVE (4)
+        // and UNKNOWN (0, which the backend rejects).
+        statusList: "1,2,3,5,7",
       },
     });
     // Short page → no next page.
@@ -152,9 +134,11 @@ describe("useAgentsQuery — infinite", () => {
     expect(result.current.hasNextPage).toBe(false);
     expect(get).toHaveBeenNthCalledWith(2, "/agent/single_agent_instances", {
       params: {
-        isEmployer: false,
         page: 2,
         pageSize: DEFAULT_AGENTS_PAGE_SIZE,
+        orderBy: 3,
+        sortOrder: 1,
+        statusList: "1,2,3,5,7",
       },
     });
   });

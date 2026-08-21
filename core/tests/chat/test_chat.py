@@ -1,23 +1,3 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import asyncio
 import json
 from contextlib import asynccontextmanager
@@ -215,7 +195,37 @@ class TestChat:
         assert not unmarshalled[3].chat_response.is_internal
 
     @pytest.mark.asyncio
-    async def test_hard_fast_route_skips_intent_check_and_uses_fast_model(
+    async def test_agent_instance_ongoing_conversation_index(self, fake_redis):
+        from app.biz.chat.service import _get_agent_instance_ongoing_conversations_cache_key
+
+        request = ChatRequest(
+            agent_instance_id=42,
+            conversation_id=7,
+            message=ChatContent(type=ChatContentType.TEXT, content="Hello"),
+        )
+        chat_service = ChatService.get_instance()
+
+        await chat_service._add_agent_instance_ongoing_conversation(fake_redis, request)
+
+        key = _get_agent_instance_ongoing_conversations_cache_key(42)
+        assert "7" in fake_redis.store[key]
+
+        await chat_service._remove_agent_instance_ongoing_conversation(fake_redis, request)
+
+        assert "7" not in fake_redis.store[key]
+
+    @pytest.mark.asyncio
+    async def test_agent_instance_index_failure_does_not_fail_chat_status_update(self):
+        class FailingRedis:
+            async def zadd(self, *args, **kwargs):
+                raise RuntimeError("redis unavailable")
+
+        request = ChatRequest(agent_instance_id=42, conversation_id=7)
+
+        await ChatService.get_instance()._add_agent_instance_ongoing_conversation(FailingRedis(), request)
+
+    @pytest.mark.asyncio
+    async def test_hard_fast_route_skips_classifier_work_and_uses_fast_model(
         self,
         mocker: pytest_mock.MockerFixture,
         fake_redis,
@@ -235,7 +245,8 @@ class TestChat:
         mocker.patch.object(redis, "get_shared_redis", return_value=fake_redis)
         mocker.patch("app.biz.chat.service.build_agent", build_capturing_agent)
         mocker.patch("app.biz.chat.service.init_workspace", return_value=None)
-        intent_mock = mocker.patch("app.biz.chat.service.llm_intent_check")
+        intent_mock = mocker.patch("app.biz.chat.router.llm_intent_check")
+        sections_mock = mocker.patch.object(ChatService, "_build_context_sections", return_value={})
         mocker.patch.object(ReverseConversationService, "get_instance", return_value=FakeConversationService.get_instance())
         mocker.patch.object(EventBus, "get_instance", return_value=MockEventBus())
 
@@ -246,6 +257,9 @@ class TestChat:
         )
 
         intent_mock.assert_not_called()
+        # Those sections exist only to feed the classifier, so a guarded turn must
+        # not pay to scan the workspace for them.
+        sections_mock.assert_not_called()
         assert captured["model"] == "gpt-fast-test"
 
     @pytest.mark.asyncio

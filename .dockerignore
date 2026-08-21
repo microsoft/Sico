@@ -16,15 +16,19 @@
 
 # Python (core) build / cache artifacts
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 .venv/
+**/.venv/
 *.egg-info/
 dist/
 build/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+**/.pytest_cache/
+tmp/
 
 # Helm charts are deployed separately and not needed inside the images
 backend/deployments/helm/

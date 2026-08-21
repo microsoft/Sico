@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type * as React from "react";
 import { createElement, Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
@@ -29,13 +7,16 @@ import { AddKnowledgeTagAreaSkeleton } from "./add-knowledge-tag-area-skeleton";
 import { iconForFilename } from "../../../utils/file-icon";
 import { logger } from "../../../utils/logger";
 import { safeIconUri } from "../../../utils/safe-icon-uri";
+import { SECTION_TITLE_CLASS } from "../constants";
 import type { AssetDetail as AssetDetailData } from "../hooks/use-asset-detail-query";
 import { DocumentTypeSchema } from "../schemas/asset";
 import { formatDateTime } from "../utils/format-date-time";
 
 type KnowledgeDetail = Extract<AssetDetailData, { type: "knowledge" }>;
 
-const LABEL_CLASS = "text-foreground-secondary leading-body text-sm";
+// Section separator — same hairline the project drawer uses between its
+// sections, so both panels read identically.
+const DIVIDER = <hr className="border-divider w-full border-t border-solid" />;
 
 export type AssetDetailPanelProps = {
   asset: KnowledgeDetail;
@@ -65,8 +46,8 @@ function renderSourceFile(asset: KnowledgeDetail): React.JSX.Element | null {
     </div>
   );
   return (
-    <div className="flex flex-col gap-2">
-      <p className={LABEL_CLASS}>Source file</p>
+    <div className="flex flex-col gap-3">
+      <p className={SECTION_TITLE_CLASS}>Source file</p>
       {href ? (
         <a
           href={href}
@@ -99,14 +80,19 @@ export function AssetDetailPanel({
   return (
     <>
       <div className="flex flex-col gap-2">
-        <p className="leading-body-2 text-foreground-primary min-w-0 truncate font-medium">
+        <p className="text-foreground-primary min-w-0 truncate text-base leading-tight font-medium">
           {asset.name}
         </p>
         <p className="leading-body-2 text-foreground-primary">
           {asset.summary}
         </p>
-        <p className={LABEL_CLASS}>Uploaded by {asset.creatorUsername}</p>
+        {/* Muted caption — descriptive text, NOT a section eyebrow, so it
+            stays sentence-case and readable. */}
+        <p className="leading-body text-foreground-secondary text-sm">
+          Uploaded by {asset.creatorUsername}
+        </p>
       </div>
+      {DIVIDER}
       {/* A tag-source failure must not escalate to the page-level ErrorView —
           the local boundary swallows it so only the tag area drops out. Log so
           the silent fallback still leaves a trace. */}
@@ -119,13 +105,15 @@ export function AssetDetailPanel({
             projectId={projectId}
             value={tagIds}
             onChange={onRetag}
-            labelClassName={`${LABEL_CLASS} font-normal`}
+            labelClassName={SECTION_TITLE_CLASS}
           />
         </Suspense>
       </ErrorBoundary>
+      {DIVIDER}
       {renderSourceFile(asset)}
-      <div className="flex flex-col gap-2">
-        <p className={LABEL_CLASS}>Created time</p>
+      {DIVIDER}
+      <div className="flex flex-col gap-3">
+        <p className={SECTION_TITLE_CLASS}>Created time</p>
         <p className="leading-body-2 text-foreground-primary">
           {formatDateTime(asset.createdAt)}
         </p>

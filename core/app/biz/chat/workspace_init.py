@@ -1,28 +1,4 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-"""Workspace initialization for chat sessions.
-
-Copies skills, knowledge, history, and attachments into the unified
-workspace directory before a chat session starts.
-"""
+"""Stage skills, knowledge, bounded rerun context, and attachments for chat."""
 
 import asyncio
 import json
@@ -36,7 +12,12 @@ from typing import Any
 
 import requests
 
-from app.biz.task_runtime.rerun_sources import RERUN_SOURCES_DIR
+from app.biz.task_runtime.workspace.rerun_sources import (
+    RERUN_HISTORY_MAX_BYTES,
+    RERUN_HISTORY_MAX_SOURCES,
+    RERUN_SOURCES_DIR,
+    RERUN_SOURCE_MAX_BYTES,
+)
 from app.biz.skill.paths import latest_skill_version_dir
 from app.biz.skill.resolver import (
     ORIGINAL_DIR,
@@ -45,12 +26,9 @@ from app.biz.skill.resolver import (
     infer_required_parameter_names,
     load_resolved_actions,
 )
-from app.biz.chat.workspace_init_hooks import (
-    AttachmentHookContext,
-    dispatch_attachment_hooks,
-    iter_history_subdirs,
-)
 from app.biz.reverse_grpc.knowledge import ReverseKnowledgeService
+from app.biz.source import SourceManifest, WorkspaceSourceService, is_supported_tabular_path
+from app.biz.source.persistence.repository import WorkspaceSourceRepository
 from app.experiences.playbook import PlaybookStore
 from app.storage.fs import (
     CHAT_FS,
@@ -140,13 +118,22 @@ def _init_workspace_sync(  # noqa: PLR0913
         _copy_knowledge(workspace, project_id, agent_id)
     else:
         _clear_workspace_subdir(workspace, "knowledge")
+        WorkspaceSourceRepository(workspace).replace_refs("knowledge/", ())
     _clear_workspace_subdir(workspace, "history")
+    if options.include_history:
+        _copy_rerun_sources_history(
+            workspace,
+            agent_instance_id,
+            username,
+            turn_id,
+            conversation_id,
+        )
 
     if CLEAN_TMP_ON_WORKSPACE_INIT:
         _clear_workspace_subdir(workspace, ".tmp")
-    # ``results/`` (delegate_* task runtime artifacts) and ``case_sources/``
-    # (parsed workbook manifests) are retained across turns. Their filenames are
-    # content-/UUID-addressed (batch_id, run_id, ``<file>-<hash>.json``) so
+    # ``results/`` (delegate task-runtime artifacts), the conversation-private
+    # source repository, and legacy ``case_sources/`` are retained across turns. Their filenames are
+    # content-/UUID-addressed so
     # collisions cannot occur, and keeping them lets read/context tools and the
     # parse_document cache surface prior-turn outputs without re-parsing.
     if options.include_playbooks:
@@ -156,11 +143,7 @@ def _init_workspace_sync(  # noqa: PLR0913
     _copy_attachments(
         workspace,
         attachments,
-        turn_id,
         retain_previous=options.retain_previous_attachments,
-        agent_instance_id=agent_instance_id,
-        username=username,
-        conversation_id=conversation_id,
     )
 
 
@@ -355,107 +338,72 @@ def _copy_knowledge(workspace: Path, project_id: int, agent_id: str) -> None:
             _LOGGER.warning("Failed to fetch knowledge metadata: %s", exc)
 
     (knowledge_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifests = _index_tabular_tree(workspace, knowledge_dir)
+    WorkspaceSourceRepository(workspace).replace_refs("knowledge/", manifests)
     _LOGGER.info("Copied %d knowledge items to workspace", len(index))
 
 
-# ---------------------------------------------------------------------------
-# History
-# ---------------------------------------------------------------------------
-
-
-def _copy_history(workspace: Path, agent_instance_id: int, username: str, current_turn_id: int, conversation_id: int) -> None:
-    history_dir = workspace / "history"
-    if history_dir.exists():
-        shutil.rmtree(history_dir)
-    history_dir.mkdir(parents=True, exist_ok=True)
-
-    turn_ids = CHAT_FS.list_turn_ids(agent_instance_id, username, conversation_id)
-    # Exclude current turn, take last N
-    past_turns = [t for t in turn_ids if t < current_turn_id]
-    recent_turns = past_turns[-_HISTORY_TURN_COUNT:]
-
-    for tid in recent_turns:
-        turn_path = CHAT_FS.get_turn_path(agent_instance_id, username, tid, conversation_id)
-        if not turn_path.exists():
+def _index_tabular_tree(workspace: Path, root: Path) -> tuple[SourceManifest, ...]:
+    source_service = WorkspaceSourceService()
+    manifests: list[SourceManifest] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or not is_supported_tabular_path(path):
             continue
-        dest = history_dir / f"turn-{tid}"
-        dest.mkdir(parents=True, exist_ok=True)
-
-        # Copy plan.json
-        plan = turn_path / "plan.json"
-        if plan.exists():
-            shutil.copy2(plan, dest / "plan.json")
-
-        # Copy conversation.json
-        conv = turn_path / "conversation.json"
-        if conv.exists():
-            shutil.copy2(conv, dest / "conversation.json")
-
-        # Copy reports
-        report_dir = turn_path / "report"
-        if report_dir.exists():
-            dest_report = dest / "report"
-            shutil.copytree(report_dir, dest_report, dirs_exist_ok=True)
-
-    rerun_source_turns = _copy_rerun_sources_history(
-        workspace, agent_instance_id, username, conversation_id, turn_ids, current_turn_id
-    )
-    extra_history_turns = _copy_registered_history_subdirs(
-        workspace, agent_instance_id, username, conversation_id, turn_ids, current_turn_id
-    )
-
-    _LOGGER.info(
-        "Copied %d history turns, %d rerun source turns, and %d adapter history turns to workspace",
-        len(recent_turns),
-        rerun_source_turns,
-        extra_history_turns,
-    )
+        source_ref = path.relative_to(workspace).as_posix()
+        try:
+            manifests.append(source_service.index_path(workspace, source_ref, path))
+        except Exception:  # noqa: BLE001 - source indexing is optional enrichment.
+            _LOGGER.warning("Failed to index staged tabular source %s", source_ref, exc_info=True)
+    return tuple(manifests)
 
 
 def _copy_rerun_sources_history(
     workspace: Path,
     agent_instance_id: int,
     username: str,
-    conversation_id: int,
-    turn_ids: list[int],
     current_turn_id: int,
+    conversation_id: int,
 ) -> int:
     copied = 0
+    copied_sources = 0
+    copied_bytes = 0
+    turn_ids = CHAT_FS.list_turn_ids(agent_instance_id, username, conversation_id)
     for tid in sorted((turn_id for turn_id in turn_ids if turn_id < current_turn_id), reverse=True):
+        if copied >= _HISTORY_TURN_COUNT or copied_sources >= RERUN_HISTORY_MAX_SOURCES:
+            break
         source_dir = CHAT_FS.get_turn_path(agent_instance_id, username, tid, conversation_id) / RERUN_SOURCES_DIR
         if not source_dir.exists():
             continue
         dest = workspace / "history" / f"turn-{tid}" / RERUN_SOURCES_DIR
-        shutil.copytree(source_dir, dest, dirs_exist_ok=True)
-        copied += 1
-    return copied
-
-
-def _copy_registered_history_subdirs(
-    workspace: Path,
-    agent_instance_id: int,
-    username: str,
-    conversation_id: int,
-    turn_ids: list[int],
-    current_turn_id: int,
-) -> int:
-    subdirs = iter_history_subdirs()
-    if not subdirs:
-        return 0
-    copied = 0
-    for tid in sorted((turn_id for turn_id in turn_ids if turn_id < current_turn_id), reverse=True):
-        turn_root = CHAT_FS.get_turn_path(agent_instance_id, username, tid, conversation_id)
         copied_turn = False
-        for subdir in subdirs:
-            source_dir = turn_root / subdir
-            if not source_dir.exists():
+        for source_path in sorted(source_dir.glob("*.json"), key=_rerun_source_mtime, reverse=True):
+            try:
+                size_bytes = source_path.stat().st_size
+            except OSError:
                 continue
-            dest = workspace / "history" / f"turn-{tid}" / subdir
-            shutil.copytree(source_dir, dest, dirs_exist_ok=True)
+            if size_bytes > RERUN_SOURCE_MAX_BYTES:
+                continue
+            if copied_sources >= RERUN_HISTORY_MAX_SOURCES or copied_bytes + size_bytes > RERUN_HISTORY_MAX_BYTES:
+                break
+            dest.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(source_path, dest / source_path.name)
+            except OSError:
+                continue
+            copied_sources += 1
+            copied_bytes += size_bytes
             copied_turn = True
         if copied_turn:
             copied += 1
+    _LOGGER.info("Copied %d rerun source turns to workspace", copied)
     return copied
+
+
+def _rerun_source_mtime(path: Path) -> int:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return -1
 
 
 # ---------------------------------------------------------------------------
@@ -509,12 +457,8 @@ def _copy_playbooks(workspace: Path, agent_instance_id: int) -> None:
 def _copy_attachments(
     workspace: Path,
     attachments: list[Any] | None,
-    turn_id: int,
     *,
     retain_previous: bool = False,
-    agent_instance_id: int = 0,
-    username: str = "",
-    conversation_id: int = 0,
 ) -> None:
     attach_dir = workspace / "attachments"
     if not attachments:
@@ -522,6 +466,8 @@ def _copy_attachments(
             _LOGGER.info("Retained existing workspace attachments for later turns")
         elif attach_dir.exists():
             shutil.rmtree(attach_dir)
+        index = _load_attachment_index(attach_dir) if attach_dir.exists() else {}
+        _reconcile_attachment_refs(workspace, index)
         return
 
     if attach_dir.exists() and not retain_previous:
@@ -529,6 +475,7 @@ def _copy_attachments(
     attach_dir.mkdir(parents=True, exist_ok=True)
     index = _load_attachment_index(attach_dir) if retain_previous else {}
     copied = 0
+    manifests: list[SourceManifest] = []
 
     for attachment in attachments:
         name = _safe_attachment_name(getattr(attachment, "name", "") or "unnamed")
@@ -547,17 +494,11 @@ def _copy_attachments(
             target = attach_dir / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(resp.content)
-            dispatch_attachment_hooks(
-                AttachmentHookContext(
-                    path=target,
-                    name=name,
-                    attachment_type=att_type,
-                    agent_instance_id=agent_instance_id,
-                    username=username,
-                    conversation_id=conversation_id,
-                    turn_id=turn_id,
-                )
-            )
+            if is_supported_tabular_path(target):
+                try:
+                    manifests.append(WorkspaceSourceService().index_path(workspace, f"attachments/{name}", target))
+                except Exception:  # noqa: BLE001 - source indexing is optional enrichment.
+                    _LOGGER.warning("Failed to index tabular attachment %s", name, exc_info=True)
             # Save the SAS URL alongside the file for tools that need the original link
             url_file = attach_dir / f"{name}_url.txt"
             url_file.write_text(sas_url, encoding="utf-8")
@@ -573,7 +514,27 @@ def _copy_attachments(
             _LOGGER.warning("Failed to download attachment %s: %s", name, exc)
 
     _write_attachment_index(attach_dir, index)
+    _reconcile_attachment_refs(workspace, index, newly_indexed=manifests)
     _LOGGER.info("Downloaded %d attachments to workspace", copied)
+
+
+def _reconcile_attachment_refs(
+    workspace: Path,
+    index: dict[str, dict[str, Any]],
+    *,
+    newly_indexed: list[SourceManifest] | None = None,
+) -> None:
+    repository = WorkspaceSourceRepository(workspace)
+    manifests = {manifest.source_ref: manifest for manifest in newly_indexed or ()}
+    for item in index.values():
+        source_ref = str(item.get("path") or "")
+        source_path = workspace / source_ref
+        if not source_ref.startswith("attachments/") or not source_path.is_file():
+            continue
+        manifest = manifests.get(source_ref) or repository.find(source_ref)
+        if manifest is not None:
+            manifests[source_ref] = manifest
+    repository.replace_refs("attachments/", manifests.values())
 
 
 def _load_attachment_index(attach_dir: Path) -> dict[str, dict[str, Any]]:

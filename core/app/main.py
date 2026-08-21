@@ -1,27 +1,8 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 import asyncio
 import logging
 import os
 import signal
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
@@ -34,11 +15,13 @@ from grpclib.reflection.service import ServerReflection
 from grpclib.server import Server
 
 from app.biz.chat.service import ChatService
-from app.biz.task_runtime.manager import run_task_runtime_startup_reconciler
-from app.biz.task_runtime.subscribers import register_default_subscribers
+from app.biz.task_runtime import default_agent_profile_resolver, run_task_runtime_startup_reconciler
+from app.biz.task_runtime.events.subscribers import register_default_subscribers
 from app.biz.llm.service import LLMHubService
 from app.biz.health.service import HealthService
 from app.biz.knowledge import KnowledgeService
+from app.biz.reverse_grpc.auth_state import ReverseAuthStateService
+from app.biz.reverse_grpc.case_replay import ReverseCaseReplayService
 from app.biz.reverse_grpc.conversation import ReverseConversationService
 from app.biz.reverse_grpc.knowledge import ReverseKnowledgeService
 from app.biz.reverse_grpc.llmhubs import ReverseLLMHubService
@@ -50,6 +33,8 @@ from app.schemas import consts
 from app.storage.redis import init_shared_redis
 from app.storage.sandbox_pod import delete_tracked_sandbox_pods, run_sandbox_pod_reaper
 from app.utils.cache import Cache
+from app.utils.otel import instrument_grpclib_services, setup_otel
+from app.utils.redis_config import redis_url_from_environment
 from app.utils.runner import AsyncJobRunner
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -59,26 +44,22 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def serve():
-    shutdown_event = asyncio.Event()
-    _install_shutdown_handlers(shutdown_event)
+    # Validate the immutable profile catalog before initializing process resources.
+    default_agent_profile_resolver()
+    shutdown_event, otel_shutdown = _initialize_process_runtime()
     # Initialize and start job runner
     runner = AsyncJobRunner(workers=16, max_queue=200)
     task_runtime_stop = asyncio.Event()
+    task_runtime_reconciler: asyncio.Task[None] | None = None
     sandbox_pod_reaper: asyncio.Task[None] | None = None
 
     # redis
-    redis_host = os.getenv("REDIS_HOST", "localhost")
-    redis_port = os.getenv("REDIS_PORT", "6379")
-    redis_password = os.getenv("REDIS_PASSWORD", "")
-    redis_url = f"redis://{redis_host}:{redis_port}"
-    if redis_password:
-        redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}"
+    redis_url = redis_url_from_environment()
     server = grpc.aio.server()
 
     await init_shared_redis(redis_url)
     await runner.start()
-    mem0_filepath = Path(__file__).resolve().parent.parent / "config" / "mem0" / "mem0_config.yaml"
-    await init_shared_mem0(mem0_filepath)
+    await init_shared_mem0(_resolve_mem0_config_path())
 
     # Register built-in task_runtime event-bus subscribers (audit log,
     # in-process metrics). Must happen before the reconciler / gRPC server
@@ -104,6 +85,9 @@ async def serve():
     ReverseConversationService.get_instance().initialize(reverse_channel)
     ReverseSandboxService.get_instance().initialize(reverse_channel)
     ReverseTaskRuntimeService.get_instance().initialize(reverse_channel)
+    ReverseAuthStateService.get_instance().initialize(reverse_channel)
+    ReverseCaseReplayService.get_instance().initialize(reverse_channel)
+    _initialize_private_sandbox(reverse_channel)
 
     # connect to shared gRPC service
     shared_grpc_address = os.getenv("SHARED_GRPC_ADDRESS", "localhost:50052")
@@ -124,6 +108,7 @@ async def serve():
         SkillService(),
     ]
 
+    services = instrument_grpclib_services(services)
     services = ServerReflection.extend(services)
     # Configure grpclib for large message support
     # Increase window sizes to handle messages larger than default 4MB
@@ -137,9 +122,9 @@ async def serve():
     host, port = server_address.split(":")
     _LOGGER.info("Starting gRPC server at %s...", server_address)
 
-    task_runtime_reconciler = asyncio.create_task(run_task_runtime_startup_reconciler(task_runtime_stop))
-    sandbox_pod_reaper = asyncio.create_task(run_sandbox_pod_reaper(task_runtime_stop))
     try:
+        task_runtime_reconciler = asyncio.create_task(run_task_runtime_startup_reconciler(task_runtime_stop))
+        sandbox_pod_reaper = asyncio.create_task(run_sandbox_pod_reaper(task_runtime_stop))
         await server.start(host, int(port))
         await _wait_for_server_shutdown(server, shutdown_event)
     except asyncio.CancelledError:
@@ -150,8 +135,34 @@ async def serve():
         server.close()
         with suppress(asyncio.CancelledError):
             await server.wait_closed()
+        reverse_channel.close()
         shared_channel.close()
         await runner.close()
+        otel_shutdown()
+
+
+def _initialize_process_runtime() -> tuple[asyncio.Event, Callable[[], None]]:
+    shutdown_event = asyncio.Event()
+    _install_shutdown_handlers(shutdown_event)
+    return shutdown_event, setup_otel("sico-core")
+
+
+def _resolve_mem0_config_path() -> Path:
+    application_root = Path(__file__).resolve().parent.parent
+    packaged = application_root / "config" / "mem0" / "mem0_config.yaml"
+    if packaged.exists():
+        return packaged
+    return application_root.parent / "deploy" / "config" / "mem0" / "mem0_config.yaml"
+
+
+def _initialize_private_sandbox(reverse_grpc_channel: grpc.Channel) -> None:
+    try:
+        from app.biz.private_sandbox.service import ReversePrivateSandboxService
+    except ModuleNotFoundError as exc:
+        if exc.name != "app.biz.private_sandbox":
+            raise
+    else:
+        ReversePrivateSandboxService.get_instance().initialize(reverse_grpc_channel)
 
 
 def _install_shutdown_handlers(shutdown_event: asyncio.Event) -> None:

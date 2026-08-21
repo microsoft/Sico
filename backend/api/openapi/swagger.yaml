@@ -1,19 +1,4 @@
 definitions:
-  sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption:
-    properties:
-      description:
-        type: string
-      displayName:
-        type: string
-      iconUri:
-        type: string
-      modelKey:
-        type: string
-      modelType:
-        type: integer
-      providerTemplateType:
-        type: integer
-    type: object
   sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentData:
     properties:
       agentId:
@@ -46,11 +31,13 @@ definitions:
         type: string
       name:
         type: string
+      projectId:
+        type: integer
       role:
         type: string
     required:
-    - employerUsername
     - name
+    - projectId
     type: object
   sico-backend_internal_transport_http_dto_agent_single_agent.CreateSingleAgentInstanceResponse:
     properties:
@@ -68,11 +55,11 @@ definitions:
         type: string
       iconUri:
         type: string
-      llmhubConfig:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig'
       name:
         maxLength: 100
         type: string
+      organizationId:
+        type: integer
       role:
         type: string
     required:
@@ -130,6 +117,20 @@ definitions:
       msg:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.DismissSingleAgentInstanceRequest:
+    properties:
+      id:
+        type: integer
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.DismissSingleAgentInstanceResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentData:
     properties:
       agent:
@@ -149,28 +150,6 @@ definitions:
       msg:
         type: string
     type: object
-  sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsData:
-    properties:
-      builtinModels:
-        items:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption'
-        type: array
-      customModels:
-        items:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.AgentModelOption'
-        type: array
-      selectedConfig:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig'
-    type: object
-  sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsResponse:
-    properties:
-      code:
-        type: integer
-      data:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsData'
-      msg:
-        type: string
-    type: object
   sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentResponse:
     properties:
       code:
@@ -180,15 +159,21 @@ definitions:
       msg:
         type: string
     type: object
-  sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig:
-    properties:
-      defaultGlobalModelKey:
-        type: string
-      modelKeys:
-        items:
-          type: string
-        type: array
-    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ListAgentIntent:
+    enum:
+    - 0
+    - 1
+    format: int32
+    type: integer
+    x-enum-comments:
+      ListAgentIntent_LIST_AGENT_INTENT_DEPLOY: 'Operator: pick agents to deploy'
+      ListAgentIntent_LIST_AGENT_INTENT_MANAGE: 'Developer: configure agents (default)'
+    x-enum-descriptions:
+    - 'Developer: configure agents (default)'
+    - 'Operator: pick agents to deploy'
+    x-enum-varnames:
+    - ListAgentIntent_LIST_AGENT_INTENT_MANAGE
+    - ListAgentIntent_LIST_AGENT_INTENT_DEPLOY
   sico-backend_internal_transport_http_dto_agent_single_agent.ListRolesData:
     properties:
       role:
@@ -261,6 +246,37 @@ definitions:
       msg:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.PublishSingleAgentRequest:
+    properties:
+      agentId:
+        type: string
+    required:
+    - agentId
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.PublishSingleAgentResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ReassignSingleAgentInstanceRequest:
+    properties:
+      id:
+        type: integer
+      newOperatorUsername:
+        type: string
+    required:
+    - id
+    - newOperatorUsername
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.ReassignSingleAgentInstanceResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgent:
     properties:
       agentId:
@@ -273,10 +289,12 @@ definitions:
         type: string
       iconUri:
         type: string
-      llmhubConfig:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig'
       name:
         type: string
+      organizationId:
+        type: integer
+      publishStatus:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentPublishStatus'
       rawIconUri:
         type: string
       role:
@@ -311,6 +329,8 @@ definitions:
         items:
           $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
         type: array
+      conversationStatus:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.ConversationRunStatus'
       createdAt:
         type: integer
       desc:
@@ -339,11 +359,76 @@ definitions:
         type: string
       sandboxes:
         items:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.InstanceSandboxStatusInfo'
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.SandboxDigest'
         type: array
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstanceStatus'
       updatedAt:
         type: integer
     type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstanceOrderBy:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-comments:
+      SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT: ORDER
+        BY status, updated_at
+      SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED: 'Default:
+        ID'
+    x-enum-descriptions:
+    - 'Default: ID'
+    - ""
+    - ""
+    - ORDER BY status, updated_at
+    x-enum-varnames:
+    - SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED
+    - SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_ID
+    - SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT
+    - SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT
+  sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstanceStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - SingleAgentInstanceStatus_INSTANCE_UNKNOWN
+    - SingleAgentInstanceStatus_INSTANCE_ONBOARDING
+    - SingleAgentInstanceStatus_INSTANCE_NEW
+    - SingleAgentInstanceStatus_INSTANCE_ACTIVE
+    - SingleAgentInstanceStatus_INSTANCE_INACTIVE
+    - SingleAgentInstanceStatus_INSTANCE_ABORTED
+    - SingleAgentInstanceStatus_INSTANCE_DELETED
+    - SingleAgentInstanceStatus_INSTANCE_ONBOARDING_SAVED
+  sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentPublishStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    format: int32
+    type: integer
+    x-enum-comments:
+      SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_ARCHIVED: Archived
+      SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_DRAFT: Draft
+      SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED: Published
+    x-enum-descriptions:
+    - Draft
+    - Published
+    - Archived
+    x-enum-varnames:
+    - SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_DRAFT
+    - SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED
+    - SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_ARCHIVED
   sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceRequest:
     properties:
       attachments:
@@ -370,6 +455,22 @@ definitions:
       msg:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceStatusRequest:
+    properties:
+      id:
+        type: integer
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.SingleAgentInstanceStatus'
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceStatusResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentRequest:
     properties:
       agentId:
@@ -379,8 +480,6 @@ definitions:
         type: string
       iconUri:
         type: string
-      llmhubConfig:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.LLMHubConfig'
       name:
         maxLength: 100
         type: string
@@ -394,6 +493,141 @@ definitions:
       code:
         type: integer
       msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_authstate.AuthState:
+    properties:
+      accountKey:
+        type: string
+      createdAt:
+        type: integer
+      expiresAt:
+        type: integer
+      id:
+        type: integer
+      lastValidatedAt:
+        type: integer
+      metadata:
+        type: string
+      siteHost:
+        type: string
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.AuthStateStatus'
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_authstate.AuthStateStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-comments:
+      AuthStateStatus_AUTH_STATE_STATUS_DISABLED: '@gotag: json:"AUTH_STATE_STATUS_DISABLED"'
+      AuthStateStatus_AUTH_STATE_STATUS_EXPIRED: '@gotag: json:"AUTH_STATE_STATUS_EXPIRED"'
+      AuthStateStatus_AUTH_STATE_STATUS_UNKNOWN: '@gotag: json:"AUTH_STATE_STATUS_UNKNOWN"'
+      AuthStateStatus_AUTH_STATE_STATUS_VALID: '@gotag: json:"AUTH_STATE_STATUS_VALID"'
+    x-enum-descriptions:
+    - '@gotag: json:"AUTH_STATE_STATUS_UNKNOWN"'
+    - '@gotag: json:"AUTH_STATE_STATUS_VALID"'
+    - '@gotag: json:"AUTH_STATE_STATUS_EXPIRED"'
+    - '@gotag: json:"AUTH_STATE_STATUS_DISABLED"'
+    x-enum-varnames:
+    - AuthStateStatus_AUTH_STATE_STATUS_UNKNOWN
+    - AuthStateStatus_AUTH_STATE_STATUS_VALID
+    - AuthStateStatus_AUTH_STATE_STATUS_EXPIRED
+    - AuthStateStatus_AUTH_STATE_STATUS_DISABLED
+  sico-backend_internal_transport_http_dto_authstate.GetAuthStateData:
+    properties:
+      authState:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.AuthState'
+    type: object
+  sico-backend_internal_transport_http_dto_authstate.GetAuthStateResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.GetAuthStateData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_authstate.ImportAuthStateData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_authstate.ImportAuthStateRequest:
+    properties:
+      accountKey:
+        type: string
+      expiresAt:
+        type: integer
+      metadata:
+        type: string
+      siteHost:
+        type: string
+      storageState:
+        type: string
+    required:
+    - accountKey
+    - siteHost
+    - storageState
+    type: object
+  sico-backend_internal_transport_http_dto_authstate.ImportAuthStateResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.ImportAuthStateData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_authstate.UpdateAuthStateStatusRequest:
+    properties:
+      accountKey:
+        type: string
+      siteHost:
+        type: string
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.AuthStateStatus'
+    required:
+    - accountKey
+    - siteHost
+    - status
+    type: object
+  sico-backend_internal_transport_http_dto_authstate.UpdateAuthStateStatusResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_common.AgentDigest:
+    properties:
+      agentId:
+        type: string
+      iconUri:
+        type: string
+      iconUrl:
+        type: string
+      name:
+        type: string
+      organizationId:
+        type: integer
+      role:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_common.AgentInstanceDigest:
+    properties:
+      agentIconUrl:
+        type: string
+      agentName:
+        type: string
+      id:
+        type: integer
+      operatorUsername:
         type: string
     type: object
   sico-backend_internal_transport_http_dto_common.Attachment:
@@ -411,12 +645,90 @@ definitions:
       uri:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_common.ConversationRunStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    format: int32
+    type: integer
+    x-enum-varnames:
+    - ConversationRunStatus_CONVERSATION_RUN_STATUS_UNKNOWN
+    - ConversationRunStatus_CONVERSATION_RUN_STATUS_RUNNING
+    - ConversationRunStatus_CONVERSATION_RUN_STATUS_IDLE
+  sico-backend_internal_transport_http_dto_common.ProjectDigest:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_common.SandboxDigest:
+    properties:
+      displayName:
+        type: string
+      docsUrl:
+        type: string
+      endpoint:
+        type: string
+      instanceId:
+        type: integer
+      organizationId:
+        type: integer
+      projectId:
+        type: integer
+      sandboxId:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+      vncUrl:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_common.ScheduledTaskDigest:
+    properties:
+      id:
+        type: integer
+      title:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_common.SortOrder:
+    enum:
+    - 0
+    - 1
+    - 2
+    format: int32
+    type: integer
+    x-enum-comments:
+      SortOrder_SORT_ORDER_UNSPECIFIED: 'Default: DESC'
+    x-enum-descriptions:
+    - 'Default: DESC'
+    - ""
+    - ""
+    x-enum-varnames:
+    - SortOrder_SORT_ORDER_UNSPECIFIED
+    - SortOrder_SORT_ORDER_ASC
+    - SortOrder_SORT_ORDER_DESC
   sico-backend_internal_transport_http_dto_common.StandardResponse:
     properties:
       code:
         type: integer
       data: {}
       msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_common.UserDigest:
+    properties:
+      alias:
+        type: string
+      email:
+        type: string
+      iconUrl:
+        type: string
+      id:
+        type: integer
+      username:
         type: string
     type: object
   sico-backend_internal_transport_http_dto_conversation.AgentInstanceInfo:
@@ -529,6 +841,8 @@ definitions:
         type: integer
       creatorUsername:
         type: string
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationExtraInfo'
       id:
         type: integer
       lastSectionId:
@@ -540,12 +854,23 @@ definitions:
       title:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_conversation.ConversationExtraInfo:
+    properties:
+      scheduledTaskId:
+        type: integer
+      scheduledTaskRunId:
+        type: integer
+    type: object
   sico-backend_internal_transport_http_dto_conversation.ConversationListItem:
     properties:
+      conversationStatus:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.ConversationRunStatus'
       createdAt:
         type: integer
       creatorUsername:
         type: string
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ConversationExtraInfo'
       id:
         type: integer
       title:
@@ -951,9 +1276,13 @@ definitions:
     properties:
       acquiredSandbox:
         $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolDeliverableAcquiredSandbox'
+      file:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.ToolDeliverableFile'
       fileName:
+        description: 'Deprecated: Marked as deprecated in conversation/plan.proto.'
         type: string
       fileUrl:
+        description: 'Deprecated: Marked as deprecated in conversation/plan.proto.'
         type: string
       markdownContent:
         type: string
@@ -979,6 +1308,15 @@ definitions:
       sandboxType:
         type: string
       vncUrl:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_conversation.ToolDeliverableFile:
+    properties:
+      fileName:
+        type: string
+      fileSasUrl:
+        type: string
+      fileUri:
         type: string
     type: object
   sico-backend_internal_transport_http_dto_conversation.ToolDeliverableType:
@@ -1106,6 +1444,13 @@ definitions:
         type: string
     type: object
   sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgeDocumentResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgePlaybookResponse:
     properties:
       code:
         type: integer
@@ -1272,12 +1617,50 @@ definitions:
     - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_UNKNOWN
     - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_FILE
     - KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK
+  sico-backend_internal_transport_http_dto_knowledge.KnowledgeItem:
+    properties:
+      deliverable:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectDeliverable'
+      document:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeDocument'
+      playbook:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybook'
+      type:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeItemType'
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.KnowledgeItemType:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    format: int32
+    type: integer
+    x-enum-comments:
+      KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DELIVERABLE: '@gotag: json:"KNOWLEDGE_ITEM_TYPE_DELIVERABLE"'
+      KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DOCUMENT: '@gotag: json:"KNOWLEDGE_ITEM_TYPE_DOCUMENT"'
+      KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_PLAYBOOK: '@gotag: json:"KNOWLEDGE_ITEM_TYPE_PLAYBOOK"'
+      KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_UNKNOWN: '@gotag: json:"KNOWLEDGE_ITEM_TYPE_UNKNOWN"'
+    x-enum-descriptions:
+    - '@gotag: json:"KNOWLEDGE_ITEM_TYPE_UNKNOWN"'
+    - '@gotag: json:"KNOWLEDGE_ITEM_TYPE_DOCUMENT"'
+    - '@gotag: json:"KNOWLEDGE_ITEM_TYPE_PLAYBOOK"'
+    - '@gotag: json:"KNOWLEDGE_ITEM_TYPE_DELIVERABLE"'
+    x-enum-varnames:
+    - KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_UNKNOWN
+    - KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DOCUMENT
+    - KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_PLAYBOOK
+    - KnowledgeItemType_KNOWLEDGE_ITEM_TYPE_DELIVERABLE
   sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybook:
     properties:
       agentInstanceId:
         type: integer
       createdAt:
         type: integer
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybookExtraInfo'
       id:
         type: integer
       name:
@@ -1290,6 +1673,11 @@ definitions:
         type: array
       updatedAt:
         type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.KnowledgePlaybookExtraInfo:
+    properties:
+      agentInstance:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.AgentInstanceDigest'
     type: object
   sico-backend_internal_transport_http_dto_knowledge.KnowledgeTag:
     properties:
@@ -1325,6 +1713,26 @@ definitions:
         type: integer
       data:
         $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeDocumentData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeItemsData:
+    properties:
+      hasNext:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.KnowledgeItem'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeItemsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeItemsData'
       msg:
         type: string
     type: object
@@ -1464,8 +1872,6 @@ definitions:
     type: object
   sico-backend_internal_transport_http_dto_llmhubs.CreateModelRegistryRequest:
     properties:
-      agentId:
-        type: string
       auth:
         $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.AuthConfig'
       config:
@@ -1480,6 +1886,8 @@ definitions:
       modelType:
         maximum: 3
         minimum: 1
+        type: integer
+      organizationId:
         type: integer
       providerTemplateType:
         maximum: 7
@@ -1514,10 +1922,17 @@ definitions:
       msg:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_llmhubs.GetOrganizationLLMConfigResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfigData'
+      msg:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_llmhubs.ModelRegistryEntry:
     properties:
-      agentId:
-        type: string
       config:
         $ref: '#/definitions/structpb.Struct'
       createdAt:
@@ -1540,6 +1955,8 @@ definitions:
         type: string
       modelType:
         type: integer
+      organizationId:
+        type: integer
       providerTemplateType:
         type: integer
       status:
@@ -1548,6 +1965,22 @@ definitions:
         type: integer
       updaterUsername:
         type: string
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfig:
+    properties:
+      createdAt:
+        type: integer
+      defaultModelKey:
+        type: string
+      organizationId:
+        type: integer
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfigData:
+    properties:
+      config:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfig'
     type: object
   sico-backend_internal_transport_http_dto_llmhubs.RuntimeArtifact:
     properties:
@@ -1700,6 +2133,423 @@ definitions:
       totalTokens:
         type: integer
     type: object
+  sico-backend_internal_transport_http_dto_llmhubs.SetOrganizationLLMConfigRequest:
+    properties:
+      defaultModelKey:
+        type: string
+      organizationId:
+        type: integer
+    required:
+    - organizationId
+    type: object
+  sico-backend_internal_transport_http_dto_llmhubs.SetOrganizationLLMConfigResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.OrganizationLLMConfigData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_notification.CreateNotificationData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_notification.CreateNotificationRequest:
+    properties:
+      content:
+        type: string
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfo'
+      receiverUsername:
+        type: string
+      type:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationType'
+    type: object
+  sico-backend_internal_transport_http_dto_notification.CreateNotificationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.CreateNotificationData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_notification.ListNotificationData:
+    properties:
+      hasMore:
+        type: boolean
+      notifications:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.Notification'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_notification.ListNotificationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.ListNotificationData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_notification.ListProjectNotificationsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.ListNotificationData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_notification.Notification:
+    properties:
+      content:
+        type: string
+      createdAt:
+        type: integer
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfo'
+      id:
+        type: integer
+      projectId:
+        type: integer
+      receiverUsername:
+        type: string
+      senderUsername:
+        type: string
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationStatus'
+      type:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationType'
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_notification.NotificationExtraInfo:
+    properties:
+      agentEditorUpdate:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoAgentEditorUpdate'
+      deliverable:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoDeliverable'
+      dwAction:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoDwAction'
+      roleChange:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoRoleChange'
+      scheduledTaskFinished:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoScheduledTaskFinished'
+    type: object
+  sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoAgentEditorUpdate:
+    properties:
+      agent:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.AgentDigest'
+      operator:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.UserDigest'
+    type: object
+  sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoDeliverable:
+    properties:
+      agentInstanceIconUri:
+        type: string
+      agentInstanceIconUrl:
+        type: string
+      agentInstanceId:
+        type: integer
+      agentInstanceName:
+        type: string
+      deliverableId:
+        type: integer
+      fileName:
+        type: string
+      fileUri:
+        type: string
+      projectName:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoDwAction:
+    properties:
+      agentInstanceIconUri:
+        type: string
+      agentInstanceIconUrl:
+        type: string
+      agentInstanceId:
+        type: integer
+      agentInstanceName:
+        type: string
+      newOperatorUsername:
+        type: string
+      oldOperatorUsername:
+        type: string
+      projectName:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoRoleChange:
+    properties:
+      action:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.RoleChangeAction'
+      project:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.ProjectDigest'
+      roleCode:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_notification.NotificationExtraInfoScheduledTaskFinished:
+    properties:
+      conversationId:
+        type: integer
+      scheduledFor:
+        type: integer
+      scheduledTaskRunId:
+        type: integer
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.PlanStatus'
+      task:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.ScheduledTaskDigest'
+    type: object
+  sico-backend_internal_transport_http_dto_notification.NotificationStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    format: int32
+    type: integer
+    x-enum-comments:
+      NotificationStatus_NOTIFICATION_STATUS_READ: '@gotag: json:"NOTIFICATION_STATUS_READ"'
+      NotificationStatus_NOTIFICATION_STATUS_UNKNOWN: '@gotag: json:"NOTIFICATION_STATUS_UNKNOWN"'
+      NotificationStatus_NOTIFICATION_STATUS_UNREAD: '@gotag: json:"NOTIFICATION_STATUS_UNREAD"'
+    x-enum-descriptions:
+    - '@gotag: json:"NOTIFICATION_STATUS_UNKNOWN"'
+    - '@gotag: json:"NOTIFICATION_STATUS_READ"'
+    - '@gotag: json:"NOTIFICATION_STATUS_UNREAD"'
+    x-enum-varnames:
+    - NotificationStatus_NOTIFICATION_STATUS_UNKNOWN
+    - NotificationStatus_NOTIFICATION_STATUS_READ
+    - NotificationStatus_NOTIFICATION_STATUS_UNREAD
+  sico-backend_internal_transport_http_dto_notification.NotificationType:
+    enum:
+    - 0
+    - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+    - 13
+    - 14
+    - 15
+    format: int32
+    type: integer
+    x-enum-comments:
+      NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED: '@gotag: json:"NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED"'
+      NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED: '@gotag: json:"NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED"'
+      NotificationType_NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED: '@gotag: json:"NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED"'
+      NotificationType_NOTIFICATION_TYPE_DW_DISMISSED: '@gotag: json:"NOTIFICATION_TYPE_DW_DISMISSED"'
+      NotificationType_NOTIFICATION_TYPE_DW_REASSIGNED: '@gotag: json:"NOTIFICATION_TYPE_DW_REASSIGNED"'
+      NotificationType_NOTIFICATION_TYPE_MEMBER_INVITATION: '@gotag: json:"NOTIFICATION_TYPE_MEMBER_INVITATION"'
+      NotificationType_NOTIFICATION_TYPE_MEMBER_REMOVED: '@gotag: json:"NOTIFICATION_TYPE_MEMBER_REMOVED"'
+      NotificationType_NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED: '@gotag: json:"NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED"'
+      NotificationType_NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED: '@gotag: json:"NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED"'
+      NotificationType_NOTIFICATION_TYPE_UNKNOWN: '@gotag: json:"NOTIFICATION_TYPE_UNKNOWN"'
+    x-enum-descriptions:
+    - '@gotag: json:"NOTIFICATION_TYPE_UNKNOWN"'
+    - '@gotag: json:"NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED"'
+    - '@gotag: json:"NOTIFICATION_TYPE_DW_DISMISSED"'
+    - '@gotag: json:"NOTIFICATION_TYPE_DW_REASSIGNED"'
+    - '@gotag: json:"NOTIFICATION_TYPE_MEMBER_INVITATION"'
+    - '@gotag: json:"NOTIFICATION_TYPE_MEMBER_REMOVED"'
+    - '@gotag: json:"NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED"'
+    - '@gotag: json:"NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED"'
+    - '@gotag: json:"NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED"'
+    - '@gotag: json:"NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED"'
+    x-enum-varnames:
+    - NotificationType_NOTIFICATION_TYPE_UNKNOWN
+    - NotificationType_NOTIFICATION_TYPE_DELIVERABLE_PUBLISHED
+    - NotificationType_NOTIFICATION_TYPE_DW_DISMISSED
+    - NotificationType_NOTIFICATION_TYPE_DW_REASSIGNED
+    - NotificationType_NOTIFICATION_TYPE_MEMBER_INVITATION
+    - NotificationType_NOTIFICATION_TYPE_MEMBER_REMOVED
+    - NotificationType_NOTIFICATION_TYPE_PROJECT_ROLE_CHANGED
+    - NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED
+    - NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_REVOKED
+    - NotificationType_NOTIFICATION_TYPE_SCHEDULED_TASK_FINISHED
+  sico-backend_internal_transport_http_dto_notification.ReadAllNotificationsData:
+    properties:
+      ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  sico-backend_internal_transport_http_dto_notification.ReadAllNotificationsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.ReadAllNotificationsData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_notification.RoleChangeAction:
+    enum:
+    - 0
+    - 1
+    - 2
+    format: int32
+    type: integer
+    x-enum-comments:
+      RoleChangeAction_ROLE_CHANGE_ACTION_ASSIGNED: '@gotag: json:"ROLE_CHANGE_ACTION_ASSIGNED"'
+      RoleChangeAction_ROLE_CHANGE_ACTION_REMOVED: '@gotag: json:"ROLE_CHANGE_ACTION_REMOVED"'
+      RoleChangeAction_ROLE_CHANGE_ACTION_UNSPECIFIED: '@gotag: json:"ROLE_CHANGE_ACTION_UNSPECIFIED"'
+    x-enum-descriptions:
+    - '@gotag: json:"ROLE_CHANGE_ACTION_UNSPECIFIED"'
+    - '@gotag: json:"ROLE_CHANGE_ACTION_ASSIGNED"'
+    - '@gotag: json:"ROLE_CHANGE_ACTION_REMOVED"'
+    x-enum-varnames:
+    - RoleChangeAction_ROLE_CHANGE_ACTION_UNSPECIFIED
+    - RoleChangeAction_ROLE_CHANGE_ACTION_ASSIGNED
+    - RoleChangeAction_ROLE_CHANGE_ACTION_REMOVED
+  sico-backend_internal_transport_http_dto_notification.UpdateNotificationStatusRequest:
+    properties:
+      id:
+        type: integer
+      status:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationStatus'
+    type: object
+  sico-backend_internal_transport_http_dto_notification.UpdateNotificationStatusResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.CreateOrganizationRequest:
+    properties:
+      description:
+        maxLength: 2000
+        type: string
+      name:
+        maxLength: 256
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
+  sico-backend_internal_transport_http_dto_organization.CreateOrganizationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.CreateOrganizationResponseData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_organization.DeleteOrganizationResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.GetOrganizationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.GetOrganizationResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.GetOrganizationResponseData:
+    properties:
+      organization:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.Organization'
+    type: object
+  sico-backend_internal_transport_http_dto_organization.GetUserOrganizationListResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.GetUserOrganizationListResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.GetUserOrganizationListResponseData:
+    properties:
+      hasNext:
+        type: boolean
+      organizations:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.Organization'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponseData:
+    properties:
+      hasNext:
+        type: boolean
+      organizations:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.Organization'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_organization.Organization:
+    properties:
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      isOwner:
+        type: boolean
+      name:
+        type: string
+      roleCodes:
+        items:
+          type: string
+        type: array
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_organization.UpdateOrganizationRequest:
+    properties:
+      description:
+        maxLength: 2000
+        type: string
+      id:
+        type: integer
+      name:
+        maxLength: 256
+        minLength: 1
+        type: string
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_organization.UpdateOrganizationResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_project.AddProjectAssetData:
     properties:
       id:
@@ -1720,10 +2570,108 @@ definitions:
       msg:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_project.CompleteProjectAssetUploadRequest:
+    properties:
+      contentType:
+        type: string
+      fileName:
+        type: string
+      fileSize:
+        minimum: 0
+        type: integer
+      objectKey:
+        type: string
+      projectId:
+        type: string
+    required:
+    - fileName
+    - objectKey
+    type: object
+  sico-backend_internal_transport_http_dto_project.CompleteProjectAssetUploadResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.AddProjectAssetData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLData:
+    properties:
+      expiresAt:
+        type: integer
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      metaInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.FileMetaInfo'
+      method:
+        type: string
+      objectKey:
+        type: string
+      uploadUrl:
+        type: string
+      uri:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLRequest:
+    properties:
+      contentType:
+        type: string
+      fileName:
+        type: string
+      fileSize:
+        minimum: 0
+        type: integer
+      projectId:
+        type: string
+    required:
+    - fileName
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLData'
+      msg:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_project.CreateProjectData:
     properties:
       id:
         type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableData:
+    properties:
+      id:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableRequest:
+    properties:
+      agentInstanceId:
+        type: integer
+      fileName:
+        type: string
+      fileUri:
+        type: string
+      projectId:
+        type: integer
+    required:
+    - agentInstanceId
+    - fileName
+    - fileUri
+    - projectId
+    type: object
+  sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableData'
+      msg:
+        type: string
     type: object
   sico-backend_internal_transport_http_dto_project.CreateProjectRequest:
     properties:
@@ -1742,6 +2690,8 @@ definitions:
           type: string
         maxItems: 100
         type: array
+      organizationId:
+        type: integer
     required:
     - name
     type: object
@@ -1755,6 +2705,13 @@ definitions:
         type: string
     type: object
   sico-backend_internal_transport_http_dto_project.DeleteProjectAssetResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.DeleteProjectDeliverableResponse:
     properties:
       code:
         type: integer
@@ -1796,6 +2753,20 @@ definitions:
         type: integer
       data:
         $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectAssetListData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetProjectDeliverableData:
+    properties:
+      deliverable:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectDeliverable'
+    type: object
+  sico-backend_internal_transport_http_dto_project.GetProjectDeliverableResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectDeliverableData'
       msg:
         type: string
     type: object
@@ -1844,6 +2815,46 @@ definitions:
       msg:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_project.ListProjectData:
+    properties:
+      hasNext:
+        type: boolean
+      projects:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.Project'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.ListProjectDeliverablesData:
+    properties:
+      deliverables:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectDeliverable'
+        type: array
+      hasMore:
+        type: boolean
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.ListProjectDeliverablesResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ListProjectDeliverablesData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_project.ListProjectResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ListProjectData'
+      msg:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_project.MemberType:
     enum:
     - 0
@@ -1861,7 +2872,7 @@ definitions:
     properties:
       agentInstances:
         items:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectAgentInstance'
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.AgentInstanceDigest'
         type: array
       createdAt:
         type: integer
@@ -1881,16 +2892,23 @@ definitions:
         items:
           type: string
         type: array
+      organizationId:
+        type: integer
       ownerUsername:
         type: string
+      projectAdmins:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.UserDigest'
+        type: array
+      projectMembers:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.UserDigest'
+        type: array
+      sandboxes:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.SandboxDigest'
+        type: array
       updatedAt:
-        type: integer
-    type: object
-  sico-backend_internal_transport_http_dto_project.ProjectAgentInstance:
-    properties:
-      iconUrl:
-        type: string
-      id:
         type: integer
     type: object
   sico-backend_internal_transport_http_dto_project.ProjectAsset:
@@ -1909,6 +2927,34 @@ definitions:
         type: string
       updatedAt:
         type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.ProjectDeliverable:
+    properties:
+      agentInstanceId:
+        type: integer
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ProjectDeliverableExtraInfo'
+      fileName:
+        type: string
+      fileSasUrl:
+        type: string
+      fileUri:
+        type: string
+      id:
+        type: integer
+      projectId:
+        type: integer
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_project.ProjectDeliverableExtraInfo:
+    properties:
+      agentInstance:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.AgentInstanceDigest'
     type: object
   sico-backend_internal_transport_http_dto_project.ProjectSingleAgentInstanceStatisticsEntry:
     properties:
@@ -2133,7 +3179,7 @@ definitions:
         type: string
       roles:
         items:
-          type: string
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.UserRoleInfo'
         type: array
       status:
         $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.UserStatus'
@@ -2142,6 +3188,17 @@ definitions:
       updatedAt:
         type: integer
       username:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_common.UserRoleInfo:
+    properties:
+      id:
+        type: integer
+      roleCode:
+        type: string
+      scopeId:
+        type: string
+      scopeType:
         type: string
     type: object
   sico-backend_internal_transport_http_dto_rbac_common.UserStatus:
@@ -2155,124 +3212,6 @@ definitions:
     - UserStatus_USER_STATUS_INACTIVE
     - UserStatus_USER_STATUS_ACTIVE
     - UserStatus_USER_STATUS_FROZEN
-  sico-backend_internal_transport_http_dto_rbac_role.CreateRoleRequest:
-    properties:
-      code:
-        maxLength: 64
-        minLength: 2
-        type: string
-      description:
-        maxLength: 1024
-        type: string
-      name:
-        maxLength: 128
-        minLength: 2
-        type: string
-    required:
-    - code
-    - name
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponse:
-    properties:
-      code:
-        type: integer
-      data:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponseData'
-      msg:
-        type: string
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponseData:
-    properties:
-      id:
-        type: integer
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.DeleteRoleResponse:
-    properties:
-      code:
-        type: integer
-      msg:
-        type: string
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponse:
-    properties:
-      code:
-        type: integer
-      data:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponseData'
-      msg:
-        type: string
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponseData:
-    properties:
-      role:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role'
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponse:
-    properties:
-      code:
-        type: integer
-      data:
-        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponseData'
-      msg:
-        type: string
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponseData:
-    properties:
-      hasNext:
-        type: boolean
-      roles:
-        items:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role'
-        type: array
-      total:
-        type: integer
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.Role:
-    properties:
-      code:
-        type: string
-      createdAt:
-        type: integer
-      description:
-        type: string
-      id:
-        type: integer
-      name:
-        type: string
-      status:
-        enum:
-        - 0
-        - 1
-        type: integer
-      updatedAt:
-        type: integer
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleRequest:
-    properties:
-      description:
-        maxLength: 1024
-        type: string
-      id:
-        type: integer
-      name:
-        maxLength: 128
-        minLength: 2
-        type: string
-      status:
-        enum:
-        - 0
-        - 1
-        type: integer
-    required:
-    - id
-    type: object
-  sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleResponse:
-    properties:
-      code:
-        type: integer
-      msg:
-        type: string
-    type: object
   sico-backend_internal_transport_http_dto_rbac_token.LoginRequest:
     properties:
       email:
@@ -2487,12 +3426,22 @@ definitions:
     type: object
   sico-backend_internal_transport_http_dto_rbac_user_role.AssignUserRoleRequest:
     properties:
-      roleId:
-        type: integer
+      roleCode:
+        type: string
+      scopeId:
+        type: string
+      scopeType:
+        enum:
+        - platform
+        - org
+        - project
+        - agent
+        type: string
       userId:
         type: integer
     required:
-    - roleId
+    - roleCode
+    - scopeType
     - userId
     type: object
   sico-backend_internal_transport_http_dto_rbac_user_role.AssignUserRoleResponse:
@@ -2517,7 +3466,7 @@ definitions:
         type: boolean
       roles:
         items:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.Role'
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_user_role.UserRole'
         type: array
       total:
         type: integer
@@ -2544,12 +3493,22 @@ definitions:
     type: object
   sico-backend_internal_transport_http_dto_rbac_user_role.RemoveUserRoleRequest:
     properties:
-      roleId:
-        type: integer
+      roleCode:
+        type: string
+      scopeId:
+        type: string
+      scopeType:
+        enum:
+        - platform
+        - org
+        - project
+        - agent
+        type: string
       userId:
         type: integer
     required:
-    - roleId
+    - roleCode
+    - scopeType
     - userId
     type: object
   sico-backend_internal_transport_http_dto_rbac_user_role.RemoveUserRoleResponse:
@@ -2558,6 +3517,25 @@ definitions:
         type: integer
       msg:
         type: string
+    type: object
+  sico-backend_internal_transport_http_dto_rbac_user_role.UserRole:
+    properties:
+      createdAt:
+        type: integer
+      id:
+        type: integer
+      roleCode:
+        type: string
+      scopeId:
+        type: string
+      scopeType:
+        type: string
+      updatedAt:
+        type: integer
+      user:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_common.User'
+      userId:
+        type: integer
     type: object
   sico-backend_internal_transport_http_dto_sandbox.GetInstanceSandboxesData:
     properties:
@@ -2619,8 +3597,60 @@ definitions:
         type: string
       sandboxes:
         items:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.InstanceSandboxStatusInfo'
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.SandboxDigest'
         type: array
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxOrgAssignRequest:
+    properties:
+      organization_id:
+        type: integer
+      sandbox_ids:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - organization_id
+    - sandbox_ids
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxOrgUnassignRequest:
+    properties:
+      organization_id:
+        type: integer
+      sandbox_ids:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - organization_id
+    - sandbox_ids
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxProjectAssignRequest:
+    properties:
+      project_id:
+        type: integer
+      sandbox_ids:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - project_id
+    - sandbox_ids
+    type: object
+  sico-backend_internal_transport_http_dto_sandbox.SandboxProjectUnassignRequest:
+    properties:
+      project_id:
+        type: integer
+      sandbox_ids:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - project_id
+    - sandbox_ids
     type: object
   sico-backend_internal_transport_http_dto_sandbox.SandboxReleaseRequest:
     properties:
@@ -2652,6 +3682,10 @@ definitions:
         type: string
       instance_name:
         type: string
+      organization_id:
+        type: integer
+      project_id:
+        type: integer
       sandbox_id:
         type: string
       status:
@@ -2695,6 +3729,162 @@ definitions:
       type:
         type: string
       vnc_url:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.CreateScheduledTaskRequest:
+    properties:
+      agentInstanceId:
+        type: integer
+      attachments:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
+        type: array
+      cronExpression:
+        type: string
+      enabled:
+        type: boolean
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTaskExtraInfo'
+      message:
+        type: string
+      name:
+        type: string
+      timezone:
+        type: string
+    required:
+    - agentInstanceId
+    - cronExpression
+    - message
+    - name
+    - timezone
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.CreateScheduledTaskResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.DeleteScheduledTaskRequest:
+    properties:
+      id:
+        type: integer
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.DeleteScheduledTaskResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.GetScheduledTaskResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.ListScheduledTasksData:
+    properties:
+      hasNext:
+        type: boolean
+      tasks:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask'
+        type: array
+      total:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.ListScheduledTasksResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ListScheduledTasksData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask:
+    properties:
+      agentInstanceId:
+        type: integer
+      attachments:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
+        type: array
+      createdAt:
+        type: integer
+      creatorUsername:
+        type: string
+      cronExpression:
+        type: string
+      enabled:
+        type: boolean
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTaskExtraInfo'
+      id:
+        type: integer
+      lastRunAt:
+        type: integer
+      message:
+        type: string
+      name:
+        type: string
+      nextRunAt:
+        type: integer
+      timezone:
+        type: string
+      updatedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTaskExtraInfo:
+    properties:
+      sendEmailOnComplete:
+        type: boolean
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.UpdateScheduledTaskRequest:
+    properties:
+      agentInstanceId:
+        type: integer
+      attachments:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.Attachment'
+        type: array
+      cronExpression:
+        type: string
+      enabled:
+        type: boolean
+      extraInfo:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTaskExtraInfo'
+      id:
+        type: integer
+      message:
+        type: string
+      name:
+        type: string
+      timezone:
+        type: string
+    required:
+    - agentInstanceId
+    - cronExpression
+    - id
+    - message
+    - name
+    - timezone
+    type: object
+  sico-backend_internal_transport_http_dto_scheduledtask.UpdateScheduledTaskResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ScheduledTask'
+      msg:
         type: string
     type: object
   sico-backend_internal_transport_http_dto_skill.CreateSkillData:
@@ -2916,28 +4106,6 @@ info:
   title: Sico API
   version: "1.0"
 paths:
-  /api/dwp/conversation/onboard/recommendation_tasks:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksResponse'
-      security:
-      - BearerAuth: []
-      tags:
-      - Conversation
   /api/sico/agent/roles:
     get:
       produces:
@@ -3055,10 +4223,58 @@ paths:
       - BearerAuth: []
       tags:
       - SingleAgent
+  /api/sico/agent/single_agent/publish:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Publish single agent request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.PublishSingleAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.PublishSingleAgentResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgent
   /api/sico/agent/single_agent_infos:
     get:
       consumes:
       - application/json
+      parameters:
+      - enum:
+        - 0
+        - 1
+        format: int32
+        in: query
+        name: intent
+        type: integer
+        x-enum-comments:
+          ListAgentIntent_LIST_AGENT_INTENT_DEPLOY: 'Operator: pick agents to deploy'
+          ListAgentIntent_LIST_AGENT_INTENT_MANAGE: 'Developer: configure agents (default)'
+        x-enum-descriptions:
+        - 'Developer: configure agents (default)'
+        - 'Operator: pick agents to deploy'
+        x-enum-varnames:
+        - ListAgentIntent_LIST_AGENT_INTENT_MANAGE
+        - ListAgentIntent_LIST_AGENT_INTENT_DEPLOY
+      - in: query
+        name: organizationId
+        type: integer
+      - description: |-
+          Comma-separated publish status values (e.g. "0,1"); parsed into publish_status_arr
+          by the handler. Empty defaults to PUBLISHED only.
+        in: query
+        name: publishStatusList
+        type: string
       produces:
       - application/json
       responses:
@@ -3151,14 +4367,110 @@ paths:
       - BearerAuth: []
       tags:
       - SingleAgentInstance
+  /api/sico/agent/single_agent_instance/dismiss:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Dismiss request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DismissSingleAgentInstanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.DismissSingleAgentInstanceResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgentInstance
+  /api/sico/agent/single_agent_instance/reassign:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Reassign request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ReassignSingleAgentInstanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.ReassignSingleAgentInstanceResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgentInstance
+  /api/sico/agent/single_agent_instance/status:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Status update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.UpdateSingleAgentInstanceStatusResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - SingleAgentInstance
   /api/sico/agent/single_agent_instances:
     get:
       consumes:
       - application/json
       parameters:
       - in: query
-        name: isEmployer
+        name: employerUsername
+        type: string
+      - in: query
+        name: fetchConversationStatus
         type: boolean
+      - in: query
+        name: operatorUsername
+        type: string
+      - enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        format: int32
+        in: query
+        name: orderBy
+        type: integer
+        x-enum-comments:
+          SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT: ORDER
+            BY status, updated_at
+          SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED: 'Default:
+            ID'
+        x-enum-descriptions:
+        - 'Default: ID'
+        - ""
+        - ""
+        - ORDER BY status, updated_at
+        x-enum-varnames:
+        - SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UNSPECIFIED
+        - SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_ID
+        - SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_UPDATED_AT
+        - SingleAgentInstanceOrderBy_SINGLE_AGENT_INSTANCE_ORDER_BY_STATUS_UPDATED_AT
       - in: query
         minimum: 1
         name: page
@@ -3170,6 +4482,30 @@ paths:
         name: pageSize
         required: true
         type: integer
+      - in: query
+        name: projectId
+        type: integer
+      - enum:
+        - 0
+        - 1
+        - 2
+        format: int32
+        in: query
+        name: sortOrder
+        type: integer
+        x-enum-comments:
+          SortOrder_SORT_ORDER_UNSPECIFIED: 'Default: DESC'
+        x-enum-descriptions:
+        - 'Default: DESC'
+        - ""
+        - ""
+        x-enum-varnames:
+        - SortOrder_SORT_ORDER_UNSPECIFIED
+        - SortOrder_SORT_ORDER_ASC
+        - SortOrder_SORT_ORDER_DESC
+      - in: query
+        name: statusList
+        type: string
       produces:
       - application/json
       responses:
@@ -3186,17 +4522,31 @@ paths:
       consumes:
       - application/json
       parameters:
-      - in: query
-        minimum: 1
-        name: page
-        required: true
+      - enum:
+        - 0
+        - 1
+        format: int32
+        in: query
+        name: intent
         type: integer
+        x-enum-comments:
+          ListAgentIntent_LIST_AGENT_INTENT_DEPLOY: 'Operator: pick agents to deploy'
+          ListAgentIntent_LIST_AGENT_INTENT_MANAGE: 'Developer: configure agents (default)'
+        x-enum-descriptions:
+        - 'Developer: configure agents (default)'
+        - 'Operator: pick agents to deploy'
+        x-enum-varnames:
+        - ListAgentIntent_LIST_AGENT_INTENT_MANAGE
+        - ListAgentIntent_LIST_AGENT_INTENT_DEPLOY
       - in: query
-        maximum: 50
-        minimum: 1
-        name: pageSize
-        required: true
+        name: organizationId
         type: integer
+      - description: |-
+          Comma-separated publish status values (e.g. "0,1"); parsed into publish_status_arr
+          by the handler. Empty defaults to PUBLISHED only.
+        in: query
+        name: publishStatusList
+        type: string
       produces:
       - application/json
       responses:
@@ -3208,14 +4558,15 @@ paths:
       - BearerAuth: []
       tags:
       - SingleAgent
-  /api/sico/agents/{agentId}/models:
+  /api/sico/auth-state:
     get:
-      consumes:
-      - application/json
       parameters:
-      - description: Agent ID
-        in: path
-        name: agentId
+      - in: query
+        name: accountKey
+        required: true
+        type: string
+      - in: query
+        name: siteHost
         required: true
         type: string
       produces:
@@ -3224,11 +4575,53 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sico-backend_internal_transport_http_dto_agent_single_agent.GetSingleAgentModelsResponse'
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.GetAuthStateResponse'
       security:
       - BearerAuth: []
       tags:
-      - SingleAgent
+      - auth-state
+  /api/sico/auth-state/import:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Import Auth State
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.ImportAuthStateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.ImportAuthStateResponse'
+      tags:
+      - auth-state
+  /api/sico/auth-state/status:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Auth State Status
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.UpdateAuthStateStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_authstate.UpdateAuthStateStatusResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - auth-state
   /api/sico/conversation:
     delete:
       parameters:
@@ -3391,6 +4784,9 @@ paths:
         name: agentInstanceId
         required: true
         type: integer
+      - in: query
+        name: fetchConversationStatus
+        type: boolean
       - default: 1
         in: query
         minimum: 0
@@ -3472,6 +4868,28 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GetUserMessageByUserAgentTurnIDResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Conversation
+  /api/sico/conversation/onboard/recommendation_tasks:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_conversation.GenerateOnboardRecommendationTasksResponse'
       security:
       - BearerAuth: []
       tags:
@@ -3714,7 +5132,53 @@ paths:
       - BearerAuth: []
       tags:
       - knowledge
+  /api/sico/knowledge/items:
+    get:
+      parameters:
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      - in: query
+        name: projectId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.ListKnowledgeItemsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
   /api/sico/knowledge/playbook:
+    delete:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_knowledge.DeleteKnowledgePlaybookResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - knowledge
     get:
       parameters:
       - in: query
@@ -3949,6 +5413,45 @@ paths:
       - BearerAuth: []
       tags:
       - llmhub
+  /api/sico/llm/org-config:
+    get:
+      parameters:
+      - in: query
+        name: organizationId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.GetOrganizationLLMConfigResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - llmhub
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Set Org Config
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.SetOrganizationLLMConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_llmhubs.SetOrganizationLLMConfigResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - llmhub
   /api/sico/llm/runtime/generate:
     post:
       consumes:
@@ -4017,6 +5520,233 @@ paths:
       - BearerAuth: []
       tags:
       - llmhub
+  /api/sico/notification:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Notification Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.CreateNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.CreateNotificationResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Notification
+  /api/sico/notification/read-all:
+    put:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.ReadAllNotificationsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Notification
+  /api/sico/notification/status:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Notification Status Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.UpdateNotificationStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.UpdateNotificationStatusResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Notification
+  /api/sico/notifications:
+    get:
+      parameters:
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.ListNotificationResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Notification
+  /api/sico/organization:
+    delete:
+      parameters:
+      - description: Organization ID
+        format: int64
+        in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.DeleteOrganizationResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Organization
+      tags:
+      - Organization
+    get:
+      parameters:
+      - description: Organization ID
+        format: int64
+        in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.GetOrganizationResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Organization
+      tags:
+      - Organization
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Organization
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Organization
+      tags:
+      - Organization
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Organization
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.UpdateOrganizationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.UpdateOrganizationResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Organization
+      tags:
+      - Organization
+  /api/sico/organization/user_organizations:
+    get:
+      parameters:
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        maxLength: 64
+        name: roleCode
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.GetUserOrganizationListResponse'
+      security:
+      - BearerAuth: []
+      summary: Get User Organization List
+      tags:
+      - Organization
+  /api/sico/organizations:
+    get:
+      parameters:
+      - in: query
+        maxLength: 256
+        name: name
+        type: string
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponse'
+      security:
+      - BearerAuth: []
+      summary: List Organizations
+      tags:
+      - Organization
   /api/sico/project:
     delete:
       consumes:
@@ -4138,6 +5868,46 @@ paths:
             $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.AddProjectAssetResponse'
       tags:
       - Project
+  /api/sico/project/asset/complete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Complete direct upload request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CompleteProjectAssetUploadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CompleteProjectAssetUploadResponse'
+      tags:
+      - Project
+  /api/sico/project/asset/upload_url:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create direct upload URL request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectAssetUploadURLResponse'
+      tags:
+      - Project
   /api/sico/project/assets:
     get:
       consumes:
@@ -4168,6 +5938,156 @@ paths:
       - BearerAuth: []
       tags:
       - Project
+  /api/sico/project/deliverable:
+    delete:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.DeleteProjectDeliverableResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.GetProjectDeliverableResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create project deliverable request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.CreateProjectDeliverableResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+  /api/sico/project/deliverables:
+    get:
+      parameters:
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        name: projectId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ListProjectDeliverablesResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+  /api/sico/project/list:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - in: query
+        name: creatorUsername
+        type: string
+      - in: query
+        name: organizationId
+        type: integer
+      - in: query
+        name: ownerUsername
+        type: string
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_project.ListProjectResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Project
+  /api/sico/project/notifications:
+    get:
+      parameters:
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      - in: query
+        name: projectId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.ListProjectNotificationsResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - Notification
   /api/sico/project/sas_asset:
     get:
       consumes:
@@ -4253,6 +6173,21 @@ paths:
       - BearerAuth: []
       tags:
       - Project
+  /api/sico/rbac/enforcer/reload:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reload Casbin Enforcer
+      tags:
+      - RBAC
   /api/sico/rbac/login:
     post:
       consumes:
@@ -4435,91 +6370,6 @@ paths:
       - BearerAuth: []
       tags:
       - RBAC
-  /api/sico/rbac/role:
-    delete:
-      consumes:
-      - application/json
-      parameters:
-      - in: query
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.DeleteRoleResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete Role
-      tags:
-      - RBAC
-    get:
-      consumes:
-      - application/json
-      parameters:
-      - in: query
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.GetRoleResponse'
-      security:
-      - BearerAuth: []
-      summary: Get Role
-      tags:
-      - RBAC
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Create Role
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.CreateRoleResponse'
-      security:
-      - BearerAuth: []
-      summary: Create Role
-      tags:
-      - RBAC
-    put:
-      consumes:
-      - application/json
-      parameters:
-      - description: Update Role
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.UpdateRoleResponse'
-      security:
-      - BearerAuth: []
-      summary: Update Role
-      tags:
-      - RBAC
   /api/sico/rbac/role_users:
     get:
       consumes:
@@ -4537,9 +6387,21 @@ paths:
         name: pageSize
         type: integer
       - in: query
-        name: roleId
+        name: roleCode
         required: true
-        type: integer
+        type: string
+      - in: query
+        name: scopeId
+        type: string
+      - enum:
+        - platform
+        - org
+        - project
+        - agent
+        in: query
+        name: scopeType
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -4550,48 +6412,6 @@ paths:
       security:
       - BearerAuth: []
       summary: List Users By Role
-      tags:
-      - RBAC
-  /api/sico/rbac/roles:
-    get:
-      consumes:
-      - application/json
-      parameters:
-      - in: query
-        maxLength: 64
-        name: code
-        type: string
-      - in: query
-        maxLength: 128
-        name: name
-        type: string
-      - default: 1
-        in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 10
-        in: query
-        maximum: 100
-        minimum: 1
-        name: pageSize
-        type: integer
-      - enum:
-        - 0
-        - 1
-        in: query
-        name: status
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/sico-backend_internal_transport_http_dto_rbac_role.QueryRolesResponse'
-      security:
-      - BearerAuth: []
-      summary: Query Roles
       tags:
       - RBAC
   /api/sico/rbac/user:
@@ -5034,6 +6854,16 @@ paths:
     get:
       description: List all sandbox resources grouped by type, with status and usage
         info
+      parameters:
+      - in: query
+        name: instanceId
+        type: string
+      - in: query
+        name: organizationId
+        type: integer
+      - in: query
+        name: projectId
+        type: integer
       produces:
       - application/json
       responses:
@@ -5047,6 +6877,98 @@ paths:
                   $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourcesByType'
               type: object
       summary: List all sandboxes
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/org/assign:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Org assign request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxOrgAssignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      security:
+      - BearerAuth: []
+      summary: Assign sandboxes to organization
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/org/unassign:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Org unassign request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxOrgUnassignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      security:
+      - BearerAuth: []
+      summary: Unassign sandboxes from organization
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/project/assign:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project assign request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxProjectAssignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      security:
+      - BearerAuth: []
+      summary: Assign sandboxes to project
+      tags:
+      - Sandbox-Management
+  /api/sico/sandbox/project/unassign:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project unassign request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxProjectUnassignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_common.StandardResponse'
+      security:
+      - BearerAuth: []
+      summary: Unassign sandboxes from project
       tags:
       - Sandbox-Management
   /api/sico/sandbox/release:
@@ -5143,6 +7065,110 @@ paths:
       summary: Unassign sandbox from instance
       tags:
       - Sandbox-Management
+  /api/sico/scheduled-tasks:
+    delete:
+      parameters:
+      - description: Delete Scheduled Task
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.DeleteScheduledTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.DeleteScheduledTaskResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - scheduled-tasks
+    get:
+      parameters:
+      - in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.GetScheduledTaskResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - scheduled-tasks
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Scheduled Task
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.CreateScheduledTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.CreateScheduledTaskResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - scheduled-tasks
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Update Scheduled Task
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.UpdateScheduledTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.UpdateScheduledTaskResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - scheduled-tasks
+  /api/sico/scheduled-tasks/list:
+    get:
+      parameters:
+      - in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_scheduledtask.ListScheduledTasksResponse'
+      security:
+      - BearerAuth: []
+      tags:
+      - scheduled-tasks
   /api/sico/skills:
     delete:
       parameters:

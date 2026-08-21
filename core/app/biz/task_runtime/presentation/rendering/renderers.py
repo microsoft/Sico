@@ -1,43 +1,24 @@
-# Copyright (c) 2026 Sico Authors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 """Dispatch-kind specific renderers used by the rendering layer.
 
-Centralizes the per-dispatch-kind plan-UI cues (icon, titles, labels) so the
-rendering modules don't each branch on ``task.skill_name`` / ``task.tool_name``.
-Callers read ``task.display`` first and fall back to the dispatch-kind defaults
-provided here. Adding a new dispatch kind is: define a Dispatch subclass,
-implement a renderer, register it in :data:`_RENDERERS`."""
+Centralizes the plan-UI cues (icon, titles, labels) so the rendering modules
+don't each branch on ``task.skill_name`` / ``task.tool_name``. Callers read
+``task.display`` first and fall back to the defaults provided here. Giving a
+new capability provider its own phrasing is: implement a renderer and register
+it in :data:`_CAPABILITY_RENDERERS` under that provider id."""
 
 from __future__ import annotations
 
 from typing import Protocol
 
-from ...models import SkillDispatch, SubAgentDispatch, TaskSpec, ToolDispatch
+from ...capabilities.ids import BUILTIN_PROVIDER_ID, SKILL_PROVIDER_ID, provider_of
+from ...domain.models import TaskSpec
 
 
 class TaskRenderer(Protocol):
-    """Strategy interface implemented per dispatch kind."""
+    """Strategy interface implemented per presentation flavour."""
 
     default_icon: str
-    """Frontend icon identifier for this dispatch kind."""
+    """Frontend icon identifier for this flavour."""
 
     def plan_title(self, task: TaskSpec) -> str:
         """Sub-step title shown under the parent plan step."""
@@ -74,7 +55,7 @@ def _display_or(default: str, override: str) -> str:
 
 
 class ToolRenderer:
-    """Renderer for :class:`ToolDispatch` tasks."""
+    """Renderer for builtin capability tasks."""
 
     default_icon = "tool"
 
@@ -103,7 +84,7 @@ class ToolRenderer:
 
 
 class SkillRenderer:
-    """Renderer for :class:`SkillDispatch` tasks."""
+    """Renderer for skill capability tasks."""
 
     default_icon = "skill"
 
@@ -133,7 +114,7 @@ class SkillRenderer:
 
 
 class SubAgentRenderer:
-    """Renderer for :class:`SubAgentDispatch` tasks."""
+    """Renderer for sub-agent tasks."""
 
     default_icon = "sub_agent"
 
@@ -147,36 +128,40 @@ class SubAgentRenderer:
         return _display_or(task.title or "Sub-agent", task.display.single_step_title)
 
     def context_line(self, task: TaskSpec) -> str:
-        persona = getattr(task.dispatch, "persona", "default")
-        return f"Sub-agent: {persona}"
+        profile_id = getattr(task.dispatch, "profile_id", "default")
+        return f"Sub-agent: {profile_id}"
 
     def command_hint(self, task: TaskSpec) -> str:
         return "sub-agent reasoning loop"
 
     def resolved_item_name(self, task: TaskSpec, command: str = "") -> str:
-        persona = getattr(task.dispatch, "persona", "default")
-        return f"Resolved sub-agent: {persona}"
+        profile_id = getattr(task.dispatch, "profile_id", "default")
+        return f"Resolved sub-agent: {profile_id}"
 
     def invocation_label(self, task: TaskSpec) -> str:
-        persona = getattr(task.dispatch, "persona", "default")
-        return f"sub-agent {persona}"
+        profile_id = getattr(task.dispatch, "profile_id", "default")
+        return f"sub-agent {profile_id}"
 
 
 _TOOL_RENDERER = ToolRenderer()
 _SKILL_RENDERER = SkillRenderer()
 _SUB_AGENT_RENDERER = SubAgentRenderer()
 
-_RENDERERS: dict[type, TaskRenderer] = {
-    ToolDispatch: _TOOL_RENDERER,
-    SkillDispatch: _SKILL_RENDERER,
-    SubAgentDispatch: _SUB_AGENT_RENDERER,
+_CAPABILITY_RENDERERS: dict[str, TaskRenderer] = {
+    BUILTIN_PROVIDER_ID: _TOOL_RENDERER,
+    SKILL_PROVIDER_ID: _SKILL_RENDERER,
 }
 
 
 def renderer_for(task: TaskSpec) -> TaskRenderer:
-    """Return the renderer associated with ``task.dispatch``.
+    """Return the renderer that phrases ``task`` for the plan view.
 
-    Falls back to the tool renderer when the dispatch kind is unknown — this
-    only happens with corrupt persisted records and produces a benign label
-    rather than raising."""
-    return _RENDERERS.get(type(task.dispatch), _TOOL_RENDERER)
+    Presentation still distinguishes a skill from a builtin payload, but that is
+    now a *label* decision keyed off the capability's provider rather than a
+    dispatch kind. A provider with no entry here falls back to the builtin
+    wording, which is right for a corrupt record but not for a real new source:
+    adding one means adding its renderer alongside it.
+    """
+    if task.kind == "sub_agent":
+        return _SUB_AGENT_RENDERER
+    return _CAPABILITY_RENDERERS.get(provider_of(task.capability_id), _TOOL_RENDERER)

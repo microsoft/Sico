@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -29,9 +9,11 @@ import (
 
 	appresp "sico-backend/internal/biz/common/response"
 	knowledgebiz "sico-backend/internal/biz/knowledge"
+	notificationbiz "sico-backend/internal/biz/notification"
 	rbac "sico-backend/internal/biz/rbac"
 	sandboxbiz "sico-backend/internal/biz/sandbox"
 	entity "sico-backend/internal/entity/agent/singleagent"
+	notificationEntity "sico-backend/internal/entity/notification"
 	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/enum"
@@ -39,7 +21,10 @@ import (
 	"sico-backend/internal/store/agent/singleagent/repository"
 	"sico-backend/internal/transport/http/dto/agent/single_agent"
 	"sico-backend/internal/transport/http/dto/knowledge"
+	notificationdto "sico-backend/internal/transport/http/dto/notification"
+	"sico-backend/internal/transport/http/middleware"
 	"sico-backend/pkg/logger"
+	"sico-backend/pkg/safego"
 
 	"gorm.io/gorm"
 )
@@ -47,11 +32,6 @@ import (
 func (s *Service) CreateSingleAgent(
 	ctx context.Context, req *single_agent.CreateSingleAgentRequest,
 ) (*single_agent.CreateSingleAgentResponse, error) {
-	configModel, err := normalizeLLMHubConfig(req.LlmhubConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	agentEntity := &entity.SingleAgent{
 		SingleAgent: &single_agent.SingleAgent{
 			AgentId:         req.AgentId,
@@ -60,22 +40,21 @@ func (s *Service) CreateSingleAgent(
 			Desc:            req.Desc,
 			IconUri:         req.IconUri,
 			Role:            req.Role,
-			LlmhubConfig:    req.LlmhubConfig,
 			UpdaterUsername: req.UpdaterUsername,
+			OrganizationId:  req.OrganizationId,
 		},
 	}
 
 	var agentID string
-	err = s.withRepositories(ctx, func(
+	err := s.withRepositories(ctx, func(
 		agentRepo repository.SingleAgentRepository,
-		configRepo repository.SingleAgentLLMHubConfigRepository,
 		_ repository.SingleAgentInstanceRepository,
 	) error {
 		if err := agentRepo.Create(ctx, req.CreatorUsername, agentEntity); err != nil {
 			return err
 		}
 		agentID = agentEntity.AgentId
-		return persistLLMHubConfig(ctx, configRepo, agentID, configModel)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -102,9 +81,6 @@ func (s *Service) GetSingleAgent(
 		logger.CtxWarn(ctx, "failed to convert icon to CDN, err:%v", err)
 	}
 	agent.IconUri = cdnIconUri
-	if err := s.attachLLMHubConfig(ctx, agent.SingleAgent); err != nil {
-		return nil, err
-	}
 
 	return appresp.Success(&single_agent.GetSingleAgentResponse{
 		Data: &single_agent.GetSingleAgentData{Agent: agent.SingleAgent},
@@ -114,8 +90,17 @@ func (s *Service) GetSingleAgent(
 func (s *Service) UpdateSingleAgent(
 	ctx context.Context, req *single_agent.UpdateSingleAgentRequest,
 ) (*single_agent.UpdateSingleAgentResponse, error) {
-	configModel, err := normalizeLLMHubConfig(req.LlmhubConfig)
+	existing, err := s.getSingleAgent(ctx, req.AgentId)
 	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return nil, apperr.New(errcode.CommonNotFound, "agent not found")
+	}
+
+	if err := rbac.CheckCtxAccessScopedOrIsOwner(
+		ctx, rbac.ScopeAgent, req.AgentId, "agent", "manage", existing.CreatorUsername,
+	); err != nil {
 		return nil, err
 	}
 
@@ -126,23 +111,15 @@ func (s *Service) UpdateSingleAgent(
 			Desc:            req.Desc,
 			IconUri:         req.IconUri,
 			Role:            req.Role,
-			LlmhubConfig:    req.LlmhubConfig,
 			UpdaterUsername: req.UpdaterUsername,
 		},
 	}
 
 	if err := s.withRepositories(ctx, func(
 		agentRepo repository.SingleAgentRepository,
-		configRepo repository.SingleAgentLLMHubConfigRepository,
 		_ repository.SingleAgentInstanceRepository,
 	) error {
-		if err := agentRepo.Update(ctx, agentEntity); err != nil {
-			return err
-		}
-		if req.LlmhubConfig != nil {
-			return persistLLMHubConfig(ctx, configRepo, req.AgentId, configModel)
-		}
-		return nil
+		return agentRepo.Update(ctx, agentEntity)
 	}); err != nil {
 		return nil, err
 	}
@@ -155,7 +132,6 @@ func (s *Service) DeleteSingleAgent(
 ) (*single_agent.DeleteSingleAgentResponse, error) {
 	if err := s.withRepositories(ctx, func(
 		agentRepo repository.SingleAgentRepository,
-		configRepo repository.SingleAgentLLMHubConfigRepository,
 		instanceRepo repository.SingleAgentInstanceRepository,
 	) error {
 		agent, err := agentRepo.GetForUpdate(ctx, req.AgentId)
@@ -166,22 +142,8 @@ func (s *Service) DeleteSingleAgent(
 			return apperr.New(errcode.CommonNotFound, "agent not found")
 		}
 
-		_, count, err := instanceRepo.ListByFilter(ctx, &entity.ListSingleAgentInstanceFilter{
-			AgentId: &req.AgentId,
-		}, 0, 0)
-		if err != nil {
-			return apperr.New(errcode.AgentInstanceQueryDatabaseError,
-				fmt.Sprintf("failed to check existing instances for agent %s: %v", req.AgentId, err))
-		}
-		if count > 0 {
-			return apperr.New(errcode.CommonConflict,
-				fmt.Sprintf("cannot delete agent %s: %d instance(s) still exist", req.AgentId, count))
-		}
-
-		if err := deleteLLMHubConfig(ctx, configRepo, req.AgentId); err != nil {
-			return err
-		}
-		return agentRepo.Delete(ctx, req.AgentId)
+		agent.PublishStatus = single_agent.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_ARCHIVED
+		return agentRepo.Update(ctx, agent)
 	}); err != nil {
 		return nil, err
 	}
@@ -189,14 +151,57 @@ func (s *Service) DeleteSingleAgent(
 	return appresp.Success(&single_agent.DeleteSingleAgentResponse{}), nil
 }
 
-func (s *Service) ListSingleAgentInfos(ctx context.Context) (*single_agent.ListSingleAgentInfosResponse, error) {
-	roles, err := s.listSingleAgentInfos(ctx)
+func (s *Service) PublishSingleAgent(
+	ctx context.Context, req *single_agent.PublishSingleAgentRequest,
+) (*single_agent.PublishSingleAgentResponse, error) {
+	if err := s.withRepositories(ctx, func(
+		agentRepo repository.SingleAgentRepository,
+		_ repository.SingleAgentInstanceRepository,
+	) error {
+		agent, err := agentRepo.GetForUpdate(ctx, req.AgentId)
+		if err != nil {
+			return err
+		}
+		if agent == nil {
+			return apperr.New(errcode.CommonNotFound, "agent not found")
+		}
+
+		if agent.PublishStatus != single_agent.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_DRAFT {
+			return apperr.New(errcode.CommonInvalidParam, "agent is not in draft status")
+		}
+
+		agent.PublishStatus = single_agent.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED
+		return agentRepo.Update(ctx, agent)
+	}); err != nil {
+		return nil, err
+	}
+
+	return appresp.Success(&single_agent.PublishSingleAgentResponse{}), nil
+}
+
+func (s *Service) ListSingleAgentInfos(
+	ctx context.Context, req *single_agent.ListSingleAgentInfosRequest,
+) (*single_agent.ListSingleAgentInfosResponse, error) {
+	agents, err := s.listVisibleAgents(ctx, req.OrganizationId, req.PublishStatusArr, req.Intent)
 	if err != nil {
 		return nil, err
 	}
 
+	infos := make([]*single_agent.SingleAgentInfo, 0, len(agents))
+	for _, a := range agents {
+		if a.Role == "" {
+			continue
+		}
+		infos = append(infos, &single_agent.SingleAgentInfo{
+			AgentId:         a.AgentId,
+			Role:            a.Role,
+			Name:            a.Name,
+			CreatorUsername: a.CreatorUsername,
+		})
+	}
+
 	return appresp.Success(&single_agent.ListSingleAgentInfosResponse{
-		Data: &single_agent.ListSingleAgentInfosData{AgentInfos: roles},
+		Data: &single_agent.ListSingleAgentInfosData{AgentInfos: infos},
 	}), nil
 }
 
@@ -204,18 +209,16 @@ func (s *Service) withRepositories(
 	ctx context.Context,
 	fn func(
 		agentRepo repository.SingleAgentRepository,
-		configRepo repository.SingleAgentLLMHubConfigRepository,
 		instanceRepo repository.SingleAgentInstanceRepository,
 	) error,
 ) error {
 	if s.DB == nil {
-		return fn(s.SingleAgentRepo, s.SingleAgentLLMHubConfigRepo, s.SingleAgentInstanceRepo)
+		return fn(s.SingleAgentRepo, s.SingleAgentInstanceRepo)
 	}
 
 	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(
 			repository.NewSingleAgentRepo(tx),
-			repository.NewSingleAgentLLMHubConfigRepo(tx),
 			repository.NewSingleAgentInstanceRepo(tx),
 		)
 	})
@@ -230,7 +233,7 @@ func (s *Service) ListRoles(_ context.Context) (*single_agent.ListRolesResponse,
 func (s *Service) ListSingleAgents(
 	ctx context.Context, req *single_agent.ListSingleAgentsRequest,
 ) (*single_agent.ListSingleAgentsResponse, error) {
-	agents, total, hasNext, err := s.listSingleAgents(ctx, req)
+	agents, err := s.listVisibleAgents(ctx, req.OrganizationId, req.PublishStatusArr, req.Intent)
 	if err != nil {
 		return nil, err
 	}
@@ -250,10 +253,150 @@ func (s *Service) ListSingleAgents(
 	return appresp.Success(&single_agent.ListSingleAgentsResponse{
 		Data: &single_agent.ListSingleAgentsData{
 			Agents:  pbAgents,
-			Total:   int32(total),
-			HasNext: hasNext,
+			Total:   int32(len(pbAgents)),
+			HasNext: false,
 		},
 	}), nil
+}
+
+// listVisibleAgents resolves the caller's agent-visibility grants and returns the
+// agents they may see. When intent is DEPLOY, published platform-prebuilt agents
+// (organization_id = 0) are visible to all authenticated users; otherwise only
+// platform admins can see them.
+func (s *Service) listVisibleAgents(
+	ctx context.Context,
+	organizationID *int64,
+	publishStatusArr []single_agent.SingleAgentPublishStatus,
+	intent single_agent.ListAgentIntent,
+) ([]*entity.SingleAgent, error) {
+	filter := &entity.ListSingleAgentFilter{
+		PublishStatuses: publishStatusesOrDefault(publishStatusArr),
+		OrganizationID:  organizationID,
+	}
+
+	if !rbac.Initialized() {
+		filter.Unrestricted = true
+		agents, _, err := s.SingleAgentRepo.ListByFilter(ctx, filter)
+		return agents, err
+	}
+
+	filter.OwnerUsername = middleware.MustGetUsernameFromCtx(ctx)
+	if rbac.IsPlatformAdmin(ctx) {
+		filter.IncludeOrgFreeAgents = true
+	} else if intent == single_agent.ListAgentIntent_LIST_AGENT_INTENT_DEPLOY {
+		filter.IncludeOrgFreePublishedOnly = true
+	}
+	orgIDs, err := rbac.ListOrgIDsWithPermission(ctx, "sicodev", "entry")
+	if err != nil {
+		return nil, err
+	}
+	filter.VisibleOrgIDs = orgIDs
+	managed, err := rbac.ListAgentIDsWithPermission(ctx, "agent", "manage")
+	if err != nil {
+		return nil, err
+	}
+	filter.ManagedAgentIDs = managed
+
+	agents, _, err := s.SingleAgentRepo.ListByFilter(ctx, filter)
+	return agents, err
+}
+
+func publishStatusesOrDefault(arr []single_agent.SingleAgentPublishStatus) []int32 {
+	if len(arr) == 0 {
+		return []int32{int32(single_agent.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED)}
+	}
+	out := make([]int32, 0, len(arr))
+	for _, st := range arr {
+		out = append(out, int32(st))
+	}
+	return out
+}
+
+// CheckAgentVisibility returns nil if the context user may view the given agent.
+// Visibility is status-agnostic (owners/managers can see their own drafts): the
+// caller is allowed if they own the agent, hold agent.manage on it, are a platform
+// admin for an organization-free agent, or hold sicodev.entry in the agent's org.
+func (s *Service) CheckAgentVisibility(ctx context.Context, agentID string) error {
+	if agentID == "" {
+		return apperr.New(errcode.CommonInvalidParam, "agentId is required")
+	}
+
+	agent, err := s.getSingleAgent(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	if agent == nil {
+		return apperr.New(errcode.CommonNotFound, "agent not found")
+	}
+
+	if !rbac.Initialized() {
+		return nil
+	}
+
+	username := middleware.MustGetUsernameFromCtx(ctx)
+	if agent.CreatorUsername == username {
+		return nil
+	}
+	if err := rbac.CheckCtxAccessScoped(ctx, rbac.ScopeAgent, agentID, "agent", "manage"); err == nil {
+		return nil
+	}
+	if agent.OrganizationId == 0 && rbac.IsPlatformAdmin(ctx) {
+		return nil
+	}
+	if agent.OrganizationId > 0 {
+		orgID := strconv.FormatInt(agent.OrganizationId, 10)
+		if err := rbac.CheckCtxAccessScoped(ctx, rbac.ScopeOrg, orgID, "sicodev", "entry"); err == nil {
+			return nil
+		}
+	}
+
+	return apperr.New(errcode.CommonForbidden, "forbidden")
+}
+
+// CheckAgentOwner returns nil only if the context user is the creator (owner) of
+// the given agent. It authorizes agent-scoped role changes (adding or removing an
+// agent editor). Returns nil when RBAC is not initialized (e.g. in tests).
+func (s *Service) CheckAgentOwner(ctx context.Context, agentID string) error {
+	if agentID == "" {
+		return apperr.New(errcode.CommonInvalidParam, "agentId is required")
+	}
+
+	agent, err := s.getSingleAgent(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	if agent == nil {
+		return apperr.New(errcode.CommonNotFound, "agent not found")
+	}
+
+	if !rbac.Initialized() {
+		return nil
+	}
+
+	if agent.CreatorUsername != middleware.MustGetUsernameFromCtx(ctx) {
+		return apperr.New(errcode.CommonForbidden, "only the agent owner can manage agent editors")
+	}
+	return nil
+}
+
+// CheckAgentManageAccess returns nil if the context user may manage the given agent
+// (is its creator/owner or holds agent.manage). It authorizes the management views
+// of an agent (GET/PUT of its config); runtime/chat flows only require project-scoped
+// dw.use and must not be gated by this check.
+func (s *Service) CheckAgentManageAccess(ctx context.Context, agentID string) error {
+	if agentID == "" {
+		return apperr.New(errcode.CommonInvalidParam, "agentId is required")
+	}
+	agent, err := s.getSingleAgent(ctx, agentID)
+	if err != nil {
+		return err
+	}
+	if agent == nil {
+		return apperr.New(errcode.CommonNotFound, "agent not found")
+	}
+	return rbac.CheckCtxAccessScopedOrIsOwner(
+		ctx, rbac.ScopeAgent, agentID, "agent", "manage", agent.CreatorUsername,
+	)
 }
 
 func (s *Service) DeploySingleAgent(
@@ -333,11 +476,13 @@ func (s *Service) CreateSingleAgentInstance(
 		SingleAgentInstance: &single_agent.SingleAgentInstance{
 			AgentId:          agentID,
 			EmployerUsername: req.EmployerUsername,
+			OperatorUsername: req.OperatorUsername,
 			Name:             req.Name,
 			Desc:             req.Desc,
 			IconUri:          req.IconUri,
 			Role:             req.Role,
 			ProjectId:        req.ProjectId,
+			Status:           single_agent.SingleAgentInstanceStatus_INSTANCE_ACTIVE,
 		},
 	}
 
@@ -591,6 +736,11 @@ func (s *Service) DismissSingleAgentInstance(
 		return nil, err
 	}
 
+	notifyCtx := context.WithoutCancel(ctx)
+	safego.Go(notifyCtx, func() {
+		s.notifyDwAction(notifyCtx, instance, notificationdto.NotificationType_NOTIFICATION_TYPE_DW_DISMISSED, "", "")
+	})
+
 	return appresp.Success(&single_agent.DismissSingleAgentInstanceResponse{}), nil
 }
 
@@ -614,15 +764,28 @@ func (s *Service) ReassignSingleAgentInstance(
 		return nil, err
 	}
 
+	oldOperator := instance.OperatorUsername
 	instanceEntity := &entity.SingleAgentInstance{
 		SingleAgentInstance: &single_agent.SingleAgentInstance{
 			Id:               req.Id,
 			OperatorUsername: req.NewOperatorUsername,
+			Status:           single_agent.SingleAgentInstanceStatus_INSTANCE_ACTIVE,
 		},
 	}
 	if err := s.updateSingleAgentInstance(ctx, instanceEntity); err != nil {
 		return nil, err
 	}
+
+	notifyCtx := context.WithoutCancel(ctx)
+	safego.Go(notifyCtx, func() {
+		s.notifyDwAction(
+			notifyCtx,
+			instance,
+			notificationdto.NotificationType_NOTIFICATION_TYPE_DW_REASSIGNED,
+			oldOperator,
+			req.NewOperatorUsername,
+		)
+	})
 
 	return appresp.Success(&single_agent.ReassignSingleAgentInstanceResponse{}), nil
 }
@@ -645,6 +808,66 @@ func (s *Service) unassignInstanceSandboxesIfIdle(ctx context.Context, instanceI
 	return sandboxbiz.WithInstanceAssignmentLock(ctx, instanceID, func() error {
 		return sandboxSvc.CleanupInstanceSandboxes(ctx, instanceID)
 	})
+}
+
+func (s *Service) notifyDwAction(
+	ctx context.Context,
+	instance *entity.SingleAgentInstance,
+	notifType notificationdto.NotificationType,
+	oldOperator, newOperator string,
+) {
+	notifSvc := notificationbiz.Default()
+	if notifSvc == nil {
+		return
+	}
+
+	sender := middleware.MustGetUsernameFromCtx(ctx)
+	projectName := ""
+	if instance.Project != nil {
+		projectName = instance.Project.Name
+	}
+
+	extraInfo := &notificationdto.NotificationExtraInfo{
+		DwAction: &notificationdto.NotificationExtraInfoDwAction{
+			AgentInstanceId:      instance.Id,
+			AgentInstanceName:    instance.Name,
+			ProjectName:          projectName,
+			OldOperatorUsername:  oldOperator,
+			NewOperatorUsername:  newOperator,
+			AgentInstanceIconUri: instance.IconUri,
+		},
+	}
+
+	recipients := make(map[string]struct{})
+	if instance.EmployerUsername != "" && instance.EmployerUsername != sender {
+		recipients[instance.EmployerUsername] = struct{}{}
+	}
+	if instance.OperatorUsername != "" && instance.OperatorUsername != sender {
+		recipients[instance.OperatorUsername] = struct{}{}
+	}
+	if instance.ProjectId > 0 {
+		admins, err := rbac.ListProjectAdminUsernames(ctx, []int64{instance.ProjectId})
+		if err == nil {
+			for _, name := range admins[instance.ProjectId] {
+				if name != sender {
+					recipients[name] = struct{}{}
+				}
+			}
+		}
+	}
+
+	for username := range recipients {
+		_, err := notifSvc.Create(ctx, &notificationEntity.Notification{
+			Type:             notifType,
+			SenderUsername:   sender,
+			ReceiverUsername: username,
+			ExtraInfo:        extraInfo,
+			ProjectId:        instance.ProjectId,
+		})
+		if err != nil {
+			logger.CtxError(ctx, "notifyDwAction: failed to notify %s: %v", username, err)
+		}
+	}
 }
 
 func (s *Service) ListSingleAgentInstancesByFilter(

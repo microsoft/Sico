@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import type { AxiosInstance } from "axios";
 import { describe, expect, it, vi } from "vitest";
 
@@ -37,7 +15,7 @@ function makeClient(response: unknown): AxiosInstance {
 }
 
 describe("fetchAgents", () => {
-  it("requests the correct page + pageSize + isEmployer=false", async () => {
+  it("requests page + pageSize + default activity sort (no user/project scope)", async () => {
     const client = makeClient({
       code: 0,
       msg: "ok",
@@ -45,7 +23,97 @@ describe("fetchAgents", () => {
     });
     await fetchAgents(client, { page: 2 });
     expect(client.get).toHaveBeenCalledWith("/agent/single_agent_instances", {
-      params: { page: 2, pageSize: 30, isEmployer: false },
+      params: {
+        page: 2,
+        pageSize: 30,
+        orderBy: 3,
+        sortOrder: 1,
+      },
+    });
+  });
+
+  it("adds operatorUsername when scoped to a user's own DWs", async () => {
+    const client = makeClient({
+      code: 0,
+      msg: "ok",
+      data: { instances: [], total: 0, hasNext: false },
+    });
+    await fetchAgents(client, { page: 1, operatorUsername: "me@x.com" });
+    expect(client.get).toHaveBeenCalledWith("/agent/single_agent_instances", {
+      params: {
+        page: 1,
+        pageSize: 30,
+        orderBy: 3,
+        sortOrder: 1,
+        operatorUsername: "me@x.com",
+      },
+    });
+  });
+
+  it("adds projectId to the params when scoped to a project", async () => {
+    const client = makeClient({
+      code: 0,
+      msg: "ok",
+      data: { instances: [], total: 0, hasNext: false },
+    });
+    await fetchAgents(client, { page: 1, projectId: 42 });
+    expect(client.get).toHaveBeenCalledWith("/agent/single_agent_instances", {
+      params: {
+        page: 1,
+        pageSize: 30,
+        orderBy: 3,
+        sortOrder: 1,
+        projectId: 42,
+      },
+    });
+  });
+
+  it("omits statusList when none is given (backend returns all statuses)", async () => {
+    const client = makeClient({
+      code: 0,
+      msg: "ok",
+      data: { instances: [], total: 0, hasNext: false },
+    });
+    await fetchAgents(client, { page: 1 });
+    const params = vi.mocked(client.get).mock.calls[0]?.[1]?.params;
+    expect(params).not.toHaveProperty("statusList");
+  });
+
+  it("omits statusList when the array is empty (show-all)", async () => {
+    const client = makeClient({
+      code: 0,
+      msg: "ok",
+      data: { instances: [], total: 0, hasNext: false },
+    });
+    await fetchAgents(client, { page: 1, statusList: [] });
+    const params = vi.mocked(client.get).mock.calls[0]?.[1]?.params;
+    expect(params).not.toHaveProperty("statusList");
+  });
+
+  it("joins statusList to CSV when provided (hide-inactive filter)", async () => {
+    const client = makeClient({
+      code: 0,
+      msg: "ok",
+      data: { instances: [], total: 0, hasNext: false },
+    });
+    await fetchAgents(client, {
+      page: 1,
+      statusList: [
+        AgentStatusSchema.enum.ONBOARDING,
+        AgentStatusSchema.enum.NEW,
+        AgentStatusSchema.enum.ACTIVE,
+        AgentStatusSchema.enum.ABORTED,
+        AgentStatusSchema.enum.ONBOARDING_SAVED,
+      ],
+    });
+    expect(client.get).toHaveBeenCalledWith("/agent/single_agent_instances", {
+      params: {
+        page: 1,
+        pageSize: 30,
+        orderBy: 3,
+        sortOrder: 1,
+        statusList: "1,2,3,5,7",
+      },
     });
   });
 
@@ -88,12 +156,27 @@ describe("fetchAgents", () => {
     });
     await fetchAgents(client, { page: 1, pageSize: 200 });
     expect(client.get).toHaveBeenCalledWith("/agent/single_agent_instances", {
-      params: { page: 1, pageSize: 50, isEmployer: false },
+      params: {
+        page: 1,
+        pageSize: 50,
+        orderBy: 3,
+        sortOrder: 1,
+      },
     });
   });
 
   it("throws when envelope has no data", async () => {
     const client = makeClient({ code: 500, msg: "boom" });
+    await expect(fetchAgents(client, { page: 1 })).rejects.toThrow(
+      /missing data/,
+    );
+  });
+
+  it("throws on the 'agent not found' (100004) code so it surfaces the error UI", async () => {
+    // Decision: 100004 shows the ErrorView (via the DW-tab ErrorBoundary), not
+    // an empty state — the backend sends no `data`, so it throws like any other
+    // non-OK envelope.
+    const client = makeClient({ code: 100_004, msg: "agent not found" });
     await expect(fetchAgents(client, { page: 1 })).rejects.toThrow(
       /missing data/,
     );

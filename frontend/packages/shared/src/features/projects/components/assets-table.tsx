@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { useQueryErrorResetBoundary } from "@tanstack/react-query";
 import type * as React from "react";
 import { Suspense, useRef } from "react";
@@ -30,6 +8,7 @@ import { AssetsTableSkeleton } from "./assets-table-skeleton";
 import { AssetsToolbar } from "./assets-toolbar";
 import { ErrorView } from "../../../components/error-view";
 import { useInfiniteScrollSentinel } from "../../../hooks/use-infinite-scroll-sentinel";
+import { useProjectPermission } from "../../rbac";
 import { useAssetsInfiniteQuery } from "../hooks/use-assets-query";
 import type { AssetSearch } from "../schemas/asset-search";
 import type { AssetCategory } from "../types";
@@ -72,6 +51,11 @@ export function AssetsTable({
 }: AssetsTableProps): React.JSX.Element {
   const { reset } = useQueryErrorResetBoundary();
   const pager = useAssetsInfiniteQuery(projectId, category);
+  // Asset capabilities, threaded into the toolbar (Add Knowledge) + each row
+  // (Delete). `.own` deletes compare `asset.creatorUsername` to `userEmail`.
+  const { canManageAsset, canManageAssetOwn, userEmail, isLoading } =
+    useProjectPermission(projectId);
+  const settled = !isLoading;
 
   const scrollCardRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -93,6 +77,7 @@ export function AssetsTable({
         search={search}
         onSearchChange={onSearchChange}
         onAddKnowledge={onAddKnowledge}
+        canAddKnowledge={settled && canManageAssetOwn}
       />
 
       {/* Persistent scroll card: the observer root, and the sentinel lives in it
@@ -115,6 +100,9 @@ export function AssetsTable({
               search={search}
               onSearchChange={onSearchChange}
               isFetchingNextPage={pager.isFetchingNextPage}
+              canManageAsset={settled && canManageAsset}
+              canManageAssetOwn={settled && canManageAssetOwn}
+              userEmail={userEmail}
             />
           </Suspense>
         </ErrorBoundary>

@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -34,6 +14,7 @@ import (
 	messagerepo "sico-backend/internal/store/conversation/message/repository"
 	msgMock "sico-backend/internal/store/conversation/message/repository/mock"
 	conversationrpc "sico-backend/internal/transport/grpc/pb/conversation"
+	commondto "sico-backend/internal/transport/http/dto/common"
 	convdto "sico-backend/internal/transport/http/dto/conversation"
 	"sico-backend/internal/transport/http/middleware"
 	rgrpc "sico-backend/internal/transport/reverse_grpc/pb/conversation"
@@ -204,6 +185,18 @@ func TestListConversationFiltersByAgentInstance(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resp.Data.Conversations, 1)
 	require.Equal(t, "first", resp.Data.Conversations[0].Title)
+	require.Nil(t, resp.Data.Conversations[0].ConversationStatus)
+
+	resp, err = service.ListConversation(ctx, &convdto.ListConversationRequest{
+		AgentInstanceId:         42,
+		Page:                    1,
+		PageSize:                10,
+		FetchConversationStatus: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp.Data.Conversations[0].ConversationStatus)
+	require.Equal(t, commondto.ConversationRunStatus_CONVERSATION_RUN_STATUS_UNKNOWN,
+		resp.Data.Conversations[0].GetConversationStatus())
 }
 
 func TestDeleteConversation(t *testing.T) {

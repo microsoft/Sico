@@ -1,45 +1,4 @@
-# Sico Technical Report (v0.2)
-
-## Table of Contents
-
-1. [Vision: Symbiotic Intelligence for Co-Evolution](#1-vision-symbiotic-intelligence-for-co-evolution)
-   - [From Tools to Workforce](#11-from-tools-to-workforce)
-   - [The Co-Evolution Loop](#12-the-co-evolution-loop)
-2. [System Architecture](#2-system-architecture)
-   - [Service Topology](#21-service-topology)
-   - [Protobuf-Driven Development](#22-protobuf-driven-development)
-   - [Authentication and Middleware](#23-authentication-and-middleware)
-   - [Infrastructure Dependencies](#24-infrastructure-dependencies)
-3. [Cortex-Action-Memory](#3-cortex-action-memory)
-   - [Cortex: Reasoning and Planning](#31-cortex-reasoning-and-planning)
-   - [Action: Skills, Tools, and Sandbox](#32-action-skills-tools-and-sandbox)
-   - [Memory & Sense: Experience & Contextual Awareness](#33-memory--sense-experience--contextual-awareness)
-   - [Three Loops at the Heart of Sico](#34-three-loops-at-the-heart-of-sico)
-4. [Core Execution Loop](#4-core-execution-loop)
-   - [End-to-End Flow](#41-end-to-end-flow)
-   - [Workspace Initialization](#42-workspace-initialization)
-   - [Route Classification (Intent Check)](#43-route-classification-intent-check)
-   - [Agent Execution Loop](#44-agent-execution-loop)
-   - [Planning](#45-planning)
-   - [Tool Execution](#46-tool-execution)
-   - [Delegated Task Runtime](#47-delegated-task-runtime)
-   - [Sandbox: Observable Execution Environments](#48-sandbox-observable-execution-environments)
-   - [Communication Mechanisms](#49-communication-mechanisms)
-5. [Evolution Loop](#5-evolution-loop)
-   - [Action & Memory/Sense Evolution (Training-Free)](#51-action--memorysense-evolution-training-free)
-     - [Data Flow](#511-data-flow)
-     - [Core Components](#512-core-components)
-     - [Dual Feedback Paths](#513-dual-feedback-paths)
-     - [Positioning](#514-positioning)
-     - [External Agent Integration](#515-external-agent-integration)
-   - [Cortex Evolution (Training-Based)](#52-cortex-evolution-training-based)
-6. [Evaluation Loop](#6-evaluation-loop)
-   - [Scope: Failure Attribution, Not Generic Scoring](#61-scope-failure-attribution-not-generic-scoring)
-   - [The L1-L4 Taxonomy](#62-the-l1-l4-taxonomy)
-   - [Closing the Loop](#63-closing-the-loop)
-7. [Summary: The Co-Evolution Architecture](#7-summary-the-co-evolution-architecture)
-
----
+# Sico Technical Report
 
 ## 1. Vision: Symbiotic Intelligence for Co-Evolution
 
@@ -194,7 +153,7 @@ The agent execution loop (`ChatAgent.run_stream()`) builds on top of ChatClient:
 
 #### Built-in Tools
 
-Core defines a set of 16 built-in tools. Rather than handing the whole set to every turn, the chat agent receives a **route-scoped** subset (`fast` / `inspect` / `task`); role-level differentiation comes from skills, knowledge, playbooks, and runtime context (workspace, plan, sandbox session) on top of that shared definition (the route is decided by the intent check in [§4.3](#43-route-classification-intent-check), and route gating lives in `core/app/biz/chat/router.py`; see [§4.6](#46-tool-execution)):
+Core defines a set of 16 built-in function tools plus one server-side `web_search` spec. Rather than handing the whole set to every turn, the chat agent receives a **route-scoped** subset (`fast` / `task`); role-level differentiation comes from skills, knowledge, playbooks, and runtime context (workspace, plan, sandbox session) on top of that shared definition (the route is decided by the router chain in [§4.3](#43-route-classification-intent-check), and the surface each route receives is defined in `core/app/biz/chat/tool_registry.py`; see [§4.6](#46-tool-execution)):
 
 | Category | Tools |
 |----------|-------|
@@ -229,7 +188,7 @@ The Skill Resolver (`core/app/biz/skill/resolver.py`) is what makes skills cheap
 - **Incremental re-resolution.** On re-upload the resolver diffs the previous and current skill files (budgeted to `_MAX_TOTAL_DIFF_BYTES`) and passes the diff plus the previous `actions.json` into the prompt, so unchanged skills reuse prior output and changed skills are adapted incrementally instead of recompiled from scratch.
 - **Versioned persistence.** The backend `skill` domain stores each resolution as a new `SkillVersionModel` row, so skill definitions are versioned and a current version is always resolvable.
 
-At run time, `SkillLoader` (`core/app/biz/task_runtime/skill_loader.py`) projects each resolved action into a **CapabilityCard** (name, parameters, infra requirements, visibility). These cards are the shared catalogue that every skill consumer chooses from when turning an instruction into a concrete skill dispatch — whether an LLM planner (e.g. the `general` adapter, the sub-agent loop in [§4.7](#47-delegated-task-runtime)) or a deterministic adapter that matches cards by rule (e.g. the `workbook` adapter).
+At run time, `SkillLoader` (`core/app/biz/task_runtime/capabilities/loader.py`) projects each resolved action into a **CapabilityCard** (name, parameters, infra requirements, visibility). Preparation projects caller-visible cards into capability descriptors: the shared task planner chooses among them for unresolved instruction items, tabular preparation binds rows to them, and the sub-agent loop in [§4.7](#47-delegated-task-runtime) invokes only its explicit grants.
 
 #### Sandbox Environments
 
@@ -344,7 +303,7 @@ sequenceDiagram
    participant BE as Backend
    box Core · Chat Orchestration
       participant CS as ChatService
-      participant RT as router.py<br/>hard_guard_route · llm_intent_check
+      participant RT as router.py<br/>HardGuardChatRouter · LlmChatRouter
       participant WS as init_workspace
       participant CA as ChatAgent
    end
@@ -365,11 +324,11 @@ sequenceDiagram
 
    CS->>WS: init_workspace<br/>(skills · knowledge · playbooks)
    CS->>RT: route turn
-   opt hard_guard_route = UNSPECIFIED
+   opt hard guard defers
       RT->>LLM: llm_intent_check
-      LLM-->>RT: FAST / INSPECT / TASK
+      LLM-->>RT: FAST / TASK
    end
-   RT-->>CS: route + tools_for_route
+   RT-->>CS: route + route-scoped tools
    CS->>CA: run_stream
 
    loop reasoning · tool calls
@@ -416,7 +375,7 @@ sequenceDiagram
 1. Frontend sends the chat request to Backend over HTTP and keeps an SSE stream open for user-visible updates.
 2. Backend forwards the turn to Core through `StreamChat`; the response stream itself remains decoupled through Kafka and SSE.
 3. `ChatService` initializes the workspace before routing, materializing skills, knowledge, Playbook snapshots, and attachments so every route starts with the same execution context.
-4. `ChatService` asks the router to classify the turn. `hard_guard_route` handles obvious cases; otherwise `llm_intent_check` calls the LLM Hub and returns `FAST`, `INSPECT`, or `TASK` plus the route-scoped tool set.
+4. `ChatService` asks the router chain to classify the turn. `HardGuardChatRouter` handles obvious cases; when it defers, `LlmChatRouter` calls the LLM Hub. The decision is `FAST` or `TASK`, and the `ToolRegistry` turns it into the route-scoped tool set.
 5. `ChatService` starts `ChatAgent.run_stream()`. During the main reasoning loop, `ChatAgent` streams through the LLM Hub, reads and writes workspace files such as `plan.json`, and publishes chunks to Kafka for Backend to deliver as SSE events.
 6. If the agent calls `delegate`, durable work enters Task Runtime. `TaskManager`, `Submitter`, `BatchScheduler`, and `RunCoordinator` claim and execute each run; `SandboxCoordinator` leases and releases a sandbox when required; executors read inputs and write outputs under `results/`.
 7. When execution reaches a terminal state, Core publishes the final event through Kafka for SSE delivery, persists platform-owned state through reverse gRPC, then performs non-blocking cleanup and background work such as sandbox release, plan cleanup, Mem0 memory write, and Experience Learning ingestion.
@@ -429,30 +388,40 @@ turn it clears and re-materializes reusable context (skills, knowledge, playbook
 workspace `history/` scratch directory, and retains attachments plus prior delegated outputs
 across turns:
 
-```
-agent_instance/{agent_instance_id}/user/{user_id}/
-  turn/
-    {turn_id}/
-      plan.json              # Plan state (created during execution)
-      conversation.json      # Full turn transcript (written after execution)
-  workspace/                 # keyed by (agent_instance_id, user_id); refreshed each turn
-    attachments/             # retained across turns
-      {file_name}            # Downloaded from SAS URLs
-      {file_name}_url.txt    # Original URL reference
-      index.json             # [{name, path, source_turn_id}, ...]
-    knowledge/               # cleared + re-copied each turn
-      {doc_id}/ or {link_id}/
-      index.json
-    playbooks/               # cleared + re-copied each turn (if Experience Learning enabled)
-      {section_name}.md      # Rendered from Playbook bullets
-    skills/                  # cleared + re-copied each turn
-      {skill_id}/SKILL.md    # Copied from project + agent skill stores
-      index.json             # [{id, name, description, actions}, ...]
-    results/                 # retained across turns; outputs of the `delegate` task tool
-      {batch_id}/            # run records (status, payloads)
-        artifacts/           # files produced by the runs
-    case_sources/            # retained across turns
-      parsed_documents/      # archived workbook / parsed-document manifests (*.json + *.jsonl)
+```text
+agent_instance/{agent_instance_id}/user/{user_id}/conversation/{conversation_id}/
+├── turn/
+│   └── {turn_id}/
+│       ├── plan.json                # Plan state (created during execution)
+│       ├── conversation.json        # Full turn transcript (written after execution)
+│       └── rerun_sources/           # Compact replayable batch inputs written at materialization
+├── .source-repository/
+│   └── workspace/                   # Private; never mounted as the general workspace
+│       ├── index.json               # Active source_ref -> immutable projection
+│       ├── objects/{hash}/          # Immutable raw inputs
+│       └── snapshots/{projection}/
+│           ├── manifest.json
+│           └── tables/*.jsonl
+├── workspace/                       # Conversation-scoped; refreshed each turn
+│   ├── attachments/                 # Retained across turns
+│   │   ├── {file_name}              # Downloaded from SAS URLs
+│   │   ├── {file_name}_url.txt      # Original URL reference
+│   │   └── index.json               # [{name, path, source_turn_id}, ...]
+│   ├── knowledge/                   # Cleared + re-copied each turn
+│   │   ├── {doc_id}/ or {link_id}/
+│   │   └── index.json
+│   ├── playbooks/                   # Cleared + re-copied each turn when enabled
+│   │   └── {section_name}.md
+│   ├── skills/                      # Cleared + re-copied each turn
+│   │   ├── {skill_id}/SKILL.md
+│   │   └── index.json
+│   ├── results/                     # Retained outputs of the `delegate` task tool
+│   │   └── {batch_id}/
+│   │       └── artifacts/
+│   ├── history/                     # Hidden bounded projection; rerun metadata only
+│   │   └── turn-{turn_id}/
+│   │       └── rerun_sources/*.json
+│   └── case_sources/                # Read-only legacy V1 workbook snapshots
 ```
 
 **Skills injection**: The skills section, capability cards rendered from each skill's resolved
@@ -464,28 +433,38 @@ tool) and follow.
 rendered as `.md` files in the workspace ([§5.1.3](#513-dual-feedback-paths)).
 
 **Recent conversation history**: The last 3 turns of text are *not* read from `workspace/history/`
-by the agent. `init_workspace()` clears that directory in the current implementation; prompt
-history is loaded directly from the persisted turn store at prompt-build time
-(`_load_recent_history` → `CHAT_FS.read_conversation`) and prepended to the prompt.
+by the agent. Prompt history is loaded directly from the persisted turn store at prompt-build time
+(`_load_recent_history` → `CHAT_FS.read_conversation`) and prepended to the prompt. Workspace init
+uses the hidden `history/` directory only for at most three recent turns that contain compact
+`rerun_sources` artifacts; it never restores complete plans, transcripts, or reports there.
+Each compact rerun source is bounded before persistence and projection. For a task that originally consumed an immutable
+tabular object, the artifact stores only its logical `source_ref`, original content hash, and a reserved materialization
+hint. Preparation accepts that hint only for an exact prebound capability, verifies that the active manifest still has
+the same hash, and rematerializes the object URI. This permits snapshot-only reruns without exposing private paths and
+rejects a logical source that has since changed content.
 
 ### 4.3 Route Classification (Intent Check)
 
-After the workspace is assembled but before the `ChatAgent` is built, Core decides **which route** the turn takes. The route determines the tool surface the agent is given (`fast` / `inspect` / `task`; see [§4.6](#46-tool-execution)), so misrouting either starves a real task of the `delegate` tool or hands a simple greeting an oversized toolset. Routing is two-stage and lives in `core/app/biz/chat/router.py`:
+After the workspace is assembled but before the `ChatAgent` is built, Core decides which of two routes the turn takes: `fast` (no tools) or `task` (the full tool set plus `delegate`; see [§4.6](#46-tool-execution)). Misrouting either starves a real task of `delegate` or hands a greeting an oversized toolset. Routing lives in `core/app/biz/chat/router.py` as a **chain** of `ChatRouter` stages: each decides or returns `None` to defer, and an exhausted chain falls back to `TASK`.
 
-**Stage 1: hard guard (cheap heuristic).** `hard_guard_route(user_prompt, has_attachments)` is a pure keyword + attachment check that runs first and costs no LLM call:
+**Stage 1: hard guard (cheap heuristic).** `HardGuardChatRouter` is a pure keyword + attachment check that costs no LLM call. Its keyword lists live in `core/app/biz/chat/route_rules.toml`:
 
 | Signal | Route |
 |--------|-------|
 | Empty prompt with no attachments | `FAST` (nothing to act on) |
-| Task keywords (`execute`, `run all`, `batch`, …) | `TASK` |
-| Short greeting / thanks (`hello`, `hi`, `hey`, `thanks`; ≤24 chars, no attachments) | `FAST` |
-| Anything else (including an empty prompt with attachments) | `UNSPECIFIED` (defer to stage 2) |
+| Task keywords (`execute`, `run all`, `重跑`, …) | `TASK` |
+| Bare greeting / thanks (`hello`, `hi`, `hey`, `thanks`), whole message, no attachments | `FAST` |
+| Anything else (including an empty prompt with attachments) | defer to stage 2 |
 
-A confident hard-guard hit (`FAST` or `TASK`) is used directly with `confidence = 1.0` and **skips the LLM intent check entirely**, keeping common cases (a greeting, an obvious batch request) off the critical path.
+The two lists match differently. Task keywords are substrings, since a wrong `TASK` only skips the classifier call. Greetings must match the whole message, since a wrong `FAST` answers a real request with no tools: `"hello, run tests"` is a request, not a greeting.
 
-**Stage 2: LLM intent check.** Only when the hard guard returns `UNSPECIFIED` does Core call `llm_intent_check`, a single-round LLM classifier with **structured output** (`ChatIntentCheckerOutput { route, confidence, reason }`). It is fed rich context so the decision reflects what the turn can actually do: the user prompt and attachments, the available task adapters and direct tools, the workspace skills section, prior conversation, and prior rerun / parsed-workbook sources.
+A hard-guard hit skips the LLM intent check and the payload built only for it — `build_intent_input` defers the attachment conversion, the prior-conversation section, and the classifier-only context sections. Only the skills section is always rendered, since the system prompt needs it on both routes, and `init_workspace` runs before routing either way, so every route starts from the same workspace.
 
-**Defensive default.** Routing must never block a turn. Any failure in the LLM path (non-zero invocation, empty response, JSON parse error, or schema-validation failure) falls back to `route = TASK, confidence = 0.0`. The bias is deliberate: when unsure, expose the **fuller** `task` toolset rather than risk withholding `delegate` from genuine work. The chosen route is logged as `chat_route_decided` (with confidence and reason) for observability.
+**Stage 2: LLM intent check.** `LlmChatRouter` runs a single-round LLM classifier with **structured output** (`ChatIntentCheckerOutput { route, reason }`). Its context reflects what the turn can actually do: the user prompt and attachments, compact source manifests, the unified delegate tool and direct tools, the workspace skills section, prior conversation, and prior execution/source snapshots.
+
+**No read-only route.** An earlier `inspect` route sat between the two, differing from `task` by five tools. It was removed rather than tuned: "read-only" is not a stable user intent — answering "what did the last run do" can need `parse_document` or `curl` — so `task` handles those questions under a prompt that tells it not to write anything unasked.
+
+**Defensive default.** Routing never blocks a turn. Any failure in the LLM path (non-zero invocation, empty response, JSON parse error, schema-validation failure) becomes `route = TASK`, and above it `ChatRouterChain` treats a router that *raises* as a deferral. When unsure, the fuller `task` toolset is the cheaper mistake. The chosen route is logged as `chat_route_decided` with the rule or classifier that picked it.
 
 ### 4.4 Agent Execution Loop
 
@@ -499,10 +478,10 @@ The agent loop is built on the **Microsoft Agent Framework**. Two key abstractio
 `ChatAgent.run_stream()` drives the main loop:
 
 ```
-prepared_messages = system_prompt + last_3_turns_history + user_message
+prepared_messages = system_prompt + recent_history + user_message
 
 async for update in client.get_response(prepared_messages, stream=True, options={
-    tools:                    route_tools,   # per-route built-ins + delegate_* adapter tools
+   tools:                    route_tools,   # route-scoped built-ins + unified delegate tool
     tool_choice:              "auto",
     allow_multiple_tool_calls: True,     # parallel tool execution
     reasoning.effort:         "high",    # extended thinking
@@ -510,7 +489,7 @@ async for update in client.get_response(prepared_messages, stream=True, options=
     ├── Check plan cancellation (every 2 seconds via marker file)
     ├── If text update -> buffer (flush at 32 chars or before non-text content)
     ├── If tool call / tool result -> log + flush buffered text (not forwarded to client)
-   └── Text / plan / error updates -> response_queue -> reverse gRPC + Redis cache + Kafka
+      └── Text / plan / error updates -> response_queue -> reverse gRPC + Redis cache + Kafka
 ```
 
 The Agent Framework's `FunctionInvocationLayer` automates the tool call cycle: when the LLM emits a `function_call`, the Framework executes the corresponding tool, injects the `function_result` back into the conversation, and lets the LLM continue. This loop repeats until the LLM produces a final text response or hits `max_iterations`.
@@ -559,12 +538,13 @@ The LLM-facing `plan_write` schema only accepts the first five statuses (`pendin
 
 ### 4.6 Tool Execution
 
-Tools are organized into three categories. The built-in set is **route-scoped**: `tools_for_route` (`core/app/biz/chat/router.py`) gives the `fast` route no tools, the `inspect` route a read-only subset, and the `task` route the full set plus the `delegate` tool:
+Tools are organized into three categories. The built-in set is **route-scoped** by an explicit allow-list: `CHAT_TOOLS` (`core/app/biz/chat/tool_registry.py`) is the chat agent's tool surface, and `ToolRegistry` gives a route either all of it or none — `fast` gets nothing, `task` gets everything. The surface is heterogeneous: most entries are `FunctionTool`, while `web_search` is a plain Responses API spec with no `.name`, so duplicate detection resolves identity per shape. Route selection decides which tools a turn is offered, not what a tool may do once called; that enforcement lives in the task runtime's `CapabilityResolver`, where `effect` and `workspace_access` compile into a real read-only mount.
 
 | Category | Tools | Registration |
 |----------|-------|-------------|
-| **Built-in** | `context`, `plan_read`, `plan_write`, `plan_tool_call_message_update`, `read`, `grep`, `write_file`, `edit`, `remove`, `report`, `webfetch`, `curl`, `parse_document`, `download`, `search_memory`, `get_task_detail` | `BUILTIN_TOOLS` list, exposed per route by `tools_for_route` |
-| **Task delegation** | `delegate` (the `kind` argument selects the adapter, e.g. `general`, `workbook`) | `build_adapter_tools(adapters)` (TASK route only) |
+| **Built-in** | `context`, `plan_read`, `plan_write`, `plan_tool_call_message_update`, `read`, `grep`, `write_file`, `edit`, `remove`, `report`, `webfetch`, `curl`, `parse_document`, `download`, `search_memory`, `get_task_detail` | `CHAT_TOOLS` allow-list, exposed per route by `ToolRegistry` |
+| **Server-side** | `web_search` | A Responses API tool spec rather than a `FunctionTool`; declaring it routes the turn to the Responses API and the provider runs the search |
+| **Task delegation** | `delegate(request_json)` with mixed `instructions` / `tabular` sources | Built from `DelegatePreparationService` when the route may delegate |
 | **Sandbox actions** | Performed per task run inside the task runtime, not by agent-side tools | Owned by `SandboxCoordinator` (see [§4.7](#47-delegated-task-runtime)) |
 
 Every tool receives a `ToolContext` via `function_invocation_kwargs`, providing access to the current user, agent instance, and plan editor.
@@ -579,10 +559,13 @@ The built-in tools in [§4.6](#46-tool-execution) let the chat agent read, edit,
 
 ```
 chat agent (task route)
-   │  delegate(kind, options_json)
+   │  delegate(request_json: mixed sources)
    ▼
-Adapter  (general | workbook)            core/app/biz/chat/adapters/
-   │  build_tasks() → PreparedTaskBatch (one or more TaskSpec)
+DelegatePreparationService                core/app/biz/chat/preparation/
+   │  select canonical source snapshots → capability binding → WorkItem[]
+   ▼
+Shared TaskPlanner + assemble_batch()
+   │  PreparedTaskBatch (one or more TaskSpec)
    ▼
 TaskManager.submit_prepared()            core/app/biz/task_runtime/manager.py
    │  Submitter: plan sandboxes, create batch + per-run records
@@ -591,8 +574,7 @@ Scheduler → RunCoordinator (per run)
    │  claim (fencing token) → acquire sandbox → execute → write result → release
    ▼
 DispatchRouter → executor by kind:
-   ├── tool       (echo, file_convert, run_command via a command backend)
-   ├── skill      (execute resolved actions.json, zero LLM)
+   ├── capability (built-in payload or resolved skill action)
    └── sub_agent  (bounded LLM loop over an allow-listed capability set)
    │
    ▼  BatchResult (per-run statuses + summaries) returned synchronously to delegate
@@ -600,16 +582,26 @@ DispatchRouter → executor by kind:
 
 The chat coroutine **awaits** the `delegate` call: it suspends until every run in the batch reaches a terminal state, then receives the aggregated payload as the tool result. The task runs themselves execute as separate asyncio tasks, with progress streamed back onto the plan while the chat agent waits.
 
-#### Adapters
+Core integrations import task-runtime lifecycle entrypoints from the `app.biz.task_runtime` package root. The `manager` module is the orchestration facade only; factory and recovery entrypoints remain owned by their respective modules and are re-exported exclusively through the package root.
 
-`delegate` exposes one tool whose `kind` argument is a closed `Literal` over the registered adapters (`build_default_adapters` currently registers `general` and `workbook`); the `options_json` argument is a JSON **string** that decodes to that adapter's Pydantic options schema. Each adapter turns intent into a concrete `PreparedTaskBatch`:
+#### Preparation Pipeline
 
-- **`general`**: takes natural-language `instructions` and runs a single planner LLM call that maps each instruction to a dispatch (`tool`, `skill`, or `sub_agent`), choosing from the CapabilityCards exposed by resolved skills ([§3.2 → Skill Resolver](#skill-resolver-build-time-compilation)).
-- **`workbook`**: extracts rows from a workbook (xlsx/csv/JSONL) and expands each case into a `TaskSpec` stamped with a concrete skill dispatch, used for structured batch execution such as Android test suites.
+`delegate` exposes one strict `request_json` contract containing a batch goal and one or more discriminated sources. Source inspection is a separate read-only domain: attachments and staged Knowledge are indexed before routing into content-addressed, typed snapshots shared by chat context, `parse_document`, and delegate preparation. The active-reference catalogue lives in a conversation-private repository outside the workspace and is not an authorization-free cache: Knowledge refs are atomically replaced from each turn's authorized staging set, while immutable objects/snapshots may outlive a detached ref for a 30-day grace period. Generic workspace tools and general workspace mounts cannot enumerate the repository; they consume bounded active-manifest projections instead. Preparation persists only a stable `sico-source://` reference. Runtime hash-verifies and mounts the selected object read-only only when an actual task argument contains that exact URI; provenance metadata alone grants no mount. The TASK agent asks for missing sheet scope before delegation whenever the manifest is ambiguous; delegate repeats scope validation as a consistency fallback but does not own file-format parsing.
+
+An `instructions` source contributes explicit or unresolved work items; a `tabular` source selects rows from one or more canonical snapshots. Table-level capability/column binding and row validation complete before neutral `WorkItem`s cross into the shared planner. A pure `assemble_batch` helper is the only code that creates the final `PreparedTaskBatch`.
+
+- **`instructions` source**: carries one or more goals, optional structured parameters, per-source capability/profile allow-lists, and optional prebinding. Up to 100 unresolved items and 500 KB of context are planned together in one structured LLM call; larger unresolved scopes require explicit dispatch bindings or narrowing.
+- **`tabular` source**: selects typed rows from source snapshots, creates one capability binding plan per table, validates every selected row, then emits prebound work items. Exact case-ID filters run before the selected-row budget. Ambiguous execution platforms return clarification rather than forcing a capability choice. Capability schemas are deduplicated, and scopes above 50 ambiguous tables or 500 KB require explicit mappings. Parsing is bounded by file/source-row, column, decoded-cell, per-cell, and total display-character budgets. File parameters always bind to the immutable content-addressed raw object, so execution and retries cannot observe a later overwrite of the logical workspace path.
+
+Preparation has four outcomes: success proceeds to runtime submission; `NeedsClarification` returns understood/missing/suggested context; `Rejected` reports a deterministic invalid-capability, scope, or permission outcome; and operational faults are mapped to `preparation_failed`. No non-success path allocates a task submission or creates runtime rows. One request is capped at 500 total work items, enforced before planning and submission. Capability providers and profiles are queried only when the request can use them, with caller identity attached. Join strategy and caller concurrency cap bypass the planner and flow directly into deterministic batch assembly.
+
+For tabular execution, preparation also carries reporting instructions from the selected executable skill into the parent result. A single selected skill retains the legacy `skill_description` field; mixed-capability batches use a deduplicated, bounded `skill_descriptions` list.
+
+Multi-task tool responses keep at most 10 detailed results and 50 inline artifact URLs. Aggregate counts, the artifacts root, omitted URL counts, and bounded omitted success/non-success run IDs preserve recovery through `get_task_detail` without returning every summary inline.
 
 #### Sub-Agent Execution
 
-The `sub_agent` dispatch is a **bounded, sandboxed LLM loop** (`core/app/biz/task_runtime/executors/sub_agent.py`). Each step makes one structured-output LLM call that either calls a capability or returns a final answer; the loop is capped by `max_steps` (default `DEFAULT_MAX_STEPS = 12`) and may only call capabilities on its dispatch's allow-list. This gives a delegated task its own constrained reasoning agent without exposing arbitrary tools or unbounded iteration.
+The `sub_agent` dispatch is a **bounded, sandboxed LLM loop** (`core/app/biz/task_runtime/sub_agent/executor.py`). Each step makes one structured-output LLM call that either calls a capability or returns a final answer; the loop is capped by `max_model_turns` (default `DEFAULT_MAX_MODEL_TURNS = 12`) and may only call capabilities on its dispatch's allow-list. This gives a delegated task its own constrained reasoning agent without exposing arbitrary tools or unbounded iteration.
 
 #### Execution Backends
 
@@ -617,20 +609,22 @@ The task runtime separates **what** is being executed from **where** command-lik
 
 | Axis | Choices | Meaning |
 |------|---------|---------|
-| **Dispatch kind** | `tool`, `skill`, `sub_agent` | The semantic unit of work selected by an adapter or sub-agent planner. |
+| **Dispatch kind** | `capability`, `sub_agent` | The semantic unit selected by preparation or a sub-agent planner. |
 | **Command backend** | `local`, `docker`, `k8s` | The physical execution environment for command-like work. |
 
-This matters because `run_command` is **not** exposed as a chat built-in tool. It is a task-runtime tool selected only through delegated planning and executed by `ToolExecutor` through the configured `CommandBackend`. The runtime tool catalog currently includes:
+A `capability` is anything the runtime can invoke, whatever provided it — a built-in payload, a resolved skill action, later a GUI or MCP action. Each source is a `CapabilityProvider` behind one `CapabilityResolver`, and every capability runs through the same `CapabilityExecutor`, so adding a source never adds a dispatch kind.
 
-| Runtime tool | Behavior |
+This matters because `run_command` is **not** exposed as a chat built-in tool. It is a runtime capability selected only through delegated planning and executed by the built-in provider through the configured `CommandBackend`. The runtime's built-in capabilities currently are:
+
+| Built-in capability | Behavior |
 |--------------|----------|
-| `run_command` | Executes an exact shell command from `args.command` through the configured command backend. |
-| `file_convert` | Converts workspace-relative Excel `.xlsx` / `.xlsm` files to CSV artifacts. |
-| `echo` | Emits a literal message, mainly for smoke tests and placeholder runs. |
+| `builtin:run_command` | Executes an exact shell command from `args.command` through the configured command backend. |
+| `builtin:file_convert` | Converts workspace-relative Excel `.xlsx` / `.xlsm` files to CSV artifacts. |
+| `builtin:echo` | Emits a literal message, mainly for smoke tests and placeholder runs. |
 
-Only `run_command` is lowered to a `CommandSpec` and sent through the `CommandBackend`; `echo` and `file_convert` run in process inside `ToolExecutor`.
+Only `run_command` is lowered to a `CommandSpec` and sent through the `CommandBackend`; `echo` and `file_convert` run in process.
 
-Skill execution uses the same backend axis: a resolved skill action is lowered to argv steps from `resolved/actions.json`, then `SkillExecutor` runs those steps through the configured `CommandBackend`. A `sub_agent` does not get arbitrary shell access; it can only call capabilities on its allow-list, and capability calls are bridged back to the same tool / skill executors.
+Skill execution uses the same backend axis: a resolved skill action is lowered to argv steps from `resolved/actions.json`, which the skill provider runs through the configured `CommandBackend`. A `sub_agent` does not get arbitrary shell access; it can only call capabilities on its allow-list, and each call runs as a real child run through that same single capability path.
 
 `CommandBackend` selection is deployment-driven:
 
@@ -644,7 +638,7 @@ For container-style backends (`docker` / `k8s`), the shared workspace is mounted
 
 #### Durability: State Machine, Fencing, and Recovery
 
-Runs are not fire-and-forget coroutines; they are persisted records governed by an explicit state machine (`core/app/biz/task_runtime/state_machine.py`):
+Runs are not fire-and-forget coroutines; they are persisted records governed by an explicit state machine (`core/app/biz/task_runtime/domain/state_machine.py`):
 
 - **States**: runs move `QUEUED → RUNNING →` a terminal state (`COMPLETED`, `FAILED`, `CANCELLED`, `TIMED_OUT`, `BLOCKED`); a batch can settle as `PARTIAL` when runs have mixed outcomes. Only retryable-terminal runs may reopen to `QUEUED`, guarded by compare-and-set.
 - **Fencing tokens**: `claim_run` returns a token that `write_result` must present, so a stale worker cannot overwrite a run that was reclaimed after a crash or timeout.
@@ -653,7 +647,7 @@ Runs are not fire-and-forget coroutines; they are persisted records governed by 
 
 #### Persistence and Sandbox Leasing
 
-The task runtime owns no MySQL connection of its own. It persists batch/run state, claims, results, and progress through a dedicated **reverse gRPC** service, `ReverseTaskRuntimeService` ([§4.9](#49-communication-mechanisms)), backed in production by `DbRunStore` (with `FileRunStore` for tests). Sandbox leasing follows the same pattern: `SandboxCoordinator` reserves, acquires, resets, and releases sandboxes per run via the backend's reverse sandbox service, and guarantees release on every terminal outcome ([§4.8](#48-sandbox-observable-execution-environments)).
+The task runtime owns no MySQL connection of its own. It persists batch/run state, claims, results, and progress through a dedicated **reverse gRPC** service, `ReverseTaskRuntimeService` ([§4.9](#49-communication-mechanisms)), backed in production by `DBRunStore` (with `FileRunStore` for tests). Sandbox leasing follows the same pattern: `SandboxCoordinator` reserves, acquires, resets, and releases sandboxes per run via the backend's reverse sandbox service, and guarantees release on every terminal outcome ([§4.8](#48-sandbox-observable-execution-environments)).
 
 ### 4.8 Sandbox: Observable Execution Environments
 
@@ -685,7 +679,7 @@ Currently Sico ships the **Android emulator** sandbox (MuMu Player-based, ADB + 
 
 Sandbox capabilities are exposed as HTTP endpoints on each sandbox instance, not as a per-endpoint set of agent-side `FunctionTool`s. The flow is owned end-to-end by the task runtime ([§4.7](#47-delegated-task-runtime)):
 
-1. The chat agent delegates a task (the `delegate` tool with `kind="general"` or `kind="workbook"`) whose spec declares a `required_sandbox`.
+1. The chat agent submits `delegate(request_json)` and preparation emits a task whose selected capability descriptor declares `required_sandbox`.
 2. `SandboxCoordinator` reserves, acquires, and resets one sandbox for that run and exposes its `http_api_base_url`.
 3. The run drives the sandbox HTTP API (e.g. `POST /input/tap`, `POST /apps/install-url`) and the coordinator releases the lease when the run completes.
 
@@ -792,15 +786,15 @@ Learned strategies feed back into agent execution through two paths:
 EPE decouples learning from the live chat path with a write-after / read-before pattern:
 
 - **Write (post-chat, fire-and-forget).** When a chat session completes, `ChatService` schedules `_try_experience_playbook_ingestion` as a background task: it loads the turn's `conversation.json`, converts it to `TrajectoryData`, and runs the full Reflector → Curator → persist pipeline via `add_playbook()`. A `PLAYBOOK_INGESTION` message is emitted into the conversation so Operators can see that learning happened. Because it runs off the response path, slow LLM calls or persistence failures never block the chat reply.
-- **Read (pre-chat snapshot).** Before the next session starts, `workspace_init` snapshots the current Playbook into the workspace as one Markdown file per section under `playbooks/`. The system prompt instructs the agent to read these files before acting and to re-read them when steps fail.
+- **Read (pre-chat snapshot).** Before the next session starts, `workspace_init` snapshots the current Playbook into the workspace as one Markdown file per section under `playbooks/`. The chat agent is not pointed at it; retrieval that influences execution happens per task on the runtime side (below).
 
 The two halves are intentionally asynchronous: the snapshot is taken once at session start, so EPE writes that land **during** a session do not affect the running agent: they take effect on the next session.
 
 **Path B: In-task self-correction (AEE)**
 
-When a step fails inside an active session, AEE closes the loop within the same task: the agent diagnoses the root cause, re-reads the relevant files under `playbooks/` (and any execution logs already in the workspace), and retries with a better strategy. The lesson learned in this turn is not written back to the Playbook on its own; it becomes durable only after EPE distills it from the post-session trajectory.
+When a step fails inside an active session, AEE closes the loop within the same task: the executing agent diagnoses the root cause and retries with a better strategy. It already holds the relevant Playbook bullets — `attach_playbook_hints` ranks them per `TaskSpec` and appends them to the task instructions, with an ID-citation protocol and a rule that the current environment state wins over any recorded experience. The lesson learned in this turn is not written back to the Playbook on its own; it becomes durable only after EPE distills it from the post-session trajectory.
 
-In the current implementation this loop is realized in-context via a system-prompt directive: the running LLM plays both reflector and fixer, with no separate Reflector / Curator invocation on this path. A future iteration may upgrade it into a genuine online Reflector-Curator call without changing AEE's role.
+In the current implementation this loop is realized in-context through that injected experience block: the running LLM plays both reflector and fixer, with no separate Reflector / Curator invocation on this path. A future iteration may upgrade it into a genuine online Reflector-Curator call without changing AEE's role.
 
 #### 5.1.4 Positioning
 

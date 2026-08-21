@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package handler
 
 import (
@@ -40,7 +20,7 @@ import (
 // @Success 200 {object} organization.CreateOrganizationResponse
 // @Security BearerAuth
 func CreateOrganization(ctx *gin.Context) {
-	_, ok := middleware.GetUserFromContext(ctx)
+	user, ok := middleware.GetUserFromContext(ctx)
 	if !ok {
 		unauthorizedResponse(ctx, "Authentication required")
 		return
@@ -52,7 +32,44 @@ func CreateOrganization(ctx *gin.Context) {
 		return
 	}
 
-	resp, err := orgbiz.Default().CreateOrganization(reqctx(ctx), &req)
+	resp, err := orgbiz.Default().CreateOrganization(reqctx(ctx), &req, user.Name)
+	if err != nil {
+		internalServerErrorResponse(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
+// GetUserOrganizationList gets organizations for the logged-in user.
+// @Summary Get User Organization List
+// @Router /api/sico/organization/user_organizations [GET]
+// @Tags Organization
+// @Produce json
+// @Param request query organization.GetUserOrganizationListRequest true "Get User Organization List"
+// @Success 200 {object} organization.GetUserOrganizationListResponse
+// @Security BearerAuth
+func GetUserOrganizationList(ctx *gin.Context) {
+	user, ok := middleware.GetUserFromContext(ctx)
+	if !ok {
+		unauthorizedResponse(ctx, "Authentication required")
+		return
+	}
+
+	var req organization.GetUserOrganizationListRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		invalidParamRequestResponse(ctx, err.Error())
+		return
+	}
+	if req.Page == 0 {
+		req.Page = 1
+	}
+	if req.PageSize == 0 {
+		req.PageSize = 10
+	}
+	req.Username = user.Name
+
+	resp, err := orgbiz.Default().GetUserOrganizationList(reqctx(ctx), &req)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
 		return

@@ -79,6 +79,16 @@ func (dao *ProjectDAO) GetProjectAsset(ctx context.Context, id int64) (*model.TP
 	).First()
 }
 
+func (dao *ProjectDAO) GetProjectAssetByObjectKey(
+	ctx context.Context, projectID, objectKey string,
+) (*model.TProjectAsset, error) {
+	asset := dao.query.TProjectAsset
+	return asset.WithContext(ctx).Where(
+		asset.ProjectID.Eq(projectID),
+		asset.ObjectKey.Eq(objectKey),
+	).First()
+}
+
 func (dao *ProjectDAO) GetProjectAssetListWithPagination(
 	ctx context.Context, projectID string, page, pageSize int32) ([]*model.TProjectAsset, int64, error) {
 	query := dao.query.TProjectAsset.WithContext(ctx).Where(

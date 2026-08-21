@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Button } from "@sico/ui";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, MessageCirclePlus } from "lucide-react";
@@ -85,14 +63,12 @@ export function DwConversationNav({ agentInstanceId }: Props): JSX.Element {
           route navigation while staying an anchor. `nativeButton={false}` tells
           base-ui the rendered element is an <a>, not a <button> (else it warns
           about lost native button semantics). The `p-2` wrapper insets it
-          to align with the conversation-row text below. `shadow-none` overrides
-          the secondary variant's default drop shadow — a flat, quiet affordance
-          alongside the sidebar's flush nav rows. */}
+          to align with the conversation-row text below. */}
       <div className="p-2">
         <Button
           variant="secondary"
           size="lg"
-          className="w-full shadow-none"
+          className="w-full"
           nativeButton={false}
           render={
             <Link

@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@sico/ui";
 import { ArrowDownToLine, FileText } from "lucide-react";
 import { type JSX, useCallback } from "react";
@@ -27,6 +5,7 @@ import { type JSX, useCallback } from "react";
 import { Markdown } from "../../../../../components/markdown";
 import { MessageState } from "../../../../../components/message-state";
 import { EMPTY_ILLUSTRATIONS } from "../../../../../constants/empty-illustration";
+import { firstMarkdownHeading } from "../../../../../utils/markdown-title";
 import { saveBlob } from "../../../../../utils/save-blob";
 import type { SidepaneContent } from "../../../atoms/sidepane-atom";
 import { SidepaneHeader } from "../sidepane-header";
@@ -57,6 +36,10 @@ export function MarkdownPreviewer({
   content,
 }: MarkdownPreviewerProps): JSX.Element {
   const { title, markdown } = content;
+  // Prefer the document's own H1 as the header title; fall back to the filename
+  // when the body has no top-level heading. Download still uses `title` so the
+  // saved file keeps its original name.
+  const displayTitle = firstMarkdownHeading(markdown) ?? title;
   // Treat whitespace-only as empty: an agent emitting "\n\n" or "   " would
   // otherwise render a near-blank Markdown instead of the empty state (MI17).
   const isEmpty = markdown.trim() === "";
@@ -75,7 +58,7 @@ export function MarkdownPreviewer({
     <div className="bg-surface-basic @container flex h-full flex-col overflow-y-auto">
       <SidepaneHeader
         icon={FileText}
-        title={title}
+        title={displayTitle}
         actionsSlot={
           <Tooltip>
             <TooltipTrigger

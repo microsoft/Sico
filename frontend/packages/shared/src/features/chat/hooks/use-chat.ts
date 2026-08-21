@@ -1,25 +1,3 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import { toast } from "@sico/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { useStore } from "jotai";
@@ -38,6 +16,7 @@ import {
 } from "../services/chat-stream";
 import { cancelPlan } from "../services/plan";
 import { uploadAttachment } from "../services/upload";
+import { refreshActivityListsAfterSettle } from "../utils/refresh-activity-lists";
 
 export type UseChat = {
   send: (
@@ -51,10 +30,30 @@ export type UseChat = {
   upload: (file: File, signal: AbortSignal) => Promise<ChatAttachmentRef>;
 };
 
-// On turn settle the message is persisted server-side: refresh the history
-// cache so a revisit refetches it instead of the empty seed, and drop the
-// create-first page-1 skip marker (once persisted, page 1 holds real history,
-// not a turnId-less twin — bounds the skip to the first-send window).
+// The create-first page-1 skip is only needed until THIS turn settles: once
+// persisted, page 1 holds real history, not a turnId-less twin. Drop the marker
+// so a later cold revisit + in-flight send never skips that real page 1 (bounds
+// the skip to the first-send window). No-op for a plain send (no id yet).
+function clearCreateFirstMarker(
+  store: ReturnType<typeof useStore>,
+  conversationId?: number,
+): void {
+  if (conversationId === undefined) {
+    return;
+  }
+  store.set(createFirstConversationIdsAtom, (prev) => {
+    if (!prev.has(conversationId)) {
+      return prev;
+    }
+    const next = new Set(prev);
+    next.delete(conversationId);
+    return next;
+  });
+}
+
+// On turn settle: refresh the history cache (so a revisit refetches instead of
+// the empty seed), surface the conversation + its DW in the activity-sorted
+// lists, and drop the create-first skip marker.
 function onSendSettle(
   store: ReturnType<typeof useStore>,
   queryClient: ReturnType<typeof useQueryClient>,
@@ -62,16 +61,8 @@ function onSendSettle(
   conversationId?: number,
 ): void {
   invalidateHistory(queryClient, agentInstanceId, conversationId);
-  if (conversationId !== undefined) {
-    store.set(createFirstConversationIdsAtom, (prev) => {
-      if (!prev.has(conversationId)) {
-        return prev;
-      }
-      const next = new Set(prev);
-      next.delete(conversationId);
-      return next;
-    });
-  }
+  refreshActivityListsAfterSettle(queryClient, agentInstanceId, conversationId);
+  clearCreateFirstMarker(store, conversationId);
 }
 
 // The only React-aware layer: binds the live store + axios into the plain
@@ -102,6 +93,8 @@ export function useChat(
           options: Omit<OpenChatStreamOptions, "url">,
         ) => openChatStream(payload, { ...options, url: chatStreamUrl }),
         toastError: (message) => toast.error(message),
+        // On turn settle the message is persisted server-side; refresh the
+        // history cache + activity lists so a revisit refetches, not the seed.
         onSettle: () =>
           onSendSettle(store, queryClient, agentInstanceId, conversationId),
       }),

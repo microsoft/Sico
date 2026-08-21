@@ -1,23 +1,3 @@
-// Copyright (c) 2026 Sico Authors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 package impl
 
 import (
@@ -33,31 +13,11 @@ import (
 	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/errcode"
 	"sico-backend/internal/store/agent/singleagent/repository"
-	"sico-backend/internal/transport/http/dto/agent/single_agent"
 	"sico-backend/pkg/logger"
 )
 
 func (s *Service) getSingleAgent(ctx context.Context, agentID string) (*entity.SingleAgent, error) {
 	return s.SingleAgentRepo.Get(ctx, agentID)
-}
-
-func (s *Service) listSingleAgents(
-	ctx context.Context, req *single_agent.ListSingleAgentsRequest,
-) ([]*entity.SingleAgent, int64, bool, error) {
-	offset := int(req.Page-1) * int(req.PageSize)
-	limit := int(req.PageSize)
-
-	agents, total, err := s.SingleAgentRepo.List(ctx, req.CreatorUsername, offset, limit)
-	if err != nil {
-		return nil, 0, false, err
-	}
-
-	hasNext := int64(offset+len(agents)) < total
-	return agents, total, hasNext, nil
-}
-
-func (s *Service) listSingleAgentInfos(ctx context.Context) ([]*single_agent.SingleAgentInfo, error) {
-	return s.SingleAgentRepo.ListInfos(ctx)
 }
 
 func (s *Service) ObtainInstantiatedAgent(

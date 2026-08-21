@@ -19,7 +19,7 @@
     "lint": "npm run lint:tsc && npm run lint:oxlint && npm run lint:eslint:fix && npm run lint:fmt:fix",
     "lint:tsc": "tsgo --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsgo/.tsbuildinfo",
     "lint:oxlint": "oxlint -c ../../packages/config/.oxlintrc.json --disable-nested-config --type-aware --max-warnings 0",
-    "lint:eslint": "eslint . --cache --cache-location node_modules/.cache/eslint/ --max-warnings 0 --concurrency auto",
+    "lint:eslint": "eslint . --cache --cache-location node_modules/.cache/eslint/ --max-warnings 0 --concurrency off",
     "lint:eslint:fix": "npm run lint:eslint -- --fix",
     "lint:fmt": "oxfmt --config ../../packages/config/.oxfmtrc.json --check .",
     "lint:fmt:fix": "oxfmt --config ../../packages/config/.oxfmtrc.json .",

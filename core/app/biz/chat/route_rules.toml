@@ -1,0 +1,38 @@
+# Keyword rules for the hard-guard chat router (app/biz/chat/router.py).
+#
+# The guard only shortcuts turns it is sure about; everything else defers to the
+# LLM router. Matching is case-insensitive.
+#
+# The two lists are deliberately asymmetric, because their mistakes cost
+# different amounts. A wrong `task` hit only skips the classifier call — TASK is
+# the fallback anyway. A wrong `fast` hit answers a real request with no tools at
+# all and burns the whole turn.
+
+[task]
+# Substring match anywhere in the prompt, so this list is allowed to be loose.
+#
+# Every entry must name an **action**, never a topic. A topic noun matches when
+# the user is only asking about it: "batch" used to live here and caught "what is
+# batch normalization?". A verb cannot make that mistake.
+keywords = [
+    "execute",
+    "run all",
+    "重跑",
+    "重新执行",
+    "run the cases",
+]
+
+[fast]
+# Matched against the **whole** message, after trimming surrounding punctuation
+# and whitespace. Not a prefix: "hello, run tests" and "hey, delete report.txt"
+# are requests, not greetings. Anything with real content after the greeting
+# falls through to the classifier, which is the cheap mistake to make here.
+greetings = [
+    "hello",
+    "hi",
+    "hey",
+    "thanks",
+    "thank you",
+    "你好",
+    "谢谢",
+]

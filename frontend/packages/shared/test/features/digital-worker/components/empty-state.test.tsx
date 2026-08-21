@@ -1,50 +1,69 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
+import {
+  type AnyRouter,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { EmptyState } from "@/features/digital-worker/components/empty-state";
 
+function renderEmpty(props: {
+  hasProject?: boolean;
+  onAddDw?: () => void;
+}): void {
+  const rootRoute = createRootRoute({ component: () => <Outlet /> });
+  const indexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/",
+    component: () => (
+      <EmptyState hasProject={props.hasProject} onAddDw={props.onAddDw} />
+    ),
+  });
+  const projectRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/project",
+    component: () => <div>project page</div>,
+  });
+  const router: AnyRouter = createRouter({
+    routeTree: rootRoute.addChildren([indexRoute, projectRoute]),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  render(<RouterProvider router={router} />);
+}
+
 describe("EmptyState", () => {
   it("renders the shared heading", async () => {
-    render(<EmptyState />);
+    renderEmpty({ hasProject: true });
     await screen.findByText("Your crew is one hire away");
   });
 
   it("renders the empty illustration as decorative", async () => {
-    render(<EmptyState />);
+    renderEmpty({ hasProject: true });
     const img = await screen.findByTestId("message-state-illustration");
     expect(img.getAttribute("src")).toContain("empty-people.svg");
     expect(img).toHaveAttribute("alt", "");
   });
 
-  it("does not render a create affordance", () => {
-    render(<EmptyState />);
-    expect(
-      screen.queryByRole("button", { name: /add digital worker/i }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: /create project/i }),
-    ).toBeNull();
+  it("offers an Add digital worker CTA when the user has a project", async () => {
+    const onAddDw = vi.fn();
+    renderEmpty({ hasProject: true, onAddDw });
+    const button = await screen.findByRole("button", {
+      name: /add digital worker/i,
+    });
+    button.click();
+    expect(onAddDw).toHaveBeenCalledOnce();
+  });
+
+  it("offers a Create project CTA (with no-project copy) when the user has no project", async () => {
+    renderEmpty({ hasProject: false });
+    await screen.findByText(
+      "You need a project before adding a digital worker.",
+    );
+    await screen.findByRole("button", { name: /create project/i });
   });
 });

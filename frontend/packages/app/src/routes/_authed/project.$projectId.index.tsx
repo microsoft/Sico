@@ -1,29 +1,8 @@
-/**
- * Copyright (c) 2026 Sico Authors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 import {
   type AssetSearch,
   assetSearchSchema,
   assetsInfiniteQueryOptions,
+  knowledgeTagsQueryOptions,
   projectDetailQueryOptions,
   ProjectWorkspace,
 } from "@sico/shared/features/projects/index.ts";
@@ -52,11 +31,20 @@ export const Route = createFileRoute("/_authed/project/$projectId/")({
   search: { middlewares: [stripSearchParams(DEFAULT_SEARCH)] },
   loader: ({ context, params }) => {
     const projectId = Number(params.projectId);
+    // Kick off every query the workspace + its drawer read, in PARALLEL, so the
+    // drawer's knowledge-tags (suspense) don't fire as a post-mount client
+    // waterfall — they resolve alongside the project detail behind the single
+    // ProjectWorkspaceSkeleton instead of popping in. The drawer's Sandbox +
+    // Team sections read `project.sandboxes` / `project.projectMembers` inline
+    // from the detail payload, so no separate devices/members prefetch here.
     void context.queryClient.prefetchQuery(
       projectDetailQueryOptions(projectId, context.apiClient),
     );
     void context.queryClient.prefetchInfiniteQuery(
       assetsInfiniteQueryOptions(projectId, "all", context.apiClient),
+    );
+    void context.queryClient.prefetchQuery(
+      knowledgeTagsQueryOptions(projectId, context.apiClient),
     );
   },
   component: ProjectOverviewPage,
