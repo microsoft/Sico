@@ -238,7 +238,7 @@ tomlkit==0.13.3
 torch==2.10.0
 torchvision==0.25.0
 tqdm==4.67.3
-transformers==4.57.6
+transformers==5.10.1
 typer==0.24.1
 types-requests==2.32.4.20260107
 typing-extensions==4.15.0
