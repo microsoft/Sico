@@ -27,7 +27,7 @@ codespell==2.4.1
 colorama==0.4.6
 contourpy==1.3.3
 croniter==6.0.0
-cryptography==46.0.5
+cryptography==50.0.0
 cycler==0.12.1
 datasets==4.6.1
 detect-secrets==1.5.0
