@@ -80,7 +80,7 @@ jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 kiwisolver==1.4.9
 linkify-it-py==2.1.0
-litellm==1.82.0
+litellm==1.93.0
 litellm-enterprise==0.1.33
 litellm-proxy-extras==0.4.50
 markdown-it-py==4.0.0
