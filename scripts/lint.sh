@@ -53,7 +53,7 @@ if $RUN_BACKEND; then
       (cd "$REPO_ROOT" && make openapi >/dev/null)
     else
       echo "swag not found — skipping OpenAPI regeneration."
-      echo "Install: go install github.com/swaggo/swag/cmd/swag@latest"
+      echo "Install: go install github.com/swaggo/swag/cmd/swag@v1.16.6"
     fi
     (cd "$REPO_ROOT/backend" && golangci-lint run ./...) || FAILED=1
   else

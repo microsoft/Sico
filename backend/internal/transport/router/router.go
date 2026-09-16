@@ -14,6 +14,13 @@ import (
 	"sico-backend/pkg/env"
 )
 
+func defaultCORSConfig() cors.Config {
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AllowHeaders = append(config.AllowHeaders, "Authorization")
+	return config
+}
+
 // Health is a simple handler for health check endpoint
 // @Summary Health Check
 // @Description Get the health status of the server
@@ -27,13 +34,14 @@ func Health(ctx *gin.Context) {
 func RegisterAPIs(router *gin.Engine, sandboxIntegration sandboxproviders.Integration) {
 	router.Use(otelgin.Middleware(env.GetOrDefault("OTEL_SERVICE_NAME", "sico-backend")))
 	router.Use(middleware.TracedLogger())
-	router.Use(cors.Default())
+	router.Use(cors.New(defaultCORSConfig()))
 
 	// Health check must be registered before auth middleware
 	router.GET("/api/sico/health", func(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"status": "ok"})
 	})
 	registerPublicAuthStateRoutes(router)
+	registerPublicIntegrationRoutes(router)
 
 	router.Use(middleware.AuthMiddleware())
 	router.Use(middleware.SelectedOrganizationMiddleware())
@@ -52,6 +60,7 @@ func RegisterAPIs(router *gin.Engine, sandboxIntegration sandboxproviders.Integr
 	registerOrganizationRoutes(r)
 	registerNotificationRoutes(r)
 	registerScheduledTaskRoutes(r)
+	registerIntegrationRoutes(r)
 	registerAuthStateRoutes(r)
 	sandboxIntegration.RegisterHTTPRoutes(r)
 
@@ -164,6 +173,10 @@ func registerPublicAuthStateRoutes(router *gin.Engine) {
 	router.POST("/api/sico/auth-state/import", handler.ImportAuthState)
 }
 
+func registerPublicIntegrationRoutes(router *gin.Engine) {
+	router.GET("/api/sico/integrations/azure-devops/personal/callback", handler.AzureDevOpsPersonalCallback)
+}
+
 func registerScheduledTaskRoutes(r *gin.RouterGroup) {
 	tasks := r.Group("/scheduled-tasks")
 	tasks.POST("", handler.CreateScheduledTask)
@@ -171,6 +184,30 @@ func registerScheduledTaskRoutes(r *gin.RouterGroup) {
 	tasks.PUT("", handler.UpdateScheduledTask)
 	tasks.DELETE("", handler.DeleteScheduledTask)
 	tasks.GET("/list", handler.ListScheduledTasks)
+}
+
+func registerIntegrationRoutes(r *gin.RouterGroup) {
+	connections := r.Group("/integrations/connections")
+	connections.POST("", handler.CreateIntegrationConnection)
+	connections.GET("", handler.ListIntegrationConnections)
+	connections.GET("/:connectionKey", handler.GetIntegrationConnection)
+	connections.PUT("/:connectionKey", handler.UpdateIntegrationConnection)
+	connections.DELETE("/:connectionKey", handler.DeleteIntegrationConnection)
+	connections.POST("/:connectionKey/bindings", handler.CreateIntegrationBinding)
+	connections.GET("/:connectionKey/bindings", handler.ListIntegrationBindings)
+	connections.GET("/:connectionKey/bindings/:bindingId", handler.GetIntegrationBinding)
+	connections.PUT("/:connectionKey/bindings/:bindingId", handler.UpdateIntegrationBinding)
+	connections.DELETE("/:connectionKey/bindings/:bindingId", handler.DeleteIntegrationBinding)
+
+	azureDevOps := r.Group("/integrations/azure-devops")
+	azureDevOps.GET("/connections", handler.ListAzureDevOpsConnections)
+	azureDevOps.GET("/candidates", handler.ListAzureDevOpsCandidates)
+	azureDevOps.GET("/project-connections", handler.ListAzureDevOpsProjectConnections)
+	azureDevOps.POST("/content/query", handler.QueryAzureDevOpsContent)
+	azureDevOps.POST("/content/export-fields", handler.ListAzureDevOpsExportFields)
+	azureDevOps.POST("/content/export", handler.ExportAzureDevOpsQuery)
+	azureDevOps.POST("/content/import-knowledge", handler.ImportAzureDevOpsKnowledge)
+	azureDevOps.POST("/personal/start", handler.StartAzureDevOpsPersonal)
 }
 
 func registerLLMRoutes(r *gin.RouterGroup) {

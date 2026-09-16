@@ -24,6 +24,7 @@ package errcode
 //   106000-106999: Project
 //   110000-110999: LLM
 //   112000-112999: Sandbox
+//   114000-114999: Integration
 //
 // NOTE: modules are allocated by business domain (biz/entity), not by storage implementation.
 
@@ -104,4 +105,13 @@ const (
 const (
 	// GUI automation assets (113000-113999)
 	AuthStateNotFound int32 = 113001
+)
+
+const (
+	// Integration (114000-114999)
+	IntegrationConnectorUnavailable    int32 = 114001
+	IntegrationOAuthStateInvalid       int32 = 114002
+	IntegrationCredentialUnavailable   int32 = 114003
+	IntegrationReauthorizationRequired int32 = 114004
+	IntegrationProviderFailure         int32 = 114005
 )

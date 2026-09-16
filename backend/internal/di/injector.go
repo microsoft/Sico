@@ -8,6 +8,7 @@ import (
 	"sico-backend/internal/biz/authstate"
 	"sico-backend/internal/biz/casereplay"
 	"sico-backend/internal/biz/conversation"
+	"sico-backend/internal/biz/integration"
 	"sico-backend/internal/biz/knowledge"
 	"sico-backend/internal/biz/llmhubs"
 	"sico-backend/internal/biz/notification"
@@ -39,6 +40,7 @@ type Injector struct {
 	KnowledgeApp       knowledge.Service
 	AgentApp           agent.Service
 	ConversationApp    conversation.Service
+	IntegrationApp     integration.Service
 	SandboxApp         sandbox.Service
 	SkillApp           skill.Service
 	LLMHubApp          llmhubs.Service

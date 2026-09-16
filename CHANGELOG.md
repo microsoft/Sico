@@ -20,6 +20,16 @@ Guidelines for editors:
   add the compare link at the bottom.
 -->
 
+## [0.5.1] - 2026-09-16
+
+### Changed
+
+- Encrypt integration credentials with the shared SICO encryption key and remove legacy integration-specific key aliases; deployments must configure the shared key consistently.
+
+### Fixed
+
+- Log Knowledge extraction metadata instead of request payloads to avoid exposing imported content in logs.
+
 ## [0.5.0] - 2026-09-14
 
 _Highlights: multi-tenant organization management, prepared task environments, Linux workstation sandboxes, and unified main/sub-agent execution._
