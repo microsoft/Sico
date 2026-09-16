@@ -82,6 +82,12 @@ spec:
                   name: {{ .Values.secretName }}
                   key: SANDBOX_CLIENT_SECRET_TEST_CLIENT
                   optional: true
+            - name: SICO_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: SICO_ENCRYPTION_KEY
+                  optional: true
             - name: SICO_SANDBOX_SERVICE_TOKEN
               valueFrom:
                 secretKeyRef:

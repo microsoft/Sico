@@ -30,8 +30,13 @@ class KnowledgeService(KnowledgeServiceBase):
         self._extractor = build_doc_extractor(self._logger)
 
     async def extract_document(self, message: KnowledgeDocument) -> ExtractDocumentResponse:  # type: ignore[override]
-        # Log full payload to confirm the request hit the service.
-        self._logger.info("ExtractDocument request received: %s", message.to_dict())
+        self._logger.info(
+            "ExtractDocument request received id=%s project_id=%s agent_id=%s type=%s",
+            message.id,
+            message.project_id,
+            message.agent_id,
+            getattr(message.document_type, "name", None),
+        )
 
         if message.document_type == KnowledgeDocumentType.LINK:
             return await self._extract_link_document(message)
@@ -112,12 +117,10 @@ class KnowledgeService(KnowledgeServiceBase):
             full_text, summary = await self._extractor.extract_from_url(file_url)
             await self._persist_original_document(message, file_url)
             self._logger.info(
-                "Knowledge extraction succeeded id=%s full_text_length=%d summary_length=%d\n%s\n\n%s",
+                "Knowledge extraction succeeded id=%s full_text_length=%d summary_length=%d",
                 message.id,
                 len(full_text),
                 len(summary),
-                full_text,
-                summary,
             )
             await self._persist_extraction(message, full_text, summary)
         except Exception as exc:  # pragma: no cover - defensive for external service

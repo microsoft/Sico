@@ -1,0 +1,187 @@
+syntax = "proto3";
+package integration;
+
+option go_package = "sico-backend/internal/transport/http/dto/integration";
+
+import "google/protobuf/struct.proto";
+
+enum ConnectionMode {
+  CONNECTION_MODE_UNSPECIFIED = 0;
+  CONNECTION_MODE_PERSONAL = 1;
+  reserved 2;
+  reserved "CONNECTION_MODE_ORGANIZATION";
+}
+
+enum ConnectionStatus {
+  CONNECTION_STATUS_DRAFT = 0;
+  CONNECTION_STATUS_PENDING_AUTHORIZATION = 1;
+  CONNECTION_STATUS_ACTIVE = 4;
+  CONNECTION_STATUS_REAUTHORIZATION_REQUIRED = 5;
+  CONNECTION_STATUS_SUSPENDED = 6;
+  CONNECTION_STATUS_REVOKED = 7;
+  CONNECTION_STATUS_FAILED = 8;
+  reserved 2, 3, 9;
+  reserved "CONNECTION_STATUS_PENDING_PROVIDER_ADMIN", "CONNECTION_STATUS_VERIFYING", "CONNECTION_STATUS_REVOKING";
+}
+
+enum SicoScopeType {
+  SICO_SCOPE_TYPE_UNSPECIFIED = 0;
+  SICO_SCOPE_TYPE_ORGANIZATION = 1;
+  SICO_SCOPE_TYPE_PROJECT = 2;
+}
+
+enum BindingStatus {
+  BINDING_STATUS_UNSPECIFIED = 0;
+  BINDING_STATUS_ACTIVE = 1;
+  BINDING_STATUS_DISABLED = 2;
+  BINDING_STATUS_INACCESSIBLE = 3;
+}
+
+message Connection {
+  int64 id = 1;                                  // @gotag: json:"id"
+  string connection_key = 2;                    // @gotag: json:"connectionKey"
+  int64 organization_id = 3;                    // @gotag: json:"organizationId"
+  string owner_username = 4;                    // @gotag: json:"ownerUsername"
+  string provider = 5;                          // @gotag: json:"provider"
+  ConnectionMode mode = 6;                      // @gotag: json:"mode"
+  ConnectionStatus status = 7;                  // @gotag: json:"status"
+  string display_name = 8;                      // @gotag: json:"displayName"
+  string external_id = 9;                       // @gotag: json:"externalId"
+  google.protobuf.Struct metadata = 10;         // @gotag: json:"metadata,omitempty"
+  string creator_username = 11;                 // @gotag: json:"creatorUsername"
+  string updater_username = 12;                 // @gotag: json:"updaterUsername"
+  int64 created_at = 13;                        // @gotag: json:"createdAt"
+  int64 updated_at = 14;                        // @gotag: json:"updatedAt"
+  int64 sico_project_id = 15;                   // @gotag: json:"sicoProjectId,omitempty"
+}
+
+message Binding {
+  int64 id = 1;                                  // @gotag: json:"id"
+  string connection_key = 2;                    // @gotag: json:"connectionKey"
+  SicoScopeType sico_scope_type = 3;             // @gotag: json:"sicoScopeType"
+  string sico_scope_id = 4;                      // @gotag: json:"sicoScopeId"
+  string resource_type = 5;                     // @gotag: json:"resourceType"
+  string resource_key = 6;                      // @gotag: json:"resourceKey"
+  string resource_name = 7;                     // @gotag: json:"resourceName"
+  BindingStatus status = 8;                     // @gotag: json:"status"
+  google.protobuf.Struct metadata = 9;          // @gotag: json:"metadata,omitempty"
+  string creator_username = 10;                 // @gotag: json:"creatorUsername"
+  int64 created_at = 11;                        // @gotag: json:"createdAt"
+  int64 updated_at = 12;                        // @gotag: json:"updatedAt"
+}
+
+message CreateConnectionRequest {
+  int64 organization_id = 1;                    // @gotag: json:"organizationId" binding:"required,gt=0"
+  string provider = 2;                          // @gotag: json:"provider" binding:"required,max=64"
+  ConnectionMode mode = 3;                      // @gotag: json:"mode" binding:"required,oneof=1"
+  string display_name = 4;                      // @gotag: json:"displayName" binding:"max=128"
+  reserved 5 to 8;
+  int64 sico_project_id = 9;                    // @gotag: json:"sicoProjectId" binding:"omitempty,gt=0"
+}
+
+message CreateConnectionResponse {
+  Connection data = 1; // @gotag: json:"data"
+  int32 code = 253;    // @gotag: json:"code"
+  string msg = 254;    // @gotag: json:"msg"
+}
+
+message GetConnectionResponse {
+  Connection data = 1; // @gotag: json:"data"
+  int32 code = 253;    // @gotag: json:"code"
+  string msg = 254;    // @gotag: json:"msg"
+}
+
+message ListConnectionsRequest {
+  int64 organization_id = 1;               // @gotag: form:"organizationId" binding:"required,gt=0"
+  int32 page = 2;                          // @gotag: form:"page" binding:"omitempty,min=1"
+  int32 page_size = 3;                     // @gotag: form:"pageSize" binding:"omitempty,min=1,max=100"
+  optional string provider = 4;            // @gotag: form:"provider" binding:"omitempty,max=64"
+  optional ConnectionMode mode = 5;        // @gotag: form:"mode" binding:"omitempty,oneof=1"
+  optional ConnectionStatus status = 6;    // @gotag: form:"status" binding:"omitempty,oneof=0 1 4 5 6 7 8"
+  int64 sico_project_id = 7;               // @gotag: form:"sicoProjectId" binding:"omitempty,gt=0"
+}
+
+message ListConnectionsData {
+  repeated Connection connections = 1; // @gotag: json:"connections"
+  int64 total = 2;                     // @gotag: json:"total"
+  bool has_next = 3;                   // @gotag: json:"hasNext"
+}
+
+message ListConnectionsResponse {
+  ListConnectionsData data = 1; // @gotag: json:"data"
+  int32 code = 253;             // @gotag: json:"code"
+  string msg = 254;             // @gotag: json:"msg"
+}
+
+message UpdateConnectionRequest {
+  optional string display_name = 1;             // @gotag: json:"displayName" binding:"omitempty,max=128"
+  reserved 2 to 8;
+}
+
+message UpdateConnectionResponse {
+  Connection data = 1; // @gotag: json:"data"
+  int32 code = 253;    // @gotag: json:"code"
+  string msg = 254;    // @gotag: json:"msg"
+}
+
+message DeleteConnectionResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message CreateBindingRequest {
+  SicoScopeType sico_scope_type = 1;             // @gotag: json:"sicoScopeType" binding:"required,oneof=1 2"
+  string sico_scope_id = 2;                      // @gotag: json:"sicoScopeId" binding:"required,max=64"
+  string resource_type = 3;                      // @gotag: json:"resourceType" binding:"required,max=64"
+  string resource_key = 4;                       // @gotag: json:"resourceKey" binding:"required,max=255"
+  string resource_name = 5;                      // @gotag: json:"resourceName" binding:"required,max=255"
+}
+
+message CreateBindingResponse {
+  Binding data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message GetBindingResponse {
+  Binding data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message ListBindingsRequest {
+  int32 page = 1;                       // @gotag: form:"page" binding:"omitempty,min=1"
+  int32 page_size = 2;                  // @gotag: form:"pageSize" binding:"omitempty,min=1,max=100"
+  optional BindingStatus status = 3;    // @gotag: form:"status" binding:"omitempty,oneof=1 2 3"
+  optional SicoScopeType scope_type = 4; // @gotag: form:"sicoScopeType" binding:"omitempty,oneof=1 2"
+  optional string scope_id = 5;         // @gotag: form:"sicoScopeId" binding:"omitempty,max=64"
+}
+
+message ListBindingsData {
+  repeated Binding bindings = 1; // @gotag: json:"bindings"
+  int64 total = 2;               // @gotag: json:"total"
+  bool has_next = 3;             // @gotag: json:"hasNext"
+}
+
+message ListBindingsResponse {
+  ListBindingsData data = 1; // @gotag: json:"data"
+  int32 code = 253;          // @gotag: json:"code"
+  string msg = 254;          // @gotag: json:"msg"
+}
+
+message UpdateBindingRequest {
+  reserved 1 to 3;
+  optional BindingStatus status = 4;            // @gotag: json:"status" binding:"omitempty,oneof=1 2"
+  reserved 5;
+}
+
+message UpdateBindingResponse {
+  Binding data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message DeleteBindingResponse {
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}

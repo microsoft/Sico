@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -38,11 +39,39 @@ class FakeResponse:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("document_type", [KnowledgeDocumentType.FILE, KnowledgeDocumentType.LINK])
+async def test_extract_document_logs_only_metadata(
+    caplog: pytest.LogCaptureFixture, document_type: KnowledgeDocumentType
+) -> None:
+    signed_url = "https://blob.example/spec.pdf?sig=fixture-secret"
+    service = object.__new__(KnowledgeService)
+    service._logger = logging.getLogger(knowledge_service_module.__name__)
+    service._extractor = None
+    message = KnowledgeDocument(
+        id=7,
+        project_id=3,
+        document_type=document_type,
+        link_url=signed_url,
+        attachment=Attachment(name="private-document-name", uri=signed_url, sas_url=signed_url),
+    )
+
+    with caplog.at_level(logging.INFO, logger=knowledge_service_module.__name__):
+        response = await service.extract_document(message)
+
+    assert response.code != 0
+    assert f"ExtractDocument request received id=7 project_id=3 agent_id= type={document_type.name}" in caplog.messages
+    assert signed_url not in caplog.text
+    assert "fixture-secret" not in caplog.text
+    assert "private-document-name" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_extract_file_document_persists_original_document(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     writes: dict[str, object] = {}
+    logged: list[tuple[object, ...]] = []
     service = object.__new__(KnowledgeService)
     service._logger = SimpleNamespace(
-        info=lambda *_args, **_kwargs: None,
+        info=lambda *args, **_kwargs: logged.append(args),
         warning=lambda *_args, **_kwargs: None,
         error=lambda *_args, **_kwargs: None,
     )
@@ -78,6 +107,7 @@ async def test_extract_file_document_persists_original_document(monkeypatch: pyt
     assert writes["bytes"] == (7, "original/spec.pdf", b"pdf bytes", {"project_id": 3, "agent_id": ""})
     assert (7, "full.md", "full text", {"project_id": 3, "agent_id": ""}) in writes["texts"]
     assert (7, "summary.md", "summary", {"project_id": 3, "agent_id": ""}) in writes["texts"]
+    assert all("full text" not in entry and "summary" not in entry for entry in logged)
 
 
 @pytest.mark.asyncio

@@ -103,9 +103,11 @@ lint-fix:
 
 openapi:
 	@command -v swag >/dev/null 2>&1 || { \
-		echo "swag not found. Install: go install github.com/swaggo/swag/cmd/swag@latest"; \
+		echo "swag not found. Install: go install github.com/swaggo/swag/cmd/swag@v1.16.6"; \
 		exit 1; }
-	cd backend && swag init -g cmd/sico-server/main.go --parseDependency --parseInternal --tags '!Internal' -o api/openapi
+	cd backend && swag init -g cmd/sico-server/main.go --parseDependency --parseInternal --tags=!Internal -o api/openapi
+	@grep -q '"/api/sico/health"' backend/api/openapi/swagger.json
+	@! grep -q '"Internal"' backend/api/openapi/swagger.json
 
 # Regenerate OpenTelemetry decorators for public business and repository interfaces.
 otelwrap:
