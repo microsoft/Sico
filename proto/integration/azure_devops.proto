@@ -1,0 +1,194 @@
+syntax = "proto3";
+package integration;
+
+option go_package = "sico-backend/internal/transport/http/dto/integration";
+
+import "integration/restful.proto";
+import "google/protobuf/struct.proto";
+
+message StartAzureDevOpsAuthorizationRequest {
+  int64 organization_id = 1;       // @gotag: json:"organizationId" binding:"required,gt=0"
+  optional string connection_key = 2; // @gotag: json:"connectionKey" binding:"omitempty,max=64"
+  optional string display_name = 3;   // @gotag: json:"displayName" binding:"omitempty,max=128"
+  int64 sico_project_id = 4;           // @gotag: json:"sicoProjectId" binding:"required,gt=0"
+}
+
+message StartAzureDevOpsAuthorizationData {
+  string authorization_url = 1; // @gotag: json:"authorizationUrl"
+  string connection_key = 2;    // @gotag: json:"connectionKey"
+  int64 expires_at = 3;         // @gotag: json:"expiresAt"
+  string operation_id = 4;      // @gotag: json:"operationId"
+}
+
+message StartAzureDevOpsAuthorizationResponse {
+  StartAzureDevOpsAuthorizationData data = 1; // @gotag: json:"data"
+  int32 code = 253;                         // @gotag: json:"code"
+  string msg = 254;                         // @gotag: json:"msg"
+}
+
+message ListAzureDevOpsCandidatesRequest {
+  string connection_key = 1; // @gotag: form:"connectionKey" binding:"required,max=64"
+  string external_organization_id = 2; // @gotag: form:"externalOrganizationId" binding:"omitempty,max=128"
+}
+
+message AzureDevOpsProject {
+  string id = 1;           // @gotag: json:"id"
+  string name = 2;         // @gotag: json:"name"
+  string description = 3;  // @gotag: json:"description,omitempty"
+  string state = 4;        // @gotag: json:"state,omitempty"
+  string visibility = 5;   // @gotag: json:"visibility,omitempty"
+  string parent_id = 6;    // @gotag: json:"parentId"
+  string parent_name = 7;  // @gotag: json:"parentName"
+  string resource_key = 8; // @gotag: json:"resourceKey"
+  reserved 9;
+  reserved "binding_id";
+}
+
+message AzureDevOpsOrganization {
+  string id = 1;                       // @gotag: json:"id"
+  string name = 2;                     // @gotag: json:"name"
+  repeated AzureDevOpsProject projects = 3; // @gotag: json:"projects"
+}
+
+message ListAzureDevOpsCandidatesData {
+  repeated AzureDevOpsOrganization organizations = 1; // @gotag: json:"organizations"
+}
+
+message ListAzureDevOpsCandidatesResponse {
+  ListAzureDevOpsCandidatesData data = 1; // @gotag: json:"data"
+  int32 code = 253;                       // @gotag: json:"code"
+  string msg = 254;                       // @gotag: json:"msg"
+}
+
+message ListAzureDevOpsProjectConnectionsRequest {
+  int64 organization_id = 1; // @gotag: form:"organizationId" binding:"required,gt=0"
+  int64 sico_project_id = 2; // @gotag: form:"sicoProjectId" binding:"required,gt=0"
+  string search = 3;         // @gotag: form:"search" binding:"omitempty,max=128"
+  int32 page = 4;            // @gotag: form:"page" binding:"omitempty,min=1"
+  int32 page_size = 5;       // @gotag: form:"pageSize" binding:"omitempty,min=1,max=100"
+}
+
+message AzureDevOpsProjectConnection {
+  string connection_key = 1;             // @gotag: json:"connectionKey"
+  string display_name = 2;               // @gotag: json:"displayName"
+  string owner_username = 3;             // @gotag: json:"ownerUsername"
+  ConnectionStatus status = 4;            // @gotag: json:"status"
+  int64 updated_at = 5;                   // @gotag: json:"updatedAt"
+  reserved 6;
+  reserved "projects";
+  string creator_username = 7;            // @gotag: json:"creatorUsername"
+  int64 created_at = 8;                   // @gotag: json:"createdAt"
+}
+
+message ListAzureDevOpsProjectConnectionsData {
+  repeated AzureDevOpsProjectConnection connections = 1; // @gotag: json:"connections"
+  int64 total = 2;                                     // @gotag: json:"total"
+  bool has_next = 3;                                   // @gotag: json:"hasNext"
+}
+
+message ListAzureDevOpsProjectConnectionsResponse {
+  ListAzureDevOpsProjectConnectionsData data = 1; // @gotag: json:"data"
+  int32 code = 253;                               // @gotag: json:"code"
+  string msg = 254;                               // @gotag: json:"msg"
+}
+
+message QueryAzureDevOpsContentRequest {
+  string connection_key = 1;  // @gotag: json:"connectionKey" binding:"required,max=64"
+  int64 sico_project_id = 2;  // @gotag: json:"sicoProjectId" binding:"required,gt=0"
+  string resource_key = 3;    // @gotag: json:"resourceKey" binding:"required,max=255"
+  string kind = 4;            // @gotag: json:"kind" binding:"required,oneof=work_items repositories test_plans test_cases pipelines pipeline_runs saved_queries saved_query_results work_item_detail"
+  string search = 5;          // @gotag: json:"search" binding:"omitempty,max=256"
+  string work_item_type = 6;  // @gotag: json:"workItemType" binding:"omitempty,max=128"
+  string state = 7;           // @gotag: json:"state" binding:"omitempty,max=128"
+  string assigned_to = 8;     // @gotag: json:"assignedTo" binding:"omitempty,max=256"
+  int64 plan_id = 9;          // @gotag: json:"planId" binding:"omitempty,gt=0"
+  int64 suite_id = 10;        // @gotag: json:"suiteId" binding:"omitempty,gt=0"
+  int64 pipeline_id = 11;     // @gotag: json:"pipelineId" binding:"omitempty,gt=0"
+  int32 top = 12;             // @gotag: json:"top" binding:"omitempty,min=1,max=100"
+  string query_id = 13;       // @gotag: json:"queryId" binding:"omitempty,max=128"
+  int64 work_item_id = 14;     // @gotag: json:"workItemId" binding:"omitempty,gt=0"
+  int32 offset = 15;          // @gotag: json:"offset" binding:"omitempty,min=0,max=20000"
+  string as_of = 16;          // @gotag: json:"asOf" binding:"omitempty,max=128"
+}
+
+message QueryAzureDevOpsContentData {
+  string connection_key = 1;            // @gotag: json:"connectionKey"
+  string owner_username = 2;            // @gotag: json:"ownerUsername"
+  string resource_key = 3;              // @gotag: json:"resourceKey"
+  string kind = 4;                      // @gotag: json:"kind"
+  repeated google.protobuf.Struct items = 5; // @gotag: json:"items"
+  int32 count = 6;                      // @gotag: json:"count"
+  google.protobuf.Struct metadata = 7;  // @gotag: json:"metadata,omitempty"
+}
+
+message QueryAzureDevOpsContentResponse {
+  QueryAzureDevOpsContentData data = 1; // @gotag: json:"data"
+  int32 code = 253;                    // @gotag: json:"code"
+  string msg = 254;                    // @gotag: json:"msg"
+}
+
+message ListAzureDevOpsExportFieldsRequest {
+  reserved 4;
+  reserved "work_item_type";
+  string connection_key = 1; // @gotag: json:"connectionKey" binding:"required,max=64"
+  int64 sico_project_id = 2; // @gotag: json:"sicoProjectId" binding:"required,gt=0"
+  string resource_key = 3; // @gotag: json:"resourceKey" binding:"required,max=255"
+}
+
+message AzureDevOpsExportField {
+  reserved 5;
+  reserved "recommended";
+  string name = 1; // @gotag: json:"name"
+  string reference_name = 2; // @gotag: json:"referenceName"
+  string type = 3; // @gotag: json:"type"
+  bool required = 4; // @gotag: json:"required"
+  string group = 6; // @gotag: json:"group"
+}
+
+message ListAzureDevOpsExportFieldsData {
+  repeated AzureDevOpsExportField fields = 1; // @gotag: json:"fields"
+  bool can_import_knowledge = 2; // @gotag: json:"canImportKnowledge"
+  int32 max_work_items = 3; // @gotag: json:"maxWorkItems"
+  int64 max_file_bytes = 4; // @gotag: json:"maxFileBytes"
+}
+
+message ListAzureDevOpsExportFieldsResponse {
+  ListAzureDevOpsExportFieldsData data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}
+
+message ExportAzureDevOpsQueryRequest {
+  reserved 6, 7;
+  reserved "format", "export_method";
+  string connection_key = 1; // @gotag: json:"connectionKey" binding:"required,max=64"
+  int64 sico_project_id = 2; // @gotag: json:"sicoProjectId" binding:"required,gt=0"
+  string resource_key = 3; // @gotag: json:"resourceKey" binding:"required,max=255"
+  string query_id = 4; // @gotag: json:"queryId" binding:"required,max=128"
+  repeated string column_options = 5; // @gotag: json:"columnOptions" binding:"required,min=3,max=100,dive,required,max=256"
+}
+
+message ImportAzureDevOpsKnowledgeRequest {
+  ExportAzureDevOpsQueryRequest export = 1; // @gotag: json:"export" binding:"required"
+  string name = 2; // @gotag: json:"name" binding:"required,max=128"
+  bool confirm_snapshot = 3; // @gotag: json:"confirmSnapshot" binding:"required"
+  string request_id = 4; // @gotag: json:"requestId" binding:"required,uuid4"
+}
+
+message ImportAzureDevOpsKnowledgeData {
+  string document_id = 1; // @gotag: json:"documentId"
+  string asset_id = 2; // @gotag: json:"assetId"
+  string file_name = 3; // @gotag: json:"fileName"
+  int32 work_item_count = 4; // @gotag: json:"workItemCount"
+  string query_id = 5; // @gotag: json:"queryId"
+  string query_as_of = 6; // @gotag: json:"queryAsOf"
+  string exported_at = 7; // @gotag: json:"exportedAt"
+  string name = 8; // @gotag: json:"name"
+  string export_source = 9; // @gotag: json:"exportSource"
+}
+
+message ImportAzureDevOpsKnowledgeResponse {
+  ImportAzureDevOpsKnowledgeData data = 1; // @gotag: json:"data"
+  int32 code = 253; // @gotag: json:"code"
+  string msg = 254; // @gotag: json:"msg"
+}

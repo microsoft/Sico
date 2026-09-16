@@ -56,8 +56,9 @@ type jsonColumn struct {
 // tableSpec describes a single database table together with the columns that
 // must be generated as custom Go types (serialized as JSON on the DB side).
 type tableSpec struct {
-	name        string
-	jsonColumns []jsonColumn
+	ignoredColumns []string
+	name           string
+	jsonColumns    []jsonColumn
 	// datatypesJSONColumns lists JSON columns whose Go type must be the
 	// self-serializing gorm datatypes.JSON ([]byte). Unlike jsonColumns these
 	// must NOT receive a `serializer:json` tag: datatypes.JSON already
@@ -162,6 +163,22 @@ var stores = []storeSpec{
 		tables: []tableSpec{
 			{name: "t_model_registry"},
 			{name: "t_model_registry_secret"},
+		},
+	},
+	{
+		outDir:        "internal/store/integration/internal/dal/query",
+		fieldNullable: true,
+		tables: []tableSpec{
+			{
+				name:                 "t_integration_connection",
+				datatypesJSONColumns: []string{"metadata"},
+				ignoredColumns:       []string{"ado_entitlement_key", "ado_personal_account_key"},
+			},
+			{
+				name:                 "t_integration_binding",
+				datatypesJSONColumns: []string{"metadata"},
+			},
+			{name: "t_integration_credential"},
 		},
 	},
 	{
@@ -309,7 +326,11 @@ func generateStore(db *gorm.DB, root string, s storeSpec) error {
 	for _, t := range s.tables {
 		hits := make(map[string]bool, len(t.jsonColumns))
 		applied[t.name] = hits
-		models = append(models, g.GenerateModel(t.name, modelOptions(t, modelPkgPath, hits)...))
+		options := modelOptions(t, modelPkgPath, hits)
+		if len(t.ignoredColumns) > 0 {
+			options = append(options, gen.FieldIgnore(t.ignoredColumns...))
+		}
+		models = append(models, g.GenerateModel(t.name, options...))
 	}
 
 	g.ApplyBasic(models...)

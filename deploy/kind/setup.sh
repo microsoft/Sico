@@ -191,6 +191,17 @@ ensure_sandbox_auth_secret() {
     --dry-run=client -o yaml | kubectl --context "${KUBE_CONTEXT}" -n sico apply -f -
 }
 
+ensure_sico_credentials_secret() {
+  kubectl --context "${KUBE_CONTEXT}" -n sico create secret generic sico-credentials \
+    --from-literal=DB_NAME="${DB_NAME:-sico}" \
+    --from-literal=DB_USER="${DB_USER:-sico}" \
+    --from-literal=DB_PASSWORD="${DB_PASSWORD}" \
+    --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}" \
+    --from-literal=SANDBOX_CLIENT_SECRET_TEST_CLIENT="${SANDBOX_CLIENT_SECRET_TEST_CLIENT:-}" \
+    --from-literal=SICO_ENCRYPTION_KEY="${SICO_ENCRYPTION_KEY:-}" \
+    --dry-run=client -o yaml | kubectl --context "${KUBE_CONTEXT}" -n sico apply -f -
+}
+
 prepare_backend_helm_extra_args() {
   BACKEND_HELM_EXTRA_ARGS=(
     --set-string "env.APP_ENV=development"
@@ -237,7 +248,21 @@ prepare_backend_helm_extra_args() {
   BACKEND_HELM_EXTRA_ARGS+=(
     --set-string "env.OTEL_EXPORTER_OTLP_ENDPOINT=sico-otel-lgtm.sico.svc.cluster.local:4317"
     --set-string "env.OTEL_EXPORTER_OTLP_INSECURE=true"
+    --set-string "env.AZURE_DEVOPS_ENABLED=${AZURE_DEVOPS_ENABLED:-false}"
   )
+  if [[ "${AZURE_DEVOPS_ENABLED:-false}" == "true" ]]; then
+    local name
+    for name in \
+      AZURE_CLIENT_ID \
+      AZURE_DEVOPS_CLIENT_ID \
+      AZURE_DEVOPS_HOME_TENANT_ID \
+      AZURE_DEVOPS_PERSONAL_REDIRECT_URL \
+      AZURE_DEVOPS_FRONTEND_RETURN_URL; do
+      if [[ -n "${!name:-}" ]]; then
+        BACKEND_HELM_EXTRA_ARGS+=(--set-string "env.${name}=${!name}")
+      fi
+    done
+  fi
 }
 
 prepare_core_helm_extra_args() {
@@ -345,6 +370,7 @@ deploy_kind_service() {
 
   case "${svc}" in
     backend)
+      ensure_sico_credentials_secret
       ensure_sandbox_auth_secret
       prepare_backend_helm_extra_args
       helm upgrade --install sico-backend backend/deployments/helm \
@@ -504,14 +530,8 @@ kubectl --context "${KUBE_CONTEXT}" create namespace sico 2>/dev/null || true
 kubectl --context "${KUBE_CONTEXT}" create namespace python-sandbox 2>/dev/null || true
 kubectl --context "${KUBE_CONTEXT}" create namespace sandbox 2>/dev/null || true
 
-# Create Kubernetes secret for credentials
-kubectl --context "${KUBE_CONTEXT}" -n sico create secret generic sico-credentials \
-  --from-literal=DB_NAME="${DB_NAME:-sico}" \
-  --from-literal=DB_USER="${DB_USER:-sico}" \
-  --from-literal=DB_PASSWORD="${DB_PASSWORD}" \
-  --from-literal=REDIS_PASSWORD="${REDIS_PASSWORD}" \
-  --from-literal=SANDBOX_CLIENT_SECRET_TEST_CLIENT="${SANDBOX_CLIENT_SECRET_TEST_CLIENT:-}" \
-  --dry-run=client -o yaml | kubectl --context "${KUBE_CONTEXT}" -n sico apply -f -
+# Create Kubernetes secrets for credentials.
+ensure_sico_credentials_secret
 ensure_sandbox_auth_secret
 
 # Delete previous Kafka init Job if it exists (Jobs are immutable)

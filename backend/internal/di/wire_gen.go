@@ -11,15 +11,18 @@ import (
 	"sico-backend/internal/biz/agent"
 	impl5 "sico-backend/internal/biz/agent/impl"
 	"sico-backend/internal/biz/authstate"
-	impl12 "sico-backend/internal/biz/authstate/impl"
+	impl13 "sico-backend/internal/biz/authstate/impl"
 	"sico-backend/internal/biz/casereplay"
 	"sico-backend/internal/biz/conversation"
 	impl6 "sico-backend/internal/biz/conversation/impl"
+	"sico-backend/internal/biz/integration"
+	"sico-backend/internal/biz/integration/azuredevops"
+	impl7 "sico-backend/internal/biz/integration/impl"
 	"sico-backend/internal/biz/knowledge"
 	impl4 "sico-backend/internal/biz/knowledge/impl"
 	"sico-backend/internal/biz/llmhubs"
 	"sico-backend/internal/biz/notification"
-	impl10 "sico-backend/internal/biz/notification/impl"
+	impl11 "sico-backend/internal/biz/notification/impl"
 	"sico-backend/internal/biz/organization"
 	impl3 "sico-backend/internal/biz/organization/impl"
 	"sico-backend/internal/biz/ownership"
@@ -28,31 +31,32 @@ import (
 	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/biz/rbac/impl"
 	"sico-backend/internal/biz/sandbox"
-	impl7 "sico-backend/internal/biz/sandbox/impl"
+	impl8 "sico-backend/internal/biz/sandbox/impl"
 	"sico-backend/internal/biz/sandbox/providers"
 	"sico-backend/internal/biz/scheduledtask"
-	impl11 "sico-backend/internal/biz/scheduledtask/impl"
+	impl12 "sico-backend/internal/biz/scheduledtask/impl"
 	"sico-backend/internal/biz/skill"
-	impl8 "sico-backend/internal/biz/skill/impl"
+	impl9 "sico-backend/internal/biz/skill/impl"
 	"sico-backend/internal/biz/taskruntime"
-	impl9 "sico-backend/internal/biz/taskruntime/impl"
+	impl10 "sico-backend/internal/biz/taskruntime/impl"
 	"sico-backend/internal/di/infra"
 	"sico-backend/internal/infra/cron"
 	repository2 "sico-backend/internal/store/agent/singleagent/repository"
-	repository13 "sico-backend/internal/store/authstate/repository"
-	repository14 "sico-backend/internal/store/casereplay/repository"
+	repository14 "sico-backend/internal/store/authstate/repository"
+	repository15 "sico-backend/internal/store/casereplay/repository"
 	repository4 "sico-backend/internal/store/conversation/conversation/repository"
 	repository7 "sico-backend/internal/store/conversation/message/repository"
+	repository9 "sico-backend/internal/store/integration/repository"
 	repository6 "sico-backend/internal/store/knowledge/repository"
 	repository8 "sico-backend/internal/store/llmhubs/repository"
-	repository11 "sico-backend/internal/store/notification/repository"
+	repository12 "sico-backend/internal/store/notification/repository"
 	repository5 "sico-backend/internal/store/organization/repository"
 	"sico-backend/internal/store/project/repository"
 	"sico-backend/internal/store/rbac/enforcer"
 	repository3 "sico-backend/internal/store/rbac/repository"
-	repository12 "sico-backend/internal/store/scheduledtask/repository"
-	repository9 "sico-backend/internal/store/skill/repository"
-	repository10 "sico-backend/internal/store/taskruntime/repository"
+	repository13 "sico-backend/internal/store/scheduledtask/repository"
+	repository10 "sico-backend/internal/store/skill/repository"
+	repository11 "sico-backend/internal/store/taskruntime/repository"
 )
 
 // Injectors from wire.go:
@@ -79,7 +83,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	v, err := infra.ProvideCoreGRPCConnection()
+	clientConn, err := infra.ProvideCoreGRPCConnection()
 	if err != nil {
 		cleanup2()
 		cleanup()
@@ -150,7 +154,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		ProjectRepo:       projectRepository,
 		AgentInstanceRepo: singleAgentInstanceRepository,
 		Storage:           storage,
-		CoreGRPC:          v,
+		CoreGRPC:          clientConn,
 		Access:            access,
 		Ownership:         resolver,
 	}
@@ -169,7 +173,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 	modelRegistryRepository := repository8.NewModelRegistryRepo(db)
 	modelRegistrySecretRepository := repository8.NewModelRegistrySecretRepo(db)
 	organizationLLMConfigRepository := repository5.NewOrganizationLLMConfigRepository(db)
-	llmhubsService := llmhubs.InitService(db, v, modelRegistryRepository, modelRegistrySecretRepository, organizationLLMConfigRepository)
+	llmhubsService := llmhubs.InitService(db, clientConn, modelRegistryRepository, modelRegistrySecretRepository, organizationLLMConfigRepository)
 	components5 := &impl6.Components{
 		ConversationRepo: conversationRepo,
 		MessageRepo:      messageRepo,
@@ -178,56 +182,74 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		LLMHubService:    llmhubsService,
 		IDGenerator:      idGenerator,
 		Storage:          storage,
-		CoreGRPC:         v,
+		CoreGRPC:         clientConn,
 		Cache:            client,
 		DB:               db,
 		Access:           access,
 		Ownership:        resolver,
 	}
 	conversationService := conversation.InitService(components5)
-	v2 := providers.NewProviders()
-	providerRegistry, err := impl7.NewProviderRegistry(v2)
+	integrationRepository := repository9.NewRepository(db)
+	connector, err := azuredevops.NewConnector(client)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	pool := impl7.NewPool(providerRegistry, client)
+	components6 := &impl7.Components{
+		IntegrationRepo:  integrationRepository,
+		OrganizationRepo: organizationRepository,
+		ProjectRepo:      projectRepository,
+		AzureDevOps:      connector,
+		ProjectService:   projectService,
+		KnowledgeService: knowledgeService,
+		Cache:            client,
+		Access:           access,
+	}
+	integrationService := integration.InitService(components6)
+	v := providers.NewProviders()
+	providerRegistry, err := impl8.NewProviderRegistry(v)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	pool := impl8.NewPool(providerRegistry, client)
 	cronCron, cleanup3, err := infra.ProvideCron()
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	service2 := impl7.NewServiceWithAccess(pool, singleAgentInstanceRepository, cronCron, projectRepository, access)
+	service2 := impl8.NewServiceWithAccess(pool, singleAgentInstanceRepository, cronCron, projectRepository, access)
 	sandboxService := sandbox.InitService(service2)
-	skillRepository := repository9.NewSkillRepo(db)
-	components6 := &impl8.Components{
+	skillRepository := repository10.NewSkillRepo(db)
+	components7 := &impl9.Components{
 		SkillRepo:   skillRepository,
 		ProjectRepo: projectRepository,
-		CoreGRPC:    v,
+		CoreGRPC:    clientConn,
 		Ownership:   resolver,
 	}
-	skillService := skill.InitService(components6)
-	taskRuntimeRepository := repository10.NewTaskRuntimeRepo(db)
-	service3 := impl9.NewService(taskRuntimeRepository)
+	skillService := skill.InitService(components7)
+	taskRuntimeRepository := repository11.NewTaskRuntimeRepo(db)
+	service3 := impl10.NewService(taskRuntimeRepository)
 	taskruntimeService := taskruntime.InitService(service3)
-	notificationRepo := repository11.NewNotificationRepo(db)
-	components7 := &impl10.Components{
+	notificationRepo := repository12.NewNotificationRepo(db)
+	components8 := &impl11.Components{
 		NotificationRepo: notificationRepo,
 		Storage:          storage,
-		CoreGRPC:         v,
+		CoreGRPC:         clientConn,
 		Ownership:        resolver,
 	}
-	notificationService := notification.InitService(components7)
-	repositoryRepository := repository12.NewRepository(db)
+	notificationService := notification.InitService(components8)
+	repositoryRepository := repository13.NewRepository(db)
 	implConversationService := scheduledtask.ProvideConversationService(conversationService)
 	implNotificationService := scheduledtask.ProvideNotificationService(notificationService)
 	implEmailClient := scheduledtask.ProvideEmailClient(emailClient)
 	implUserRepository := scheduledtask.ProvideUserRepository(userRepository)
 	deliverableStorage := scheduledtask.ProvideDeliverableStorage(storage)
 	parser := cron.NewParser()
-	components8 := &impl11.Components{
+	components9 := &impl12.Components{
 		Repository:          repositoryRepository,
 		AgentInstanceRepo:   singleAgentInstanceRepository,
 		ConversationService: implConversationService,
@@ -239,22 +261,22 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		Parser:              parser,
 		Ownership:           resolver,
 	}
-	scheduledtaskService := scheduledtask.InitService(components8)
-	authStateRepository := repository13.NewAuthStateRepo(db)
-	components9 := &impl12.Components{
+	scheduledtaskService := scheduledtask.InitService(components9)
+	authStateRepository := repository14.NewAuthStateRepo(db)
+	components10 := &impl13.Components{
 		AuthStateRepo: authStateRepository,
 		Storage:       storage,
 	}
-	authstateService := authstate.InitService(components9)
-	caseReplayRepository := repository14.NewCaseReplayRepo(db)
+	authstateService := authstate.InitService(components10)
+	caseReplayRepository := repository15.NewCaseReplayRepo(db)
 	casereplayService := casereplay.InitService(caseReplayRepository)
-	integration := providers.NewIntegration(v2, service2, pool)
+	providersIntegration := providers.NewIntegration(v, service2, pool)
 	injector := &Injector{
 		DB:                 db,
 		Cache:              client,
 		IDGen:              idGenerator,
 		Storage:            storage,
-		CoreGRPC:           v,
+		CoreGRPC:           clientConn,
 		Email:              emailClient,
 		ProjectApp:         projectService,
 		RBACApp:            rbacService,
@@ -262,6 +284,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		KnowledgeApp:       knowledgeService,
 		AgentApp:           agentService,
 		ConversationApp:    conversationService,
+		IntegrationApp:     integrationService,
 		SandboxApp:         sandboxService,
 		SkillApp:           skillService,
 		LLMHubApp:          llmhubsService,
@@ -270,7 +293,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		ScheduledTaskApp:   scheduledtaskService,
 		AuthStateApp:       authstateService,
 		CaseReplayApp:      casereplayService,
-		SandboxIntegration: integration,
+		SandboxIntegration: providersIntegration,
 		Access:             access,
 	}
 	return injector, func() {

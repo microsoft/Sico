@@ -14,11 +14,16 @@ cd "$SCRIPT_DIR"
 
 # Optional extra include path(s) for protoc, e.g. when google/protobuf well-known
 # protos live outside protoc's default search path (Winget Windows install).
-# Multiple paths can be passed via colon-separated string.
+# Separate multiple paths with ':' on Unix and ';' on Windows Git Bash so drive
+# letters such as C:/ are not split.
 EXTRA_PROTOC_INCLUDE="${EXTRA_PROTOC_INCLUDE:-}"
 _protoc_extra_args=()
 if [[ -n "${EXTRA_PROTOC_INCLUDE}" ]]; then
-  IFS=':' read -ra _extra_paths <<<"${EXTRA_PROTOC_INCLUDE}"
+  _extra_path_separator=':'
+  case "${OSTYPE:-}" in
+    msys*|cygwin*) _extra_path_separator=';' ;;
+  esac
+  IFS="${_extra_path_separator}" read -ra _extra_paths <<<"${EXTRA_PROTOC_INCLUDE}"
   for _p in "${_extra_paths[@]}"; do
     [[ -n "$_p" ]] && _protoc_extra_args+=("-I" "$_p")
   done
@@ -119,6 +124,13 @@ run_backend_http() {
 
   _http_process_subdir "knowledge" "knowledge" \
     knowledge
+
+  _http_process_subdir "integration" "integration" \
+    restful \
+    azure_devops
+  gofmt -w \
+    "${GO_HTTP_OUT_DIR_ABS}/integration/restful.pb.go" \
+    "${GO_HTTP_OUT_DIR_ABS}/integration/azure_devops.pb.go"
 
   _http_process_subdir "skill" "skill" \
     skill

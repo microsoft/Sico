@@ -1382,6 +1382,898 @@
                 }
             }
         },
+        "/api/sico/integrations/azure-devops/candidates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "maxLength": 64,
+                        "type": "string",
+                        "name": "connectionKey",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maxLength": 128,
+                        "type": "string",
+                        "name": "externalOrganizationId",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsCandidatesResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/azure-devops/connections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "enum": [
+                            0,
+                            1
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-varnames": [
+                            "ConnectionMode_CONNECTION_MODE_UNSPECIFIED",
+                            "ConnectionMode_CONNECTION_MODE_PERSONAL"
+                        ],
+                        "name": "mode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "organizationId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "maxLength": 64,
+                        "type": "string",
+                        "name": "provider",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "sicoProjectId",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-varnames": [
+                            "ConnectionStatus_CONNECTION_STATUS_DRAFT",
+                            "ConnectionStatus_CONNECTION_STATUS_PENDING_AUTHORIZATION",
+                            "ConnectionStatus_CONNECTION_STATUS_ACTIVE",
+                            "ConnectionStatus_CONNECTION_STATUS_REAUTHORIZATION_REQUIRED",
+                            "ConnectionStatus_CONNECTION_STATUS_SUSPENDED",
+                            "ConnectionStatus_CONNECTION_STATUS_REVOKED",
+                            "ConnectionStatus_CONNECTION_STATUS_FAILED"
+                        ],
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListConnectionsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/azure-devops/content/export": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ],
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "description": "Saved query and selected columns",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ExportAzureDevOpsQueryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "XLSX workbook",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/azure-devops/content/export-fields": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "description": "Selected project field catalog",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsExportFieldsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsExportFieldsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/azure-devops/content/import-knowledge": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "description": "Confirmed XLSX snapshot import",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ImportAzureDevOpsKnowledgeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ImportAzureDevOpsKnowledgeResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/azure-devops/content/query": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "description": "Structured content query",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.QueryAzureDevOpsContentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.QueryAzureDevOpsContentResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/azure-devops/personal/callback": {
+            "get": {
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "One-time OAuth state",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Authorization code",
+                        "name": "code",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Provider error code",
+                        "name": "error",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Redirect to the configured frontend return URL",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/azure-devops/personal/start": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "description": "Authorization request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.StartAzureDevOpsAuthorizationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.StartAzureDevOpsAuthorizationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/azure-devops/project-connections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Azure DevOps Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "name": "organizationId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "maxLength": 128,
+                        "type": "string",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "sicoProjectId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsProjectConnectionsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/connections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "enum": [
+                            0,
+                            1
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-varnames": [
+                            "ConnectionMode_CONNECTION_MODE_UNSPECIFIED",
+                            "ConnectionMode_CONNECTION_MODE_PERSONAL"
+                        ],
+                        "name": "mode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "organizationId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "maxLength": 64,
+                        "type": "string",
+                        "name": "provider",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "name": "sicoProjectId",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-varnames": [
+                            "ConnectionStatus_CONNECTION_STATUS_DRAFT",
+                            "ConnectionStatus_CONNECTION_STATUS_PENDING_AUTHORIZATION",
+                            "ConnectionStatus_CONNECTION_STATUS_ACTIVE",
+                            "ConnectionStatus_CONNECTION_STATUS_REAUTHORIZATION_REQUIRED",
+                            "ConnectionStatus_CONNECTION_STATUS_SUSPENDED",
+                            "ConnectionStatus_CONNECTION_STATUS_REVOKED",
+                            "ConnectionStatus_CONNECTION_STATUS_FAILED"
+                        ],
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListConnectionsResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "description": "Create connection request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.CreateConnectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.CreateConnectionResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/connections/{connectionKey}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection key",
+                        "name": "connectionKey",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.GetConnectionResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection key",
+                        "name": "connectionKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update connection request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.UpdateConnectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.UpdateConnectionResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection key",
+                        "name": "connectionKey",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.DeleteConnectionResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/connections/{connectionKey}/bindings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection key",
+                        "name": "connectionKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "maxLength": 64,
+                        "type": "string",
+                        "name": "sicoScopeId",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            2
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-varnames": [
+                            "SicoScopeType_SICO_SCOPE_TYPE_UNSPECIFIED",
+                            "SicoScopeType_SICO_SCOPE_TYPE_ORGANIZATION",
+                            "SicoScopeType_SICO_SCOPE_TYPE_PROJECT"
+                        ],
+                        "name": "sicoScopeType",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            0,
+                            1,
+                            2,
+                            3
+                        ],
+                        "type": "integer",
+                        "format": "int32",
+                        "x-enum-varnames": [
+                            "BindingStatus_BINDING_STATUS_UNSPECIFIED",
+                            "BindingStatus_BINDING_STATUS_ACTIVE",
+                            "BindingStatus_BINDING_STATUS_DISABLED",
+                            "BindingStatus_BINDING_STATUS_INACCESSIBLE"
+                        ],
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListBindingsResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection key",
+                        "name": "connectionKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Create binding request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.CreateBindingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.CreateBindingResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/integrations/connections/{connectionKey}/bindings/{bindingId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection key",
+                        "name": "connectionKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Binding ID",
+                        "name": "bindingId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.GetBindingResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection key",
+                        "name": "connectionKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Binding ID",
+                        "name": "bindingId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update binding request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.UpdateBindingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.UpdateBindingResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integration"
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection key",
+                        "name": "connectionKey",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Binding ID",
+                        "name": "bindingId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.DeleteBindingResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/sico/knowledge/document": {
             "get": {
                 "security": [
@@ -7570,6 +8462,914 @@
             "properties": {
                 "code": {
                     "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.AzureDevOpsExportField": {
+            "type": "object",
+            "properties": {
+                "group": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "referenceName": {
+                    "type": "string"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.AzureDevOpsOrganization": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "projects": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.AzureDevOpsProject"
+                    }
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.AzureDevOpsProject": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parentId": {
+                    "type": "string"
+                },
+                "parentName": {
+                    "type": "string"
+                },
+                "resourceKey": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "visibility": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.AzureDevOpsProjectConnection": {
+            "type": "object",
+            "properties": {
+                "connectionKey": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "creatorUsername": {
+                    "type": "string"
+                },
+                "displayName": {
+                    "type": "string"
+                },
+                "ownerUsername": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ConnectionStatus"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.Binding": {
+            "type": "object",
+            "properties": {
+                "connectionKey": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "creatorUsername": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/structpb.Struct"
+                },
+                "resourceKey": {
+                    "type": "string"
+                },
+                "resourceName": {
+                    "type": "string"
+                },
+                "resourceType": {
+                    "type": "string"
+                },
+                "sicoScopeId": {
+                    "type": "string"
+                },
+                "sicoScopeType": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.SicoScopeType"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.BindingStatus"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.BindingStatus": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "BindingStatus_BINDING_STATUS_UNSPECIFIED",
+                "BindingStatus_BINDING_STATUS_ACTIVE",
+                "BindingStatus_BINDING_STATUS_DISABLED",
+                "BindingStatus_BINDING_STATUS_INACCESSIBLE"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_integration.Connection": {
+            "type": "object",
+            "properties": {
+                "connectionKey": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "integer"
+                },
+                "creatorUsername": {
+                    "type": "string"
+                },
+                "displayName": {
+                    "type": "string"
+                },
+                "externalId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/structpb.Struct"
+                },
+                "mode": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ConnectionMode"
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "ownerUsername": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "sicoProjectId": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ConnectionStatus"
+                },
+                "updatedAt": {
+                    "type": "integer"
+                },
+                "updaterUsername": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ConnectionMode": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1
+            ],
+            "x-enum-varnames": [
+                "ConnectionMode_CONNECTION_MODE_UNSPECIFIED",
+                "ConnectionMode_CONNECTION_MODE_PERSONAL"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_integration.ConnectionStatus": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                4,
+                5,
+                6,
+                7,
+                8
+            ],
+            "x-enum-varnames": [
+                "ConnectionStatus_CONNECTION_STATUS_DRAFT",
+                "ConnectionStatus_CONNECTION_STATUS_PENDING_AUTHORIZATION",
+                "ConnectionStatus_CONNECTION_STATUS_ACTIVE",
+                "ConnectionStatus_CONNECTION_STATUS_REAUTHORIZATION_REQUIRED",
+                "ConnectionStatus_CONNECTION_STATUS_SUSPENDED",
+                "ConnectionStatus_CONNECTION_STATUS_REVOKED",
+                "ConnectionStatus_CONNECTION_STATUS_FAILED"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_integration.CreateBindingRequest": {
+            "type": "object",
+            "required": [
+                "resourceKey",
+                "resourceName",
+                "resourceType",
+                "sicoScopeId",
+                "sicoScopeType"
+            ],
+            "properties": {
+                "resourceKey": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "resourceName": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "resourceType": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "sicoScopeId": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "sicoScopeType": {
+                    "enum": [
+                        1,
+                        2
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.SicoScopeType"
+                        }
+                    ]
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.CreateBindingResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.Binding"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.CreateConnectionRequest": {
+            "type": "object",
+            "required": [
+                "mode",
+                "organizationId",
+                "provider"
+            ],
+            "properties": {
+                "displayName": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "mode": {
+                    "enum": [
+                        1
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ConnectionMode"
+                        }
+                    ]
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "provider": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "sicoProjectId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.CreateConnectionResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.Connection"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.DeleteBindingResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.DeleteConnectionResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ExportAzureDevOpsQueryRequest": {
+            "type": "object",
+            "required": [
+                "columnOptions",
+                "connectionKey",
+                "queryId",
+                "resourceKey",
+                "sicoProjectId"
+            ],
+            "properties": {
+                "columnOptions": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "minItems": 3,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "connectionKey": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "queryId": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "resourceKey": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "sicoProjectId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.GetBindingResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.Binding"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.GetConnectionResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.Connection"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ImportAzureDevOpsKnowledgeData": {
+            "type": "object",
+            "properties": {
+                "assetId": {
+                    "type": "string"
+                },
+                "documentId": {
+                    "type": "string"
+                },
+                "exportSource": {
+                    "type": "string"
+                },
+                "exportedAt": {
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "queryAsOf": {
+                    "type": "string"
+                },
+                "queryId": {
+                    "type": "string"
+                },
+                "workItemCount": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ImportAzureDevOpsKnowledgeRequest": {
+            "type": "object",
+            "required": [
+                "confirmSnapshot",
+                "export",
+                "name",
+                "requestId"
+            ],
+            "properties": {
+                "confirmSnapshot": {
+                    "type": "boolean"
+                },
+                "export": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ExportAzureDevOpsQueryRequest"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "requestId": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ImportAzureDevOpsKnowledgeResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ImportAzureDevOpsKnowledgeData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsCandidatesData": {
+            "type": "object",
+            "properties": {
+                "organizations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.AzureDevOpsOrganization"
+                    }
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsCandidatesResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsCandidatesData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsExportFieldsData": {
+            "type": "object",
+            "properties": {
+                "canImportKnowledge": {
+                    "type": "boolean"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.AzureDevOpsExportField"
+                    }
+                },
+                "maxFileBytes": {
+                    "type": "integer"
+                },
+                "maxWorkItems": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsExportFieldsRequest": {
+            "type": "object",
+            "required": [
+                "connectionKey",
+                "resourceKey",
+                "sicoProjectId"
+            ],
+            "properties": {
+                "connectionKey": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "resourceKey": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "sicoProjectId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsExportFieldsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsExportFieldsData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsProjectConnectionsData": {
+            "type": "object",
+            "properties": {
+                "connections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.AzureDevOpsProjectConnection"
+                    }
+                },
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsProjectConnectionsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListAzureDevOpsProjectConnectionsData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListBindingsData": {
+            "type": "object",
+            "properties": {
+                "bindings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.Binding"
+                    }
+                },
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListBindingsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListBindingsData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListConnectionsData": {
+            "type": "object",
+            "properties": {
+                "connections": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.Connection"
+                    }
+                },
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.ListConnectionsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.ListConnectionsData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.QueryAzureDevOpsContentData": {
+            "type": "object",
+            "properties": {
+                "connectionKey": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/structpb.Struct"
+                    }
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/structpb.Struct"
+                },
+                "ownerUsername": {
+                    "type": "string"
+                },
+                "resourceKey": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.QueryAzureDevOpsContentRequest": {
+            "type": "object",
+            "required": [
+                "connectionKey",
+                "kind",
+                "resourceKey",
+                "sicoProjectId"
+            ],
+            "properties": {
+                "asOf": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "assignedTo": {
+                    "type": "string",
+                    "maxLength": 256
+                },
+                "connectionKey": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "work_items",
+                        "repositories",
+                        "test_plans",
+                        "test_cases",
+                        "pipelines",
+                        "pipeline_runs",
+                        "saved_queries",
+                        "saved_query_results",
+                        "work_item_detail"
+                    ]
+                },
+                "offset": {
+                    "type": "integer",
+                    "maximum": 20000,
+                    "minimum": 0
+                },
+                "pipelineId": {
+                    "type": "integer"
+                },
+                "planId": {
+                    "type": "integer"
+                },
+                "queryId": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "resourceKey": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "search": {
+                    "type": "string",
+                    "maxLength": 256
+                },
+                "sicoProjectId": {
+                    "type": "integer"
+                },
+                "state": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "suiteId": {
+                    "type": "integer"
+                },
+                "top": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 1
+                },
+                "workItemId": {
+                    "type": "integer"
+                },
+                "workItemType": {
+                    "type": "string",
+                    "maxLength": 128
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.QueryAzureDevOpsContentResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.QueryAzureDevOpsContentData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.SicoScopeType": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "x-enum-varnames": [
+                "SicoScopeType_SICO_SCOPE_TYPE_UNSPECIFIED",
+                "SicoScopeType_SICO_SCOPE_TYPE_ORGANIZATION",
+                "SicoScopeType_SICO_SCOPE_TYPE_PROJECT"
+            ]
+        },
+        "sico-backend_internal_transport_http_dto_integration.StartAzureDevOpsAuthorizationData": {
+            "type": "object",
+            "properties": {
+                "authorizationUrl": {
+                    "type": "string"
+                },
+                "connectionKey": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "integer"
+                },
+                "operationId": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.StartAzureDevOpsAuthorizationRequest": {
+            "type": "object",
+            "required": [
+                "organizationId",
+                "sicoProjectId"
+            ],
+            "properties": {
+                "connectionKey": {
+                    "type": "string",
+                    "maxLength": 64
+                },
+                "displayName": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "sicoProjectId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.StartAzureDevOpsAuthorizationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.StartAzureDevOpsAuthorizationData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.UpdateBindingRequest": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "enum": [
+                        1,
+                        2
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.BindingStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.UpdateBindingResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.Binding"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.UpdateConnectionRequest": {
+            "type": "object",
+            "properties": {
+                "displayName": {
+                    "type": "string",
+                    "maxLength": 128
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_integration.UpdateConnectionResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_integration.Connection"
                 },
                 "msg": {
                     "type": "string"

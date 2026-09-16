@@ -4,7 +4,7 @@ WORKDIR /app
 # Install swag for generating OpenAPI documentation
 RUN --mount=type=cache,target=/go/pkg/mod \
 	--mount=type=cache,target=/root/.cache/go-build \
-	go install github.com/swaggo/swag/cmd/swag@latest
+	go install github.com/swaggo/swag/cmd/swag@v1.16.6
 
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -20,7 +20,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 ARG SWAGGER_MAIN=./cmd/sico-server/main.go
 RUN --mount=type=cache,target=/go/pkg/mod \
 	--mount=type=cache,target=/root/.cache/go-build \
-	swag init -g ${SWAGGER_MAIN} --parseDependency --parseInternal --tags '!Internal' -o api/openapi
+	swag init -g ${SWAGGER_MAIN} --parseDependency --parseInternal --tags=!Internal -o api/openapi && \
+	grep -q '"/api/sico/health"' api/openapi/swagger.json && \
+	! grep -q '"Internal"' api/openapi/swagger.json
 
 # Compile the Go application
 RUN --mount=type=cache,target=/go/pkg/mod \
