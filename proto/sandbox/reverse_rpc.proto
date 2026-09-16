@@ -20,6 +20,9 @@ service ReverseSandboxRPC {
     // The lease and assignment are preserved — only the sandbox environment is reset.
     rpc RpcResetSandbox(ResetSandboxRequest) returns (ResetSandboxResponse) {}
 
+    // RpcProxyLinuxWorkstationSandboxHttp forwards an authorized request to a Linux Workstation assigned to the instance.
+    rpc RpcProxyLinuxWorkstationSandboxHttp(LinuxWorkstationSandboxHttpRequest) returns (LinuxWorkstationSandboxHttpResponse) {}
+
 }
 
 message InstanceSandboxInfo {
@@ -80,4 +83,31 @@ message ResetSandboxRequest {
 message ResetSandboxResponse {
     int32 code = 253;                           // @gotag: json:"code"
     string msg = 254;                           // @gotag: json:"msg"
+}
+
+message LinuxWorkstationSandboxHttpFormField {
+    string name = 1;          // @gotag: json:"name"
+    string text_value = 2;    // @gotag: json:"textValue"
+    bytes bytes_value = 3;    // @gotag: json:"bytesValue"
+    string file_name = 4;     // @gotag: json:"fileName"
+    string content_type = 5;  // @gotag: json:"contentType"
+}
+
+message LinuxWorkstationSandboxHttpRequest {
+    string proxy_base_path = 1; // @gotag: json:"proxyBasePath"
+    string method = 2;          // @gotag: json:"method"
+    string path = 3;            // @gotag: json:"path"
+    string query_json = 4;      // @gotag: json:"queryJson"
+    string json_body_json = 5;  // @gotag: json:"jsonBodyJson"
+    repeated LinuxWorkstationSandboxHttpFormField form_fields = 6; // @gotag: json:"formFields"
+    string agent_instance_id = 7; // @gotag: json:"agentInstanceId"
+}
+
+message LinuxWorkstationSandboxHttpResponse {
+    int32 status_code = 1;      // @gotag: json:"statusCode"
+    string content_type = 2;    // @gotag: json:"contentType"
+    string body_text = 3;       // @gotag: json:"bodyText"
+    bytes body_bytes = 4;       // @gotag: json:"bodyBytes"
+    int32 code = 253;           // @gotag: json:"code"
+    string msg = 254;           // @gotag: json:"msg"
 }

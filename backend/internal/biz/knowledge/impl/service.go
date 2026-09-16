@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	appresp "sico-backend/internal/biz/common/response"
+	"sico-backend/internal/biz/ownership"
 	rbac "sico-backend/internal/biz/rbac"
 	coregrpc "sico-backend/internal/infra/coregrpc"
 	"sico-backend/internal/infra/storage"
@@ -44,6 +45,8 @@ type Components struct {
 	AgentInstanceRepo agentrepo.SingleAgentInstanceRepository
 	Storage           storage.Storage
 	CoreGRPC          coregrpc.Connection
+	Access            rbac.Access
+	Ownership         ownership.Resolver
 }
 
 type Service struct {
@@ -62,17 +65,65 @@ func NewService(c *Components) *Service {
 	return svc
 }
 
+func (s *Service) access() rbac.Access {
+	if s != nil && s.Components != nil && s.Access != nil {
+		return s.Access
+	}
+	return rbac.NewUninitializedAccessServices()
+}
+
+func (s *Service) requireResourceOrganization(ctx context.Context, projectID int64, agentID string) error {
+	if s == nil || s.Components == nil || s.Ownership == nil {
+		return nil
+	}
+	if projectID > 0 {
+		organizationID, err := s.Ownership.ProjectOrganization(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		if err := s.Ownership.RequireOrganization(ctx, organizationID, false); err != nil {
+			return err
+		}
+	}
+	if agentID != "" {
+		organizationID, err := s.Ownership.AgentOrganization(ctx, agentID)
+		if err != nil {
+			return err
+		}
+		if err := s.Ownership.RequireOrganization(ctx, organizationID, true); err != nil {
+			return err
+		}
+	}
+	if projectID == 0 && agentID == "" {
+		return apperr.New(errcode.CommonInvalidParam, "projectId or agentId is required")
+	}
+	return nil
+}
+
+func (s *Service) requireAgentInstanceOrganization(ctx context.Context, instanceID int64) error {
+	if s == nil || s.Components == nil || s.Ownership == nil || instanceID == 0 {
+		return nil
+	}
+	organizationID, err := s.Ownership.AgentInstanceOrganization(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	return s.Ownership.RequireOrganization(ctx, organizationID, false)
+}
+
 func (s *Service) CreateDocument(
 	ctx context.Context, req *knowledge.CreateKnowledgeDocumentRequest,
 ) (*knowledge.CreateKnowledgeDocumentResponse, error) {
-	if req.ProjectId == 0 && req.AgentId == "" {
-		return nil, apperr.New(errcode.CommonInvalidParam, "projectId or agentId is required")
+	if err := s.validateDocumentOwnerScope(ctx, req); err != nil {
+		return nil, err
 	}
 
 	if req.ProjectId != 0 {
-		if err := rbac.CheckCtxAccessOrOwner(
-			ctx, rbac.ScopeProject, req.ProjectId,
-			"asset", "manage", middleware.MustGetUsernameFromCtx(ctx),
+		if err := s.access().RequireOrOwner(
+			ctx,
+			rbac.ProjectScope(req.ProjectId),
+			rbac.PermissionAssetManage,
+			middleware.MustGetUsernameFromCtx(ctx),
 		); err != nil {
 			return nil, err
 		}
@@ -93,6 +144,7 @@ func (s *Service) CreateDocument(
 		}
 	}
 
+	autoName := shouldAutoNameDocument(req)
 	name := s.deriveDocumentName(ctx, req)
 	creator := middleware.MustGetUsernameFromCtx(ctx)
 
@@ -123,11 +175,26 @@ func (s *Service) CreateDocument(
 		}
 	}
 
-	s.triggerExtractDocument(ctx, doc)
+	s.triggerExtractDocument(ctx, doc, autoName)
 
 	return appresp.Success(&knowledge.CreateKnowledgeDocumentResponse{
 		Data: &knowledge.CreateKnowledgeDocumentData{Id: id},
 	}), nil
+}
+
+func (s *Service) validateDocumentOwnerScope(
+	ctx context.Context,
+	req *knowledge.CreateKnowledgeDocumentRequest,
+) error {
+	if req.ProjectId == 0 && req.AgentId == "" {
+		return apperr.New(errcode.CommonInvalidParam, "projectId or agentId is required")
+	}
+	return s.requireResourceOrganization(ctx, req.ProjectId, req.AgentId)
+}
+
+func shouldAutoNameDocument(req *knowledge.CreateKnowledgeDocumentRequest) bool {
+	return req.DocumentType == knowledge.KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK &&
+		strings.TrimSpace(req.Name) == ""
 }
 
 func (s *Service) GetDocument(
@@ -138,6 +205,9 @@ func (s *Service) GetDocument(
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.New(errcode.CommonNotFound, "knowledge document not found")
 		}
+		return nil, err
+	}
+	if err := s.requireResourceOrganization(ctx, doc.ProjectID, doc.AgentID); err != nil {
 		return nil, err
 	}
 
@@ -182,6 +252,9 @@ func (s *Service) GetDocumentDetails(
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, doc.ProjectID, doc.AgentID); err != nil {
+		return nil, err
+	}
 
 	if s.grpcClient == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "core gRPC client not initialized")
@@ -192,9 +265,10 @@ func (s *Service) GetDocumentDetails(
 	}
 
 	grpcReq := &knowledgegrpc.GetDocumentDetailsRequest{
-		DocumentId: req.Id,
-		ProjectId:  doc.ProjectID,
-		AgentId:    doc.AgentID,
+		DocumentId:   req.Id,
+		ProjectId:    doc.ProjectID,
+		AgentId:      doc.AgentID,
+		DocumentType: docTypeFromDB(doc.DocumentType),
 	}
 
 	resp, err := s.grpcClient.GetDocumentDetails(ctx, grpcReq)
@@ -232,6 +306,9 @@ func (s *Service) UpdateDocument(
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, doc.ProjectID, doc.AgentID); err != nil {
+		return nil, err
+	}
 
 	applyDocumentUpdates(doc, req)
 
@@ -243,7 +320,7 @@ func (s *Service) UpdateDocument(
 		return nil, err
 	}
 
-	s.triggerExtractDocument(ctx, doc)
+	s.triggerExtractDocument(ctx, doc, false)
 
 	return appresp.Success(&knowledge.UpdateKnowledgeDocumentResponse{}), nil
 }
@@ -298,11 +375,13 @@ func (s *Service) DeleteDocument(
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, doc.ProjectID, doc.AgentID); err != nil {
+		return nil, err
+	}
 
 	if doc.ProjectID != 0 {
-		if err := rbac.CheckCtxAccessOrOwner(
-			ctx, rbac.ScopeProject, doc.ProjectID,
-			"asset", "manage", doc.CreatorUsername,
+		if err := s.access().RequireOrOwner(
+			ctx, rbac.ProjectScope(doc.ProjectID), rbac.PermissionAssetManage, doc.CreatorUsername,
 		); err != nil {
 			return nil, err
 		}
@@ -324,6 +403,9 @@ func (s *Service) DeleteDocument(
 func (s *Service) ListDocuments(
 	ctx context.Context, req *knowledge.ListKnowledgeDocumentRequest,
 ) (*knowledge.ListKnowledgeDocumentResponse, error) {
+	if err := s.requireResourceOrganization(ctx, req.ProjectId, req.AgentId); err != nil {
+		return nil, err
+	}
 	offset := int(req.Page-1) * int(req.PageSize)
 	filter := &repository.DocumentV2Filter{
 		ProjectID:       req.ProjectId,
@@ -384,6 +466,9 @@ func (s *Service) CreateKnowledgeTag(
 	if req.ProjectId == 0 || strings.TrimSpace(req.Name) == "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "projectId and name are required")
 	}
+	if err := s.requireResourceOrganization(ctx, req.ProjectId, ""); err != nil {
+		return nil, err
+	}
 
 	creator := middleware.MustGetUsernameFromCtx(ctx)
 
@@ -417,6 +502,9 @@ func (s *Service) UpdateKnowledgeTag(
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, tag.ProjectID, ""); err != nil {
+		return nil, err
+	}
 
 	if req.Name != "" {
 		tag.Name = req.Name
@@ -435,10 +523,14 @@ func (s *Service) UpdateKnowledgeTag(
 func (s *Service) DeleteKnowledgeTag(
 	ctx context.Context, req *knowledge.DeleteKnowledgeTagRequest,
 ) (*knowledge.DeleteKnowledgeTagResponse, error) {
-	if _, err := s.KnowledgeTagRepo.GetByID(ctx, req.Id); err != nil {
+	tag, err := s.KnowledgeTagRepo.GetByID(ctx, req.Id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.New(errcode.CommonNotFound, "knowledge tag not found")
 		}
+		return nil, err
+	}
+	if err := s.requireResourceOrganization(ctx, tag.ProjectID, ""); err != nil {
 		return nil, err
 	}
 
@@ -458,6 +550,9 @@ func (s *Service) GetKnowledgeTag(
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, tag.ProjectID, ""); err != nil {
+		return nil, err
+	}
 
 	return appresp.Success(&knowledge.GetKnowledgeTagResponse{
 		Data: &knowledge.GetKnowledgeTagData{Tag: knowledgeTagModelToDTO(tag)},
@@ -465,7 +560,9 @@ func (s *Service) GetKnowledgeTag(
 }
 
 func (s *Service) triggerExtractDocument(
-	ctx context.Context, doc *repository.KnowledgeDocumentV2Model,
+	ctx context.Context,
+	doc *repository.KnowledgeDocumentV2Model,
+	autoName bool,
 ) {
 	if doc == nil || doc.ID == 0 || s.grpcClient == nil {
 		return
@@ -491,6 +588,7 @@ func (s *Service) triggerExtractDocument(
 		resp, err := s.grpcClient.ExtractDocument(reqCtx, dto)
 		status := knowledge.KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED
 		failReason := ""
+		extractedTitle := ""
 		if err != nil || resp == nil || resp.Code != 0 {
 			status = knowledge.KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_FAILED
 			if err != nil {
@@ -501,9 +599,17 @@ func (s *Service) triggerExtractDocument(
 			} else {
 				failReason = "extraction failed"
 			}
+		} else if autoName {
+			extractedTitle = strings.TrimSpace(resp.Title)
 		}
 
-		if updateErr := s.updateDocumentStatus(reqCtx, doc.ID, status, failReason); updateErr != nil {
+		if updateErr := s.updateDocumentAfterExtraction(
+			reqCtx,
+			doc.ID,
+			status,
+			failReason,
+			extractedTitle,
+		); updateErr != nil {
 			logger.CtxWarn(
 				ctx,
 				"knowledge: failed to update status after extract: id=%d err=%v",
@@ -513,9 +619,11 @@ func (s *Service) triggerExtractDocument(
 	})
 }
 
-func (s *Service) updateDocumentStatus(
-	ctx context.Context, docID int64,
-	status knowledge.KnowledgeDocumentStatus, failReason string,
+func (s *Service) updateDocumentAfterExtraction(
+	ctx context.Context,
+	docID int64,
+	status knowledge.KnowledgeDocumentStatus,
+	failReason, extractedTitle string,
 ) error {
 	if s.DocumentRepo == nil {
 		return nil
@@ -528,6 +636,9 @@ func (s *Service) updateDocumentStatus(
 
 	doc.Status = docStatusToDB(status)
 	doc.FailReason = failReason
+	if extractedTitle != "" {
+		doc.Name = extractedTitle
+	}
 
 	return s.DocumentRepo.Update(ctx, doc)
 }
@@ -563,6 +674,9 @@ func (s *Service) buildDocumentDTO(
 func (s *Service) ListKnowledgeTag(
 	ctx context.Context, req *knowledge.ListKnowledgeTagRequest,
 ) (*knowledge.ListKnowledgeTagResponse, error) {
+	if err := s.requireResourceOrganization(ctx, req.ProjectId, ""); err != nil {
+		return nil, err
+	}
 	offset := int(req.Page-1) * int(req.PageSize)
 	tags, total, err := s.KnowledgeTagRepo.List(ctx, req.ProjectId, offset, int(req.PageSize))
 	if err != nil {
@@ -926,6 +1040,9 @@ func (s *Service) GetPlaybook(
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, playbook.ProjectID, ""); err != nil {
+		return nil, err
+	}
 
 	tags, err := s.fetchPlaybookTags(ctx, playbook.ID)
 	if err != nil {
@@ -947,6 +1064,17 @@ func (s *Service) ListPlaybooks(
 ) (*knowledge.ListKnowledgePlaybookResponse, error) {
 	if s.PlaybookRepo == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "playbook repository not initialized")
+	}
+	if req.ProjectId == 0 && req.AgentInstanceId == 0 && s.Ownership != nil {
+		return nil, apperr.New(errcode.CommonInvalidParam, "projectId or agentInstanceId is required")
+	}
+	if req.ProjectId > 0 {
+		if err := s.requireResourceOrganization(ctx, req.ProjectId, ""); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.requireAgentInstanceOrganization(ctx, req.AgentInstanceId); err != nil {
+		return nil, err
 	}
 
 	offset := int(req.Page-1) * int(req.PageSize)
@@ -987,6 +1115,9 @@ func (s *Service) ListKnowledgeItems(
 	ctx context.Context, req *knowledge.ListKnowledgeItemsRequest,
 ) (*knowledge.ListKnowledgeItemsResponse, error) {
 	projectID := req.ProjectId
+	if err := s.requireResourceOrganization(ctx, projectID, ""); err != nil {
+		return nil, err
+	}
 
 	page := req.GetPage()
 	if page <= 0 {
@@ -1170,6 +1301,9 @@ func (s *Service) UpdatePlaybook(
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, playbook.ProjectID, ""); err != nil {
+		return nil, err
+	}
 
 	if name := strings.TrimSpace(req.Name); name != "" {
 		playbook.Name = name
@@ -1200,10 +1334,14 @@ func (s *Service) DeletePlaybook(
 		return nil, apperr.New(errcode.CommonUnavailable, "playbook repository not initialized")
 	}
 
-	if _, err := s.PlaybookRepo.GetByID(ctx, req.Id); err != nil {
+	playbook, err := s.PlaybookRepo.GetByID(ctx, req.Id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.New(errcode.CommonNotFound, "playbook not found")
 		}
+		return nil, err
+	}
+	if err := s.requireResourceOrganization(ctx, playbook.ProjectID, ""); err != nil {
 		return nil, err
 	}
 
@@ -1236,6 +1374,9 @@ func (s *Service) GetPlaybookDetails(
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.New(errcode.CommonNotFound, "playbook not found")
 		}
+		return nil, err
+	}
+	if err := s.requireResourceOrganization(ctx, playbook.ProjectID, ""); err != nil {
 		return nil, err
 	}
 

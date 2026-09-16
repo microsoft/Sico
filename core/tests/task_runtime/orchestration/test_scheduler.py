@@ -98,6 +98,88 @@ async def test_concurrency_cap_limits_in_flight() -> None:
 
 
 @pytest.mark.asyncio
+async def test_parent_cancellation_cancels_and_awaits_in_flight_runs() -> None:
+    run = _run("A", 0)
+    started = asyncio.Event()
+    cleanup_started = asyncio.Event()
+    allow_cleanup = asyncio.Event()
+    worker_task: asyncio.Task[TaskResult] | None = None
+
+    async def execute(run: TaskRun) -> TaskResult:
+        nonlocal worker_task
+        worker_task = asyncio.current_task()
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleanup_started.set()
+            await allow_cleanup.wait()
+        return _result(run, TaskStatus.COMPLETED)
+
+    owner_task = asyncio.create_task(BatchScheduler().run([run], execute))
+    await started.wait()
+
+    try:
+        owner_task.cancel()
+        await asyncio.wait_for(cleanup_started.wait(), timeout=1)
+
+        assert not owner_task.done()
+
+        allow_cleanup.set()
+        with pytest.raises(asyncio.CancelledError):
+            await owner_task
+    finally:
+        allow_cleanup.set()
+        if worker_task is not None and not worker_task.done():
+            worker_task.cancel()
+            await asyncio.gather(worker_task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_repeated_parent_cancellation_does_not_interrupt_in_flight_cleanup() -> None:
+    run = _run("A", 0)
+    started = asyncio.Event()
+    cleanup_started = asyncio.Event()
+    allow_cleanup = asyncio.Event()
+    cleanup_finished = asyncio.Event()
+    worker_task: asyncio.Task[TaskResult] | None = None
+
+    async def execute(run: TaskRun) -> TaskResult:
+        nonlocal worker_task
+        worker_task = asyncio.current_task()
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleanup_started.set()
+            await allow_cleanup.wait()
+            cleanup_finished.set()
+        return _result(run, TaskStatus.COMPLETED)
+
+    owner_task = asyncio.create_task(BatchScheduler().run([run], execute))
+    await started.wait()
+
+    try:
+        owner_task.cancel()
+        await asyncio.wait_for(cleanup_started.wait(), timeout=1)
+        owner_task.cancel()
+        await asyncio.sleep(0)
+
+        assert not owner_task.done()
+        assert not cleanup_finished.is_set()
+
+        allow_cleanup.set()
+        with pytest.raises(asyncio.CancelledError):
+            await owner_task
+        assert cleanup_finished.is_set()
+    finally:
+        allow_cleanup.set()
+        if worker_task is not None and not worker_task.done():
+            worker_task.cancel()
+            await asyncio.gather(worker_task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
 async def test_resource_limit_caps_in_flight_per_key() -> None:
     runs = [_run(f"t{i}", i) for i in range(4)]
     live = 0

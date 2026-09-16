@@ -72,6 +72,45 @@ class _ResetFailingLeaseManager:
         return None
 
 
+class _RecordingLeaseManager:
+    def __init__(self) -> None:
+        self.reserve_calls: list[tuple[str, str]] = []
+        self.acquire_calls: list[str] = []
+        self.reset_calls: list[str] = []
+        self.release_calls: list[tuple[str, str]] = []
+        self.active_lease_ids: set[str] = set()
+
+    async def reserve(self, req: SandboxRequirement, run_id: str) -> ReservationToken:
+        self.reserve_calls.append((req.type, run_id))
+        return ReservationToken(
+            reservation_id=f"reservation-{run_id}",
+            run_id=run_id,
+            type=req.type,
+            expires_at=int((time.time() + 30) * 1000),
+        )
+
+    async def acquire(self, token: ReservationToken) -> SandboxLeaseRef:
+        sandbox_id = f"sandbox-{token.run_id}"
+        self.acquire_calls.append(token.reservation_id)
+        self.active_lease_ids.add(sandbox_id)
+        return SandboxLeaseRef(
+            sandbox_id=sandbox_id,
+            type=token.type,
+            endpoint="127.0.0.1:5555",
+            acquired_at=int(time.time() * 1000),
+        )
+
+    async def reset(self, lease: SandboxLeaseRef) -> None:
+        self.reset_calls.append(lease.sandbox_id)
+
+    async def heartbeat(self, lease: SandboxLeaseRef) -> None:
+        return None
+
+    async def release(self, lease: SandboxLeaseRef, outcome: str) -> None:
+        self.release_calls.append((lease.sandbox_id, outcome))
+        self.active_lease_ids.discard(lease.sandbox_id)
+
+
 def _ctx() -> TurnContext:
     return TurnContext(
         username="alice@example.com",
@@ -132,3 +171,47 @@ async def test_acquire_reset_failure_warns_and_continues(caplog) -> None:
         SANDBOX_STAGE_READY,
     ]
     assert any("sandbox acquire reset failed; continuing" in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_sandbox_lifecycle_baseline_accounts_for_acquire_and_release() -> None:
+    store = _FakeStore()
+    progress = _FakeProgress()
+    lease_manager = _RecordingLeaseManager()
+    coordinator = SandboxCoordinator(store, progress, lease_manager=lease_manager)
+    run = _run()
+
+    await coordinator.acquire(_ctx(), run)
+    released = await coordinator.release(_ctx(), run, "clean")
+
+    assert released is True
+    assert lease_manager.reserve_calls == [("android", "run-1")]
+    assert lease_manager.acquire_calls == ["reservation-run-1"]
+    assert lease_manager.reset_calls == ["sandbox-run-1"]
+    assert lease_manager.release_calls == [("sandbox-run-1", "clean")]
+    assert lease_manager.active_lease_ids == set()
+    assert run.sandbox_released is True
+    assert run.lease_outcome == "clean"
+
+
+@pytest.mark.asyncio
+async def test_sandbox_lifecycle_baseline_accounts_for_stale_release() -> None:
+    lease_manager = _RecordingLeaseManager()
+    coordinator = SandboxCoordinator(_FakeStore(), _FakeProgress(), lease_manager=lease_manager)
+    run = _run()
+    run.sandbox = SandboxLeaseRef(
+        sandbox_id="sandbox-stale",
+        type="android",
+        endpoint="127.0.0.1:5555",
+        acquired_at=int(time.time() * 1000),
+    )
+    run.lease_outcome = "dirty"
+    lease_manager.active_lease_ids.add(run.sandbox.sandbox_id)
+
+    released = await coordinator.release_stale(run)
+
+    assert released is True
+    assert lease_manager.release_calls == [("sandbox-stale", "dirty")]
+    assert lease_manager.active_lease_ids == set()
+    assert run.sandbox_released is True
+    assert run.lease_outcome == "dirty"

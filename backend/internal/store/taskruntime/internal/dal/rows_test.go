@@ -74,6 +74,13 @@ func TestRunRowFromJSONAppliesDefaults(t *testing.T) {
 	if row.TaskID != "t" {
 		t.Fatalf("expected TaskID lifted from spec, got %q", row.TaskID)
 	}
+	var stored map[string]any
+	if err := json.Unmarshal(row.RunJSON, &stored); err != nil {
+		t.Fatalf("stored run JSON is invalid: %v", err)
+	}
+	if stored[jsonKeyAttempt] != float64(1) {
+		t.Fatalf("stored run JSON should contain canonical attempt=1, got %v", stored[jsonKeyAttempt])
+	}
 }
 
 func TestRunRowFromJSONCarriesIdempotencyKey(t *testing.T) {

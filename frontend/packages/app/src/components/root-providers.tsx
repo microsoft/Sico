@@ -22,7 +22,12 @@ export function RootProviders(): ReactElement {
   return (
     <JotaiProvider store={store}>
       <I18nProvider>
-        <SicoConfigProvider config={{ loginPrefillCredentials: true }}>
+        <SicoConfigProvider
+          config={{
+            loginPrefillCredentials:
+              import.meta.env.VITE_LOGIN_PREFILL_CREDENTIALS !== "false",
+          }}
+        >
           <QueryClientProvider client={queryClient}>
             <ApiClientProvider client={api}>
               <TooltipProvider>

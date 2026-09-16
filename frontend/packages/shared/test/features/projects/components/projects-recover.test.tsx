@@ -19,6 +19,9 @@ import { ApiClientProvider } from "@/services/api-client-context";
 // `QueryErrorResetBoundary → ErrorBoundary.onReset` clears both, so
 // the refetch is allowed to fire.
 vi.mock("@/features/projects/services/projects");
+vi.mock("@/hooks/use-bound-organization", () => ({
+  useBoundOrganizationQuery: () => ({ data: { id: 9 } }),
+}));
 
 // Replace the grid with a thin stub that still triggers suspense (so
 // the boundary path is exercised) but skips rendering `<ProjectCard>`

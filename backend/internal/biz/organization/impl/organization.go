@@ -3,20 +3,30 @@ package impl
 import (
 	"context"
 	"errors"
+	"sort"
+	"strings"
 
 	"gorm.io/gorm"
 
 	appresp "sico-backend/internal/biz/common/response"
+	"sico-backend/internal/biz/ownership"
 	rbac "sico-backend/internal/biz/rbac"
 	"sico-backend/internal/errcode"
+	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/shared/apperr"
 	repo "sico-backend/internal/store/organization/repository"
+	projectrepo "sico-backend/internal/store/project/repository"
 	dto "sico-backend/internal/transport/http/dto/organization"
+	"sico-backend/internal/transport/http/middleware"
 	"sico-backend/pkg/logger"
 )
 
 type Components struct {
-	OrgRepo repo.OrganizationRepository
+	OrgRepo        repo.OrganizationRepository
+	InvitationRepo repo.InvitationRepository
+	ProjectRepo    projectrepo.ProjectRepository
+	Access         rbac.Access
+	Ownership      ownership.Resolver
 }
 
 type Service struct {
@@ -27,31 +37,43 @@ func NewService(c *Components) *Service {
 	return &Service{Components: c}
 }
 
+func (s *Service) access() rbac.Access {
+	if s != nil && s.Components != nil && s.Access != nil {
+		return s.Access
+	}
+	return rbac.NewUninitializedAccessServices()
+}
+
 func (s *Service) CreateOrganization(
 	ctx context.Context, req *dto.CreateOrganizationRequest, creator string,
 ) (*dto.CreateOrganizationResponse, error) {
 	if req == nil || creator == "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "request and creator are required")
 	}
-
-	if err := rbac.CheckCtxAccess(ctx, rbac.ScopePlatform, 0, "organization", "admin"); err != nil {
+	if err := s.access().Require(ctx, rbac.PlatformScope(), rbac.PermissionOrganizationAdmin); err != nil {
 		return nil, err
 	}
+	return s.CreateOrganizationInternal(ctx, req, creator)
+}
 
-	if _, err := s.OrgRepo.GetByName(ctx, req.Name); err == nil {
-		return nil, apperr.New(errcode.CommonConflict, "organization name already exists")
+func (s *Service) CreateOrganizationInternal(
+	ctx context.Context, req *dto.CreateOrganizationRequest, creator string,
+) (*dto.CreateOrganizationResponse, error) {
+	if req == nil || creator == "" {
+		return nil, apperr.New(errcode.CommonInvalidParam, "request and creator are required")
 	}
 
 	org := &repo.OrganizationModel{
 		Name:            req.Name,
 		Description:     req.Description,
+		IconURI:         req.IconUri,
 		CreatorUsername: creator,
 	}
 	if err := s.OrgRepo.Create(ctx, org); err != nil {
 		logger.CtxError(ctx, "failed to create organization: name=%s, err=%v", req.Name, err)
 		return nil, err
 	}
-	if err := rbac.AssignOrganizationRole(ctx, creator, rbac.RoleOrgMember, org.ID); err != nil {
+	if err := s.access().AssignOrganizationRole(ctx, creator, rbac.RoleOrgMember, org.ID); err != nil {
 		logger.CtxError(
 			ctx,
 			"failed to assign organization member role to creator: organizationId=%d, creator=%s, err=%v",
@@ -63,10 +85,10 @@ func (s *Service) CreateOrganization(
 		}
 		return nil, err
 	}
-	if err := rbac.AssignOrganizationRole(ctx, creator, rbac.RoleOrgAdmin, org.ID); err != nil {
+	if err := s.access().AssignOrganizationRole(ctx, creator, rbac.RoleOrgAdmin, org.ID); err != nil {
 		logger.CtxError(ctx, "failed to assign organization admin role to creator: organizationId=%d, creator=%s, err=%v",
 			org.ID, creator, err)
-		if removeErr := rbac.RemoveAllOrganizationRoles(ctx, org.ID); removeErr != nil {
+		if removeErr := s.access().RemoveAllOrganizationRoles(ctx, org.ID); removeErr != nil {
 			logger.CtxError(
 				ctx, "failed to roll back organization roles: organizationId=%d, err=%v", org.ID, removeErr,
 			)
@@ -86,7 +108,7 @@ func (s *Service) CreateOrganization(
 func (s *Service) UpdateOrganization(
 	ctx context.Context, req *dto.UpdateOrganizationRequest,
 ) (*dto.UpdateOrganizationResponse, error) {
-	if err := rbac.CheckCtxAccess(ctx, rbac.ScopeOrg, req.Id, "organization", "manage"); err != nil {
+	if err := s.access().Require(ctx, rbac.OrganizationScope(req.Id), rbac.PermissionOrganizationManage); err != nil {
 		return nil, err
 	}
 
@@ -104,6 +126,9 @@ func (s *Service) UpdateOrganization(
 	if req.Description != "" {
 		existing.Description = req.Description
 	}
+	if req.IconUri != "" {
+		existing.IconURI = req.IconUri
+	}
 
 	if err := s.OrgRepo.Update(ctx, existing); err != nil {
 		logger.CtxError(ctx, "failed to update organization: id=%d, err=%v", req.Id, err)
@@ -116,7 +141,7 @@ func (s *Service) UpdateOrganization(
 func (s *Service) DeleteOrganization(
 	ctx context.Context, req *dto.DeleteOrganizationRequest,
 ) (*dto.DeleteOrganizationResponse, error) {
-	if err := rbac.CheckCtxAccess(ctx, rbac.ScopePlatform, 0, "organization", "admin"); err != nil {
+	if err := s.access().Require(ctx, rbac.PlatformScope(), rbac.PermissionOrganizationAdmin); err != nil {
 		return nil, err
 	}
 
@@ -131,7 +156,7 @@ func (s *Service) DeleteOrganization(
 		logger.CtxError(ctx, "failed to delete organization: id=%d, err=%v", req.Id, err)
 		return nil, err
 	}
-	if err := rbac.RemoveAllOrganizationRoles(ctx, req.Id); err != nil {
+	if err := s.access().RemoveAllOrganizationRoles(ctx, req.Id); err != nil {
 		logger.CtxError(ctx, "failed to remove organization roles: organizationId=%d, err=%v", req.Id, err)
 		return nil, err
 	}
@@ -142,6 +167,18 @@ func (s *Service) DeleteOrganization(
 func (s *Service) GetOrganization(
 	ctx context.Context, req *dto.GetOrganizationRequest,
 ) (*dto.GetOrganizationResponse, error) {
+	if req == nil {
+		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
+	}
+
+	visibleOrgIDs, platformAdmin, err := s.resolveVisibleOrganizationIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !platformAdmin && !visibleOrgIDs[req.Id] {
+		return nil, apperr.New(errcode.CommonForbidden, "organization access denied")
+	}
+
 	org, err := s.OrgRepo.GetByID(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -181,6 +218,122 @@ func (s *Service) ListOrganizations(
 	}), nil
 }
 
+func (s *Service) ListVisibleOrganizations(
+	ctx context.Context,
+	req *dto.ListOrganizationsRequest,
+) (*dto.ListOrganizationsResponse, error) {
+	if req == nil {
+		return nil, apperr.New(errcode.CommonInvalidParam, "request is required")
+	}
+
+	visibleOrgIDs, platformAdmin, err := s.resolveVisibleOrganizationIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if platformAdmin {
+		return s.ListOrganizations(ctx, req)
+	}
+
+	uniqueOrgIDs := make([]int64, 0, len(visibleOrgIDs))
+	for orgID := range visibleOrgIDs {
+		uniqueOrgIDs = append(uniqueOrgIDs, orgID)
+	}
+	organizations, err := s.OrgRepo.GetByIDs(ctx, uniqueOrgIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	nameFilter := strings.ToLower(strings.TrimSpace(req.Name))
+	filtered := organizations[:0]
+	for _, organization := range organizations {
+		if organization == nil ||
+			(nameFilter != "" && !strings.Contains(strings.ToLower(organization.Name), nameFilter)) {
+			continue
+		}
+		filtered = append(filtered, organization)
+	}
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].ID > filtered[j].ID })
+	total := len(filtered)
+	page, pageSize := int(req.Page), int(req.PageSize)
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+
+	result := make([]*dto.Organization, 0, end-start)
+	for _, organization := range filtered[start:end] {
+		result = append(result, orgModelToDTO(organization))
+	}
+	return appresp.Success(&dto.ListOrganizationsResponse{
+		Data: &dto.ListOrganizationsResponseData{
+			Organizations: result,
+			Total:         int32(total),
+			HasNext:       end < total,
+		},
+	}), nil
+}
+
+func (s *Service) resolveVisibleOrganizationIDs(
+	ctx context.Context,
+) (map[int64]bool, bool, error) {
+	access := s.access()
+	if !access.Initialized() {
+		return nil, false, apperr.New(errcode.CommonUnavailable, "RBAC service unavailable")
+	}
+
+	platformErr := access.Require(ctx, rbac.PlatformScope(), rbac.PermissionOrganizationAdmin)
+	if platformErr == nil {
+		return nil, true, nil
+	}
+	if appError, ok := apperr.As(platformErr); !ok || appError.Code() != errcode.CommonForbidden {
+		return nil, false, platformErr
+	}
+
+	orgIDs, err := access.ListOrganizationIDs(ctx, rbac.PermissionOrganizationManage)
+	if err != nil {
+		return nil, false, err
+	}
+
+	username := middleware.MustGetUsernameFromCtx(ctx)
+	projectIDs, err := s.access().GetProjectIDsByAdminUsername(ctx, username)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(projectIDs) > 0 {
+		if s.ProjectRepo == nil {
+			return nil, false, apperr.New(errcode.CommonUnavailable, "project repository unavailable")
+		}
+		projects, err := s.ProjectRepo.GetProjectByIDs(ctx, projectIDs)
+		if err != nil {
+			return nil, false, err
+		}
+		for _, project := range projects {
+			if project != nil && project.OrganizationID > 0 {
+				orgIDs = append(orgIDs, project.OrganizationID)
+			}
+		}
+	}
+
+	visibleOrgIDs := make(map[int64]bool, len(orgIDs))
+	for _, orgID := range orgIDs {
+		if orgID <= 0 {
+			continue
+		}
+		visibleOrgIDs[orgID] = true
+	}
+	return visibleOrgIDs, false, nil
+}
+
 func (s *Service) GetUserOrganizationList(
 	ctx context.Context, req *dto.GetUserOrganizationListRequest,
 ) (*dto.GetUserOrganizationListResponse, error) {
@@ -197,7 +350,7 @@ func (s *Service) GetUserOrganizationList(
 		pageSize = 10
 	}
 
-	memberships, err := rbac.GetUserOrganizationListByUsername(ctx, req.Username, req.RoleCode)
+	memberships, err := s.access().GetUserOrganizationListByUsername(ctx, req.Username, req.RoleCode)
 	if err != nil {
 		logger.CtxError(ctx, "failed to get user organization list: username=%s, err=%v", req.Username, err)
 		return nil, err
@@ -255,7 +408,7 @@ func filterExistingOrganizationMemberships(
 }
 
 func orgModelToDTO(m *repo.OrganizationModel) *dto.Organization {
-	return &dto.Organization{
+	organization := &dto.Organization{
 		Id:              m.ID,
 		Name:            m.Name,
 		Description:     m.Description,
@@ -263,4 +416,10 @@ func orgModelToDTO(m *repo.OrganizationModel) *dto.Organization {
 		CreatedAt:       m.CreatedAt,
 		UpdatedAt:       m.UpdatedAt,
 	}
+	if m.IconURI != "" {
+		if sasURL, err := storage.PathToUrl(m.IconURI); err == nil {
+			organization.IconSasUrl = sasURL
+		}
+	}
+	return organization
 }

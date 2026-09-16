@@ -20,7 +20,7 @@ from app.biz.task_runtime.sandbox.types import (
 def test_sandbox_vocab_are_plain_str_values() -> None:
     # The enums subclass ``str`` so they drop into ``Literal[...]`` field
     # contracts and the gRPC boundary unchanged.
-    assert SANDBOX_TYPES == ("emulator", "wincua", "aio", "physical")
+    assert SANDBOX_TYPES == ("emulator", "wincua", "linux_workstation", "physical")
     assert SANDBOX_OSES == ("windows", "macos", "ios", "android", "linux")
     assert SandboxType.EMULATOR == "emulator"
     assert SandboxOS.WINDOWS == "windows"
@@ -82,7 +82,7 @@ def test_lease_type_from_sandbox_id() -> None:
         # Concrete sandbox types are internal-only and are NOT valid hints.
         ("wincua", ""),
         ("emulator", ""),
-        ("aio", ""),
+        ("linux_workstation", ""),
     ],
 )
 def test_normalize_sandbox_hint(hint: str | None, expected: str) -> None:

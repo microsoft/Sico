@@ -13,6 +13,10 @@
 # * SeaweedFS Master: http://localhost:14002 (view cluster status)
 # * SeaweedFS Filer UI: http://localhost:14003 (browse, upload and download files)
 # * Qdrant Dashboard: http://localhost:14004/dashboard
+# * Grafana: http://localhost:14005 (admin/admin)
+# * OTLP/gRPC: localhost:14006
+# * OTLP/HTTP: localhost:14007
+# * Linux Workstation Sandbox: http://localhost:14008
 
 
 services:
@@ -62,6 +66,7 @@ services:
     container_name: sico-backend
     environment:
       - APP_ENV=${APP_ENV:-production}
+      - SEED_AGENT_INSTANCES=${SEED_AGENT_INSTANCES:-true}
       - DB_HOST=mysql
       - DB_PORT=${DB_PORT:-3306}
       - DB_NAME=${DB_NAME:-sico}
@@ -72,6 +77,8 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - REDIS_AUTH_TYPE=${REDIS_AUTH_TYPE:-password}
       - SANDBOX_CLIENT_SECRET_TEST_CLIENT=${SANDBOX_CLIENT_SECRET_TEST_CLIENT:-}
+      - SANDBOX_LINUX_WORKSTATION_K8S=false
+      - SANDBOX_LINUX_WORKSTATION_ENDPOINTS=http://linux-workstation-sandbox:8080
       - CORE_GRPC_ADDRESS=core:50053
       - REVERSE_GRPC_SERVE_ADDRESS=0.0.0.0:50054
       - REVERSE_GRPC_ADDRESS=backend:50054
@@ -89,11 +96,12 @@ services:
       - MAIL_ENDPOINT=${MAIL_ENDPOINT:-}
       - MAIL_ACCESS_KEY=${MAIL_ACCESS_KEY:-}
       - MAIL_SENDER_ADDRESS=${MAIL_SENDER_ADDRESS:-}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
-      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-false}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-lgtm:4317}
+      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-true}
       # Sandbox emulator endpoint (e.g. MuMu running on the developer's host machine).
       # Use host.docker.internal in the URL; the extra_hosts entry below makes it work on Linux too.
       - SANDBOX_EMULATOR_BASE_URL=${SANDBOX_EMULATOR_BASE_URL:-}
+      - SICO_SANDBOX_SERVICE_TOKEN=${SICO_SANDBOX_SERVICE_TOKEN:?set SICO_SANDBOX_SERVICE_TOKEN in .env}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -107,12 +115,31 @@ services:
         condition: service_healthy
       core:
         condition: service_healthy
+      linux-workstation-sandbox:
+        condition: service_healthy
+      otel-lgtm:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/sico/health"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 10s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  linux-workstation-sandbox:
+    image: ${LINUX_WORKSTATION_SANDBOX_IMAGE:-sico/linux-workstation-sandbox:local}
+    container_name: sico-linux-workstation-sandbox
+    ports:
+      - "${LINUX_WORKSTATION_SANDBOX_PORT:-14008}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     networks:
       - sico
     restart: unless-stopped
@@ -136,8 +163,8 @@ services:
       - EVENT_BUS_TOPIC=core-backend
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - AZURE_SERVICE_BUS_NAMESPACE=${AZURE_SERVICE_BUS_NAMESPACE:-}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
-      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-false}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-otel-lgtm:4317}
+      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-true}
       - MEM0_QDRANT_HOST=qdrant
       - EXPERIENCES_ENABLED=${EXPERIENCES_ENABLED:-true}
       - UV_DEFAULT_INDEX=${PYPI_INDEX_URL:?PYPI_INDEX_URL must be set in .env}
@@ -147,10 +174,16 @@ services:
       - TASK_RUNTIME_ARTIFACT_STORE=${TASK_RUNTIME_ARTIFACT_STORE:-seaweedfs}
       - TASK_RUNTIME_ARTIFACT_PUBLIC_BASE_URL=${TASK_RUNTIME_ARTIFACT_PUBLIC_BASE_URL:-/storage}
       - TASK_RUNTIME_MAX_CONCURRENCY=${TASK_RUNTIME_MAX_CONCURRENCY:-20}
+      - TASK_RUNTIME_BACKEND=runner
+      - TASK_RUNTIME_COMMAND_RUNNER_ENDPOINT=http://environment-runner:8080
+      - TASK_RUNTIME_ENVIRONMENT_BUILDER_ENDPOINT=http://environment-runner:8080
+      - TASK_RUNTIME_PREPARED_ENV_ROOT=/mnt/storage/prepared-environments
+      - TASK_RUNTIME_ENVIRONMENT_QUOTA_BYTES=${TASK_RUNTIME_ENVIRONMENT_QUOTA_BYTES:-10737418240}
       # Sandbox image for the run_command tool. Override to ship a pre-baked
       # image with skill dependencies (e.g. adb/fastboot for Android skills)
       # so the LLM does not have to ``apk add`` them on every turn.
       - TASK_RUNTIME_PYTHON_RUNNER_IMAGE=${TASK_RUNTIME_PYTHON_RUNNER_IMAGE:-ghcr.io/astral-sh/uv:python3.14-alpine}
+      - TASK_RUNTIME_DEFAULT_RUNNER_COMMANDS=${TASK_RUNTIME_DEFAULT_RUNNER_COMMANDS:-apk,python,sh,uv}
       - STORAGE_TYPE=${STORAGE_TYPE:-seaweedfs}
       - SEAWEEDFS_ENDPOINT=http://seaweedfs-filer:${SEAWEEDFS_FILER_PORT:-14003}
       - AZURE_BLOB_ENDPOINT=${AZURE_BLOB_ENDPOINT:-}
@@ -167,11 +200,43 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      environment-runner:
+        condition: service_healthy
+      otel-lgtm:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import grpc; ch = grpc.insecure_channel('localhost:50053'); grpc.channel_ready_future(ch).result(timeout=2)"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - sico
+    restart: unless-stopped
+
+  environment-runner:
+    build:
+      context: ../../core/deployments/environment-runner
+      dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: ${PYPI_INDEX_URL:?PYPI_INDEX_URL must be set in .env}
+    container_name: sico-environment-runner
+    environment:
+      - PREPARED_ENV_PUSH=false
+      - PREPARED_ENV_REPOSITORY=sico-prepared-environment
+      - PREPARED_ENV_COMMAND_VOLUME=sico-core-storage
+      - PREPARED_ENV_COMMAND_STORAGE_ROOT=/mnt/storage
+      - PREPARED_ENV_COMMAND_NETWORK=sico_sico
+      - PREPARED_ENV_DEFAULT_COMMAND_IMAGE=${TASK_RUNTIME_PYTHON_RUNNER_IMAGE:-ghcr.io/astral-sh/uv:python3.14-alpine}
+      - PREPARED_ENV_MAX_CONTEXT_BYTES=${PREPARED_ENV_MAX_CONTEXT_BYTES:-67108864}
+      - PREPARED_ENV_MAX_COMMAND_OUTPUT_BYTES=${PREPARED_ENV_MAX_COMMAND_OUTPUT_BYTES:-4194304}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health && docker info >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
       start_period: 10s
     networks:
       - sico
@@ -386,14 +451,40 @@ services:
       - sico
     restart: unless-stopped
 
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.11.10
+    container_name: sico-otel-lgtm
+    ports:
+      - "14005:3000"
+      - "14006:4317"
+      - "14007:4318"
+    volumes:
+      - otel-lgtm-data:/data
+      - ./observability/loki-config.yaml:/otel-lgtm/loki-config.yaml:ro
+      - ./observability/tempo-config.yaml:/otel-lgtm/tempo-config.yaml:ro
+      - ./observability/run-prometheus.sh:/otel-lgtm/run-prometheus.sh:ro
+      - ../observability/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/sico.yaml:ro
+      - ../observability/dashboards:/otel-lgtm/sico-dashboards:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - sico
+    restart: unless-stopped
+
 volumes:
   mysql-data:
   kafka-data:
   core-storage:
+    name: sico-core-storage
   seaweedfs-master-data:
   seaweedfs-volume-data:
   seaweedfs-filer-data:
   qdrant-data:
+  otel-lgtm-data:
 
 networks:
   sico:

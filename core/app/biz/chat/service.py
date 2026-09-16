@@ -22,13 +22,19 @@ from pydantic import BaseModel
 import pydantic
 
 import app.schemas.conversation
-from app.biz.chat.chat import build_error_response
-from app.biz.chat.preparation import build_default_preparation_service
+from app.biz.chat.runtime_agent import build_agent, build_error_response
 from app.biz.chat.source_context import build_source_sections
-from app.biz.chat.router import ChatRouteRequest, default_chat_router
-from app.biz.chat.tool_registry import default_tool_registry
-from app.biz.chat.turn_timing import begin_turn, time_awaitable, time_sync
-from app.biz.task_runtime import default_agent_profile_resolver
+from app.biz.chat.turn import (
+    ChatResponsePresenter,
+    ChatResponsePublisher,
+    ChatTurnExecutor,
+    ChatTurnLifecycle,
+    ChatTurnLifecycleConfig,
+)
+from app.biz.chat.turn_timing import begin_turn
+from app.biz.chat.turn_preparer import ChatTurnPreparer
+from app.biz.task_runtime.planning import render_sandbox_delegation_section
+from app.biz.reverse_grpc.sandbox import ReverseSandboxService
 from app.biz.task_runtime.workspace.rerun_sources import (
     RERUN_HISTORY_MAX_BYTES,
     RERUN_HISTORY_MAX_SOURCES,
@@ -41,8 +47,8 @@ from app.biz.task_runtime.workspace.rerun_sources import (
 from app.biz.source import is_supported_tabular_path
 from app.biz.source.persistence.repository import WorkspaceSourceRepository
 from app.biz.task_runtime.capabilities.loader import SkillLoader
-from app.biz.chat.types import ChatIntentCheckerInput, ChatRouteMode, ToolExcerpt
-from app.biz.chat.workspace_init import WorkspaceInitOptions, init_workspace
+from app.biz.chat.types import ChatRouteMode, ToolExcerpt
+from app.biz.chat.workspace_init import init_workspace
 from app.tools import (
     CONTEXT_TOOL,
     EDIT_TOOL,
@@ -73,7 +79,6 @@ from app.pb.conversation.api import (
     GenerateOnboardRecommendationTasksResponse,
 )
 import app.llmhubs
-from app.biz.llm.service import _model_definition_to_entry
 from app.pb.common.common import Attachment
 from app.schemas.common.common import Attachment as SchemaAttachment
 from app.schemas.conversation.chat import TopicMessage
@@ -81,23 +86,20 @@ from app.schemas.conversation.plan import Plan, PlanStatus
 from app.storage import redis
 from app.storage.fs import CHAT_FS
 from app.tools.common import ToolContext
-from app.tools.delegate import build_delegate_tool
 from app.tools.plan import PlanEditor, read_plan
 from app.tools.plan import cancel_plan as cancel_plan_async
 from app.utils.eventbus import EventBus
 from app.utils.response import error_response, success_response
 from app.utils.runner import AsyncJobRunner
 
-from .chat import RunOptions, build_agent
 from .context import get_skill_knowledge_context
-from .prompt import PromptFile, compose_system_prompt, render_prompt_file
+from .prompt import PromptFile, render_prompt_file
 
 ONGOING_CHAT_CACHE_TIME_TO_LIVE = 3 * 24 * 60 * 60  # 3 days
 KEEPALIVE_INTERVAL_SECONDS = 5
 _JSON_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.IGNORECASE | re.DOTALL)
 _LOG_PREVIEW_CHARS = 1000
 _INTENT_PRIOR_CONVERSATION_TURNS = 3
-_FAST_MODEL_ENV = "FAST_MODEL"
 _TITLE_SUMMARY_MAX_CHARS = 20000
 _TITLE_SUMMARY_MAX_LENGTH = 80
 
@@ -212,8 +214,10 @@ class ChatService(ChatServiceBase):
     async def stream_chat(self, chat_request: ChatRequest) -> ChatDirectResponse:  # noqa: PLR0915
         timings = begin_turn()
         response_queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None] = asyncio.Queue()
-
-        send_keepalive_task = asyncio.create_task(self._send_keepalive_loop(chat_request))
+        presenter = ChatResponsePresenter(
+            conversation_id=chat_request.conversation_id,
+            turn_id=chat_request.turn_id,
+        )
 
         if chat_request.message.type != ChatContentType.TEXT:
             self._logger.warning(
@@ -226,13 +230,23 @@ class ChatService(ChatServiceBase):
 
         redis_client = redis.get_shared_redis()
         cache_key = _get_ongoing_chat_cache_key(chat_request.conversation_id, chat_request.turn_id)
-        await redis_client.set(cache_key.turn_id_cache_key, chat_request.turn_id, ex=ONGOING_CHAT_CACHE_TIME_TO_LIVE)
-        await self._add_agent_instance_ongoing_conversation(redis_client, chat_request)
-
-        async def clear_ongoing_chat_cache():
-            await redis_client.delete(cache_key.turn_id_cache_key)
-            await redis_client.delete(cache_key.chat_responses_cache_key)
-            await self._remove_agent_instance_ongoing_conversation(redis_client, chat_request)
+        lifecycle = ChatTurnLifecycle(
+            config=ChatTurnLifecycleConfig(
+                turn_id_cache_key=cache_key.turn_id_cache_key,
+                responses_cache_key=cache_key.chat_responses_cache_key,
+                turn_id=chat_request.turn_id,
+                conversation_id=chat_request.conversation_id,
+                cache_ttl=ONGOING_CHAT_CACHE_TIME_TO_LIVE,
+            ),
+            redis_client=redis_client,
+            timings=timings,
+            send_keepalive=lambda: self._send_keepalive_loop(chat_request),
+            add_ongoing_conversation=lambda: self._add_agent_instance_ongoing_conversation(redis_client, chat_request),
+            remove_ongoing_conversation=lambda: self._remove_agent_instance_ongoing_conversation(
+                redis_client, chat_request
+            ),
+        )
+        await lifecycle.start()
 
         self._logger.info(
             "chat_stream_request_received "
@@ -250,7 +264,7 @@ class ChatService(ChatServiceBase):
 
         async def on_plan_update(plan: Plan):
             chat_content = ChatContent(type=ChatContentType.PLAN)
-            await response_queue.put(self._build_chat_response(chat_content, is_final=False, is_internal=False))
+            await response_queue.put(presenter.build_response(chat_content, is_final=False, is_internal=False))
 
         plan_editor = PlanEditor(
             agent_instance_id=chat_request.agent_instance_id,
@@ -259,6 +273,7 @@ class ChatService(ChatServiceBase):
             username=chat_request.username,
             notify_plan_updated_callback=on_plan_update,
         )
+        assigned_sandbox_types = await self._assigned_sandbox_types(chat_request.agent_instance_id)
         tool_context = ToolContext(
             username=chat_request.username,
             agent_id=chat_request.agent_id,
@@ -270,140 +285,35 @@ class ChatService(ChatServiceBase):
             plan_editor=plan_editor,
             raw_user_message=chat_request.message.content,
             submission_id=chat_request.submission_id,
+            assigned_sandbox_types=assigned_sandbox_types,
         )
 
-        sequence_id = 0
+        async def publish_response(sequence_id: int, chat_message: ChatResponse, persist: bool) -> None:
+            await self._yield_response(
+                chat_request,
+                redis_client,
+                cache_key,
+                sequence_id,
+                chat_message,
+                persist=persist,
+            )
 
-        async def yield_response(chat_message: ChatResponse):
-            nonlocal sequence_id
-            sequence_id += 1
-            await self._yield_response(chat_request, redis_client, cache_key, sequence_id, chat_message)
-
+        publisher = ChatResponsePublisher(publish_response)
         route = ChatRouteMode.TASK
         try:
-            # Always initialize the workspace: every route benefits from having
-            # attachments + knowledge/skills materialized before routing.
-            workspace_started_at = time.perf_counter()
-            await init_workspace(
-                agent_instance_id=chat_request.agent_instance_id,
-                username=chat_request.username,
-                conversation_id=chat_request.conversation_id,
-                turn_id=chat_request.turn_id,
-                project_id=chat_request.project_id,
-                agent_id=chat_request.agent_id,
-                attachments=chat_request.message.attachments + chat_request.agent_attachments,
-                options=WorkspaceInitOptions(),
+            prepared = await ChatTurnPreparer(
+                host=self,
+                mem_runner=self._mem_runner,
+                init_workspace=init_workspace,
+                build_agent=build_agent,
+            ).prepare(
+                chat_request=chat_request,
+                tool_context=tool_context,
+                assigned_sandbox_types=assigned_sandbox_types,
+                timings=timings,
             )
-            timings.record("workspace_init_ms", workspace_started_at)
-
-            # Skills feed both the classifier and the system prompt; the remaining
-            # context sections are classifier-only and are built lazily below.
-            workspace = CHAT_FS.get_workspace_path(
-                chat_request.agent_instance_id,
-                chat_request.username,
-                chat_request.conversation_id,
-            )
-            skill_loader = SkillLoader(
-                workspace,
-                project_id=int(chat_request.project_id or 0),
-                agent_id=chat_request.agent_id,
-            )
-            tool_context.skill_loader = skill_loader
-            skills_section = skill_loader.render_cards_section()
-
-            preparation_service = build_default_preparation_service(default_agent_profile_resolver())
-            delegate_tool = build_delegate_tool(preparation_service)
-            delegate_excerpt = ToolExcerpt.from_agent_framework_function_tool(delegate_tool)
-            direct_tool_excerpts = self._direct_tool_excerpts()
-
-            # --- routing ---
-            context_sections: dict[str, str] | None = None
-
-            def get_context_sections() -> dict[str, str]:
-                nonlocal context_sections
-                if context_sections is None:
-                    context_sections = self._build_context_sections(chat_request, skill_loader)
-                return context_sections
-
-            def build_intent_input() -> ChatIntentCheckerInput:
-                import app.schemas.common.common
-
-                sections = get_context_sections()
-                attachments = [
-                    app.schemas.common.common.Attachment.from_pb(item)
-                    for item in list(chat_request.message.attachments) + list(chat_request.agent_attachments)
-                ]
-                return ChatIntentCheckerInput(
-                    user_prompt=chat_request.message.content or "",
-                    attachments=attachments,
-                    delegate=delegate_excerpt,
-                    direct_tools=direct_tool_excerpts,
-                    workspace_attachments_section=sections.get("workspace_attachments", ""),
-                    source_manifests_section=sections.get("source_manifests", ""),
-                    workspace_knowledge_section=sections.get("workspace_knowledge", ""),
-                    prior_rerun_sources_section=sections.get("prior_rerun_sources", ""),
-                    prior_tabular_sources_section=sections.get("prior_tabular_sources", ""),
-                    prior_conversation_section=self._build_prior_conversation_section(chat_request),
-                    skills_section=skills_section,
-                )
-
-            decision = await time_awaitable(
-                timings,
-                "route_ms",
-                default_chat_router().decide(
-                    ChatRouteRequest(
-                        user_prompt=chat_request.message.content or "",
-                        has_attachments=bool(chat_request.message.attachments or chat_request.agent_attachments),
-                        build_intent_input=build_intent_input,
-                    )
-                ),
-            )
-            route = decision.route
-            self._logger.info(
-                "chat_route_decided conversation_id=%s turn_id=%s route=%s reason=%s",
-                chat_request.conversation_id,
-                chat_request.turn_id,
-                route.value,
-                decision.reason,
-            )
-
-            # Build common chat agent + user message + system prompt.
-            resolved_entry = _model_definition_to_entry(getattr(chat_request, "model_definition", None))
-            agent = await time_awaitable(
-                timings,
-                "agent_build_ms",
-                build_agent(
-                    chat_request.username,
-                    chat_request.agent_id,
-                    chat_request.agent_instance_id,
-                    self._mem_runner,
-                    tool_context=tool_context,
-                    model=_model_for_route(route, chat_request.model or None),
-                    resolved_entry=resolved_entry,
-                ),
-            )
-            system_message = time_sync(
-                timings,
-                "prompt_build_ms",
-                compose_system_prompt,
-                prompt_mode=_prompt_mode_for_route(route),
-                name=chat_request.agent_instance_name,
-                role_name=chat_request.agent_role,
-                project_name=chat_request.project_name,
-                skills_section=skills_section,
-            )
-            user_msg_started_at = time.perf_counter()
-            agent_sections = get_context_sections() if route == ChatRouteMode.TASK else {}
-            user_message = await asyncio.to_thread(self._build_user_message_from_sections, chat_request, agent_sections)
-            timings.record("user_message_build_ms", user_msg_started_at)
-
-            tools_started_at = time.perf_counter()
-            registry = default_tool_registry()
-            all_tools = registry.tools_for_route(route)
-            if registry.may_delegate(route):
-                all_tools.append(delegate_tool)
-            tool_context.all_tools = all_tools
-            timings.record("tools_build_ms", tools_started_at)
+            route = prepared.route
+            lifecycle.set_route(route)
 
             if chat_request.need_update_title:
                 asyncio.ensure_future(
@@ -415,26 +325,15 @@ class ChatService(ChatServiceBase):
                     )
                 )
 
-            await time_awaitable(
-                timings,
-                "stream_submit_ms",
-                self._stream_chat_runner.submit(
-                    agent.run_stream,
-                    queue=response_queue,
-                    user_message=user_message,
-                    system_message=system_message,
-                    options=RunOptions(
-                        turn_id=chat_request.turn_id,
-                        save_history=True,
-                        save_memory=True,
-                        tools=all_tools,
-                    ),
-                ),
-            )
-            await time_awaitable(
-                timings,
-                "response_drain_ms",
-                self._drain_response_queue(response_queue, yield_response, chat_request),
+            await ChatTurnExecutor(
+                runner=self._stream_chat_runner,
+                timings=timings,
+            ).execute(
+                prepared=prepared,
+                turn_id=chat_request.turn_id,
+                response_queue=response_queue,
+                presenter=presenter,
+                publisher=publisher,
             )
 
             self._logger.info(
@@ -442,15 +341,15 @@ class ChatService(ChatServiceBase):
                 chat_request.conversation_id,
                 chat_request.turn_id,
                 route.value,
-                sequence_id,
+                publisher.emitted_count,
             )
 
         except GRPCError as exc:
-            await yield_response(build_error_response(f"Caught GRPC error: {str(exc)}"))
+            await publisher.publish(build_error_response(f"Caught GRPC error: {str(exc)}"))
             raise exc
 
         except Exception as exc:
-            await yield_response(build_error_response(f"Error during chat: {str(exc)}"))
+            await publisher.publish(build_error_response(f"Error during chat: {str(exc)}"))
             self._logger.exception(
                 "chat_stream_execution_failed conversation_id=%s turn_id=%s agent_instance_id=%s model=%s",
                 chat_request.conversation_id,
@@ -461,10 +360,7 @@ class ChatService(ChatServiceBase):
             raise GRPCError(Status.INTERNAL, "Chat agent execution failed") from exc
 
         finally:
-            timings.stages["turn_total_ms"] = int((time.perf_counter() - timings.started_at) * 1000)
-            timings.log(conversation_id=chat_request.conversation_id, turn_id=chat_request.turn_id, route=route)
-            await clear_ongoing_chat_cache()
-            send_keepalive_task.cancel()
+            await lifecycle.close()
 
         return ChatDirectResponse()
 
@@ -612,14 +508,17 @@ class ChatService(ChatServiceBase):
         cache_key: _CacheKeyForOngoingChatTurn,
         sequence_id: int,
         chat_message: ChatResponse,
+        *,
+        persist: bool = True,
     ) -> None:
-        await self._persist_chat_response(
-            conversation_id=chat_request.conversation_id,
-            username=chat_request.username,
-            agent_instance_id=chat_request.agent_instance_id,
-            turn_id=chat_request.turn_id,
-            resp=chat_message,
-        )
+        if persist:
+            await self._persist_chat_response(
+                conversation_id=chat_request.conversation_id,
+                username=chat_request.username,
+                agent_instance_id=chat_request.agent_instance_id,
+                turn_id=chat_request.turn_id,
+                resp=chat_message,
+            )
 
         import app.schemas.conversation.chat as chat_schemas
 
@@ -652,91 +551,6 @@ class ChatService(ChatServiceBase):
                 chat_message.is_final,
                 chat_message.is_internal,
             )
-
-    async def _drain_response_queue(
-        self,
-        response_queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None],
-        yield_response,
-        chat_request: ChatRequest,
-    ) -> None:
-        accumulated_text: Content = Content.from_text("")
-        while True:
-            update = await response_queue.get()
-            if update is None:
-                break
-            if isinstance(update, ChatResponse):
-                await yield_response(update)
-                continue
-            if isinstance(update, ChatResponseUpdate):
-                parts, accumulated_text = self._extract_parts_from_update(update, accumulated_text, chat_request)
-                accumulated_text = await self._yield_parts(parts, accumulated_text, yield_response)
-
-        # Flush any remaining accumulated text response.
-        # Use a try/finally to guarantee the END event is always sent, even if
-        # the DB persist for the accumulated text fails or hangs.
-        try:
-            if accumulated_text.text:
-                await yield_response(
-                    self._build_chat_response(
-                        self._build_text_content(accumulated_text.text),
-                        is_final=False,
-                        is_internal=True,
-                    )
-                )
-        except Exception:
-            self._logger.exception(
-                "chat_drain_accumulated_text_persist_failed conversation_id=%s turn_id=%s",
-                chat_request.conversation_id,
-                chat_request.turn_id,
-            )
-        finally:
-            await yield_response(self._build_chat_response(self._build_end_content(), is_final=True, is_internal=False))
-
-    def _extract_parts_from_update(
-        self,
-        update: ChatResponseUpdate,
-        accumulated_text: Content,
-        chat_request: ChatRequest,
-    ) -> tuple[list[ChatContent], Content]:
-        parts: list[ChatContent] = []
-        for content in update.contents or []:
-            # FunctionCallContent and FunctionResultContent are handled elsewhere.
-            if content.type in ("function_call", "function_result"):
-                continue
-            if content.type == "text":
-                chunk = content.text or ""
-                if not chunk:
-                    continue
-                accumulated_text += content
-                parts.append(self._build_text_content(chunk))
-            else:
-                self._logger.debug(
-                    "chat_stream_non_visible_content_skipped conversation_id=%s turn_id=%s content_type=%s",
-                    chat_request.conversation_id,
-                    chat_request.turn_id,
-                    content.type,
-                )
-        return parts, accumulated_text
-
-    async def _yield_parts(
-        self,
-        parts: list[ChatContent],
-        accumulated_text: Content,
-        yield_response,
-    ) -> Content:
-        for part in parts:
-            if part.type != ChatContentType.TEXT and accumulated_text.text:
-                # Flush accumulated text response before yielding non-text content
-                await yield_response(
-                    self._build_chat_response(
-                        self._build_text_content(accumulated_text.text),
-                        is_final=False,
-                        is_internal=True,
-                    )
-                )
-                accumulated_text = Content.from_text("")
-            await yield_response(self._build_chat_response(part, is_final=False, is_internal=False))
-        return accumulated_text
 
     async def get_plan(self, request: GetPlanRequest) -> GetPlanResponse:
         try:
@@ -949,7 +763,13 @@ class ChatService(ChatServiceBase):
         )
         return self._build_user_message_with_images(message=msg, attachments=chat_request.message.attachments)
 
-    def _build_context_sections(self, chat_request: ChatRequest, skill_loader: SkillLoader) -> dict[str, str]:
+    def _build_context_sections(
+        self,
+        chat_request: ChatRequest,
+        skill_loader: SkillLoader,
+        *,
+        assigned_sandbox_types: frozenset[str] = frozenset(),
+    ) -> dict[str, str]:
         """Render all reusable context sections; safe to call multiple times."""
         sections: dict[str, str] = {
             "workspace_attachments": self._build_workspace_attachments_section(
@@ -961,7 +781,14 @@ class ChatService(ChatServiceBase):
             "prior_rerun_sources": self._build_prior_rerun_sources_section(
                 chat_request.agent_instance_id, chat_request.username, chat_request.conversation_id
             ),
-            "skills": skill_loader.render_cards_section(),
+            "skills": "\n\n".join(
+                section
+                for section in (
+                    skill_loader.render_cards_section(),
+                    render_sandbox_delegation_section(assigned_sandbox_types),
+                )
+                if section
+            ),
         }
         try:
             workspace = CHAT_FS.get_workspace_path(
@@ -982,6 +809,26 @@ class ChatService(ChatServiceBase):
             if value:
                 sections[name] = value
         return sections
+
+    async def _assigned_sandbox_types(self, agent_instance_id: int) -> frozenset[str]:
+        try:
+            sandboxes = await asyncio.to_thread(
+                ReverseSandboxService.get_instance().get_instance_sandboxes,
+                str(agent_instance_id),
+                "",
+            )
+        except Exception as exc:
+            self._logger.warning(
+                "Failed to load assigned sandbox types for agent instance %s: %s",
+                agent_instance_id,
+                exc,
+            )
+            return frozenset()
+        return frozenset(
+            sandbox.type.strip()
+            for sandbox in sandboxes
+            if sandbox.type.strip() and sandbox.status.strip().lower() in {"assigned", "in_use"}
+        )
 
     def _build_prior_conversation_section(self, chat_request: ChatRequest) -> str:
         try:
@@ -1122,23 +969,6 @@ class ChatService(ChatServiceBase):
             self._logger.warning("Failed to build prior rerun sources section: %s", exc)
             return ""
 
-    def _build_chat_response(self, content: ChatContent, *, is_final: bool, is_internal: bool) -> ChatResponse:
-        return ChatResponse(
-            content=content,
-            timestamp=self._current_timestamp_ms(),
-            is_final=is_final,
-            is_internal=is_internal,
-        )
-
-    def _build_end_content(self) -> ChatContent:
-        return ChatContent(type=ChatContentType.END)
-
-    def _build_text_content(self, text: str) -> ChatContent:
-        return ChatContent(
-            type=ChatContentType.TEXT,
-            content=text,
-        )
-
     @staticmethod
     def _current_timestamp_ms() -> int:
         return int(datetime.now(UTC).timestamp() * 1000)
@@ -1268,20 +1098,6 @@ def _get_ongoing_chat_cache_key(conversation_id: int, turn_id: int) -> _CacheKey
 
 def _get_agent_instance_ongoing_conversations_cache_key(agent_instance_id: int) -> str:
     return f"ongoing-chat:agent-instance:{agent_instance_id}:conversations"
-
-
-def _prompt_mode_for_route(route: ChatRouteMode) -> str:
-    if route == ChatRouteMode.FAST:
-        return "fast"
-    return "task"
-
-
-def _model_for_route(route: ChatRouteMode, requested_model: str | None) -> str | None:
-    if route == ChatRouteMode.FAST:
-        fast_model = os.getenv(_FAST_MODEL_ENV, "").strip()
-        if fast_model:
-            return fast_model
-    return requested_model
 
 
 def _load_prior_rerun_sources(workspace: Path) -> list[dict[str, Any]]:

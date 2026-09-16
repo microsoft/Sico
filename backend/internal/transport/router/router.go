@@ -26,6 +26,7 @@ func Health(ctx *gin.Context) {
 
 func RegisterAPIs(router *gin.Engine, sandboxIntegration sandboxproviders.Integration) {
 	router.Use(otelgin.Middleware(env.GetOrDefault("OTEL_SERVICE_NAME", "sico-backend")))
+	router.Use(middleware.TracedLogger())
 	router.Use(cors.Default())
 
 	// Health check must be registered before auth middleware
@@ -35,6 +36,7 @@ func RegisterAPIs(router *gin.Engine, sandboxIntegration sandboxproviders.Integr
 	registerPublicAuthStateRoutes(router)
 
 	router.Use(middleware.AuthMiddleware())
+	router.Use(middleware.SelectedOrganizationMiddleware())
 	r := router.Group("/api/sico")
 	r.Use(middleware.CasbinMiddleware(rbac.Default().GetEnforcer()))
 
@@ -282,6 +284,13 @@ func registerOrganizationRoutes(r *gin.RouterGroup) {
 		orgApi.PUT("", handler.UpdateOrganization)
 		orgApi.DELETE("", handler.DeleteOrganization)
 		orgApi.GET("", handler.GetOrganization)
+
+		invitationApi := orgApi.Group("/invitations")
+		invitationApi.POST("/create", handler.CreateOrganizationInvitation)
+		invitationApi.GET("/detail", handler.GetOrganizationInvitation)
+		invitationApi.POST("/accept", handler.AcceptOrganizationInvitation)
+		invitationApi.GET("/list", handler.ListOrganizationInvitations)
+		invitationApi.DELETE("", handler.RevokeOrganizationInvitation)
 	}
 	r.GET("/organizations", handler.ListOrganizations)
 }

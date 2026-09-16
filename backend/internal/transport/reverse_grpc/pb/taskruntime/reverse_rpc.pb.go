@@ -117,6 +117,74 @@ func (x *CreateBatchRequest) GetBatchJson() string {
 	return ""
 }
 
+type CreateBatchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`  
+	Created       bool                   `protobuf:"varint,2,opt,name=created,proto3" json:"created"`                      
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                          
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                             
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateBatchResponse) Reset() {
+	*x = CreateBatchResponse{}
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateBatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateBatchResponse) ProtoMessage() {}
+
+func (x *CreateBatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateBatchResponse.ProtoReflect.Descriptor instead.
+func (*CreateBatchResponse) Descriptor() ([]byte, []int) {
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *CreateBatchResponse) GetBatchJson() string {
+	if x != nil {
+		return x.BatchJson
+	}
+	return ""
+}
+
+func (x *CreateBatchResponse) GetCreated() bool {
+	if x != nil {
+		return x.Created
+	}
+	return false
+}
+
+func (x *CreateBatchResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *CreateBatchResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
 type UpdateBatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`  
@@ -126,7 +194,7 @@ type UpdateBatchRequest struct {
 
 func (x *UpdateBatchRequest) Reset() {
 	*x = UpdateBatchRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[2]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -138,7 +206,7 @@ func (x *UpdateBatchRequest) String() string {
 func (*UpdateBatchRequest) ProtoMessage() {}
 
 func (x *UpdateBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[2]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -151,12 +219,80 @@ func (x *UpdateBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBatchRequest.ProtoReflect.Descriptor instead.
 func (*UpdateBatchRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{2}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *UpdateBatchRequest) GetBatchJson() string {
 	if x != nil {
 		return x.BatchJson
+	}
+	return ""
+}
+
+type UpdateBatchResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BatchJson     string                 `protobuf:"bytes,1,opt,name=batch_json,json=batchJson,proto3" json:"batchJson"`  
+	Applied       bool                   `protobuf:"varint,2,opt,name=applied,proto3" json:"applied"`                      
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                          
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                             
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateBatchResponse) Reset() {
+	*x = UpdateBatchResponse{}
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateBatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateBatchResponse) ProtoMessage() {}
+
+func (x *UpdateBatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateBatchResponse.ProtoReflect.Descriptor instead.
+func (*UpdateBatchResponse) Descriptor() ([]byte, []int) {
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *UpdateBatchResponse) GetBatchJson() string {
+	if x != nil {
+		return x.BatchJson
+	}
+	return ""
+}
+
+func (x *UpdateBatchResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+func (x *UpdateBatchResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *UpdateBatchResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
 	}
 	return ""
 }
@@ -170,7 +306,7 @@ type GetBatchRequest struct {
 
 func (x *GetBatchRequest) Reset() {
 	*x = GetBatchRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[3]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -182,7 +318,7 @@ func (x *GetBatchRequest) String() string {
 func (*GetBatchRequest) ProtoMessage() {}
 
 func (x *GetBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[3]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -195,7 +331,7 @@ func (x *GetBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBatchRequest.ProtoReflect.Descriptor instead.
 func (*GetBatchRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{3}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetBatchRequest) GetBatchId() string {
@@ -217,7 +353,7 @@ type GetBatchResponse struct {
 
 func (x *GetBatchResponse) Reset() {
 	*x = GetBatchResponse{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[4]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -229,7 +365,7 @@ func (x *GetBatchResponse) String() string {
 func (*GetBatchResponse) ProtoMessage() {}
 
 func (x *GetBatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[4]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -242,7 +378,7 @@ func (x *GetBatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBatchResponse.ProtoReflect.Descriptor instead.
 func (*GetBatchResponse) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{4}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetBatchResponse) GetBatchJson() string {
@@ -282,7 +418,7 @@ type CreateRunRequest struct {
 
 func (x *CreateRunRequest) Reset() {
 	*x = CreateRunRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[5]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -294,7 +430,7 @@ func (x *CreateRunRequest) String() string {
 func (*CreateRunRequest) ProtoMessage() {}
 
 func (x *CreateRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[5]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -307,7 +443,7 @@ func (x *CreateRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRunRequest.ProtoReflect.Descriptor instead.
 func (*CreateRunRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{5}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CreateRunRequest) GetRunJson() string {
@@ -326,7 +462,7 @@ type UpdateRunRequest struct {
 
 func (x *UpdateRunRequest) Reset() {
 	*x = UpdateRunRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[6]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -338,7 +474,7 @@ func (x *UpdateRunRequest) String() string {
 func (*UpdateRunRequest) ProtoMessage() {}
 
 func (x *UpdateRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[6]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -351,7 +487,7 @@ func (x *UpdateRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRunRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRunRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{6}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *UpdateRunRequest) GetRunJson() string {
@@ -370,7 +506,7 @@ type LookupIdempotentRequest struct {
 
 func (x *LookupIdempotentRequest) Reset() {
 	*x = LookupIdempotentRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[7]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -382,7 +518,7 @@ func (x *LookupIdempotentRequest) String() string {
 func (*LookupIdempotentRequest) ProtoMessage() {}
 
 func (x *LookupIdempotentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[7]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -395,7 +531,7 @@ func (x *LookupIdempotentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupIdempotentRequest.ProtoReflect.Descriptor instead.
 func (*LookupIdempotentRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{7}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *LookupIdempotentRequest) GetIdempotencyKey() string {
@@ -415,7 +551,7 @@ type ClaimRunRequest struct {
 
 func (x *ClaimRunRequest) Reset() {
 	*x = ClaimRunRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[8]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -427,7 +563,7 @@ func (x *ClaimRunRequest) String() string {
 func (*ClaimRunRequest) ProtoMessage() {}
 
 func (x *ClaimRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[8]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -440,7 +576,7 @@ func (x *ClaimRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimRunRequest.ProtoReflect.Descriptor instead.
 func (*ClaimRunRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{8}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ClaimRunRequest) GetRunId() string {
@@ -468,7 +604,7 @@ type ClaimRunResponse struct {
 
 func (x *ClaimRunResponse) Reset() {
 	*x = ClaimRunResponse{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[9]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -480,7 +616,7 @@ func (x *ClaimRunResponse) String() string {
 func (*ClaimRunResponse) ProtoMessage() {}
 
 func (x *ClaimRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[9]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -493,7 +629,7 @@ func (x *ClaimRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimRunResponse.ProtoReflect.Descriptor instead.
 func (*ClaimRunResponse) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{9}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ClaimRunResponse) GetTokenJson() string {
@@ -526,7 +662,7 @@ type HeartbeatBatchRequest struct {
 
 func (x *HeartbeatBatchRequest) Reset() {
 	*x = HeartbeatBatchRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[10]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -538,7 +674,7 @@ func (x *HeartbeatBatchRequest) String() string {
 func (*HeartbeatBatchRequest) ProtoMessage() {}
 
 func (x *HeartbeatBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[10]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -551,7 +687,7 @@ func (x *HeartbeatBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatBatchRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatBatchRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{10}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *HeartbeatBatchRequest) GetBatchId() string {
@@ -572,7 +708,7 @@ type SetRunProgressRequest struct {
 
 func (x *SetRunProgressRequest) Reset() {
 	*x = SetRunProgressRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[11]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -584,7 +720,7 @@ func (x *SetRunProgressRequest) String() string {
 func (*SetRunProgressRequest) ProtoMessage() {}
 
 func (x *SetRunProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[11]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,7 +733,7 @@ func (x *SetRunProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRunProgressRequest.ProtoReflect.Descriptor instead.
 func (*SetRunProgressRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{11}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SetRunProgressRequest) GetRunId() string {
@@ -632,7 +768,7 @@ type WriteResultRequest struct {
 
 func (x *WriteResultRequest) Reset() {
 	*x = WriteResultRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[12]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -644,7 +780,7 @@ func (x *WriteResultRequest) String() string {
 func (*WriteResultRequest) ProtoMessage() {}
 
 func (x *WriteResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[12]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -657,7 +793,7 @@ func (x *WriteResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WriteResultRequest.ProtoReflect.Descriptor instead.
 func (*WriteResultRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{12}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *WriteResultRequest) GetRunId() string {
@@ -691,7 +827,7 @@ type CancelBatchRequest struct {
 
 func (x *CancelBatchRequest) Reset() {
 	*x = CancelBatchRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[13]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -703,7 +839,7 @@ func (x *CancelBatchRequest) String() string {
 func (*CancelBatchRequest) ProtoMessage() {}
 
 func (x *CancelBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[13]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -716,7 +852,7 @@ func (x *CancelBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelBatchRequest.ProtoReflect.Descriptor instead.
 func (*CancelBatchRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{13}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CancelBatchRequest) GetBatchId() string {
@@ -743,7 +879,7 @@ type CancelRunRequest struct {
 
 func (x *CancelRunRequest) Reset() {
 	*x = CancelRunRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[14]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -755,7 +891,7 @@ func (x *CancelRunRequest) String() string {
 func (*CancelRunRequest) ProtoMessage() {}
 
 func (x *CancelRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[14]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +904,7 @@ func (x *CancelRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelRunRequest.ProtoReflect.Descriptor instead.
 func (*CancelRunRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{14}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *CancelRunRequest) GetRunId() string {
@@ -794,7 +930,7 @@ type GetRunRequest struct {
 
 func (x *GetRunRequest) Reset() {
 	*x = GetRunRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[15]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -806,7 +942,7 @@ func (x *GetRunRequest) String() string {
 func (*GetRunRequest) ProtoMessage() {}
 
 func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[15]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -819,7 +955,7 @@ func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
 func (*GetRunRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{15}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetRunRequest) GetRunId() string {
@@ -841,7 +977,7 @@ type GetRunResponse struct {
 
 func (x *GetRunResponse) Reset() {
 	*x = GetRunResponse{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[16]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -853,7 +989,7 @@ func (x *GetRunResponse) String() string {
 func (*GetRunResponse) ProtoMessage() {}
 
 func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[16]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -866,7 +1002,7 @@ func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
 func (*GetRunResponse) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{16}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetRunResponse) GetRunJson() string {
@@ -907,7 +1043,7 @@ type GetTaskDetailRequest struct {
 
 func (x *GetTaskDetailRequest) Reset() {
 	*x = GetTaskDetailRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[17]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -919,7 +1055,7 @@ func (x *GetTaskDetailRequest) String() string {
 func (*GetTaskDetailRequest) ProtoMessage() {}
 
 func (x *GetTaskDetailRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[17]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -932,7 +1068,7 @@ func (x *GetTaskDetailRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTaskDetailRequest.ProtoReflect.Descriptor instead.
 func (*GetTaskDetailRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{17}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetTaskDetailRequest) GetRunId() string {
@@ -965,7 +1101,7 @@ type GetTaskDetailResponse struct {
 
 func (x *GetTaskDetailResponse) Reset() {
 	*x = GetTaskDetailResponse{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[18]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -977,7 +1113,7 @@ func (x *GetTaskDetailResponse) String() string {
 func (*GetTaskDetailResponse) ProtoMessage() {}
 
 func (x *GetTaskDetailResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[18]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -990,7 +1126,7 @@ func (x *GetTaskDetailResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTaskDetailResponse.ProtoReflect.Descriptor instead.
 func (*GetTaskDetailResponse) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{18}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetTaskDetailResponse) GetRunJson() string {
@@ -1058,7 +1194,7 @@ type ListBatchRunsRequest struct {
 
 func (x *ListBatchRunsRequest) Reset() {
 	*x = ListBatchRunsRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[19]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1070,7 +1206,7 @@ func (x *ListBatchRunsRequest) String() string {
 func (*ListBatchRunsRequest) ProtoMessage() {}
 
 func (x *ListBatchRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[19]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1083,7 +1219,7 @@ func (x *ListBatchRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBatchRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListBatchRunsRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{19}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListBatchRunsRequest) GetBatchId() string {
@@ -1104,7 +1240,7 @@ type ListBatchRunsResponse struct {
 
 func (x *ListBatchRunsResponse) Reset() {
 	*x = ListBatchRunsResponse{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[20]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1116,7 +1252,7 @@ func (x *ListBatchRunsResponse) String() string {
 func (*ListBatchRunsResponse) ProtoMessage() {}
 
 func (x *ListBatchRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[20]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1129,7 +1265,7 @@ func (x *ListBatchRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBatchRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListBatchRunsResponse) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{20}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListBatchRunsResponse) GetRunsJson() []string {
@@ -1164,7 +1300,7 @@ type ListBatchesByTurnRequest struct {
 
 func (x *ListBatchesByTurnRequest) Reset() {
 	*x = ListBatchesByTurnRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[21]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1176,7 +1312,7 @@ func (x *ListBatchesByTurnRequest) String() string {
 func (*ListBatchesByTurnRequest) ProtoMessage() {}
 
 func (x *ListBatchesByTurnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[21]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1189,7 +1325,7 @@ func (x *ListBatchesByTurnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBatchesByTurnRequest.ProtoReflect.Descriptor instead.
 func (*ListBatchesByTurnRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{21}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListBatchesByTurnRequest) GetParentConversationId() int64 {
@@ -1224,7 +1360,7 @@ type ListBatchesByTurnResponse struct {
 
 func (x *ListBatchesByTurnResponse) Reset() {
 	*x = ListBatchesByTurnResponse{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[22]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1236,7 +1372,7 @@ func (x *ListBatchesByTurnResponse) String() string {
 func (*ListBatchesByTurnResponse) ProtoMessage() {}
 
 func (x *ListBatchesByTurnResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[22]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1249,7 +1385,7 @@ func (x *ListBatchesByTurnResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBatchesByTurnResponse.ProtoReflect.Descriptor instead.
 func (*ListBatchesByTurnResponse) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{22}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ListBatchesByTurnResponse) GetBatchesJson() []string {
@@ -1282,7 +1418,7 @@ type SweepStaleRunsRequest struct {
 
 func (x *SweepStaleRunsRequest) Reset() {
 	*x = SweepStaleRunsRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[23]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1294,7 +1430,7 @@ func (x *SweepStaleRunsRequest) String() string {
 func (*SweepStaleRunsRequest) ProtoMessage() {}
 
 func (x *SweepStaleRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[23]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1307,7 +1443,7 @@ func (x *SweepStaleRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SweepStaleRunsRequest.ProtoReflect.Descriptor instead.
 func (*SweepStaleRunsRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{23}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SweepStaleRunsRequest) GetBeforeTs() int64 {
@@ -1328,7 +1464,7 @@ type SweepStaleRunsResponse struct {
 
 func (x *SweepStaleRunsResponse) Reset() {
 	*x = SweepStaleRunsResponse{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[24]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1340,7 +1476,7 @@ func (x *SweepStaleRunsResponse) String() string {
 func (*SweepStaleRunsResponse) ProtoMessage() {}
 
 func (x *SweepStaleRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[24]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1353,7 +1489,7 @@ func (x *SweepStaleRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SweepStaleRunsResponse.ProtoReflect.Descriptor instead.
 func (*SweepStaleRunsResponse) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{24}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SweepStaleRunsResponse) GetStaleRunsJson() []string {
@@ -1395,7 +1531,7 @@ type ReopenRunForRetryRequest struct {
 
 func (x *ReopenRunForRetryRequest) Reset() {
 	*x = ReopenRunForRetryRequest{}
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[25]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1407,7 +1543,7 @@ func (x *ReopenRunForRetryRequest) String() string {
 func (*ReopenRunForRetryRequest) ProtoMessage() {}
 
 func (x *ReopenRunForRetryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[25]
+	mi := &file_taskruntime_reverse_rpc_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1420,7 +1556,7 @@ func (x *ReopenRunForRetryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReopenRunForRetryRequest.ProtoReflect.Descriptor instead.
 func (*ReopenRunForRetryRequest) Descriptor() ([]byte, []int) {
-	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{25}
+	return file_taskruntime_reverse_rpc_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ReopenRunForRetryRequest) GetRunJson() string {
@@ -1447,10 +1583,22 @@ const file_taskruntime_reverse_rpc_proto_rawDesc = "" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"3\n" +
 	"\x12CreateBatchRequest\x12\x1d\n" +
 	"\n" +
-	"batch_json\x18\x01 \x01(\tR\tbatchJson\"3\n" +
+	"batch_json\x18\x01 \x01(\tR\tbatchJson\"v\n" +
+	"\x13CreateBatchResponse\x12\x1d\n" +
+	"\n" +
+	"batch_json\x18\x01 \x01(\tR\tbatchJson\x12\x18\n" +
+	"\acreated\x18\x02 \x01(\bR\acreated\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"3\n" +
 	"\x12UpdateBatchRequest\x12\x1d\n" +
 	"\n" +
-	"batch_json\x18\x01 \x01(\tR\tbatchJson\",\n" +
+	"batch_json\x18\x01 \x01(\tR\tbatchJson\"v\n" +
+	"\x13UpdateBatchResponse\x12\x1d\n" +
+	"\n" +
+	"batch_json\x18\x01 \x01(\tR\tbatchJson\x12\x18\n" +
+	"\aapplied\x18\x02 \x01(\bR\aapplied\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\",\n" +
 	"\x0fGetBatchRequest\x12\x19\n" +
 	"\bbatch_id\x18\x01 \x01(\tR\abatchId\"o\n" +
 	"\x10GetBatchResponse\x12\x1d\n" +
@@ -1534,10 +1682,10 @@ const file_taskruntime_reverse_rpc_proto_rawDesc = "" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"`\n" +
 	"\x18ReopenRunForRetryRequest\x12\x19\n" +
 	"\brun_json\x18\x01 \x01(\tR\arunJson\x12)\n" +
-	"\x10expected_attempt\x18\x02 \x01(\x05R\x0fexpectedAttempt2\xfe\f\n" +
-	"\x15ReverseTaskRuntimeRPC\x12Z\n" +
-	"\x0eRpcCreateBatch\x12\x1f.reverse_rpc.CreateBatchRequest\x1a%.reverse_rpc.EmptyTaskRuntimeResponse\"\x00\x12Z\n" +
-	"\x0eRpcUpdateBatch\x12\x1f.reverse_rpc.UpdateBatchRequest\x1a%.reverse_rpc.EmptyTaskRuntimeResponse\"\x00\x12L\n" +
+	"\x10expected_attempt\x18\x02 \x01(\x05R\x0fexpectedAttempt2\xf4\f\n" +
+	"\x15ReverseTaskRuntimeRPC\x12U\n" +
+	"\x0eRpcCreateBatch\x12\x1f.reverse_rpc.CreateBatchRequest\x1a .reverse_rpc.CreateBatchResponse\"\x00\x12U\n" +
+	"\x0eRpcUpdateBatch\x12\x1f.reverse_rpc.UpdateBatchRequest\x1a .reverse_rpc.UpdateBatchResponse\"\x00\x12L\n" +
 	"\vRpcGetBatch\x12\x1c.reverse_rpc.GetBatchRequest\x1a\x1d.reverse_rpc.GetBatchResponse\"\x00\x12V\n" +
 	"\fRpcCreateRun\x12\x1d.reverse_rpc.CreateRunRequest\x1a%.reverse_rpc.EmptyTaskRuntimeResponse\"\x00\x12V\n" +
 	"\fRpcUpdateRun\x12\x1d.reverse_rpc.UpdateRunRequest\x1a%.reverse_rpc.EmptyTaskRuntimeResponse\"\x00\x12Z\n" +
@@ -1567,71 +1715,73 @@ func file_taskruntime_reverse_rpc_proto_rawDescGZIP() []byte {
 	return file_taskruntime_reverse_rpc_proto_rawDescData
 }
 
-var file_taskruntime_reverse_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_taskruntime_reverse_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_taskruntime_reverse_rpc_proto_goTypes = []any{
 	(*EmptyTaskRuntimeResponse)(nil),  // 0: reverse_rpc.EmptyTaskRuntimeResponse
 	(*CreateBatchRequest)(nil),        // 1: reverse_rpc.CreateBatchRequest
-	(*UpdateBatchRequest)(nil),        // 2: reverse_rpc.UpdateBatchRequest
-	(*GetBatchRequest)(nil),           // 3: reverse_rpc.GetBatchRequest
-	(*GetBatchResponse)(nil),          // 4: reverse_rpc.GetBatchResponse
-	(*CreateRunRequest)(nil),          // 5: reverse_rpc.CreateRunRequest
-	(*UpdateRunRequest)(nil),          // 6: reverse_rpc.UpdateRunRequest
-	(*LookupIdempotentRequest)(nil),   // 7: reverse_rpc.LookupIdempotentRequest
-	(*ClaimRunRequest)(nil),           // 8: reverse_rpc.ClaimRunRequest
-	(*ClaimRunResponse)(nil),          // 9: reverse_rpc.ClaimRunResponse
-	(*HeartbeatBatchRequest)(nil),     // 10: reverse_rpc.HeartbeatBatchRequest
-	(*SetRunProgressRequest)(nil),     // 11: reverse_rpc.SetRunProgressRequest
-	(*WriteResultRequest)(nil),        // 12: reverse_rpc.WriteResultRequest
-	(*CancelBatchRequest)(nil),        // 13: reverse_rpc.CancelBatchRequest
-	(*CancelRunRequest)(nil),          // 14: reverse_rpc.CancelRunRequest
-	(*GetRunRequest)(nil),             // 15: reverse_rpc.GetRunRequest
-	(*GetRunResponse)(nil),            // 16: reverse_rpc.GetRunResponse
-	(*GetTaskDetailRequest)(nil),      // 17: reverse_rpc.GetTaskDetailRequest
-	(*GetTaskDetailResponse)(nil),     // 18: reverse_rpc.GetTaskDetailResponse
-	(*ListBatchRunsRequest)(nil),      // 19: reverse_rpc.ListBatchRunsRequest
-	(*ListBatchRunsResponse)(nil),     // 20: reverse_rpc.ListBatchRunsResponse
-	(*ListBatchesByTurnRequest)(nil),  // 21: reverse_rpc.ListBatchesByTurnRequest
-	(*ListBatchesByTurnResponse)(nil), // 22: reverse_rpc.ListBatchesByTurnResponse
-	(*SweepStaleRunsRequest)(nil),     // 23: reverse_rpc.SweepStaleRunsRequest
-	(*SweepStaleRunsResponse)(nil),    // 24: reverse_rpc.SweepStaleRunsResponse
-	(*ReopenRunForRetryRequest)(nil),  // 25: reverse_rpc.ReopenRunForRetryRequest
+	(*CreateBatchResponse)(nil),       // 2: reverse_rpc.CreateBatchResponse
+	(*UpdateBatchRequest)(nil),        // 3: reverse_rpc.UpdateBatchRequest
+	(*UpdateBatchResponse)(nil),       // 4: reverse_rpc.UpdateBatchResponse
+	(*GetBatchRequest)(nil),           // 5: reverse_rpc.GetBatchRequest
+	(*GetBatchResponse)(nil),          // 6: reverse_rpc.GetBatchResponse
+	(*CreateRunRequest)(nil),          // 7: reverse_rpc.CreateRunRequest
+	(*UpdateRunRequest)(nil),          // 8: reverse_rpc.UpdateRunRequest
+	(*LookupIdempotentRequest)(nil),   // 9: reverse_rpc.LookupIdempotentRequest
+	(*ClaimRunRequest)(nil),           // 10: reverse_rpc.ClaimRunRequest
+	(*ClaimRunResponse)(nil),          // 11: reverse_rpc.ClaimRunResponse
+	(*HeartbeatBatchRequest)(nil),     // 12: reverse_rpc.HeartbeatBatchRequest
+	(*SetRunProgressRequest)(nil),     // 13: reverse_rpc.SetRunProgressRequest
+	(*WriteResultRequest)(nil),        // 14: reverse_rpc.WriteResultRequest
+	(*CancelBatchRequest)(nil),        // 15: reverse_rpc.CancelBatchRequest
+	(*CancelRunRequest)(nil),          // 16: reverse_rpc.CancelRunRequest
+	(*GetRunRequest)(nil),             // 17: reverse_rpc.GetRunRequest
+	(*GetRunResponse)(nil),            // 18: reverse_rpc.GetRunResponse
+	(*GetTaskDetailRequest)(nil),      // 19: reverse_rpc.GetTaskDetailRequest
+	(*GetTaskDetailResponse)(nil),     // 20: reverse_rpc.GetTaskDetailResponse
+	(*ListBatchRunsRequest)(nil),      // 21: reverse_rpc.ListBatchRunsRequest
+	(*ListBatchRunsResponse)(nil),     // 22: reverse_rpc.ListBatchRunsResponse
+	(*ListBatchesByTurnRequest)(nil),  // 23: reverse_rpc.ListBatchesByTurnRequest
+	(*ListBatchesByTurnResponse)(nil), // 24: reverse_rpc.ListBatchesByTurnResponse
+	(*SweepStaleRunsRequest)(nil),     // 25: reverse_rpc.SweepStaleRunsRequest
+	(*SweepStaleRunsResponse)(nil),    // 26: reverse_rpc.SweepStaleRunsResponse
+	(*ReopenRunForRetryRequest)(nil),  // 27: reverse_rpc.ReopenRunForRetryRequest
 }
 var file_taskruntime_reverse_rpc_proto_depIdxs = []int32{
 	1,  // 0: reverse_rpc.ReverseTaskRuntimeRPC.RpcCreateBatch:input_type -> reverse_rpc.CreateBatchRequest
-	2,  // 1: reverse_rpc.ReverseTaskRuntimeRPC.RpcUpdateBatch:input_type -> reverse_rpc.UpdateBatchRequest
-	3,  // 2: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetBatch:input_type -> reverse_rpc.GetBatchRequest
-	5,  // 3: reverse_rpc.ReverseTaskRuntimeRPC.RpcCreateRun:input_type -> reverse_rpc.CreateRunRequest
-	6,  // 4: reverse_rpc.ReverseTaskRuntimeRPC.RpcUpdateRun:input_type -> reverse_rpc.UpdateRunRequest
-	7,  // 5: reverse_rpc.ReverseTaskRuntimeRPC.RpcLookupIdempotent:input_type -> reverse_rpc.LookupIdempotentRequest
-	8,  // 6: reverse_rpc.ReverseTaskRuntimeRPC.RpcClaimRun:input_type -> reverse_rpc.ClaimRunRequest
-	10, // 7: reverse_rpc.ReverseTaskRuntimeRPC.RpcHeartbeatBatch:input_type -> reverse_rpc.HeartbeatBatchRequest
-	11, // 8: reverse_rpc.ReverseTaskRuntimeRPC.RpcSetRunProgress:input_type -> reverse_rpc.SetRunProgressRequest
-	12, // 9: reverse_rpc.ReverseTaskRuntimeRPC.RpcWriteResult:input_type -> reverse_rpc.WriteResultRequest
-	13, // 10: reverse_rpc.ReverseTaskRuntimeRPC.RpcCancelBatch:input_type -> reverse_rpc.CancelBatchRequest
-	14, // 11: reverse_rpc.ReverseTaskRuntimeRPC.RpcCancelRun:input_type -> reverse_rpc.CancelRunRequest
-	15, // 12: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetRun:input_type -> reverse_rpc.GetRunRequest
-	17, // 13: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetTaskDetail:input_type -> reverse_rpc.GetTaskDetailRequest
-	19, // 14: reverse_rpc.ReverseTaskRuntimeRPC.RpcListBatchRuns:input_type -> reverse_rpc.ListBatchRunsRequest
-	21, // 15: reverse_rpc.ReverseTaskRuntimeRPC.RpcListBatchesByTurn:input_type -> reverse_rpc.ListBatchesByTurnRequest
-	23, // 16: reverse_rpc.ReverseTaskRuntimeRPC.RpcSweepStaleRuns:input_type -> reverse_rpc.SweepStaleRunsRequest
-	25, // 17: reverse_rpc.ReverseTaskRuntimeRPC.RpcReopenRunForRetry:input_type -> reverse_rpc.ReopenRunForRetryRequest
-	0,  // 18: reverse_rpc.ReverseTaskRuntimeRPC.RpcCreateBatch:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
-	0,  // 19: reverse_rpc.ReverseTaskRuntimeRPC.RpcUpdateBatch:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
-	4,  // 20: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetBatch:output_type -> reverse_rpc.GetBatchResponse
+	3,  // 1: reverse_rpc.ReverseTaskRuntimeRPC.RpcUpdateBatch:input_type -> reverse_rpc.UpdateBatchRequest
+	5,  // 2: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetBatch:input_type -> reverse_rpc.GetBatchRequest
+	7,  // 3: reverse_rpc.ReverseTaskRuntimeRPC.RpcCreateRun:input_type -> reverse_rpc.CreateRunRequest
+	8,  // 4: reverse_rpc.ReverseTaskRuntimeRPC.RpcUpdateRun:input_type -> reverse_rpc.UpdateRunRequest
+	9,  // 5: reverse_rpc.ReverseTaskRuntimeRPC.RpcLookupIdempotent:input_type -> reverse_rpc.LookupIdempotentRequest
+	10, // 6: reverse_rpc.ReverseTaskRuntimeRPC.RpcClaimRun:input_type -> reverse_rpc.ClaimRunRequest
+	12, // 7: reverse_rpc.ReverseTaskRuntimeRPC.RpcHeartbeatBatch:input_type -> reverse_rpc.HeartbeatBatchRequest
+	13, // 8: reverse_rpc.ReverseTaskRuntimeRPC.RpcSetRunProgress:input_type -> reverse_rpc.SetRunProgressRequest
+	14, // 9: reverse_rpc.ReverseTaskRuntimeRPC.RpcWriteResult:input_type -> reverse_rpc.WriteResultRequest
+	15, // 10: reverse_rpc.ReverseTaskRuntimeRPC.RpcCancelBatch:input_type -> reverse_rpc.CancelBatchRequest
+	16, // 11: reverse_rpc.ReverseTaskRuntimeRPC.RpcCancelRun:input_type -> reverse_rpc.CancelRunRequest
+	17, // 12: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetRun:input_type -> reverse_rpc.GetRunRequest
+	19, // 13: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetTaskDetail:input_type -> reverse_rpc.GetTaskDetailRequest
+	21, // 14: reverse_rpc.ReverseTaskRuntimeRPC.RpcListBatchRuns:input_type -> reverse_rpc.ListBatchRunsRequest
+	23, // 15: reverse_rpc.ReverseTaskRuntimeRPC.RpcListBatchesByTurn:input_type -> reverse_rpc.ListBatchesByTurnRequest
+	25, // 16: reverse_rpc.ReverseTaskRuntimeRPC.RpcSweepStaleRuns:input_type -> reverse_rpc.SweepStaleRunsRequest
+	27, // 17: reverse_rpc.ReverseTaskRuntimeRPC.RpcReopenRunForRetry:input_type -> reverse_rpc.ReopenRunForRetryRequest
+	2,  // 18: reverse_rpc.ReverseTaskRuntimeRPC.RpcCreateBatch:output_type -> reverse_rpc.CreateBatchResponse
+	4,  // 19: reverse_rpc.ReverseTaskRuntimeRPC.RpcUpdateBatch:output_type -> reverse_rpc.UpdateBatchResponse
+	6,  // 20: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetBatch:output_type -> reverse_rpc.GetBatchResponse
 	0,  // 21: reverse_rpc.ReverseTaskRuntimeRPC.RpcCreateRun:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
 	0,  // 22: reverse_rpc.ReverseTaskRuntimeRPC.RpcUpdateRun:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
-	16, // 23: reverse_rpc.ReverseTaskRuntimeRPC.RpcLookupIdempotent:output_type -> reverse_rpc.GetRunResponse
-	9,  // 24: reverse_rpc.ReverseTaskRuntimeRPC.RpcClaimRun:output_type -> reverse_rpc.ClaimRunResponse
+	18, // 23: reverse_rpc.ReverseTaskRuntimeRPC.RpcLookupIdempotent:output_type -> reverse_rpc.GetRunResponse
+	11, // 24: reverse_rpc.ReverseTaskRuntimeRPC.RpcClaimRun:output_type -> reverse_rpc.ClaimRunResponse
 	0,  // 25: reverse_rpc.ReverseTaskRuntimeRPC.RpcHeartbeatBatch:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
 	0,  // 26: reverse_rpc.ReverseTaskRuntimeRPC.RpcSetRunProgress:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
 	0,  // 27: reverse_rpc.ReverseTaskRuntimeRPC.RpcWriteResult:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
 	0,  // 28: reverse_rpc.ReverseTaskRuntimeRPC.RpcCancelBatch:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
 	0,  // 29: reverse_rpc.ReverseTaskRuntimeRPC.RpcCancelRun:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
-	16, // 30: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetRun:output_type -> reverse_rpc.GetRunResponse
-	18, // 31: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetTaskDetail:output_type -> reverse_rpc.GetTaskDetailResponse
-	20, // 32: reverse_rpc.ReverseTaskRuntimeRPC.RpcListBatchRuns:output_type -> reverse_rpc.ListBatchRunsResponse
-	22, // 33: reverse_rpc.ReverseTaskRuntimeRPC.RpcListBatchesByTurn:output_type -> reverse_rpc.ListBatchesByTurnResponse
-	24, // 34: reverse_rpc.ReverseTaskRuntimeRPC.RpcSweepStaleRuns:output_type -> reverse_rpc.SweepStaleRunsResponse
+	18, // 30: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetRun:output_type -> reverse_rpc.GetRunResponse
+	20, // 31: reverse_rpc.ReverseTaskRuntimeRPC.RpcGetTaskDetail:output_type -> reverse_rpc.GetTaskDetailResponse
+	22, // 32: reverse_rpc.ReverseTaskRuntimeRPC.RpcListBatchRuns:output_type -> reverse_rpc.ListBatchRunsResponse
+	24, // 33: reverse_rpc.ReverseTaskRuntimeRPC.RpcListBatchesByTurn:output_type -> reverse_rpc.ListBatchesByTurnResponse
+	26, // 34: reverse_rpc.ReverseTaskRuntimeRPC.RpcSweepStaleRuns:output_type -> reverse_rpc.SweepStaleRunsResponse
 	0,  // 35: reverse_rpc.ReverseTaskRuntimeRPC.RpcReopenRunForRetry:output_type -> reverse_rpc.EmptyTaskRuntimeResponse
 	18, // [18:36] is the sub-list for method output_type
 	0,  // [0:18] is the sub-list for method input_type
@@ -1651,7 +1801,7 @@ func file_taskruntime_reverse_rpc_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_taskruntime_reverse_rpc_proto_rawDesc), len(file_taskruntime_reverse_rpc_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

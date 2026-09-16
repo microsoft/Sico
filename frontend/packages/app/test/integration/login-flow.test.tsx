@@ -17,6 +17,7 @@ import { store } from "@/store";
 
 import { clearAuthStorage } from "../_helpers/clear-auth-storage";
 import { setupMswServer } from "../_helpers/msw-server";
+import { organizationMembershipHandler } from "../_helpers/organization-context";
 
 // Each test hits `POST /api/sico/rbac/login` with the real `api` client
 // so msw + envelope unwrap + `loginAtom` schema validation run end-to-end.
@@ -32,6 +33,7 @@ const mockLoginResponse = {
 const DEFAULT_LANDING_PATH = "/digital-worker";
 
 setupMswServer([
+  organizationMembershipHandler(),
   http.post("/api/sico/rbac/login", () =>
     HttpResponse.json({ code: 0, msg: "ok", data: mockLoginResponse }),
   ),

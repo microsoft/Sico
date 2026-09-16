@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.biz.skill.paths import latest_skill_version_dir, skill_cortex_dir, skill_runtime_dir
+from app.biz.skill.paths import latest_skill_version_dir, skill_runtime_dir
 
 from ..sandbox.types import sandbox_for_requirement
 from ..workspace.layout import workspace_layout
@@ -17,9 +17,6 @@ if TYPE_CHECKING:
     from app.biz.skill.resolver import ResolvedAction
 
 _LOGGER = logging.getLogger(__name__)
-
-_CORTEX_DOCUMENT_NAME = "SKILL.md"
-_PROSE_WORKFLOW_MIN_CHARS = 400
 
 CapabilityVisibility = Literal["public", "internal"]
 """Capability palette scope.
@@ -45,10 +42,14 @@ class CapabilityCard(BaseModel):
     action_name: str = ""
     action_description: str = ""
     infra_requirements: list[str] = Field(default_factory=list)
+    execution_backend: Literal["any", "local", "docker", "kubernetes", "linux_workstation"] = "any"
+    target_type: Literal["", "linux_workstation"] = ""
+    target_os: str = ""
     parameters: list[dict[str, Any]] = Field(default_factory=list)
     display: dict[str, str] = Field(default_factory=dict)
     skill_dir: str = ""
     visibility: CapabilityVisibility = "public"
+    workspace_access: Literal["none", "read_only", "read_write"] = "read_write"
     """Whether the Lead Planner LLM should see this card by default."""
     effect: Literal["read", "mutate"] | None = None
     """Side-effect class declared on the skill index's action entry.
@@ -70,10 +71,14 @@ class CapabilityCard(BaseModel):
 
     @property
     def sandbox_options(self) -> tuple[str, ...]:
-        """Every OS this card can run on, as a candidate set.
+        """Every OS or concrete target type this card can use.
 
-        Each distinct sandbox requirement is an acceptable OS option.
+        An explicit target type takes precedence over OS-derived infra options.
         """
+        if self.target_type:
+            return (self.target_type,)
+        if self.execution_backend == "linux_workstation":
+            return ("linux_workstation",)
         options: list[str] = []
         seen: set[str] = set()
         for requirement in self.infra_requirements:
@@ -148,42 +153,32 @@ class SkillLoader:
             return list(self._cards.values())
         return [card for card in self._cards.values() if card.visibility == visibility]
 
-    def render_cards_section(self) -> str:
+    def render_cards_section(self, *, compact: bool = False) -> str:
         cards = self.list_cards(visibility="public")
         if not cards:
             return ""
-        executable_skills = {card.skill_name for card in cards if card.is_executable}
         lines = [
-            "These skills are available:",
+            "These executable skill actions are available:",
             "- Executable skill actions have an action_name and may be run by a delegated task when an adapter is appropriate.",
-            "- Instruction-only skills have no action_name. Read their SKILL.md and follow the documented "
-            "workflow directly with TASK-mode chat tools. Do not delegate an instruction-only skill; the task "
-            "runtime has no executable capability for it.",
-            "- A skill may offer both: prefer its executable action when the request maps onto one, and only "
-            "read the SKILL.md workflow when it does not.",
         ]
         for card in cards:
             lines.append(f"- skill_id: {card.skill_id}")
             lines.append(f"  skill_name: {card.skill_name}")
             if card.description:
                 lines.append(f"  description: {card.description}")
-            if not card.action_name:
-                # A prose entry for a skill that also exposes actions is not
-                # "instruction-only" — saying so would claim no executable
-                # capability exists while its actions are listed right here.
-                mixed = card.skill_name in executable_skills
-                lines.append(f"  kind: {'instruction_workflow' if mixed else 'instruction_only'}")
-                lines.append(f"  skill_path: skills/{card.skill_id}/SKILL.md")
-                lines.append(
-                    "  invocation: read the SKILL.md, then execute its workflow yourself using available chat tools such as curl"
-                )
-                continue
             lines.append("  kind: executable_action")
             lines.append(f"  action_name: {card.action_name}")
+            if compact:
+                lines.append(f"  capability_id: skill:{card.skill_name}:{card.action_name}")
+                lines.append("  invocation: describe with capability_catalogue, then delegate")
+                continue
             if card.action_description:
                 lines.append(f"  action_description: {card.action_description}")
             if card.infra_requirements:
                 lines.append(f"  infra_requirements: {json.dumps(card.infra_requirements, ensure_ascii=False)}")
+            lines.append(f"  execution_backend: {card.execution_backend}")
+            if card.target_type:
+                lines.append(f"  target_type: {card.target_type}")
             if card.parameters:
                 lines.append(f"  parameters: {json.dumps(card.parameters, ensure_ascii=False)}")
             lines.append("  invocation: delegated task runtime skill action")
@@ -197,41 +192,21 @@ class SkillLoader:
         return loaded if isinstance(loaded, list) else []
 
     def _load_action_cards(self, entry: dict[str, Any]) -> list[CapabilityCard]:
-        """Project one registered skill onto its cards.
-
-        A skill contributes **both** kinds of card when it has both kinds of
-        content: one card per executable action, *and* — whenever the package
-        ships prose — one instruction card carrying ``skill_path``. Treating
-        these as mutually exclusive used to make a single script silently delete
-        a mixed skill's documented workflow from the chat context, which is
-        exactly the content a reader needs when the request does not land on an
-        executable entry point.
-        """
+        """Project one registered skill's accepted manifest onto executable cards."""
         skill_id = _int_value(entry.get("id"))
         if skill_id <= 0:
             return []
         skill_name = str(entry.get("name") or f"skill-{skill_id}").strip() or f"skill-{skill_id}"
         skill_description = str(entry.get("description") or "")
         skill_root = self._skill_root(skill_id)
-        cards = _action_cards_from_index(
-            entry,
-            skill_id=skill_id,
-            skill_name=skill_name,
-            skill_description=skill_description,
-            skill_root=skill_root,
-        )
-        if not cards:
-            from app.biz.skill.resolver import load_resolved_actions
+        from app.biz.skill.resolver import load_resolved_actions
 
-            try:
-                actions = load_resolved_actions(skill_root)
-            except Exception:
-                _LOGGER.warning("failed to load resolved actions for skill %s", skill_id, exc_info=True)
-                actions = []
-            cards = [_action_card(skill_id, skill_name, skill_description, skill_root, action) for action in actions]
-        if not cards or _has_prose_workflow(skill_root):
-            cards.append(_skill_card(skill_id, skill_name, skill_description, skill_root))
-        return cards
+        try:
+            actions = load_resolved_actions(skill_root)
+        except Exception:
+            _LOGGER.warning("failed to load accepted actions for skill %s", skill_id, exc_info=True)
+            return []
+        return [_action_card(skill_id, skill_name, skill_description, skill_root, action) for action in actions]
 
     def _skill_root(self, skill_id: int) -> Path:
         if self.project_id or self.agent_id:
@@ -248,7 +223,13 @@ def _action_card(
     from app.biz.skill.resolver import infer_required_parameter_names
 
     required = infer_required_parameter_names(action)
-    parameters = [{**parameter.model_dump(), "required": parameter.name in required} for parameter in action.parameters]
+    parameters = [
+        {
+            **parameter.model_dump(exclude={"type"} if parameter.type == "string" else set()),
+            "required": parameter.name in required,
+        }
+        for parameter in action.parameters
+    ]
     runtime_root = _runtime_root(skill_root)
     return CapabilityCard(
         name=f"{skill_name}.{action.name}",
@@ -258,9 +239,14 @@ def _action_card(
         action_name=action.name,
         action_description=action.description,
         infra_requirements=list(action.infra_requirements),
+        execution_backend=action.execution_requirement.backend,
+        target_type=action.target_requirements.type,
+        target_os=action.target_requirements.os,
         parameters=parameters,
         display=_display_for_infra(action.infra_requirements),
         skill_dir=str(runtime_root),
+        workspace_access=action.workspace_access,
+        effect=action.effect,
     )
 
 
@@ -303,34 +289,6 @@ def _action_cards_from_index(
             )
         )
     return cards
-
-
-def _skill_card(skill_id: int, skill_name: str, skill_description: str, skill_root: Path) -> CapabilityCard:
-    return CapabilityCard(
-        name=skill_name,
-        description=skill_description,
-        skill_id=skill_id,
-        skill_name=skill_name,
-        skill_dir=str(_runtime_root(skill_root)),
-    )
-
-
-def _has_prose_workflow(skill_root: Path) -> bool:
-    """Whether the package ships a SKILL.md with a workflow worth reading.
-
-    A stub of a few lines is a description, not a workflow; surfacing it would
-    only push the reader to open a file that answers nothing. A document this
-    cannot read is treated the same way, and for the same reason: the reader
-    would decode it no more successfully than we just did.
-    """
-    document = skill_cortex_dir(skill_root) / _CORTEX_DOCUMENT_NAME
-    if not document.is_file():
-        return False
-    try:
-        text = document.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return False
-    return len(text.strip()) >= _PROSE_WORKFLOW_MIN_CHARS
 
 
 def _runtime_root(skill_root: Path) -> Path:

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 import { isAuthenticatedAtom, logoutAtom } from "../../../atoms/auth-atom";
 import { CHAT_STREAM_ENDPOINTS } from "../../../constants/endpoints";
+import { useOrganizationIdGetter } from "../../../hooks/use-organization-id-getter";
 import { assertNever } from "../../../utils/assert-never";
 import {
   activeConversationAtom,
@@ -113,6 +114,7 @@ class ReconnectController {
       onOpen: () => (() => void) | undefined;
       onStreamEnd: () => (() => void) | undefined;
       reconnectUrl: () => string;
+      getOrganizationId: () => number | null;
     },
   ) {}
 
@@ -220,6 +222,7 @@ class ReconnectController {
       { ...this.target },
       {
         url: this.getters.reconnectUrl(),
+        getOrganizationId: this.getters.getOrganizationId,
         signal: own.signal,
         onOpen: () => {
           // Mirror the live send: on stream open, seed a Thinking… placeholder
@@ -421,6 +424,7 @@ export function useReconnect(
   options?: UseReconnectOptions,
 ): { stop: () => void } {
   const store = useStore();
+  const getOrgId = useOrganizationIdGetter();
   const optionsRef = useRef(options);
   const enabledRef = useRef(options?.enabled !== false);
   // Commit before the previous passive effect's cleanup, so that cleanup sees a
@@ -435,7 +439,6 @@ export function useReconnect(
   // `stop` is exposed through a ref so the handle stays stable across renders
   // while the live controller lives inside the effect closure.
   const stopRef = useRef<() => void>(() => {});
-  const stop = useCallback(() => stopRef.current(), []);
 
   useEffect(() => {
     if (options?.enabled === false) {
@@ -451,6 +454,7 @@ export function useReconnect(
         onOpen: () => optionsRef.current?.onOpen,
         onStreamEnd: () => optionsRef.current?.onStreamEnd,
         reconnectUrl: () => CHAT_STREAM_ENDPOINTS.reconnect,
+        getOrganizationId: getOrgId,
       },
     );
 
@@ -473,7 +477,7 @@ export function useReconnect(
       controller.dispatch({ type: "unmount" });
       stopRef.current = () => {};
     };
-  }, [store, agentInstanceId, conversationId, options?.enabled]);
+  }, [store, getOrgId, agentInstanceId, conversationId, options?.enabled]);
 
-  return { stop };
+  return { stop: useCallback(() => stopRef.current(), []) };
 }

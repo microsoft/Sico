@@ -91,8 +91,32 @@ func (sai *SingleAgentInstanceDAO) ListByFilter(
 	filter *entity.ListSingleAgentInstanceFilter,
 	offset, limit int,
 ) ([]*entity.SingleAgentInstance, int64, error) {
+	return sai.listByFilter(ctx, filter, nil, offset, limit)
+}
+
+func (sai *SingleAgentInstanceDAO) ListByFilterInProjects(
+	ctx context.Context,
+	filter *entity.ListSingleAgentInstanceFilter,
+	projectIDs []int64,
+	offset, limit int,
+) ([]*entity.SingleAgentInstance, int64, error) {
+	return sai.listByFilter(ctx, filter, projectIDs, offset, limit)
+}
+
+func (sai *SingleAgentInstanceDAO) listByFilter(
+	ctx context.Context,
+	filter *entity.ListSingleAgentInstanceFilter,
+	projectIDs []int64,
+	offset, limit int,
+) ([]*entity.SingleAgentInstance, int64, error) {
 	saim := sai.dbQuery.TSingleAgentInstance
 	saimQuery := saim.WithContext(ctx)
+	if projectIDs != nil {
+		if len(projectIDs) == 0 {
+			return []*entity.SingleAgentInstance{}, 0, nil
+		}
+		saimQuery = saimQuery.Where(saim.ProjectID.In(projectIDs...))
+	}
 
 	if filter.EmployerUsername != nil {
 		saimQuery = saimQuery.Where(saim.EmployerUsername.Eq(*filter.EmployerUsername))

@@ -13,6 +13,12 @@ export const AUTH_EXPIRES_AT_LS = "sico.expiresAt";
 // Sidebar UI preferences.
 export const SIDEBAR_COLLAPSED_LS = "sico.sidebarCollapsed";
 
+// Selected organization across page reloads.
+export const SELECTED_ORGANIZATION_ID_LS = "sico.selectedOrganizationId";
+
+// Validated, user-scoped organization summaries for cold-start routing.
+export const ORGANIZATION_CONTEXT_LS = "sico.organizationContext";
+
 // Assets-table per-tab definition hints the user dismissed ("don't show again").
 export const ASSETS_HINT_DISMISSED_LS = "sico.assetsHintDismissed";
 
@@ -24,6 +30,8 @@ export type LocalStorageKey =
   | typeof AUTH_USER_LS
   | typeof AUTH_EXPIRES_AT_LS
   | typeof SIDEBAR_COLLAPSED_LS
+  | typeof SELECTED_ORGANIZATION_ID_LS
+  | typeof ORGANIZATION_CONTEXT_LS
   | typeof ASSETS_HINT_DISMISSED_LS
   | typeof LOCALE_LS;
 

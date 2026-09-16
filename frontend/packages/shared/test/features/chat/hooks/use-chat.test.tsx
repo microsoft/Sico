@@ -5,6 +5,7 @@ import { createStore, Provider as JotaiProvider } from "jotai";
 import { type PropsWithChildren, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { userAtom } from "@/atoms/auth-atom";
 import {
   activeConversationAtom,
   activeConversationIdAtom,
@@ -15,7 +16,14 @@ import { useChat } from "@/features/chat/hooks/use-chat";
 import { historyQueryOptions } from "@/features/chat/hooks/use-history";
 import { openChatStream } from "@/features/chat/services/chat-stream";
 import { refreshConversationStatus } from "@/features/chat/utils/refresh-conversation-status";
+import { selectedOrganizationIdAtom } from "@/features/organization/atoms/selected-organization-atom";
+import { organizationKeys } from "@/features/organization/query-keys";
+import { type OrganizationSummary } from "@/features/organization/schemas/organization";
 import { ApiClientProvider } from "@/services/api-client-context";
+import {
+  removeItemFromLocalStorage,
+  SELECTED_ORGANIZATION_ID_LS,
+} from "@/utils/local-storage";
 
 vi.mock("@/features/chat/services/chat-stream", () => ({
   openChatStream: vi.fn(
@@ -69,14 +77,49 @@ function seedHistory(queryClient: QueryClient, key: readonly unknown[]): void {
 }
 
 beforeEach(() => {
+  removeItemFromLocalStorage(SELECTED_ORGANIZATION_ID_LS);
   vi.clearAllMocks();
 });
 
 afterEach(() => {
+  removeItemFromLocalStorage(SELECTED_ORGANIZATION_ID_LS);
   vi.restoreAllMocks();
 });
 
 describe("useChat", () => {
+  it("passes a live bound organization getter to the send transport", async () => {
+    const store = createStore();
+    const queryClient = new QueryClient();
+    store.set(userAtom, { id: 1, email: "user@example.test", roles: [] });
+    const organizations: OrganizationSummary[] = [9, 10].map((id) => ({
+      id,
+      name: `Organization ${id}`,
+      description: "",
+      createdAt: 1,
+      updatedAt: 1,
+      creatorUsername: "owner@example.test",
+      roleCodes: [],
+      isOwner: false,
+    }));
+    queryClient.setQueryData(
+      organizationKeys.userOrganizations(1),
+      organizations,
+    );
+    const { result } = renderHook(() => useChat(1), {
+      wrapper: wrapper(store, queryClient),
+    });
+
+    await act(async () => {
+      await result.current.send("hello", []);
+    });
+    const options = vi.mocked(openChatStream).mock.calls[0]?.[1];
+    expect(options?.getOrganizationId?.()).toBe(9);
+    store.set(selectedOrganizationIdAtom, 10);
+
+    expect(options?.getOrganizationId?.()).toBe(10);
+    queryClient.clear();
+  });
+
   it("send() runs the turn and ends in done", async () => {
     const store = createStore();
     const { result } = renderHook(() => useChat(1), {

@@ -9,6 +9,7 @@ __all__ = (
     "ClaimRunRequest",
     "ClaimRunResponse",
     "CreateBatchRequest",
+    "CreateBatchResponse",
     "CreateRunRequest",
     "EmptyTaskRuntimeResponse",
     "GetBatchRequest",
@@ -30,6 +31,7 @@ __all__ = (
     "SweepStaleRunsRequest",
     "SweepStaleRunsResponse",
     "UpdateBatchRequest",
+    "UpdateBatchResponse",
     "UpdateRunRequest",
     "WriteResultRequest",
 )
@@ -136,6 +138,34 @@ class CreateBatchRequest(betterproto2.Message):
 
 default_message_pool.register_message(
     "reverse_rpc", "CreateBatchRequest", CreateBatchRequest
+)
+
+
+@dataclass(eq=False, repr=False)
+class CreateBatchResponse(betterproto2.Message):
+    batch_json: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"batchJson"
+    """
+
+    created: "bool" = betterproto2.field(2, betterproto2.TYPE_BOOL)
+    """
+    @gotag: json:"created"
+    """
+
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "reverse_rpc", "CreateBatchResponse", CreateBatchResponse
 )
 
 
@@ -528,6 +558,34 @@ default_message_pool.register_message(
 
 
 @dataclass(eq=False, repr=False)
+class UpdateBatchResponse(betterproto2.Message):
+    batch_json: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"batchJson"
+    """
+
+    applied: "bool" = betterproto2.field(2, betterproto2.TYPE_BOOL)
+    """
+    @gotag: json:"applied"
+    """
+
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "reverse_rpc", "UpdateBatchResponse", UpdateBatchResponse
+)
+
+
+@dataclass(eq=False, repr=False)
 class UpdateRunRequest(betterproto2.Message):
     run_json: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
     """
@@ -567,22 +625,18 @@ class ReverseTaskRuntimeRpcStub:
     def __init__(self, channel: grpc.Channel):
         self._channel = channel
 
-    def rpc_create_batch(
-        self, message: "CreateBatchRequest"
-    ) -> "EmptyTaskRuntimeResponse":
+    def rpc_create_batch(self, message: "CreateBatchRequest") -> "CreateBatchResponse":
         return self._channel.unary_unary(
             "/reverse_rpc.ReverseTaskRuntimeRPC/RpcCreateBatch",
             CreateBatchRequest.SerializeToString,
-            EmptyTaskRuntimeResponse.FromString,
+            CreateBatchResponse.FromString,
         )(message)
 
-    def rpc_update_batch(
-        self, message: "UpdateBatchRequest"
-    ) -> "EmptyTaskRuntimeResponse":
+    def rpc_update_batch(self, message: "UpdateBatchRequest") -> "UpdateBatchResponse":
         return self._channel.unary_unary(
             "/reverse_rpc.ReverseTaskRuntimeRPC/RpcUpdateBatch",
             UpdateBatchRequest.SerializeToString,
-            EmptyTaskRuntimeResponse.FromString,
+            UpdateBatchResponse.FromString,
         )(message)
 
     def rpc_get_batch(self, message: "GetBatchRequest") -> "GetBatchResponse":
@@ -721,12 +775,12 @@ class ReverseTaskRuntimeRpcStub:
 class ReverseTaskRuntimeRpcBase(betterproto2_grpclib.ServiceBase):
     async def rpc_create_batch(
         self, message: "CreateBatchRequest"
-    ) -> "EmptyTaskRuntimeResponse":
+    ) -> "CreateBatchResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def rpc_update_batch(
         self, message: "UpdateBatchRequest"
-    ) -> "EmptyTaskRuntimeResponse":
+    ) -> "UpdateBatchResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def rpc_get_batch(self, message: "GetBatchRequest") -> "GetBatchResponse":
@@ -804,8 +858,7 @@ class ReverseTaskRuntimeRpcBase(betterproto2_grpclib.ServiceBase):
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
     async def __rpc_rpc_create_batch(
-        self,
-        stream: "grpclib.server.Stream[CreateBatchRequest, EmptyTaskRuntimeResponse]",
+        self, stream: "grpclib.server.Stream[CreateBatchRequest, CreateBatchResponse]"
     ) -> None:
         request = await stream.recv_message()
         assert request is not None
@@ -813,8 +866,7 @@ class ReverseTaskRuntimeRpcBase(betterproto2_grpclib.ServiceBase):
         await stream.send_message(response)
 
     async def __rpc_rpc_update_batch(
-        self,
-        stream: "grpclib.server.Stream[UpdateBatchRequest, EmptyTaskRuntimeResponse]",
+        self, stream: "grpclib.server.Stream[UpdateBatchRequest, UpdateBatchResponse]"
     ) -> None:
         request = await stream.recv_message()
         assert request is not None
@@ -967,13 +1019,13 @@ class ReverseTaskRuntimeRpcBase(betterproto2_grpclib.ServiceBase):
                 self.__rpc_rpc_create_batch,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 CreateBatchRequest,
-                EmptyTaskRuntimeResponse,
+                CreateBatchResponse,
             ),
             "/reverse_rpc.ReverseTaskRuntimeRPC/RpcUpdateBatch": grpclib.const.Handler(
                 self.__rpc_rpc_update_batch,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 UpdateBatchRequest,
-                EmptyTaskRuntimeResponse,
+                UpdateBatchResponse,
             ),
             "/reverse_rpc.ReverseTaskRuntimeRPC/RpcGetBatch": grpclib.const.Handler(
                 self.__rpc_rpc_get_batch,

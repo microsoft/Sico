@@ -102,3 +102,74 @@ func (w *otelTracedNotificationRepo) Update(ctx context.Context, record *notific
 	}
 	return ret0
 }
+
+func WithTracingOrganizationScopedNotificationRepo(next OrganizationScopedNotificationRepo) OrganizationScopedNotificationRepo {
+	if next == nil {
+		return nil
+	}
+	return &otelTracedOrganizationScopedNotificationRepo{next: next}
+}
+
+type otelTracedOrganizationScopedNotificationRepo struct {
+	next OrganizationScopedNotificationRepo
+}
+
+func (w *otelTracedOrganizationScopedNotificationRepo) GetByOrganization(ctx context.Context, id int64, organizationID int64) (*notification.Notification, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "OrganizationScopedNotificationRepo.GetByOrganization")
+	defer span.End()
+
+	ret0, ret1 := w.next.GetByOrganization(ctx, id, organizationID)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedOrganizationScopedNotificationRepo) ListByProjectIDInOrganization(ctx context.Context, projectID int64, organizationID int64, offset int, limit int) ([]*notification.Notification, int64, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "OrganizationScopedNotificationRepo.ListByProjectIDInOrganization")
+	defer span.End()
+
+	ret0, ret1, ret2 := w.next.ListByProjectIDInOrganization(ctx, projectID, organizationID, offset, limit)
+	if ret2 != nil {
+		span.RecordError(ret2)
+		span.SetStatus(codes.Error, ret2.Error())
+	}
+	return ret0, ret1, ret2
+}
+
+func (w *otelTracedOrganizationScopedNotificationRepo) ListByReceiverUsernameInOrganization(ctx context.Context, receiverUsername string, organizationID int64, offset int, limit int) ([]*notification.Notification, int64, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "OrganizationScopedNotificationRepo.ListByReceiverUsernameInOrganization")
+	defer span.End()
+
+	ret0, ret1, ret2 := w.next.ListByReceiverUsernameInOrganization(ctx, receiverUsername, organizationID, offset, limit)
+	if ret2 != nil {
+		span.RecordError(ret2)
+		span.SetStatus(codes.Error, ret2.Error())
+	}
+	return ret0, ret1, ret2
+}
+
+func (w *otelTracedOrganizationScopedNotificationRepo) MarkAllAsReadByReceiverUsernameInOrganization(ctx context.Context, receiverUsername string, organizationID int64) ([]int64, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "OrganizationScopedNotificationRepo.MarkAllAsReadByReceiverUsernameInOrganization")
+	defer span.End()
+
+	ret0, ret1 := w.next.MarkAllAsReadByReceiverUsernameInOrganization(ctx, receiverUsername, organizationID)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedOrganizationScopedNotificationRepo) SetStatusByOrganization(ctx context.Context, id int64, organizationID int64, status notification.NotificationStatus) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "OrganizationScopedNotificationRepo.SetStatusByOrganization")
+	defer span.End()
+
+	ret0 := w.next.SetStatusByOrganization(ctx, id, organizationID, status)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}

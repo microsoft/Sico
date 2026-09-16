@@ -103,6 +103,12 @@ func runRowFromJSON(payload string) (*runRow, error) {
 	if row.QueuedAt == 0 {
 		row.QueuedAt = row.CreatedAt
 	}
+	canonicalPayload, err := decodeJSONMap(string(row.RunJSON), labelRunJSON)
+	if err != nil {
+		return nil, err
+	}
+	canonicalizeRunPayload(row, canonicalPayload)
+	row.RunJSON = marshalJSON(canonicalPayload)
 
 	return row, nil
 }

@@ -50,11 +50,37 @@ func (dao *NotificationDAO) Delete(ctx context.Context, id int64) error {
 	return err
 }
 
+func (dao *NotificationDAO) Get(ctx context.Context, id int64) (*entity.Notification, error) {
+	poData, err := dao.query.TNotification.WithContext(ctx).Where(dao.query.TNotification.ID.Eq(id)).First()
+	if err != nil {
+		return nil, err
+	}
+	return dao.notificationPo2Do(ctx, poData)
+}
+
 func (dao *NotificationDAO) SetStatus(ctx context.Context, id int64, status entity.NotificationStatus) error {
 	_, err := dao.query.TNotification.WithContext(ctx).
 		Where(dao.query.TNotification.ID.Eq(id)).
 		UpdateColumn(dao.query.TNotification.Status, int32(status))
 	return err
+}
+
+func (dao *NotificationDAO) SetStatusByOrganization(
+	ctx context.Context,
+	id, organizationID int64,
+	status entity.NotificationStatus,
+) error {
+	t := dao.query.TNotification
+	result, err := t.WithContext(ctx).
+		Where(t.ID.Eq(id), t.OrganizationID.Eq(organizationID)).
+		UpdateColumn(t.Status, int32(status))
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (dao *NotificationDAO) ListByReceiverUsername(
@@ -78,6 +104,27 @@ func (dao *NotificationDAO) ListByReceiverUsername(
 		return nil, 0, convErr
 	}
 	return notifications, total, nil
+}
+
+func (dao *NotificationDAO) ListByReceiverUsernameInOrganization(
+	ctx context.Context,
+	receiverUsername string,
+	organizationID int64,
+	offset, limit int,
+) ([]*entity.Notification, int64, error) {
+	t := dao.query.TNotification
+	q := t.WithContext(ctx).
+		Where(t.ReceiverUsername.Eq(receiverUsername), t.OrganizationID.Eq(organizationID))
+	total, err := q.Count()
+	if err != nil {
+		return nil, 0, err
+	}
+	list, err := q.Offset(offset).Limit(limit).Order(t.CreatedAt.Desc()).Find()
+	if err != nil {
+		return nil, 0, err
+	}
+	notifications, convErr := dao.notificationPo2DoBatch(ctx, list)
+	return notifications, total, convErr
 }
 
 func (dao *NotificationDAO) List(
@@ -133,6 +180,7 @@ func (dao *NotificationDAO) notificationDo2Po(
 		Content:          record.Content,
 		ExtraInfo:        record.ExtraInfo,
 		ProjectID:        record.ProjectId,
+		OrganizationID:   record.OrganizationId,
 		CreatedAt:        record.CreatedAt,
 		UpdatedAt:        record.UpdatedAt,
 	}
@@ -152,6 +200,7 @@ func (dao *NotificationDAO) notificationPo2Do(
 		Content:          poData.Content,
 		ExtraInfo:        poData.ExtraInfo,
 		ProjectId:        poData.ProjectID,
+		OrganizationId:   poData.OrganizationID,
 		CreatedAt:        poData.CreatedAt,
 		UpdatedAt:        poData.UpdatedAt,
 	}
@@ -180,6 +229,30 @@ func (dao *NotificationDAO) ListByProjectID(
 		return nil, 0, convErr
 	}
 	return notifications, total, nil
+}
+
+func (dao *NotificationDAO) ListByProjectIDInOrganization(
+	ctx context.Context,
+	projectID, organizationID int64,
+	offset, limit int,
+) ([]*entity.Notification, int64, error) {
+	t := dao.query.TNotification
+	q := t.WithContext(ctx).
+		Where(
+			t.ProjectID.Eq(projectID),
+			t.OrganizationID.Eq(organizationID),
+			t.ReceiverUsername.Eq(""),
+		)
+	total, err := q.Count()
+	if err != nil {
+		return nil, 0, err
+	}
+	list, err := q.Offset(offset).Limit(limit).Order(t.CreatedAt.Desc()).Find()
+	if err != nil {
+		return nil, 0, err
+	}
+	notifications, convErr := dao.notificationPo2DoBatch(ctx, list)
+	return notifications, total, convErr
 }
 
 func (dao *NotificationDAO) notificationPo2DoBatch(
@@ -230,4 +303,51 @@ func (dao *NotificationDAO) MarkAllAsReadByReceiverUsername(
 		return nil, err
 	}
 	return ids, nil
+}
+
+func (dao *NotificationDAO) MarkAllAsReadByReceiverUsernameInOrganization(
+	ctx context.Context,
+	receiverUsername string,
+	organizationID int64,
+) ([]int64, error) {
+	unread := int32(modelpb.NotificationStatus_NOTIFICATION_STATUS_UNREAD)
+	read := int32(modelpb.NotificationStatus_NOTIFICATION_STATUS_READ)
+	t := dao.query.TNotification
+	q := t.WithContext(ctx).
+		Where(
+			t.ReceiverUsername.Eq(receiverUsername),
+			t.OrganizationID.Eq(organizationID),
+			t.Status.Eq(unread),
+		)
+	list, err := q.Select(t.ID).Find()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int64, 0, len(list))
+	for _, poData := range list {
+		ids = append(ids, poData.ID)
+	}
+	if len(ids) == 0 {
+		return ids, nil
+	}
+	if _, err := t.WithContext(ctx).
+		Where(t.ID.In(ids...), t.OrganizationID.Eq(organizationID)).
+		UpdateColumn(t.Status, read); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+func (dao *NotificationDAO) GetByOrganization(
+	ctx context.Context,
+	id, organizationID int64,
+) (*entity.Notification, error) {
+	t := dao.query.TNotification
+	poData, err := t.WithContext(ctx).
+		Where(t.ID.Eq(id), t.OrganizationID.Eq(organizationID)).
+		First()
+	if err != nil {
+		return nil, err
+	}
+	return dao.notificationPo2Do(ctx, poData)
 }

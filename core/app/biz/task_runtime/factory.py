@@ -44,6 +44,7 @@ def default_task_manager(ctx: TurnContext) -> "TaskManager":
     if override is not None:
         return override(ctx)
     from .storage.artifact_store import default_artifact_store
+    from .capabilities.linux_workstation import LinuxWorkstationCapabilityProvider
     from .capabilities.builtin import BuiltinCapabilityProvider
     from .capabilities.resolver import CapabilityResolver
     from .capabilities.skill import SkillCapabilityProvider
@@ -51,7 +52,9 @@ def default_task_manager(ctx: TurnContext) -> "TaskManager":
     from .capabilities.executor import CapabilityExecutor
     from .execution.command.limiter import limit_backend
     from .execution.command.selection import select_backend
+    from .execution.environment import default_prepared_environment_manager
     from .capabilities.loader import SkillLoader
+    from .guides import SkillGuideRegistry
     from .storage.file_store import FileRunStore
     from .sub_agent.executor import SubAgentExecutor
     from .sub_agent.invoker import RunCapabilityInvoker
@@ -68,24 +71,32 @@ def default_task_manager(ctx: TurnContext) -> "TaskManager":
     # Default to the backend-backed store so local + compose deployments behave the same;
     # set TASK_RUNTIME_RUN_STORE=file to fall back to per-turn filesystem storage in tests.
     if os.getenv("TASK_RUNTIME_RUN_STORE", "backend").strip().lower() in {"backend", "db", "mysql"}:
-        store: RunStore = DBRunStore()
+        store: RunStore = DBRunStore(results_root=sidechain_root)
         sidechain_root.mkdir(parents=True, exist_ok=True)
     else:
         store = FileRunStore(sidechain_root)
-    skill_loader = SkillLoader(workspace_root)
+    skill_loader = SkillLoader(workspace_root, project_id=ctx.project_id, agent_id=ctx.agent_id)
+    guide_registry = SkillGuideRegistry(workspace_root, project_id=ctx.project_id, agent_id=ctx.agent_id)
     artifact_store = default_artifact_store(sidechain_root / "artifacts")
     command_backend = limit_backend(select_backend())
+    environment_manager = default_prepared_environment_manager()
     # Dispatch is a closed two-member union: a deterministic ``capability`` call
     # or a bounded ``sub_agent`` loop. Every capability source - the runtime's own
     # payloads, registered skills, and later GUI / MCP - is a provider behind one
     # CapabilityResolver, so adding a source never adds a dispatch kind or a
-    # routing branch. Both providers pick *where* their commands run
-    # (local/docker/k8s) via the injected CommandBackend, keeping the capability
-    # axis and the backend axis orthogonal.
+    # routing branch. Builtins use the configured worker backend; skill actions
+    # resolve their declared placement per run, with ``any`` retaining this
+    # configured backend. The capability and backend axes remain orthogonal.
     resolver = CapabilityResolver(
         (
             BuiltinCapabilityProvider(artifact_store=artifact_store, command_backend=command_backend),
-            SkillCapabilityProvider(skill_loader, artifact_store=artifact_store, command_backend=command_backend),
+            LinuxWorkstationCapabilityProvider(artifact_store=artifact_store),
+            SkillCapabilityProvider(
+                skill_loader,
+                artifact_store=artifact_store,
+                command_backend=command_backend,
+                environment_manager=environment_manager,
+            ),
         )
     )
     capability_executor = CapabilityExecutor(resolver)
@@ -94,6 +105,7 @@ def default_task_manager(ctx: TurnContext) -> "TaskManager":
         _sub_agent_loop_engine(HubSubAgentLLM(model=os.getenv("TASK_RUNTIME_SUBAGENT_MODEL", "").strip() or None)),
         RunCapabilityInvoker(capability_executor, resolver, store),
         profile_resolver=profile_resolver,
+        guide_registry=guide_registry,
     )
     router = DispatchRouter(capability=capability_executor, sub_agent=sub_agent_executor)
     return TaskManager(

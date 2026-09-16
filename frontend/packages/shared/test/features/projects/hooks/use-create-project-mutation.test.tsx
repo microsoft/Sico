@@ -45,11 +45,13 @@ describe("useCreateProjectMutation", () => {
 
     const outcome = await result.current.mutateAsync({
       name: "Aurora",
+      organizationId: 9,
       description: "d",
     });
 
     expect(service.createProject).toHaveBeenCalledWith(expect.anything(), {
       name: "Aurora",
+      organizationId: 9,
       description: "d",
     });
     expect(outcome).toBe(5);
@@ -64,11 +66,13 @@ describe("useCreateProjectMutation", () => {
 
     await result.current.mutateAsync({
       name: "Aurora",
+      organizationId: 9,
       iconUri: "https://cdn/x.svg",
     });
 
     expect(service.createProject).toHaveBeenCalledWith(expect.anything(), {
       name: "Aurora",
+      organizationId: 9,
       iconUri: "https://cdn/x.svg",
     });
   });
@@ -86,7 +90,7 @@ describe("useCreateProjectMutation", () => {
       wrapper: Wrapper,
     });
 
-    await result.current.mutateAsync({ name: "Aurora" });
+    await result.current.mutateAsync({ name: "Aurora", organizationId: 9 });
 
     expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(false);

@@ -71,6 +71,8 @@ func getDefaultConfig() *AuthConfig {
 				"/api/sico/docs/",
 				"/api/sico/sandbox/apply",
 				"/api/sico/sandbox/release",
+				// Provider routes use protocol-specific trust boundaries. Emulator
+				// routes enforce JWT locally; internal providers retain their existing model.
 				"/api/sico/sandbox/resources/",
 				"/api/sico/sandbox/device/",
 			},
@@ -214,6 +216,10 @@ func GetUserFromContext(ctx context.Context) (UserInfo, bool) {
 	}
 
 	return UserInfo{Name: "SYSTEM"}, false
+}
+
+func AuthenticateToken(ctx context.Context, token string) (*UserInfo, error) {
+	return getDefaultConfig().JWTAuth.ParseSubject(ctx, strings.TrimSpace(token))
 }
 
 func MustGetUsernameFromCtx(ctx context.Context) string {

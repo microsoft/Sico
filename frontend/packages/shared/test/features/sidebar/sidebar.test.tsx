@@ -84,6 +84,15 @@ vi.mock("@/features/rbac/hooks/use-organization-permission", () => ({
   useOrganizationPermission: () => mockUseOrganizationPermission(),
 }));
 
+const mockUseUserOrganizationsQuery = vi.fn();
+const mockUseBoundOrganizationQuery = vi.fn();
+vi.mock("@/features/organization/hooks/use-organization-query", () => ({
+  useUserOrganizationsQuery: () => mockUseUserOrganizationsQuery(),
+}));
+vi.mock("@/hooks/use-bound-organization", () => ({
+  useBoundOrganizationQuery: () => mockUseBoundOrganizationQuery(),
+}));
+
 const mockUseLogout = vi.fn();
 vi.mock("@/features/rbac-login/hooks/use-logout", () => ({
   useLogout: () => mockUseLogout(),
@@ -219,6 +228,17 @@ const logoutMutate = vi.fn();
 beforeEach(() => {
   mockUseLocation.mockReturnValue({ pathname: "/" });
   mockUseMatches.mockReturnValue([]);
+  const organization = { id: 1, name: "SICO" };
+  mockUseUserOrganizationsQuery.mockReturnValue({
+    data: [organization],
+    isPending: false,
+    isError: false,
+  });
+  mockUseBoundOrganizationQuery.mockReturnValue({
+    data: organization,
+    isPending: false,
+    isError: false,
+  });
   mockUseOrganizationPermission.mockReturnValue({
     canEnterStudio: true,
     canRenameOrganization: true,
@@ -809,11 +829,23 @@ describe("<Sidebar> footer (T-B4 — Figma pill)", () => {
 
     const items = await screen.findAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
+      "Switch Organization",
       "Manage Organization",
       "Go to SICO.Dev",
       "Language",
       "Log out",
     ]);
+  });
+
+  it("expanded: places the organization divider after management", async () => {
+    const user = userEvent.setup();
+    render(withStore(<Sidebar />));
+    await user.click(screen.getByRole("button", { name: "Account options" }));
+
+    const manage = await screen.findByRole("menuitem", {
+      name: "Manage Organization",
+    });
+    expect(manage.nextElementSibling).toHaveAttribute("role", "separator");
   });
 
   it("expanded: account menu uses the Figma width", async () => {

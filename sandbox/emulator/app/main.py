@@ -7,19 +7,25 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 if __name__ == "__main__" and __package__ is None:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.routers import devices, emulators, health, vnc
+from app.auth import is_valid_sandbox_service_token, require_emulator_token
 from app.deps import init_device_index_map, get_device_index_map, _make_mumu
+from app.routers import devices, emulators, health, vnc
 from app.settings import get_settings
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    if not is_valid_sandbox_service_token(settings.sico_sandbox_service_token):
+        raise RuntimeError(
+            "SICO_SANDBOX_SERVICE_TOKEN must be exactly 64 lowercase hexadecimal characters"
+        )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -51,14 +57,28 @@ def create_app() -> FastAPI:
     app.state.backend_ready = False
     app.state.backend_error = "service starting"
 
-    # CORS — configurable via CORS_ORIGINS env var (default: allow all)
+    @app.middleware("http")
+    async def authenticate_service(request: Request, call_next):
+        if request.url.path == "/health":
+            return await call_next(request)
+        try:
+            require_emulator_token(request, settings)
+        except HTTPException as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=exc.headers,
+            )
+        return await call_next(request)
+
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    if origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_methods=["*"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
 
     app.include_router(health.router)
     app.include_router(

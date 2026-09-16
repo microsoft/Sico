@@ -26,6 +26,8 @@ type ListSingleAgentFilter struct {
 	// --- global AND filters ---
 	// PublishStatuses matches publish_status IN (...); empty means no status filter.
 	PublishStatuses []int32
+	// IncludeOwnerDrafts widens PublishStatuses to also match drafts owned by OwnerUsername.
+	IncludeOwnerDrafts bool
 	// OrganizationID, when set, narrows results to a single organization.
 	OrganizationID *int64
 }

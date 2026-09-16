@@ -60,7 +60,7 @@ func (w *otelTracedService) RpcClaimRun(arg0 context.Context, arg1 *reverse_rpc.
 	return ret0, ret1
 }
 
-func (w *otelTracedService) RpcCreateBatch(arg0 context.Context, arg1 *reverse_rpc.CreateBatchRequest) (*reverse_rpc.EmptyTaskRuntimeResponse, error) {
+func (w *otelTracedService) RpcCreateBatch(arg0 context.Context, arg1 *reverse_rpc.CreateBatchRequest) (*reverse_rpc.CreateBatchResponse, error) {
 	arg0, span := otel.Tracer("sico-backend/otelwrap").Start(arg0, "Service.RpcCreateBatch")
 	defer span.End()
 
@@ -204,7 +204,7 @@ func (w *otelTracedService) RpcSweepStaleRuns(arg0 context.Context, arg1 *revers
 	return ret0, ret1
 }
 
-func (w *otelTracedService) RpcUpdateBatch(arg0 context.Context, arg1 *reverse_rpc.UpdateBatchRequest) (*reverse_rpc.EmptyTaskRuntimeResponse, error) {
+func (w *otelTracedService) RpcUpdateBatch(arg0 context.Context, arg1 *reverse_rpc.UpdateBatchRequest) (*reverse_rpc.UpdateBatchResponse, error) {
 	arg0, span := otel.Tracer("sico-backend/otelwrap").Start(arg0, "Service.RpcUpdateBatch")
 	defer span.End()
 

@@ -17,7 +17,8 @@ import (
 const sandboxResetHTTPTimeout = 65 * time.Second
 
 type httpClient struct {
-	c *http.Client
+	c           *http.Client
+	bearerToken string
 }
 
 func newHTTPClient(timeout time.Duration) *httpClient {
@@ -27,12 +28,25 @@ func newHTTPClient(timeout time.Duration) *httpClient {
 	return &httpClient{c: &http.Client{Timeout: timeout}}
 }
 
+func newAuthenticatedHTTPClient(timeout time.Duration, bearerToken string) *httpClient {
+	client := newHTTPClient(timeout)
+	client.bearerToken = strings.TrimSpace(bearerToken)
+	return client
+}
+
+func (h *httpClient) do(req *http.Request) (*http.Response, error) {
+	if h.bearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+h.bearerToken)
+	}
+	return h.c.Do(req)
+}
+
 func (h *httpClient) getJSON(ctx context.Context, url string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	resp, err := h.c.Do(req)
+	resp, err := h.do(req)
 	if err != nil {
 		return err
 	}
@@ -56,7 +70,7 @@ func (h *httpClient) postJSON(ctx context.Context, url string, body, out any) er
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := h.c.Do(req)
+	resp, err := h.do(req)
 	if err != nil {
 		return err
 	}
@@ -82,7 +96,7 @@ func (h *httpClient) delete(ctx context.Context, url string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := h.c.Do(req)
+	resp, err := h.do(req)
 	if err != nil {
 		return err
 	}

@@ -22,6 +22,7 @@ type TNotification struct {
 	Status           int32                               `gorm:"column:status;not null;comment:Notification status (unread, read)" json:"status"`                        // Notification status (unread, read)
 	ExtraInfo        *notification.NotificationExtraInfo `gorm:"column:extra_info;comment:Extra information;serializer:json" json:"extra_info"`                          // Extra information
 	ProjectID        int64                               `gorm:"column:project_id;not null;comment:Project ID for project-scoped notifications" json:"project_id"`       // Project ID for project-scoped notifications
+	OrganizationID   int64                               `gorm:"column:organization_id;not null;comment:Organization ID; 0 means unresolved" json:"organization_id"`     // Organization ID; 0 means unresolved
 	CreatedAt        int64                               `gorm:"column:created_at;not null;autoCreateTime:milli;comment:Create Time (Unix timestamp)" json:"created_at"` // Create Time (Unix timestamp)
 	UpdatedAt        int64                               `gorm:"column:updated_at;not null;autoUpdateTime:milli;comment:Update Time (Unix timestamp)" json:"updated_at"` // Update Time (Unix timestamp)
 	DeletedAt        gorm.DeletedAt                      `gorm:"column:deleted_at;comment:Delete Time" json:"deleted_at"`                                                // Delete Time

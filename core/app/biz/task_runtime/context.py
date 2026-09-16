@@ -49,7 +49,7 @@ class TurnContext:
     """Stable identity for one logical task submission across transport retries."""
 
     submission_source: str = ""
-    """Stable producer identity included in replay fingerprint validation."""
+    """Stable producer identity included in duplicate-submission fingerprint validation."""
 
     task_runtime_batch_ids: list[str] = field(default_factory=list)
     """Append-only list of batch ids submitted during this turn. Mutated by

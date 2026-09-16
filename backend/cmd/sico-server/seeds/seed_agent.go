@@ -120,8 +120,8 @@ func createOrRecoverAgentInstance(
 	return repo.Update(ctx, expected)
 }
 
-func ensureAgentAndroidTester(ctx context.Context, injector *di.Injector) error {
-	projectIDStr := strconv.FormatInt(defaultProjectId, 10)
+func ensureAgentAndroidTester(ctx context.Context, injector *di.Injector, seedInstance bool) error {
+	projectIDStr := seedAssetProjectID(seedInstance)
 	_, testerAgentIcon, err := ensureAsset(ctx, injector, projectIDStr,
 		embeddedFile{bytes.NewReader(embeddata.AndroidTesterIcon)},
 		types.FileExtraInfo{
@@ -138,8 +138,10 @@ func ensureAgentAndroidTester(ctx context.Context, injector *di.Injector) error 
 	if err := ensureAgent(ctx, injector, testerAgent); err != nil {
 		return err
 	}
-	if err := ensureAgentInstance(ctx, injector, testerAgentInstance); err != nil {
-		return err
+	if seedInstance {
+		if err := ensureAgentInstance(ctx, injector, testerAgentInstance); err != nil {
+			return err
+		}
 	}
 
 	// Register the default Android tester skills against the tester agent.
@@ -157,15 +159,17 @@ func ensureAgentAndroidTester(ctx context.Context, injector *di.Injector) error 
 	// Best-effort: bind a sandbox to the tester agent instance so it's ready for immediate use with the emulator.
 	// Failures here must NOT block server startup — local dev
 	// setups may run the backend without an emulator at all.
-	if err := checkSandboxAssigned(ctx, testerAgentInstance.Id); err != nil {
-		logger.CtxWarn(ctx, "checkDefaultSandboxAssignment failed (non-fatal): %v", err)
+	if seedInstance {
+		if err := checkSandboxAssigned(ctx, testerAgentInstance.Id); err != nil {
+			logger.CtxWarn(ctx, "checkDefaultSandboxAssignment failed (non-fatal): %v", err)
+		}
 	}
 
 	return nil
 }
 
-func ensureAgent3DArtist(ctx context.Context, injector *di.Injector) error {
-	projectIDStr := strconv.FormatInt(defaultProjectId, 10)
+func ensureAgent3DArtist(ctx context.Context, injector *di.Injector, seedInstance bool) error {
+	projectIDStr := seedAssetProjectID(seedInstance)
 	_, artistAgentIcon, err := ensureAsset(ctx, injector, projectIDStr,
 		embeddedFile{bytes.NewReader(embeddata.ThreeDArtistIcon)},
 		types.FileExtraInfo{
@@ -182,8 +186,10 @@ func ensureAgent3DArtist(ctx context.Context, injector *di.Injector) error {
 	if err := ensureAgent(ctx, injector, artistAgent); err != nil {
 		return err
 	}
-	if err := ensureAgentInstance(ctx, injector, artistAgentInstance); err != nil {
-		return err
+	if seedInstance {
+		if err := ensureAgentInstance(ctx, injector, artistAgentInstance); err != nil {
+			return err
+		}
 	}
 
 	// Register the default 3D artist skill against the 3D artist agent.
@@ -195,8 +201,8 @@ func ensureAgent3DArtist(ctx context.Context, injector *di.Injector) error {
 	return nil
 }
 
-func ensureAgentProductManager(ctx context.Context, injector *di.Injector) error {
-	projectIDStr := strconv.FormatInt(defaultProjectId, 10)
+func ensureAgentProductManager(ctx context.Context, injector *di.Injector, seedInstance bool) error {
+	projectIDStr := seedAssetProjectID(seedInstance)
 	_, pmAgentIcon, err := ensureAsset(ctx, injector, projectIDStr,
 		embeddedFile{bytes.NewReader(embeddata.ProductManagerIcon)},
 		types.FileExtraInfo{
@@ -223,11 +229,14 @@ func ensureAgentProductManager(ctx context.Context, injector *di.Injector) error
 	if err := ensureSkill(ctx, injector, skills, pmAgent.AgentId); err != nil {
 		return err
 	}
-	return ensureAgentInstance(ctx, injector, pmAgentInstance)
+	if seedInstance {
+		return ensureAgentInstance(ctx, injector, pmAgentInstance)
+	}
+	return nil
 }
 
-func ensureAgentMarketing(ctx context.Context, injector *di.Injector) error {
-	projectIDStr := strconv.FormatInt(defaultProjectId, 10)
+func ensureAgentMarketing(ctx context.Context, injector *di.Injector, seedInstance bool) error {
+	projectIDStr := seedAssetProjectID(seedInstance)
 	_, marketingAgentIcon, err := ensureAsset(ctx, injector, projectIDStr,
 		embeddedFile{bytes.NewReader(embeddata.MarketingIcon)},
 		types.FileExtraInfo{
@@ -255,5 +264,36 @@ func ensureAgentMarketing(ctx context.Context, injector *di.Injector) error {
 	if err := ensureSkill(ctx, injector, skills, marketingAgent.AgentId); err != nil {
 		return err
 	}
-	return ensureAgentInstance(ctx, injector, marketingAgentInstance)
+	if seedInstance {
+		return ensureAgentInstance(ctx, injector, marketingAgentInstance)
+	}
+	return nil
+}
+
+func seedAssetProjectID(seedInstance bool) string {
+	if seedInstance {
+		return strconv.FormatInt(defaultProjectId, 10)
+	}
+	return ""
+}
+
+func ensureAgentLinuxWorkstationPilot(
+	ctx context.Context,
+	injector *di.Injector,
+	iconURI string,
+	seedInstance bool,
+) error {
+	agent, instance := getAgentLinuxWorkstationPilot(iconURI)
+	if err := ensureAgent(ctx, injector, agent); err != nil {
+		return err
+	}
+	if seedInstance {
+		if err := ensureAgentInstance(ctx, injector, instance); err != nil {
+			return err
+		}
+		if err := checkLinuxWorkstationAssigned(ctx, instance.Id); err != nil {
+			logger.CtxWarn(ctx, "checkLinuxWorkstationAssigned failed (non-fatal): %v", err)
+		}
+	}
+	return nil
 }

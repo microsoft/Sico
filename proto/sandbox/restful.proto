@@ -26,7 +26,7 @@ message SandboxLease {
 }
 
 message ListSandboxResourcesRequest {
-  string type = 1; // @gotag: form:"type" binding:"omitempty,oneof=emulator aio"
+  string type = 1; // @gotag: form:"type" binding:"omitempty,oneof=emulator linux_workstation"
 }
 
 message ListSandboxResourcesResponse {
@@ -40,7 +40,7 @@ message ListSandboxResourcesResponseData {
 }
 
 message ListSandboxLeasesRequest {
-  string type = 1; // @gotag: form:"type" binding:"omitempty,oneof=emulator aio"
+  string type = 1; // @gotag: form:"type" binding:"omitempty,oneof=emulator linux_workstation"
 }
 
 message ListSandboxLeasesResponse {
@@ -54,7 +54,7 @@ message ListSandboxLeasesResponseData {
 }
 
 message CreateSandboxLeaseRequest {
-  string type = 1;        // @gotag: json:"type" binding:"required,oneof=emulator aio"
+  string type = 1;        // @gotag: json:"type" binding:"required,oneof=emulator linux_workstation"
   // Transport sets this from auth context.
   string requester_username = 10; // @gotag: json:"-"
 }
@@ -114,7 +114,7 @@ message SandboxResourceInfo {
 
 message SandboxResourcesByType {
   repeated SandboxResourceInfo emulator = 1; // @gotag: json:"emulator"
-  repeated SandboxResourceInfo aio = 2;      // @gotag: json:"aio"
+  repeated SandboxResourceInfo linux_workstation = 2; // @gotag: json:"linux_workstation"
   repeated SandboxResourceInfo wincua = 3;   // @gotag: json:"wincua"
 }
 
@@ -126,7 +126,7 @@ message SandboxVNCInfo {
 
 message GetInstanceSandboxesRequest {
   string instance_id = 1; // @gotag: form:"instanceId" binding:"required"
-  string type = 2;        // @gotag: form:"type" binding:"omitempty,oneof=emulator aio wincua"
+  string type = 2;        // @gotag: form:"type" binding:"omitempty,oneof=emulator linux_workstation wincua"
 }
 
 message InstanceSandboxStatusInfo {

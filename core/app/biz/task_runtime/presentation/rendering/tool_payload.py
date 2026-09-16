@@ -29,6 +29,7 @@ def result_to_tool_payload(result: BatchResult, *, keep_full_structure: bool = F
         )
         _add_failure_reason_labels(payload, result.results)
         _add_artifact_response_hints(payload)
+        _add_usage(payload, result.results)
         return payload
     max_success = len(result.results) if keep_full_structure else 3
     payload = BatchResultDigest.from_result(
@@ -43,10 +44,18 @@ def result_to_tool_payload(result: BatchResult, *, keep_full_structure: bool = F
     _add_failure_reason_labels(payload, result.results)
     _add_artifact_response_hints(payload)
     _add_all_artifact_response_hints(payload, result.results)
+    _add_usage(payload, result.results)
     if not keep_full_structure:
         _add_omitted_result_hint(payload, result)
         _add_omitted_result_ids(payload, result.results)
     return payload
+
+
+def _add_usage(payload: dict[str, Any], results: list[TaskResult]) -> None:
+    keys = ("input_tokens", "output_tokens", "total_tokens", "cached_input_tokens", "reasoning_tokens")
+    usage = {key: sum(result.metrics.get(key, 0) for result in results) for key in keys}
+    if any(usage.values()):
+        payload["usage"] = usage
 
 
 def _add_omitted_result_hint(payload: dict[str, Any], result: BatchResult) -> None:

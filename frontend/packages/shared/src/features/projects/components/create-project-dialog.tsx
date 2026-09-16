@@ -27,6 +27,7 @@ import { apiErrorMessage } from "../../../utils/api-error-message";
 import { useCreateProjectMutation } from "../hooks/use-create-project-mutation";
 
 export type CreateProjectDialogProps = {
+  organizationId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -37,6 +38,7 @@ export type CreateProjectDialogProps = {
  * becomes the project's `iconUri`. Field markup lives in
  * `create-project-fields.tsx`. */
 export function CreateProjectDialog({
+  organizationId,
   open,
   onOpenChange,
 }: CreateProjectDialogProps): React.JSX.Element {
@@ -59,6 +61,7 @@ export function CreateProjectDialog({
     mutation.mutate(
       {
         name: values.name,
+        organizationId,
         description: values.description,
         iconUri: values.iconUri,
       },

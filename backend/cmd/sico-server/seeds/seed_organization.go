@@ -6,7 +6,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/di"
 	orgrepo "sico-backend/internal/store/organization/repository"
 	"sico-backend/pkg/logger"
@@ -50,11 +49,12 @@ func ensureOrganization(ctx context.Context, injector *di.Injector) error {
 
 func ensureOrganizationMembership(
 	ctx context.Context,
+	injector *di.Injector,
 	organizationID int64,
 	username string,
 	roleCode string,
 ) error {
-	if err := rbac.AssignOrganizationRole(ctx, username, roleCode, organizationID); err != nil {
+	if err := injector.Access.AssignOrganizationRole(ctx, username, roleCode, organizationID); err != nil {
 		logger.CtxWarn(ctx, "ensureOrganizationMembership: RBAC assign role=%s user=%s organization=%d: %v (non-fatal)",
 			roleCode, username, organizationID, err)
 	}

@@ -27,8 +27,8 @@ field                 question                           consumer
 ``effect``            does it change external state?     invocation policy
 ===================== ================================== =========================
 
-``required_sandbox`` is a *candidate set*, not a count: it names every OS the
-capability can run on, empty when it needs no sandbox. Which one a given task
+``required_sandbox`` is a *candidate set*, not a count: it names every OS or
+concrete sandbox type the capability can use, empty when it needs no sandbox. Which one a given task
 actually gets is a scheduling decision (made once, against live capacity) that
 lands in ``TaskSpec.selected_sandbox``; the descriptor only bounds it. That
 split is what keeps the chain one-directional — the descriptor declares what is
@@ -51,14 +51,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
-from ..sandbox.types import SANDBOX_OSES
+from ..sandbox.types import SANDBOX_SELECTORS
 from . import ids
 
 if TYPE_CHECKING:
-    from ..domain.models import TaskResult, TaskRun
-    from ..sandbox.types import SandboxOS
+    from ..domain.models import SandboxLeaseRef, TaskResult, TaskRun
 
 CapabilityEffect = Literal["read", "mutate"]
 WorkspaceAccess = Literal["none", "read_only", "read_write"]
@@ -67,6 +67,7 @@ CapabilityVisibility = Literal["public", "internal"]
 _WORKSPACE_ACCESS_VALUES: frozenset[str] = frozenset(("none", "read_only", "read_write"))
 _EFFECT_VALUES: frozenset[str] = frozenset(("read", "mutate"))
 _VISIBILITY_VALUES: frozenset[str] = frozenset(("public", "internal"))
+_SEARCH_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
 #: JSON-Schema annotation marking a parameter whose value must be kept out of
 #: the persisted run. See :func:`split_sensitive_arguments`.
@@ -95,7 +96,7 @@ class CapabilityDescriptor:
 
     capability_id: str
     parameter_schema: Mapping[str, Any]
-    required_sandbox: tuple["SandboxOS", ...]
+    required_sandbox: tuple[str, ...]
     workspace_access: WorkspaceAccess
     effect: CapabilityEffect
     description: str = ""
@@ -111,7 +112,11 @@ class CapabilityDescriptor:
         the planner as public, and an unrecognised ``effect`` would fail open in
         any observe-before-mutate policy.
         """
-        provider, local = ids.split_capability_id(self.capability_id)
+        if ids.CAPABILITY_ID_SEPARATOR not in self.capability_id:
+            raise ValueError(f"capability_id must be namespaced, got {self.capability_id!r}")
+        canonical_id = ids.normalize_capability_id(self.capability_id)
+        object.__setattr__(self, "capability_id", canonical_id)
+        provider, local = ids.split_capability_id(canonical_id)
         if not provider or not local:
             raise ValueError(
                 f"capability_id must be namespaced as '<provider>{ids.CAPABILITY_ID_SEPARATOR}<name>', got {self.capability_id!r}"
@@ -126,7 +131,7 @@ class CapabilityDescriptor:
             raise ValueError(f"{self.capability_id}: unknown effect {self.effect!r}")
         if self.visibility not in _VISIBILITY_VALUES:
             raise ValueError(f"{self.capability_id}: unknown visibility {self.visibility!r}")
-        if unknown := [os_name for os_name in self.required_sandbox if os_name not in SANDBOX_OSES]:
+        if unknown := [selector for selector in self.required_sandbox if selector not in SANDBOX_SELECTORS]:
             raise ValueError(f"{self.capability_id}: unknown required_sandbox {unknown!r}")
 
     @property
@@ -185,6 +190,7 @@ class ResolveContext:
     agent_instance_id: int = 0
     project_id: int = 0
     run_id: str = ""
+    sandbox: "SandboxLeaseRef | None" = None
 
     @classmethod
     def from_run(cls, run: "TaskRun") -> "ResolveContext":
@@ -193,6 +199,7 @@ class ResolveContext:
             agent_instance_id=run.agent_instance_id,
             project_id=run.project_id,
             run_id=run.run_id,
+            sandbox=run.sandbox,
         )
 
 
@@ -209,20 +216,68 @@ class CatalogueQuery:
 
     caller: ResolveContext = field(default_factory=ResolveContext)
     providers: tuple[str, ...] = ()
+    selectors: tuple[str, ...] = ()
     search: str = ""
     limit: int | None = None
     include_internal: bool = False
 
     def matches(self, descriptor: CapabilityDescriptor) -> bool:
-        if self.providers and descriptor.provider_id not in self.providers:
+        providers = tuple(ids.normalize_provider_id(provider) for provider in self.providers)
+        if providers and descriptor.provider_id not in providers:
+            return False
+        if self.selectors and not any(
+            ids.parse_capability_selector(selector).matches(descriptor.capability_id) for selector in self.selectors
+        ):
             return False
         if descriptor.visibility == "internal" and not self.include_internal:
             return False
-        if self.search:
-            haystack = f"{descriptor.capability_id}\n{descriptor.description}\n{descriptor.when_to_use}".lower()
-            if self.search.lower() not in haystack:
-                return False
+        if self.search and self.search_score(descriptor) == 0:
+            return False
         return True
+
+    def search_score(self, descriptor: CapabilityDescriptor) -> int:
+        """Rank a natural-language keyword query; this is deliberately not regex.
+
+        Namespace separators, underscores, and punctuation are token boundaries.
+        Exact ID terms dominate ``when_to_use`` and description terms; prefix
+        matching handles close forms such as ``exec``/``execute`` without the
+        surprising breadth and failure modes of model-authored regex.
+        """
+        query_terms = _search_terms(self.search)
+        if not query_terms:
+            return 0
+        id_terms = _search_terms(descriptor.capability_id)
+        use_terms = _search_terms(descriptor.when_to_use)
+        description_terms = _search_terms(descriptor.description)
+        environment_terms = _search_terms(" ".join(descriptor.required_sandbox))
+        score = 0
+        matched = 0
+        for term in query_terms:
+            weight = max(
+                8 if _matches_search_term(term, id_terms) else 0,
+                4 if _matches_search_term(term, use_terms) else 0,
+                2 if _matches_search_term(term, description_terms) else 0,
+                1 if _matches_search_term(term, environment_terms) else 0,
+            )
+            if weight:
+                matched += 1
+                score += weight
+        return score + matched * matched
+
+
+def _search_terms(value: str) -> frozenset[str]:
+    return frozenset(_SEARCH_TOKEN_PATTERN.findall(value.casefold()))
+
+
+def _matches_search_term(query_term: str, candidate_terms: frozenset[str]) -> bool:
+    if query_term in candidate_terms:
+        return True
+    if len(query_term) < 3:
+        return False
+    return any(
+        len(candidate) >= 3 and (candidate.startswith(query_term) or query_term.startswith(candidate))
+        for candidate in candidate_terms
+    )
 
 
 class CapabilityHandler(Protocol):

@@ -128,3 +128,11 @@ def test_task_rules_describe_safe_first_attempt_tabular_binding() -> None:
     assert "details.unknown_columns" in rules
     assert '"parameter_bindings": {"case_id"' not in rules
     assert '"capability_ids": ["skill:' not in rules
+
+
+def test_task_rules_forbid_guessing_sub_agent_profiles() -> None:
+    rules = read_prompt_file("task_rules.md")
+
+    assert "Never invent or guess a profile ID" in rules
+    assert "runtime:capability:discover" in rules
+    assert "SICO_RESULT_DIR" in rules

@@ -18,6 +18,9 @@ func (s *Service) SetOrganizationLLMConfig(
 	if req.OrganizationId <= 0 {
 		return nil, apperr.New(errcode.CommonInvalidParam, "organizationId is required")
 	}
+	if err := s.requireOrganization(ctx, req.OrganizationId, false); err != nil {
+		return nil, err
+	}
 	if s.OrgLLMConfigRepo == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "organization llm config store not initialized")
 	}
@@ -71,6 +74,9 @@ func (s *Service) GetOrganizationLLMConfig(
 ) (*dto.GetOrganizationLLMConfigResponse, error) {
 	if req.OrganizationId <= 0 {
 		return nil, apperr.New(errcode.CommonInvalidParam, "organizationId is required")
+	}
+	if err := s.requireOrganization(ctx, req.OrganizationId, false); err != nil {
+		return nil, err
 	}
 	if s.OrgLLMConfigRepo == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "organization llm config store not initialized")

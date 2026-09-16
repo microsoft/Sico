@@ -1,0 +1,37 @@
+{
+  "schema_version": 3,
+  "review_status": "accepted",
+  "source_provenance": "author",
+  "actions": [
+    {
+      "name": "control_linux_workstation",
+      "description": "Control a Linux Workstation from a prepared worker.",
+      "infra_requirements": ["sandbox.linux"],
+      "parameters": [
+        {
+          "name": "task",
+          "description": "Desktop task to perform."
+        }
+      ],
+      "execution_requirement": {
+        "backend": "kubernetes"
+      },
+      "preparation": {
+        "steps": [
+          {
+            "argv": ["uv", "sync", "--frozen"]
+          }
+        ]
+      },
+      "target_requirements": {
+        "type": "linux_workstation",
+        "os": "linux"
+      },
+      "steps": [
+        {
+          "argv": ["uv", "run", "python", "-m", "linux_workstation_controller", "--endpoint", "{_sandbox}", "--task", "{task}"]
+        }
+      ]
+    }
+  ]
+}

@@ -25,8 +25,10 @@ class DelegateInput(BaseModel):
         ...,
         description=(
             "JSON-encoded DelegateRequest with batch_goal, optional join_strategy/max_concurrency, and sources. "
-            "Instruction items support goal, title, params, capability_id or profile_id, capability_grants, "
-            "max_model_turns, and stage; source_materialization is reserved for injected rerun_request_json and "
+            "For ordinary instruction items provide goal/title/params and let preparation choose execution. Optional "
+            "execution choices are capability_id for a deterministic direct call, or profile_id with max_model_turns "
+            "for a bounded sub-agent. Capabilities available to a sub-agent are determined by its human-defined profile. "
+            "stage and source_materialization are reserved for scheduling and injected rerun_request_json; the latter "
             "must be passed through unchanged. Tabular sources support documents (source_ref, sheet_names, row_start, "
             "row_end, case_ids), capability_ids, parameter_bindings, max_rows, and stage. Omit unused optional "
             "fields. Use one call for all related files and instructions."
@@ -34,21 +36,31 @@ class DelegateInput(BaseModel):
     )
 
 
-def build_delegate_tool(service: DelegatePreparationService) -> FunctionTool:
+def build_delegate_tool(
+    service: DelegatePreparationService,
+    *,
+    available_profile_ids: tuple[str, ...] = (),
+) -> FunctionTool:
     async def _func(invocation_ctx: FunctionInvocationContext, **kwargs: Any) -> dict[str, Any]:
         context = get_tool_context(invocation_ctx)
         if context is None:
             return {"error_message": "missing tool context", "code": "missing_tool_context", "details": {}}
         return await _run_delegate(service, context, str(kwargs.get("request_json") or ""))
 
+    profile_guidance = (
+        f" Caller-visible sub-agent profile IDs: {', '.join(available_profile_ids)}."
+        if available_profile_ids
+        else ""
+    )
     return FunctionTool(
         name=DELEGATE_TOOL_NAME,
         description=(
             "Prepare and execute one durable batch from mixed sources. Pass one JSON string with `batch_goal` and "
             "`sources`: instruction items and/or one or more XLSX/XLSM/CSV/TSV/archived-JSONL tabular documents. "
-            "The shared source service selects typed rows; preparation chooses only visible capabilities, binds "
+            "For ordinary execution, provide goals without capability/profile overrides: preparation discovers "
+            "caller-visible skill and assigned-sandbox capabilities, chooses direct execution or a bounded sub-agent, binds "
             "columns to typed parameters, validates every selected row, and submits no work when clarification, "
-            "rejection, or an operational preparation failure occurs."
+            f"rejection, or an operational preparation failure occurs.{profile_guidance} Never guess a profile ID."
         ),
         input_model=DelegateInput,
         additional_properties={"max_output_length": 50_000},

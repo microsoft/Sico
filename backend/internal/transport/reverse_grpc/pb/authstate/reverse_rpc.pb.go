@@ -75,8 +75,8 @@ func (AuthStateStatus) EnumDescriptor() ([]byte, []int) {
 
 type EmptyAuthStateResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -127,16 +127,16 @@ func (x *EmptyAuthStateResponse) GetMsg() string {
 
 type AuthState struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
-	AccountKey      string                 `protobuf:"bytes,2,opt,name=account_key,json=accountKey,proto3" json:"accountKey"`
-	SiteHost        string                 `protobuf:"bytes,3,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`
-	StateBlobPath   string                 `protobuf:"bytes,4,opt,name=state_blob_path,json=stateBlobPath,proto3" json:"stateBlobPath"`
-	Status          AuthStateStatus        `protobuf:"varint,5,opt,name=status,proto3,enum=reverse_rpc.AuthStateStatus" json:"status"`
-	ExpiresAt       int64                  `protobuf:"varint,6,opt,name=expires_at,json=expiresAt,proto3" json:"expiresAt"`
-	LastValidatedAt int64                  `protobuf:"varint,7,opt,name=last_validated_at,json=lastValidatedAt,proto3" json:"lastValidatedAt"`
-	Metadata        string                 `protobuf:"bytes,8,opt,name=metadata,proto3" json:"metadata"`
-	CreatedAt       int64                  `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`
-	UpdatedAt       int64                  `protobuf:"varint,10,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`
+	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                     
+	AccountKey      string                 `protobuf:"bytes,2,opt,name=account_key,json=accountKey,proto3" json:"accountKey"`                    
+	SiteHost        string                 `protobuf:"bytes,3,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`                          
+	StateBlobPath   string                 `protobuf:"bytes,4,opt,name=state_blob_path,json=stateBlobPath,proto3" json:"stateBlobPath"`         
+	Status          AuthStateStatus        `protobuf:"varint,5,opt,name=status,proto3,enum=reverse_rpc.AuthStateStatus" json:"status"`            
+	ExpiresAt       int64                  `protobuf:"varint,6,opt,name=expires_at,json=expiresAt,proto3" json:"expiresAt"`                      
+	LastValidatedAt int64                  `protobuf:"varint,7,opt,name=last_validated_at,json=lastValidatedAt,proto3" json:"lastValidatedAt"`  
+	Metadata        string                 `protobuf:"bytes,8,opt,name=metadata,proto3" json:"metadata"`                                          
+	CreatedAt       int64                  `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                      
+	UpdatedAt       int64                  `protobuf:"varint,10,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                     
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -243,8 +243,8 @@ func (x *AuthState) GetUpdatedAt() int64 {
 
 type GetAuthStateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccountKey    string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"accountKey"`
-	SiteHost      string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`
+	AccountKey    string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"accountKey"`  
+	SiteHost      string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`        
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -295,10 +295,10 @@ func (x *GetAuthStateRequest) GetSiteHost() string {
 
 type GetAuthStateResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found"`
-	AuthState     *AuthState             `protobuf:"bytes,2,opt,name=auth_state,json=authState,proto3" json:"authState"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found"`                          
+	AuthState     *AuthState             `protobuf:"bytes,2,opt,name=auth_state,json=authState,proto3" json:"authState"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                          
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                             
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -363,13 +363,13 @@ func (x *GetAuthStateResponse) GetMsg() string {
 
 type UpsertAuthStateRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	AccountKey      string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"accountKey"`
-	SiteHost        string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`
-	StateBlobPath   string                 `protobuf:"bytes,3,opt,name=state_blob_path,json=stateBlobPath,proto3" json:"stateBlobPath"`
-	Status          AuthStateStatus        `protobuf:"varint,4,opt,name=status,proto3,enum=reverse_rpc.AuthStateStatus" json:"status"`
-	ExpiresAt       int64                  `protobuf:"varint,5,opt,name=expires_at,json=expiresAt,proto3" json:"expiresAt"`
-	LastValidatedAt int64                  `protobuf:"varint,6,opt,name=last_validated_at,json=lastValidatedAt,proto3" json:"lastValidatedAt"`
-	Metadata        string                 `protobuf:"bytes,7,opt,name=metadata,proto3" json:"metadata"`
+	AccountKey      string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"accountKey"`                    
+	SiteHost        string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`                          
+	StateBlobPath   string                 `protobuf:"bytes,3,opt,name=state_blob_path,json=stateBlobPath,proto3" json:"stateBlobPath"`         
+	Status          AuthStateStatus        `protobuf:"varint,4,opt,name=status,proto3,enum=reverse_rpc.AuthStateStatus" json:"status"`            
+	ExpiresAt       int64                  `protobuf:"varint,5,opt,name=expires_at,json=expiresAt,proto3" json:"expiresAt"`                      
+	LastValidatedAt int64                  `protobuf:"varint,6,opt,name=last_validated_at,json=lastValidatedAt,proto3" json:"lastValidatedAt"`  
+	Metadata        string                 `protobuf:"bytes,7,opt,name=metadata,proto3" json:"metadata"`                                          
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -455,9 +455,9 @@ func (x *UpsertAuthStateRequest) GetMetadata() string {
 
 type UpsertAuthStateResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`        
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -515,8 +515,8 @@ func (x *UpsertAuthStateResponse) GetMsg() string {
 
 type MarkAuthStateExpiredRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccountKey    string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"accountKey"`
-	SiteHost      string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`
+	AccountKey    string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"accountKey"`  
+	SiteHost      string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`        
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

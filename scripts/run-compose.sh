@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root_dir="$(cd "${script_dir}/.." && pwd)"
+
 docker_bin="${DOCKER_BIN:-}"
 if [[ -z "${docker_bin}" ]]; then
   case "$(uname -s)" in
@@ -14,7 +17,12 @@ if [[ -z "${docker_bin}" ]]; then
   exit 1
 fi
 
+source "${script_dir}/load-env.sh"
+ensure_sandbox_service_token "${root_dir}/.env" "${SICO_SANDBOX_SERVICE_TOKEN:-}"
+unset SICO_SANDBOX_SERVICE_TOKEN
+
 # Compose gives process variables precedence over --env-file. Remove registry
-# values inherited from the caller so the repository-root .env stays authoritative.
+# and sandbox credential values inherited from the caller so .env stays authoritative.
 unset PYPI_INDEX_URL NPM_REGISTRY
-exec "${docker_bin}" compose -p sico -f deploy/docker/docker-compose.yaml --env-file .env "$@"
+exec "${docker_bin}" compose -p sico -f "${root_dir}/deploy/docker/docker-compose.yaml" \
+  --env-file "${root_dir}/.env" "$@"

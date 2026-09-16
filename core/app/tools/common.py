@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.conversation.plan import ToolCallStatus
 from app.storage.fs import CHAT_FS
+from app.biz.task_runtime.guides import SkillGuideRef
 
 from .plan import PlanEditor, begin_tool_call_status_tracking, finish_tool_call_status_tracking
 
@@ -65,15 +66,17 @@ class ToolContext(BaseModel):
     raw_user_message: str = ""
     task_runtime_batch_ids: list[str] = Field(default_factory=list)
     skill_loader: Any | None = None
+    activated_skill_guides: list[SkillGuideRef] = Field(default_factory=list)
     submission_id: str = ""
+    assigned_sandbox_types: frozenset[str] = Field(default_factory=frozenset)
     task_submission_index: int = Field(default=0, exclude=True)
 
     def next_task_submission_id(self) -> str:
         """Allocate the next delegate slot in this chat request.
 
-        A backend-to-core replay constructs a fresh context and starts again at
-        slot zero; fingerprint validation rejects changed work in an existing
-        slot. ChatAgent suppresses whole-generation retries after any task batch
+        A duplicate backend-to-core delivery constructs a fresh context and starts
+        again at slot zero; fingerprint validation rejects changed work in an
+        existing slot. ChatAgent suppresses whole-generation retries after any task batch
         is submitted; retries before submission have no batch to duplicate. The
         retry prompt's instruction not to rerun successful tools remains an
         additional safeguard. Different delegate calls, including identical
@@ -99,7 +102,9 @@ class ToolContext(BaseModel):
             raw_user_message=self.raw_user_message,
             task_runtime_batch_ids=self.task_runtime_batch_ids,
             skill_loader=self.skill_loader,
+            activated_skill_guides=self.activated_skill_guides,
             submission_id=self.submission_id,
+            assigned_sandbox_types=self.assigned_sandbox_types,
             task_submission_index=self.task_submission_index,
         )
 

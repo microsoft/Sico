@@ -14,6 +14,7 @@ spec:
       labels:
         app: sico-backend
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       # Mirror docker-compose's `depends_on: core: service_healthy` for the
       # backend: block startup until the core gRPC endpoint is reachable so
       # the seeder doesn't race the core service on first boot.
@@ -26,6 +27,16 @@ spec:
             - |
               until nc -z sico-core 50053; do
                 echo "waiting for sico-core:50053..."
+                sleep 2
+              done
+        - name: wait-for-seaweedfs
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              until wget -q -O /dev/null http://sico-seaweedfs-master:9333/dir/assign; do
+                echo "waiting for a writable SeaweedFS volume..."
                 sleep 2
               done
       containers:
@@ -71,6 +82,11 @@ spec:
                   name: {{ .Values.secretName }}
                   key: SANDBOX_CLIENT_SECRET_TEST_CLIENT
                   optional: true
+            - name: SICO_SANDBOX_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sandboxAuthSecretName }}
+                  key: SICO_SANDBOX_SERVICE_TOKEN
           readinessProbe:
             httpGet:
               path: /api/sico/health

@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -13,10 +14,14 @@ import (
 	"sico-backend/pkg/env"
 )
 
+const sandboxServiceTokenEnv = "SICO_SANDBOX_SERVICE_TOKEN"
+const sandboxServiceTokenError = sandboxServiceTokenEnv + " must be exactly 64 lowercase hexadecimal characters"
+
 type EmulatorProvider struct {
-	BaseURLs []string
-	http     *httpClient
-	appHTTP  *httpClient
+	BaseURLs     []string
+	http         *httpClient
+	appHTTP      *httpClient
+	serviceToken string
 }
 
 func NewEmulatorProvider() *EmulatorProvider {
@@ -24,11 +29,28 @@ func NewEmulatorProvider() *EmulatorProvider {
 	for i := range parts {
 		parts[i] = strings.TrimRight(parts[i], "/")
 	}
-	return &EmulatorProvider{
-		BaseURLs: parts,
-		http:     newHTTPClient(8 * time.Second),
-		appHTTP:  newHTTPClient(10*time.Minute + 30*time.Second),
+	token := os.Getenv(sandboxServiceTokenEnv)
+	if !isValidSandboxServiceToken(token) {
+		panic(sandboxServiceTokenError)
 	}
+	return &EmulatorProvider{
+		BaseURLs:     parts,
+		http:         newAuthenticatedHTTPClient(8*time.Second, token),
+		appHTTP:      newAuthenticatedHTTPClient(10*time.Minute+30*time.Second, token),
+		serviceToken: token,
+	}
+}
+
+func isValidSandboxServiceToken(token string) bool {
+	if len(token) != 64 {
+		return false
+	}
+	for _, char := range token {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *EmulatorProvider) appClient() *httpClient {
@@ -71,6 +93,10 @@ func (p *EmulatorProvider) OpenAPIURL(_ string, metadata map[string]string) stri
 	return metadata["providerBaseUrl"] + enum.SandboxTypeEmulator.OpenAPIPath()
 }
 
+func (p *EmulatorProvider) OpenAPIBearerToken(_ string, _ map[string]string) string {
+	return p.serviceToken
+}
+
 func (p *EmulatorProvider) enabled() bool { return p != nil && len(p.BaseURLs) > 0 }
 
 type emulatorDevicesResponse struct {
@@ -78,7 +104,6 @@ type emulatorDevicesResponse struct {
 		DeviceIndex int    `json:"device_index"`
 		AdbHost     string `json:"adb_host"`
 		AdbPort     int    `json:"adb_port"`
-		ViewURL     string `json:"view_url"`
 	} `json:"devices"`
 }
 

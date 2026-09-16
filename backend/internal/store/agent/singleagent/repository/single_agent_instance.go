@@ -27,3 +27,12 @@ type SingleAgentInstanceRepository interface {
 		offset, limit int,
 	) ([]*entity.SingleAgentInstance, int64, error)
 }
+
+type OrganizationScopedSingleAgentInstanceRepository interface {
+	ListByFilterInProjects(
+		ctx context.Context,
+		filter *entity.ListSingleAgentInstanceFilter,
+		projectIDs []int64,
+		offset, limit int,
+	) ([]*entity.SingleAgentInstance, int64, error)
+}

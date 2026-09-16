@@ -9,21 +9,20 @@ import { type Agent, agentSchema, type AgentStatus } from "../schemas/agent";
 
 // Backend `data` is `{ instances, total, hasNext }`. Rename `instances`
 // → `items` so callers receive the canonical `Paged<T>` shape.
-const envelope = apiResponseSchema(
-  z
-    .object({
-      instances: z.array(agentSchema),
-      total: z.number().int().nonnegative(),
-      hasNext: z.boolean(),
-    })
-    .transform(
-      ({ instances, ...rest }): Paged<Agent> => ({
-        items: instances,
-        total: rest.total,
-        hasNext: rest.hasNext,
-      }),
-    ),
-);
+const responseEnvelope = apiResponseSchema(z.unknown());
+const agentsDataSchema = z
+  .object({
+    instances: z.array(agentSchema),
+    total: z.number().int().nonnegative(),
+    hasNext: z.boolean(),
+  })
+  .transform(
+    ({ instances, ...rest }): Paged<Agent> => ({
+      items: instances,
+      total: rest.total,
+      hasNext: rest.hasNext,
+    }),
+  );
 
 // Backend enforces `pageSize` max=50; clamp client-side so the limit is
 // visible at the call site rather than surfacing as a 400.
@@ -98,25 +97,13 @@ export async function fetchAgents(
       },
     },
   );
-  const parsed = envelope.parse(res.data);
-  if (!parsed.data) {
-    // Missing `data` on a 200 envelope (incl. the `100004 agent not found`
-    // null-data case) → schema bucket in `classifyError` so the failure
-    // surfaces the error UI.
-    throw new z.ZodError([
-      {
-        code: "custom",
-        path: ["data"],
-        message: "fetchAgents: missing data in envelope",
-      },
-    ]);
-  }
-  return parsed.data;
+  const data = unwrapData(responseEnvelope.parse(res.data), "fetchAgents");
+  return agentsDataSchema.parse(data);
 }
 
 // Detail envelope: backend wraps the agent in `data.instance`
 // (single_agent_instance.proto: GetSingleAgentInstanceResponse.data.instance).
-const detailEnvelope = apiResponseSchema(z.object({ instance: agentSchema }));
+const agentDetailDataSchema = z.object({ instance: agentSchema });
 
 // Singular detail fetch for the header (deep-link / refresh safe — the
 // infinite-list cache may never have loaded this agent's page). §6.E7.
@@ -130,17 +117,8 @@ export async function fetchAgentDetail(
       params: { id: agentId },
     },
   );
-  const parsed = detailEnvelope.parse(res.data);
-  if (!parsed.data) {
-    throw new z.ZodError([
-      {
-        code: "custom",
-        path: ["data"],
-        message: "fetchAgentDetail: missing data in envelope",
-      },
-    ]);
-  }
-  return parsed.data.instance;
+  const data = unwrapData(responseEnvelope.parse(res.data), "fetchAgentDetail");
+  return agentDetailDataSchema.parse(data).instance;
 }
 
 // Update a single agent instance's lifecycle status. dwp uses this to flip a

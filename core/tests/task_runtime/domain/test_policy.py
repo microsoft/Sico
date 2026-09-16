@@ -1,4 +1,4 @@
-from app.biz.task_runtime.domain.models import CapabilityDispatch, ErrorClass, SubAgentDispatch, TaskSpec
+from app.biz.task_runtime.domain.models import CapabilityDispatch, ErrorClass, SubAgentDispatch, TaskExecutionPolicy, TaskSpec
 from app.biz.task_runtime.domain.policy import _resolve_policy, validate_execution_mode
 
 
@@ -31,6 +31,7 @@ def test_skill_dispatch_uses_command_backend_without_skill_runtime_retry() -> No
     policy = _resolve_policy(_skill_task())
 
     assert policy.executor == "command_backend"
+    assert policy.timeout_seconds == 900
     assert policy.retry.max_attempts == 2
     assert ErrorClass.TIMEOUT in policy.retry.retry_on
     assert ErrorClass.SKILL_RUNTIME not in policy.retry.retry_on
@@ -69,16 +70,20 @@ def test_timeout_is_read_from_args() -> None:
     assert policy.timeout_seconds == 120
 
 
-def test_timeout_defaults_to_600() -> None:
+def test_policy_model_defaults_to_900() -> None:
+    assert TaskExecutionPolicy().timeout_seconds == 900
+
+
+def test_timeout_defaults_to_900() -> None:
     policy = _resolve_policy(_tool_task())
 
-    assert policy.timeout_seconds == 600
+    assert policy.timeout_seconds == 900
 
 
 def test_falsy_timeout_arg_falls_back_to_default() -> None:
     policy = _resolve_policy(_tool_task(args={"timeout_seconds": 0}))
 
-    assert policy.timeout_seconds == 600
+    assert policy.timeout_seconds == 900
 
 
 # ---------------------------------------------------------------------------

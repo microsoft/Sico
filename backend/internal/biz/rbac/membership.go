@@ -13,19 +13,18 @@ import (
 	"sico-backend/pkg/logger"
 )
 
-// AssignOrganizationRole assigns an organization-scoped role to a user identified by username.
-func AssignOrganizationRole(ctx context.Context, username, roleCode string, organizationID int64) error {
-	impl := defaultImplService()
-	if impl == nil {
+// assignOrganizationRole assigns an organization-scoped role to a user identified by username.
+func (a *AccessServices) assignOrganizationRole(ctx context.Context, username, roleCode string, organizationID int64) error {
+	if !a.Initialized() || a.roleWriter == nil {
 		return nil
 	}
 
-	userID, err := resolveUserID(ctx, username)
+	userID, err := a.resolveUserID(ctx, username)
 	if err != nil {
 		return err
 	}
 
-	return impl.AssignUserRoleInternal(ctx, &user_role.AssignUserRoleRequest{
+	return a.roleWriter.AssignUserRoleInternal(ctx, &user_role.AssignUserRoleRequest{
 		UserId:    userID,
 		RoleCode:  roleCode,
 		ScopeType: ScopeOrg,
@@ -33,15 +32,14 @@ func AssignOrganizationRole(ctx context.Context, username, roleCode string, orga
 	})
 }
 
-// RemoveAllOrganizationRoles removes every role assignment in an organization scope.
-func RemoveAllOrganizationRoles(ctx context.Context, organizationID int64) error {
-	impl := defaultImplService()
-	if impl == nil {
+// removeAllOrganizationRoles removes every role assignment in an organization scope.
+func (a *AccessServices) removeAllOrganizationRoles(ctx context.Context, organizationID int64) error {
+	if !a.Initialized() || a.roleWriter == nil {
 		return nil
 	}
 
 	scopeID := strconv.FormatInt(organizationID, 10)
-	list, _, err := impl.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+	list, _, err := a.userRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 		ScopeType: ScopeOrg,
 		ScopeID:   scopeID,
 	})
@@ -56,7 +54,7 @@ func RemoveAllOrganizationRoles(ctx context.Context, organizationID int64) error
 			continue
 		}
 		seen[key] = struct{}{}
-		if err := impl.RemoveUserRoleInternal(ctx, &user_role.RemoveUserRoleRequest{
+		if err := a.roleWriter.RemoveUserRoleInternal(ctx, &user_role.RemoveUserRoleRequest{
 			UserId:    userRole.UserID,
 			RoleCode:  userRole.RoleCode,
 			ScopeType: ScopeOrg,
@@ -68,22 +66,21 @@ func RemoveAllOrganizationRoles(ctx context.Context, organizationID int64) error
 	return nil
 }
 
-// GetUserOrganizationListByUsername returns all organization-scoped roles grouped by organization.
+// getUserOrganizationListByUsername returns all organization-scoped roles grouped by organization.
 // roleCodeFilter limits organizations to those containing the role while preserving every role in each result.
-func GetUserOrganizationListByUsername(
+func (a *AccessServices) getUserOrganizationListByUsername(
 	ctx context.Context, username, roleCodeFilter string,
 ) ([]OrganizationMembership, error) {
-	svc := defaultImplService()
-	if svc == nil {
+	if !a.Initialized() || a.userRoleRepo == nil {
 		return nil, nil
 	}
 
-	userID, err := resolveUserID(ctx, username)
+	userID, err := a.resolveUserID(ctx, username)
 	if err != nil {
 		return nil, err
 	}
 
-	list, _, err := svc.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+	list, _, err := a.userRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 		UserID:    userID,
 		ScopeType: ScopeOrg,
 	})
@@ -137,21 +134,20 @@ type OrganizationMembership struct {
 	RoleCodes      []string
 }
 
-// AssignProjectRole assigns a project-scoped role to a user identified by username.
+// assignProjectRole assigns a project-scoped role to a user identified by username.
 // It creates both the t_user_role record and the Casbin grouping policy.
 // Returns nil if the RBAC service is not initialized (e.g. in tests).
-func AssignProjectRole(ctx context.Context, username, roleCode string, projectID int64) error {
-	impl := defaultImplService()
-	if impl == nil {
+func (a *AccessServices) assignProjectRole(ctx context.Context, username, roleCode string, projectID int64) error {
+	if !a.Initialized() || a.roleWriter == nil {
 		return nil
 	}
 
-	userID, err := resolveUserID(ctx, username)
+	userID, err := a.resolveUserID(ctx, username)
 	if err != nil {
 		return err
 	}
 
-	return impl.AssignUserRoleInternal(ctx, &user_role.AssignUserRoleRequest{
+	return a.roleWriter.AssignUserRoleInternal(ctx, &user_role.AssignUserRoleRequest{
 		UserId:    userID,
 		RoleCode:  roleCode,
 		ScopeType: ScopeProject,
@@ -159,20 +155,19 @@ func AssignProjectRole(ctx context.Context, username, roleCode string, projectID
 	})
 }
 
-// RemoveProjectRole removes a project-scoped role from a user identified by username.
+// removeProjectRole removes a project-scoped role from a user identified by username.
 // Returns nil if the RBAC service is not initialized (e.g. in tests).
-func RemoveProjectRole(ctx context.Context, username, roleCode string, projectID int64) error {
-	impl := defaultImplService()
-	if impl == nil {
+func (a *AccessServices) removeProjectRole(ctx context.Context, username, roleCode string, projectID int64) error {
+	if !a.Initialized() || a.roleWriter == nil {
 		return nil
 	}
 
-	userID, err := resolveUserID(ctx, username)
+	userID, err := a.resolveUserID(ctx, username)
 	if err != nil {
 		return err
 	}
 
-	return impl.RemoveUserRoleInternal(ctx, &user_role.RemoveUserRoleRequest{
+	return a.roleWriter.RemoveUserRoleInternal(ctx, &user_role.RemoveUserRoleRequest{
 		UserId:    userID,
 		RoleCode:  roleCode,
 		ScopeType: ScopeProject,
@@ -180,17 +175,16 @@ func RemoveProjectRole(ctx context.Context, username, roleCode string, projectID
 	})
 }
 
-// RemoveAllProjectRoles removes all user-role assignments for a given project.
+// removeAllProjectRoles removes all user-role assignments for a given project.
 // Returns nil if the RBAC service is not initialized.
-func RemoveAllProjectRoles(ctx context.Context, projectID int64) error {
-	impl := defaultImplService()
-	if impl == nil {
+func (a *AccessServices) removeAllProjectRoles(ctx context.Context, projectID int64) error {
+	if !a.Initialized() || a.roleWriter == nil {
 		return nil
 	}
 
 	// List all users with any role in this project scope, then remove each.
 	for _, roleCode := range []string{RoleProjectAdmin, RoleProjectMember} {
-		list, _, err := impl.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		list, _, err := a.userRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 			RoleCode:  roleCode,
 			ScopeType: ScopeProject,
 			ScopeID:   strconv.FormatInt(projectID, 10),
@@ -199,7 +193,7 @@ func RemoveAllProjectRoles(ctx context.Context, projectID int64) error {
 			return err
 		}
 		for _, ur := range list {
-			err = impl.RemoveUserRoleInternal(ctx, &user_role.RemoveUserRoleRequest{
+			err = a.roleWriter.RemoveUserRoleInternal(ctx, &user_role.RemoveUserRoleRequest{
 				UserId:    ur.UserID,
 				RoleCode:  roleCode,
 				ScopeType: ScopeProject,
@@ -216,28 +210,27 @@ func RemoveAllProjectRoles(ctx context.Context, projectID int64) error {
 	return nil
 }
 
-// ListProjectAdminUsernames returns admin usernames grouped by project ID.
+// listProjectAdminUsernames returns admin usernames grouped by project ID.
 // Returns empty map if the RBAC service is not initialized.
-func ListProjectAdminUsernames(ctx context.Context, projectIDs []int64) (map[int64][]string, error) {
-	return listProjectRoleUsernames(ctx, RoleProjectAdmin, projectIDs)
+func (a *AccessServices) listProjectAdminUsernames(ctx context.Context, projectIDs []int64) (map[int64][]string, error) {
+	return a.listProjectRoleUsernames(ctx, RoleProjectAdmin, projectIDs)
 }
 
-// GetProjectIDsByAdminUsername returns project IDs where the user is a project admin.
+// getProjectIDsByAdminUsername returns project IDs where the user is a project admin.
 // Returns empty slice if the RBAC service is not initialized.
-func GetProjectIDsByAdminUsername(ctx context.Context, username string) ([]int64, error) {
-	return getProjectIDsByUsername(ctx, username, RoleProjectAdmin)
+func (a *AccessServices) getProjectIDsByAdminUsername(ctx context.Context, username string) ([]int64, error) {
+	return a.getProjectIDsByUsername(ctx, username, RoleProjectAdmin)
 }
 
-// ListProjectMemberUsernames returns all usernames that have any role in the given project.
-func ListProjectMemberUsernames(ctx context.Context, projectID int64) ([]string, error) {
-	svc := defaultImplService()
-	if svc == nil {
+// listProjectMemberUsernames returns all usernames that have any role in the given project.
+func (a *AccessServices) listProjectMemberUsernames(ctx context.Context, projectID int64) ([]string, error) {
+	if !a.Initialized() || a.userRoleRepo == nil {
 		return nil, nil
 	}
 
 	usernameSet := make(map[string]struct{})
 	for _, roleCode := range []string{RoleProjectAdmin, RoleProjectMember} {
-		list, _, err := svc.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		list, _, err := a.userRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 			RoleCode:  roleCode,
 			ScopeType: ScopeProject,
 			ScopeID:   strconv.FormatInt(projectID, 10),
@@ -246,7 +239,7 @@ func ListProjectMemberUsernames(ctx context.Context, projectID int64) ([]string,
 			return nil, err
 		}
 		for _, ur := range list {
-			name, err := resolveUsername(ctx, ur.UserID)
+			name, err := a.resolveUsername(ctx, ur.UserID)
 			if err != nil {
 				continue
 			}
@@ -261,22 +254,21 @@ func ListProjectMemberUsernames(ctx context.Context, projectID int64) ([]string,
 	return usernames, nil
 }
 
-// GetUserProjectListByUsername returns (projectID, roleCode) pairs for a user across all project scopes.
+// getUserProjectListByUsername returns (projectID, roleCode) pairs for a user across all project scopes.
 // If roleCode is non-empty, only that role is returned. Otherwise all project roles are returned.
-func GetUserProjectListByUsername(
+func (a *AccessServices) getUserProjectListByUsername(
 	ctx context.Context, username string, roleCode string,
 ) ([]ProjectMembership, int64, error) {
-	svc := defaultImplService()
-	if svc == nil {
+	if !a.Initialized() || a.userRoleRepo == nil {
 		return nil, 0, nil
 	}
 
-	userID, err := resolveUserID(ctx, username)
+	userID, err := a.resolveUserID(ctx, username)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return getUserProjectMemberships(ctx, userID, roleCode)
+	return a.getUserProjectMemberships(ctx, userID, roleCode)
 }
 
 // ProjectMembership represents a user's role in a project.
@@ -287,44 +279,40 @@ type ProjectMembership struct {
 
 // --- internal helpers ---
 
-func resolveUserID(ctx context.Context, username string) (int64, error) {
-	svc := defaultImplService()
-	if svc == nil {
+func (a *AccessServices) resolveUserID(ctx context.Context, username string) (int64, error) {
+	if !a.Initialized() || a.userRepo == nil {
 		return 0, apperr.New(errcode.CommonUnavailable, "RBAC service not initialized")
 	}
-	user, err := svc.UserRepo.GetUserByUsername(ctx, username)
+	user, err := a.userRepo.GetUserByUsername(ctx, username)
 	if err != nil {
 		return 0, fmt.Errorf("resolve user %q: %w", username, err)
 	}
 	return user.ID, nil
 }
 
-func resolveUsername(ctx context.Context, userID int64) (string, error) {
-	svc := defaultImplService()
-	if svc == nil {
+func (a *AccessServices) resolveUsername(ctx context.Context, userID int64) (string, error) {
+	if !a.Initialized() || a.userRepo == nil {
 		return "", apperr.New(errcode.CommonUnavailable, "RBAC service not initialized")
 	}
-	user, err := svc.UserRepo.GetUserByID(ctx, userID)
+	user, err := a.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
 		return "", fmt.Errorf("resolve user ID %d: %w", userID, err)
 	}
 	return user.Username, nil
 }
 
-// ResolveUsername returns the username for a given user ID.
-func ResolveUsername(ctx context.Context, userID int64) (string, error) {
-	return resolveUsername(ctx, userID)
-}
-
-func listProjectRoleUsernames(ctx context.Context, roleCode string, projectIDs []int64) (map[int64][]string, error) {
-	svc := defaultImplService()
-	if svc == nil {
+func (a *AccessServices) listProjectRoleUsernames(
+	ctx context.Context,
+	roleCode string,
+	projectIDs []int64,
+) (map[int64][]string, error) {
+	if !a.Initialized() || a.userRoleRepo == nil {
 		return map[int64][]string{}, nil
 	}
 
 	result := make(map[int64][]string, len(projectIDs))
 	for _, pid := range projectIDs {
-		list, _, err := svc.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+		list, _, err := a.userRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 			RoleCode:  roleCode,
 			ScopeType: ScopeProject,
 			ScopeID:   strconv.FormatInt(pid, 10),
@@ -334,7 +322,7 @@ func listProjectRoleUsernames(ctx context.Context, roleCode string, projectIDs [
 		}
 		usernames := make([]string, 0, len(list))
 		for _, ur := range list {
-			name, err := resolveUsername(ctx, ur.UserID)
+			name, err := a.resolveUsername(ctx, ur.UserID)
 			if err != nil {
 				continue
 			}
@@ -347,18 +335,17 @@ func listProjectRoleUsernames(ctx context.Context, roleCode string, projectIDs [
 	return result, nil
 }
 
-func getProjectIDsByUsername(ctx context.Context, username, roleCode string) ([]int64, error) {
-	svc := defaultImplService()
-	if svc == nil {
+func (a *AccessServices) getProjectIDsByUsername(ctx context.Context, username, roleCode string) ([]int64, error) {
+	if !a.Initialized() || a.userRoleRepo == nil {
 		return nil, nil
 	}
 
-	userID, err := resolveUserID(ctx, username)
+	userID, err := a.resolveUserID(ctx, username)
 	if err != nil {
 		return nil, err
 	}
 
-	list, _, err := svc.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+	list, _, err := a.userRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 		UserID:    userID,
 		RoleCode:  roleCode,
 		ScopeType: ScopeProject,
@@ -378,13 +365,16 @@ func getProjectIDsByUsername(ctx context.Context, username, roleCode string) ([]
 	return ids, nil
 }
 
-func getUserProjectMemberships(ctx context.Context, userID int64, roleCodeFilter string) ([]ProjectMembership, int64, error) {
-	svc := defaultImplService()
-	if svc == nil {
+func (a *AccessServices) getUserProjectMemberships(
+	ctx context.Context,
+	userID int64,
+	roleCodeFilter string,
+) ([]ProjectMembership, int64, error) {
+	if !a.Initialized() || a.userRoleRepo == nil {
 		return nil, 0, nil
 	}
 
-	list, _, err := svc.UserRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
+	list, _, err := a.userRoleRepo.List(ctx, &rolerepo.UserRoleFilter{
 		UserID:    userID,
 		RoleCode:  roleCodeFilter,
 		ScopeType: ScopeProject,

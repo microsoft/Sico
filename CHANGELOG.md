@@ -20,6 +20,29 @@ Guidelines for editors:
   add the compare link at the bottom.
 -->
 
+## [0.5.0] - 2026-09-14
+
+_Highlights: multi-tenant organization management, prepared task environments, Linux workstation sandboxes, and unified main/sub-agent execution._
+
+### Added
+
+- **Multi-tenant management:** add organization-scoped requests, organization switching and invitations, organization-aware project creation and notifications, and automatic default-organization creation for new users.
+- **Prepared task environments:** add environment building and persisted runtime images for Docker Compose, Kind, and online deployments; skill resolution now selects action images and verifies required commands.
+- **Linux workstation sandbox:** add an open-source command-execution sandbox with capability discovery and default Docker Compose and Kind integration.
+- **Knowledge ingestion:** ingest linked content as Markdown while preserving UTF-8 content.
+
+### Changed
+
+- **Unified agent loop:** run main and delegated agents through the same agent loop, remove the legacy chat path, and progressively disclose tools and skills during delegation.
+- **Development seeding:** make the default organization, project, and agent instances configurable with `SEED_AGENT_INSTANCES`; clean deployments remain unseeded while the example environment enables an immediately usable local setup.
+- **Task results:** externalize task outputs and make publication atomic, retry-safe, and protected by fencing tokens.
+
+### Fixed
+
+- Initialize organization context before protected frontend routes and keep project state consistent when switching organizations.
+- Make duplicate task submissions idempotent, ignore stale results, retain immutable retry outputs, and await cleanup after cancellation.
+- Improve sandbox assignment, service authentication, device availability handling, and configured package-registry use.
+
 ## [0.4.0] - 2026-08-24
 
 _Highlights: scheduled tasks, notifications, Digital Worker solutions, language switching, AgentStream, RBAC improvements, and chat agent optimizations._

@@ -9,8 +9,7 @@ import {
 } from "@microsoft/fetch-event-source";
 
 import { ChatStreamHttpError } from "./chat-stream";
-import { getAccessToken } from "../../../utils/auth-storage";
-import { isSameOriginRequest } from "../../../utils/is-same-origin-request";
+import { getStreamHeaders } from "./stream-headers";
 import { logger } from "../../../utils/logger";
 import { type ChatEvent, chatEventSchema } from "../schemas/chat-event";
 
@@ -32,6 +31,7 @@ export type OpenReconnectStreamOptions = {
   // hook. Injected rather than hardcoded — see chat-stream.ts; the bearer token
   // is attached only when this URL resolves same-origin.
   url: string;
+  getOrganizationId?: () => number | null;
   onEvent: (event: ChatEvent) => void;
   // Fires once the stream opens — drives the `↻→■` button flip.
   onOpen?: () => void;
@@ -47,21 +47,16 @@ export type OpenReconnectStreamOptions = {
 // onopen) or a mid-stream transport failure (auto-retry off).
 export async function openReconnectStream(
   payload: ReconnectStreamPayload,
-  { url, onEvent, onOpen, onLive, signal }: OpenReconnectStreamOptions,
+  options: OpenReconnectStreamOptions,
 ): Promise<void> {
   // Read the token per send (never cached), same helper the axios interceptor
   // uses. Missing/expired → no header → backend 401 → standard onopen 401 path.
   // The URL is config-injected, so gate the token on a same-origin check — see
   // chat-stream.ts.
-  const token = getAccessToken();
+  const { url, onEvent, onOpen, onLive, signal } = options;
   await fetchEventSource(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token && isSameOriginRequest(url, undefined)
-        ? { Authorization: `Bearer ${token}` }
-        : {}),
-    },
+    headers: getStreamHeaders(url, options.getOrganizationId),
     body: JSON.stringify(payload),
     signal,
     openWhenHidden: true, // do not pause/retry when the tab is backgrounded

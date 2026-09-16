@@ -83,8 +83,9 @@ func (m *mockAgentRepo) ListByFilter(
 
 type mockInstanceRepo struct {
 	repository.SingleAgentInstanceRepository
-	instances map[int64]*entity.SingleAgentInstance
-	nextID    int64
+	instances       map[int64]*entity.SingleAgentInstance
+	nextID          int64
+	updatedInstance *entity.SingleAgentInstance
 }
 
 func (m *mockInstanceRepo) Get(_ context.Context, id int64) (*entity.SingleAgentInstance, error) {
@@ -100,6 +101,11 @@ func (m *mockInstanceRepo) Create(_ context.Context, inst *entity.SingleAgentIns
 	inst.Id = m.nextID
 	m.instances[m.nextID] = inst
 	return m.nextID, nil
+}
+
+func (m *mockInstanceRepo) Update(_ context.Context, instance *entity.SingleAgentInstance) error {
+	m.updatedInstance = instance
+	return nil
 }
 
 type mockProjectRepo struct {
@@ -253,6 +259,38 @@ func TestListSingleAgents(t *testing.T) {
 	assert.Len(t, agents, 3)
 }
 
+func TestShouldIncludeOwnerDrafts(t *testing.T) {
+	draft := single_agent.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_DRAFT
+	published := single_agent.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED
+	deploy := single_agent.ListAgentIntent_LIST_AGENT_INTENT_DEPLOY
+
+	tests := []struct {
+		name                string
+		publishStatusArr    []single_agent.SingleAgentPublishStatus
+		intent              single_agent.ListAgentIntent
+		wantIncludeOwnDraft bool
+	}{
+		{name: "deploy with omitted statuses", intent: deploy, wantIncludeOwnDraft: true},
+		{
+			name:             "deploy with explicit published",
+			publishStatusArr: []single_agent.SingleAgentPublishStatus{published},
+			intent:           deploy,
+		},
+		{
+			name:             "deploy with explicit draft",
+			publishStatusArr: []single_agent.SingleAgentPublishStatus{draft},
+			intent:           deploy,
+		},
+		{name: "non-deploy with omitted statuses"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.wantIncludeOwnDraft, shouldIncludeOwnerDrafts(test.publishStatusArr, test.intent))
+		})
+	}
+}
+
 func TestCreateSingleAgentInstance(t *testing.T) {
 	agentRepo := &mockAgentRepo{agents: map[string]*entity.SingleAgent{
 		"a1": makeAgent("a1", "Agent One"),
@@ -287,6 +325,22 @@ func TestCreateSingleAgentInstance(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
+}
+
+func TestUpdateSingleAgentInstanceUpdatesIconURI(t *testing.T) {
+	instanceRepo := &mockInstanceRepo{instances: map[int64]*entity.SingleAgentInstance{
+		7: makeInstance(7, "a1", "Agent One"),
+	}}
+	svc := newTestService(&mockAgentRepo{}, instanceRepo, nil)
+
+	_, err := svc.UpdateSingleAgentInstance(context.Background(), &single_agent.UpdateSingleAgentInstanceRequest{
+		Id:      7,
+		IconUri: "avatars/updated.png",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, instanceRepo.updatedInstance)
+	assert.Equal(t, "avatars/updated.png", instanceRepo.updatedInstance.IconUri)
 }
 
 func TestDeploySingleAgent(t *testing.T) {

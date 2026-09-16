@@ -1,16 +1,13 @@
 import asyncio
 import json
-from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
 import pytest_mock
-from agent_framework import ChatResponse, ChatResponseUpdate, Content, Message as AgentFrameworkMessage
+from agent_framework import ChatResponse, ChatResponseUpdate, Content
 
-from app.biz.chat import chat as chat_agent_module
 from app.biz.chat import service as chat_service_module
-from app.biz.chat.chat import ChatAgent, RunOptions, _extract_text_from_message
 from app.biz.chat.conversation_history import complete_unfinished_tool_calls, discard_unfinished_tool_calls
 from app.biz.chat.service import ChatService
 from app.pb.common.common import Attachment
@@ -20,8 +17,6 @@ from app.schemas.common.common import Attachment as SchemaAttachment
 from app.schemas.conversation.chat import TopicMessage
 from app.schemas.conversation import Message
 from app.storage import redis
-from app.tools.common import ToolContext
-from app.tools.plan import PlanEditor
 from app.utils.runner import AsyncJobRunner
 
 
@@ -38,40 +33,20 @@ class FakeChatAgent:
         pass
 
 
+class FakePlanAgent:
+    async def run_stream(self, queue, *args, **kwargs):
+        for content in ("first", "second"):
+            await queue.put(
+                chat_service_module.ChatResponse(
+                    content=ChatContent(type=ChatContentType.PLAN, content=content),
+                    is_internal=True,
+                )
+            )
+        await queue.put(None)
+
+
 async def build_fake_agent(*args, **kwargs):
     return FakeChatAgent()
-
-
-class FailingStreamingClient:
-    _model = "gpt-test"
-
-    def __init__(self):
-        self.calls = 0
-
-    async def get_response(self, *args, **kwargs):
-        self.calls += 1
-        raise RuntimeError("dns down")
-        yield ChatResponseUpdate(role="assistant", contents=[Content.from_text("unreachable")])
-
-
-class PausingToolStreamingClient:
-    _model = "gpt-test"
-
-    def __init__(self):
-        self.call_processed = asyncio.Event()
-        self.release_result = asyncio.Event()
-
-    async def get_response(self, *args, **kwargs):
-        yield ChatResponseUpdate(
-            role="assistant",
-            contents=[Content(type="function_call", call_id="call-1", name="read", arguments="{}")],
-        )
-        self.call_processed.set()
-        await self.release_result.wait()
-        yield ChatResponseUpdate(
-            role="tool",
-            contents=[Content(type="function_result", call_id="call-1", result="done")],
-        )
 
 
 class FakeConversationService:
@@ -91,11 +66,6 @@ class FakeConversationService:
     def create_message(self, message: Message):
         self.created_messages.append(message)
         return message
-
-
-@asynccontextmanager
-async def _unlocked_plan(*_args, **_kwargs):
-    yield
 
 
 def test_conversation_history_normalizes_unfinished_tool_calls():
@@ -195,6 +165,72 @@ class TestChat:
         assert not unmarshalled[3].chat_response.is_internal
 
     @pytest.mark.asyncio
+    async def test_chat_persists_only_one_plan_message_but_streams_every_update(
+        self,
+        mocker: pytest_mock.MockerFixture,
+        fake_redis,
+    ):
+        from app.biz.reverse_grpc.conversation import ReverseConversationService
+        from app.utils.eventbus import EventBus
+        from app.utils.eventbus.mock import MockEventBus, MockEventBusSender
+
+        conversation_service = FakeConversationService.get_instance()
+        conversation_service.created_messages.clear()
+        mocker.patch.object(redis, "get_shared_redis", return_value=fake_redis)
+        mocker.patch("app.biz.chat.service.build_agent", return_value=FakePlanAgent())
+        mocker.patch("app.biz.chat.service.init_workspace", return_value=None)
+        mocker.patch.object(ReverseConversationService, "get_instance", return_value=conversation_service)
+        mocker.patch.object(EventBus, "get_instance", return_value=MockEventBus())
+
+        chat_service = ChatService.get_instance()
+        chat_service._event_bus_topic_name = "test-topic"
+        await chat_service.stream_chat(
+            ChatRequest(username="alice@example.com", message=ChatContent(type=ChatContentType.TEXT, content="work"))
+        )
+
+        stored_plans = [
+            message for message in conversation_service.created_messages if message.content_type == ChatContentType.PLAN
+        ]
+        assert len(stored_plans) == 1
+        sender: MockEventBusSender = chat_service._event_bus_sender
+        streamed = [TopicMessage.model_validate_json(message) for message in sender.sent_messages]
+        streamed_plans = [
+            item.chat_response.content.content
+            for item in streamed
+            if item.chat_response.content.type == ChatContentType.PLAN
+        ]
+        assert streamed_plans == [
+            "first",
+            "second",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_drain_resets_accumulated_text_at_runtime_capability_boundary(self):
+        queue = asyncio.Queue()
+        await queue.put(ChatResponseUpdate(role="assistant", contents=[Content.from_text("before")]))
+        await queue.put(
+            chat_service_module.ChatResponse(
+                content=ChatContent(type=ChatContentType.TEXT, content="before"),
+                is_internal=True,
+            )
+        )
+        await queue.put(ChatResponseUpdate(role="assistant", contents=[Content.from_text("after")]))
+        await queue.put(None)
+        yielded = []
+
+        async def collect(response):
+            yielded.append(response)
+
+        await chat_service_module.ChatResponsePresenter(conversation_id=44, turn_id=2).drain(queue, collect)
+
+        durable_segments = [
+            response.content.content
+            for response in yielded
+            if response.is_internal and response.content.type == ChatContentType.TEXT
+        ]
+        assert durable_segments == ["before", "after"]
+
+    @pytest.mark.asyncio
     async def test_agent_instance_ongoing_conversation_index(self, fake_redis):
         from app.biz.chat.service import _get_agent_instance_ongoing_conversations_cache_key
 
@@ -261,6 +297,30 @@ class TestChat:
         # not pay to scan the workspace for them.
         sections_mock.assert_not_called()
         assert captured["model"] == "gpt-fast-test"
+
+    @pytest.mark.asyncio
+    async def test_chat_uses_runtime_agent_builder(
+        self,
+        mocker: pytest_mock.MockerFixture,
+        fake_redis,
+    ):
+        from app.biz.reverse_grpc.conversation import ReverseConversationService
+        from app.utils.eventbus import EventBus
+        from app.utils.eventbus.mock import MockEventBus
+
+        mocker.patch.object(redis, "get_shared_redis", return_value=fake_redis)
+        runtime_builder = mocker.patch("app.biz.chat.service.build_agent", return_value=FakeChatAgent())
+        mocker.patch("app.biz.chat.service.init_workspace", return_value=None)
+        mocker.patch.object(ReverseConversationService, "get_instance", return_value=FakeConversationService.get_instance())
+        mocker.patch.object(EventBus, "get_instance", return_value=MockEventBus())
+
+        chat_service = ChatService.get_instance()
+        chat_service._event_bus_topic_name = "test-topic"
+        await chat_service.stream_chat(
+            ChatRequest(username="alice@example.com", message=ChatContent(type=ChatContentType.TEXT, content="hello"))
+        )
+
+        runtime_builder.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_generate_onboard_recommendation_tasks_accepts_array_payload(self, mocker: pytest_mock.MockerFixture):
@@ -352,319 +412,6 @@ class TestChat:
 
         assert response.code == 1
         assert response.msg == "Failed to validate LLM response"
-
-
-@pytest.mark.asyncio
-async def test_chat_agent_does_not_retry_generation_after_task_batch_created(mocker: pytest_mock.MockerFixture):
-    tool_context = ToolContext(
-        username="alice@example.com",
-        agent_id="agent-1",
-        agent_instance_id=628,
-        turn_id=2,
-        project_id=0,
-        conversation_id=787,
-        response_queue=asyncio.Queue(),
-        plan_editor=PlanEditor(agent_instance_id=628, username="alice@example.com", turn_id=2, conversation_id=787),
-        submission_id="request-1",
-    )
-    agent = ChatAgent(
-        client=FailingStreamingClient(),
-        username="alice@example.com",
-        agent_instance_id=628,
-        mem_runner=SimpleNamespace(),
-        tool_context=tool_context,
-    )
-    attempts = 0
-
-    async def fail_after_batch(*args, **kwargs):
-        nonlocal attempts
-        attempts += 1
-        tool_context.task_runtime_batch_ids.append("batch-1")
-        raise ConnectionError("stream failed after delegate submission")
-
-    mocker.patch.object(agent, "_stream_one_attempt", side_effect=fail_after_batch)
-    response_queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None] = asyncio.Queue()
-
-    with pytest.raises(ConnectionError, match="stream failed after delegate submission"):
-        await agent.run_stream(
-            response_queue,
-            AgentFrameworkMessage(role="user", contents=[Content.from_text("run")]),
-            "system",
-            options=RunOptions(max_attempts=2),
-        )
-
-    assert attempts == 1
-    error_response = await response_queue.get()
-    assert error_response is not None
-    error_text = error_response.content.content.lower()
-    assert "submitted tasks are still running" in error_text
-    assert "attempt 1/2" not in error_text
-
-
-@pytest.mark.asyncio
-async def test_chat_agent_persists_conversation_json_for_pre_stream_failure(tmp_path, monkeypatch):
-    monkeypatch.setattr(chat_agent_module.CHAT_FS, "_root", tmp_path)
-    monkeypatch.setattr(chat_agent_module, "get_context_length", lambda _model: 128_000)
-    client = FailingStreamingClient()
-    agent = ChatAgent(
-        client=client,
-        username="alice@example.com",
-        agent_instance_id=7,
-        mem_runner=SimpleNamespace(),
-        tool_context=ToolContext(
-            username="alice@example.com",
-            agent_id="agent-1",
-            agent_instance_id=7,
-            turn_id=33,
-            project_id=1,
-            conversation_id=44,
-            response_queue=asyncio.Queue(),
-            plan_editor=PlanEditor(7, "alice@example.com", 33, conversation_id=44),
-        ),
-    )
-    queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None] = asyncio.Queue()
-
-    with pytest.raises(RuntimeError, match="dns down"):
-        await agent.run_stream(
-            queue,
-            AgentFrameworkMessage(role="user", contents=[Content.from_text("Help me run this demo case")]),
-            "",
-            options=RunOptions(turn_id=33, max_attempts=2, save_history=True),
-        )
-
-    responses = []
-    while not queue.empty():
-        responses.append(queue.get_nowait())
-
-    assert client.calls == 2
-    assert responses[-1] is None
-    assert responses[0].content.content == "Error with chat agent attempt 1/2: dns down"
-    assert responses[1].content.content == "Error with chat agent attempt 2/2: dns down"
-
-    conversation_json = chat_agent_module.CHAT_FS.read_conversation(7, "alice@example.com", 33, conversation_id=44)
-    assert conversation_json is not None
-    messages = json.loads(conversation_json)
-    assert [message["role"] for message in messages] == ["user", "assistant", "assistant"]
-    assert messages[0]["contents"][0]["text"] == "Help me run this demo case"
-    assert messages[1]["contents"][0]["text"] == "Error with chat agent attempt 1/2: dns down"
-    assert messages[2]["contents"][0]["text"] == "Error with chat agent attempt 2/2: dns down"
-
-
-@pytest.mark.asyncio
-async def test_cancel_plan_leaves_tool_call_completion_to_chat_writer(tmp_path, mocker: pytest_mock.MockerFixture):
-    from app.storage.fs import ChatFS
-    from app.tools import plan as plan_module
-
-    chat_fs = ChatFS(tmp_path)
-    mocker.patch.object(chat_agent_module, "CHAT_FS", chat_fs)
-    mocker.patch.object(plan_module, "CHAT_FS", chat_fs)
-    mocker.patch.object(plan_module, "_plan_lock", _unlocked_plan)
-
-    tool_call = AgentFrameworkMessage(
-        role="assistant",
-        contents=[Content(type="function_call", call_id="call-1", name="read", arguments="{}")],
-    )
-    agent = ChatAgent(
-        client=FailingStreamingClient(),
-        username="alice@example.com",
-        agent_instance_id=7,
-        mem_runner=SimpleNamespace(),
-        tool_context=ToolContext(
-            username="alice@example.com",
-            agent_id="agent-1",
-            agent_instance_id=7,
-            turn_id=33,
-            project_id=1,
-            conversation_id=44,
-            response_queue=asyncio.Queue(),
-            plan_editor=PlanEditor(7, "alice@example.com", 33, conversation_id=44),
-        ),
-    )
-    user_message = AgentFrameworkMessage(role="user", contents=[Content.from_text("read")])
-    dangling_response = ChatResponse(messages=[tool_call])
-
-    await agent.persist_turn(user_message, dangling_response, 33)
-    before_cancel = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
-    await plan_module.cancel_plan(7, "alice@example.com", 33, 44)
-    after_cancel = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
-
-    assert after_cancel == before_cancel
-    assert not any(
-        content.get("type") == "function_result"
-        for message in json.loads(after_cancel)
-        for content in message.get("contents", [])
-    )
-
-    await agent.persist_turn(user_message, dangling_response, 33)
-
-    raw = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
-    contents = [content for message in json.loads(raw) for content in message.get("contents", [])]
-    matching_results = [
-        content for content in contents if content.get("type") == "function_result" and content.get("call_id") == "call-1"
-    ]
-    assert matching_results == [{"type": "function_result", "call_id": "call-1", "result": "Cancelled by user"}]
-
-
-@pytest.mark.asyncio
-async def test_chat_stream_persists_and_completes_tool_call_after_cancel(tmp_path, mocker: pytest_mock.MockerFixture):
-    from app.storage.fs import ChatFS
-    from app.tools import plan as plan_module
-
-    chat_fs = ChatFS(tmp_path)
-    mocker.patch.object(chat_agent_module, "CHAT_FS", chat_fs)
-    mocker.patch.object(plan_module, "CHAT_FS", chat_fs)
-    mocker.patch.object(chat_agent_module, "CHECK_CANCELLED_PLAN_INTERVAL_SECONDS", -1)
-    client = PausingToolStreamingClient()
-    agent = ChatAgent(
-        client=client,
-        username="alice@example.com",
-        agent_instance_id=7,
-        mem_runner=SimpleNamespace(),
-        tool_context=ToolContext(
-            username="alice@example.com",
-            agent_id="agent-1",
-            agent_instance_id=7,
-            turn_id=33,
-            project_id=1,
-            conversation_id=44,
-            response_queue=asyncio.Queue(),
-            plan_editor=PlanEditor(7, "alice@example.com", 33, conversation_id=44),
-        ),
-    )
-    queue: asyncio.Queue[ChatResponse | ChatResponseUpdate | None] = asyncio.Queue()
-    stream_task = asyncio.create_task(
-        agent.run_stream(
-            queue,
-            AgentFrameworkMessage(role="user", contents=[Content.from_text("read")]),
-            "",
-            options=RunOptions(turn_id=33, save_history=True),
-        )
-    )
-
-    await asyncio.wait_for(client.call_processed.wait(), timeout=1)
-    raw = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
-    contents = [content for message in json.loads(raw) for content in message.get("contents", [])]
-    assert any(content.get("type") == "function_call" and content.get("call_id") == "call-1" for content in contents)
-    assert not any(content.get("type") == "function_result" for content in contents)
-
-    chat_fs.plan.write_cancelled_marker(7, "alice@example.com", 33, conversation_id=44)
-    client.release_result.set()
-    await stream_task
-
-    raw = chat_fs.read_conversation(7, "alice@example.com", 33, conversation_id=44)
-    contents = [content for message in json.loads(raw) for content in message.get("contents", [])]
-    matching_results = [
-        content for content in contents if content.get("type") == "function_result" and content.get("call_id") == "call-1"
-    ]
-    assert matching_results == [{"type": "function_result", "call_id": "call-1", "result": "Cancelled by user"}]
-
-
-@pytest.mark.asyncio
-async def test_chat_agent_loads_recent_history_from_conversation_id(tmp_path, monkeypatch):
-    monkeypatch.setattr(chat_agent_module.CHAT_FS, "_root", tmp_path)
-    monkeypatch.setattr(chat_agent_module, "get_context_length", lambda _model: 128_000)
-    chat_agent_module.CHAT_FS.write_conversation(
-        7,
-        "alice@example.com",
-        1,
-        json.dumps(
-            [
-                {"role": "user", "contents": [{"type": "text", "text": "my favorite food is pizza"}]},
-                {"role": "assistant", "contents": [{"type": "text", "text": "noted pizza"}]},
-            ]
-        ),
-        conversation_id=44,
-    )
-    chat_agent_module.CHAT_FS.write_conversation(
-        7,
-        "alice@example.com",
-        1,
-        json.dumps(
-            [
-                {"role": "user", "contents": [{"type": "text", "text": "my favorite food is sushi"}]},
-                {"role": "assistant", "contents": [{"type": "text", "text": "noted sushi"}]},
-            ]
-        ),
-        conversation_id=0,
-    )
-    agent = ChatAgent(
-        client=FailingStreamingClient(),
-        username="alice@example.com",
-        agent_instance_id=7,
-        mem_runner=SimpleNamespace(),
-        tool_context=ToolContext(
-            username="alice@example.com",
-            agent_id="agent-1",
-            agent_instance_id=7,
-            turn_id=2,
-            project_id=1,
-            conversation_id=44,
-            response_queue=asyncio.Queue(),
-            plan_editor=PlanEditor(7, "alice@example.com", 2, conversation_id=44),
-        ),
-    )
-
-    history = await agent._load_recent_history()
-    history_text = "\n".join(_extract_text_from_message(message) for message in history)
-
-    assert "my favorite food is pizza" in history_text
-    assert "noted pizza" in history_text
-    assert "sushi" not in history_text
-
-
-@pytest.mark.asyncio
-async def test_chat_agent_discards_unfinished_tool_calls_from_history(tmp_path, mocker: pytest_mock.MockerFixture):
-    from app.storage.fs import ChatFS
-
-    chat_fs = ChatFS(tmp_path)
-    mocker.patch.object(chat_agent_module, "CHAT_FS", chat_fs)
-    mocker.patch.object(chat_agent_module, "get_context_length", return_value=128_000)
-    chat_fs.write_conversation(
-        7,
-        "alice@example.com",
-        1,
-        json.dumps(
-            [
-                {"role": "user", "contents": [{"type": "text", "text": "run both"}]},
-                {
-                    "role": "assistant",
-                    "contents": [
-                        {"type": "text", "text": "starting"},
-                        {"type": "function_call", "call_id": "call-1", "name": "read"},
-                        {"type": "function_call", "call_id": "call-2", "name": "write"},
-                    ],
-                },
-                {
-                    "role": "tool",
-                    "contents": [{"type": "function_result", "call_id": "call-1", "result": "done"}],
-                },
-            ]
-        ),
-        conversation_id=44,
-    )
-    agent = ChatAgent(
-        client=FailingStreamingClient(),
-        username="alice@example.com",
-        agent_instance_id=7,
-        mem_runner=SimpleNamespace(),
-        tool_context=ToolContext(
-            username="alice@example.com",
-            agent_id="agent-1",
-            agent_instance_id=7,
-            turn_id=2,
-            project_id=1,
-            conversation_id=44,
-            response_queue=asyncio.Queue(),
-            plan_editor=PlanEditor(7, "alice@example.com", 2, conversation_id=44),
-        ),
-    )
-
-    history = await agent._load_recent_history()
-    contents = [content for message in history for content in message.contents or []]
-
-    assert any(content.type == "text" and content.text == "starting" for content in contents)
-    assert any(content.type == "function_call" and content.call_id == "call-1" for content in contents)
-    assert not any(content.type == "function_call" and content.call_id == "call-2" for content in contents)
 
 
 def test_normalize_generated_conversation_title():

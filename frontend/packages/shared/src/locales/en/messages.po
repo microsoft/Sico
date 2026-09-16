@@ -588,6 +588,11 @@ msgid "common.field.email"
 msgstr "Email"
 
 #. js-lingui-explicit-id
+#: packages/shared/src/hooks/use-image-upload.ts
+msgid "common.imageUpload.failed"
+msgstr "We couldn't upload the image. Try again."
+
+#. js-lingui-explicit-id
 #: packages/shared/src/features/chat/components/digital-worker-home/digital-worker-home-skeleton.tsx
 #: packages/shared/src/features/studio/components/studio-editor-roster.tsx
 msgid "common.status.loading"
@@ -609,10 +614,21 @@ msgid "common.status.saving"
 msgstr "Saving…"
 
 #. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
 #: packages/shared/src/features/projects/components/add-knowledge-dialog.tsx
 #: packages/shared/src/features/skill/components/dialogs/upload-button-content.tsx
 msgid "common.status.uploading"
 msgstr "Uploading"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/hooks/use-add-dw-submit.ts
+msgid "digitalWorker.addDialog.added"
+msgstr "Digital worker added."
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/hooks/use-add-dw-submit.ts
+msgid "digitalWorker.addDialog.addFailed"
+msgstr "We couldn't add the digital worker."
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/digital-worker/components/avatar-field.tsx
@@ -665,6 +681,11 @@ msgid "digitalWorker.addDialog.projectsNoun"
 msgstr "projects"
 
 #. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/hooks/use-add-dw-submit.ts
+msgid "digitalWorker.addDialog.signInRequired"
+msgstr "You must be signed in to add a digital worker."
+
+#. js-lingui-explicit-id
 #: packages/shared/src/features/digital-worker/components/add-dw-dialog-header.tsx
 msgid "digitalWorker.addDialog.title"
 msgstr "Add Digital Worker"
@@ -715,8 +736,7 @@ msgid "digitalWorker.addDialog.workersNoun"
 msgstr "digital workers"
 
 #. js-lingui-explicit-id
-#. placeholder {0}: i + 1
-#: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
+#: packages/shared/src/features/digital-worker/components/dw-avatar-grid.tsx
 msgid "digitalWorker.avatarPicker.avatarAria"
 msgstr "Avatar {index}"
 
@@ -726,7 +746,7 @@ msgid "digitalWorker.avatarPicker.changeAvatarAria"
 msgstr "Change avatar"
 
 #. js-lingui-explicit-id
-#: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
+#: packages/shared/src/features/digital-worker/components/dw-avatar-grid.tsx
 msgid "digitalWorker.avatarPicker.groupAria"
 msgstr "Avatar"
 
@@ -734,6 +754,11 @@ msgstr "Avatar"
 #: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
 msgid "digitalWorker.avatarPicker.hint"
 msgstr "Click the avatar or Shuffle to generate another one."
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/services/load-avatar-preset.ts
+msgid "digitalWorker.avatarPicker.loadFailed"
+msgstr "We couldn't load the avatar. Try again."
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
@@ -1199,33 +1224,53 @@ msgstr "Windows"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
-msgid "organization.editName.failed"
-msgstr "Couldn't rename this organization."
+msgid "organization.edit.failed"
+msgstr "Couldn't update this organization."
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-members-page-content.tsx
+msgid "organization.edit.open"
+msgstr "Edit organization"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
+msgid "organization.edit.success"
+msgstr "Organization updated."
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
+msgid "organization.edit.title"
+msgstr "Edit Organization"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-avatar-field.tsx
+msgid "organization.editName.avatar.change"
+msgstr "Change avatar"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-avatar-field.tsx
+msgid "organization.editName.avatar.choose"
+msgstr "Choose organization avatar"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-avatar-field.tsx
+msgid "organization.editName.avatar.fileInput"
+msgstr "Organization avatar file"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-avatar-field.tsx
+msgid "organization.editName.avatar.label"
+msgstr "Organization avatar"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-name-field.tsx
 msgid "organization.editName.label"
 msgstr "Organization name"
 
 #. js-lingui-explicit-id
-#: packages/shared/src/features/organization/components/organization-members-page-content.tsx
-msgid "organization.editName.open"
-msgstr "Rename organization"
-
-#. js-lingui-explicit-id
-#: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
+#: packages/shared/src/features/organization/components/organization-name-field.tsx
 msgid "organization.editName.placeholder"
 msgstr "Enter organization name"
-
-#. js-lingui-explicit-id
-#: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
-msgid "organization.editName.success"
-msgstr "Organization name updated."
-
-#. js-lingui-explicit-id
-#: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
-msgid "organization.editName.title"
-msgstr "Rename Organization"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
@@ -1955,13 +2000,13 @@ msgstr "available"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/projects/components/drawer-sandbox-section.tsx
-msgid "projects.drawerSandbox.deviceType.aio"
-msgstr "AIO"
+msgid "projects.drawerSandbox.deviceType.android"
+msgstr "Android"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/projects/components/drawer-sandbox-section.tsx
-msgid "projects.drawerSandbox.deviceType.android"
-msgstr "Android"
+msgid "projects.drawerSandbox.deviceType.linuxWorkstation"
+msgstr "Linux Workstation"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/projects/components/drawer-sandbox-section.tsx
@@ -2795,6 +2840,11 @@ msgstr "Emulator"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/sandbox-devices/components/devices-table.tsx
+msgid "sandboxDevices.type.linuxWorkstation"
+msgstr "Linux Workstation"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/sandbox-devices/components/devices-table.tsx
 msgid "sandboxDevices.type.physical"
 msgstr "Physical"
 
@@ -3255,6 +3305,11 @@ msgid "sidebar.footer.accountOptions"
 msgstr "Account options"
 
 #. js-lingui-explicit-id
+#: packages/shared/src/features/sidebar/components/organization-account-menu-section.tsx
+msgid "sidebar.footer.currentOrganization"
+msgstr "Current Organization"
+
+#. js-lingui-explicit-id
 #: packages/shared/src/features/sidebar/components/sidebar-account-menu.tsx
 msgid "sidebar.footer.goToSico"
 msgstr "Go to SICO"
@@ -3278,6 +3333,21 @@ msgstr "Log out"
 #: packages/shared/src/features/sidebar/components/manage-organization-menu-item.tsx
 msgid "sidebar.footer.manageOrganization"
 msgstr "Manage Organization"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/sidebar/components/organization-account-menu-section.tsx
+msgid "sidebar.footer.organizationsLoadError"
+msgstr "Couldn't load organizations"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/sidebar/components/organization-account-menu-section.tsx
+msgid "sidebar.footer.organizationsLoading"
+msgstr "Loading organizations…"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/sidebar/components/organization-account-menu-section.tsx
+msgid "sidebar.footer.switchOrganization"
+msgstr "Switch Organization"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/sidebar/components/sidebar-menu.tsx

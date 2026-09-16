@@ -7,9 +7,6 @@ FROM node:24.13.0-slim AS build
 ARG NPM_REGISTRY
 ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY}
 
-# Disable lefthook's git-hook install (no .git in the build context).
-ENV LEFTHOOK=0
-
 WORKDIR /app
 
 # 1) Copy only what dependency resolution needs, so the (slow) install layer is
@@ -32,6 +29,8 @@ RUN pnpm install --frozen-lockfile
 # 2) Copy the rest of the workspace and build. node_modules and dist are excluded
 #    via .dockerignore, so the install layer above is preserved.
 COPY . .
+ARG VITE_LOGIN_PREFILL_CREDENTIALS=true
+ENV VITE_LOGIN_PREFILL_CREDENTIALS=${VITE_LOGIN_PREFILL_CREDENTIALS}
 RUN pnpm build
 
 # ---- Stage 2: serve the built assets with nginx -------------------------------

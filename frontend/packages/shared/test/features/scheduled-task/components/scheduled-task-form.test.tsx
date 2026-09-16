@@ -594,10 +594,11 @@ describe("<ScheduledTaskForm>", () => {
     await screen.findByRole("listbox");
     const options = screen.getByTestId("scheduled-task-worker-options");
     expect(options).toHaveAttribute("data-align", "start");
-    expect(options).toHaveClass("w-(--anchor-width)", "max-h-60");
+    expect(options).toHaveClass("!w-56", "max-h-60");
     const workerOption = screen.getByRole("option", {
       name: "Reporting Worker",
     });
+    expect(workerOption).toHaveClass("pr-8");
     expect(within(workerOption).getByTestId("avatar-root")).toBeVisible();
     expect(within(workerOption).getByText("Reporting Worker")).toHaveClass(
       "max-w-32",

@@ -9,6 +9,7 @@ from .contracts import CommandBackend
 from .docker import DockerBackend
 from .kubernetes import K8sPodBackend
 from .local import LocalBackend
+from .runner import EnvironmentRunnerBackend
 
 if TYPE_CHECKING:
     from app.storage.sandbox_pod import SandboxPod
@@ -16,13 +17,14 @@ if TYPE_CHECKING:
 BACKEND_LOCAL = "local"
 BACKEND_DOCKER = "docker"
 BACKEND_K8S = "k8s"
+BACKEND_RUNNER = "runner"
 
 RESOURCE_KEY_DOCKER = "docker"
 RESOURCE_KEY_K8S_POD = "k8s_pod"
 
 
-def select_backend(*, pod: SandboxPod | None = None) -> CommandBackend:
-    choice = os.getenv("TASK_RUNTIME_BACKEND", "").strip().lower()
+def select_backend(*, kind: str = "", pod: SandboxPod | None = None) -> CommandBackend:
+    choice = kind.strip().lower() or os.getenv("TASK_RUNTIME_BACKEND", "").strip().lower()
     if not choice:
         choice = _auto_detect_backend()
     if choice == BACKEND_LOCAL:
@@ -31,7 +33,12 @@ def select_backend(*, pod: SandboxPod | None = None) -> CommandBackend:
         return DockerBackend()
     if choice == BACKEND_K8S:
         return K8sPodBackend(pod)
-    raise ValueError(f"unknown TASK_RUNTIME_BACKEND={choice!r}; expected one of local|docker|k8s")
+    if choice == BACKEND_RUNNER:
+        endpoint = os.getenv("TASK_RUNTIME_COMMAND_RUNNER_ENDPOINT", "").strip()
+        if not endpoint:
+            raise ValueError("TASK_RUNTIME_COMMAND_RUNNER_ENDPOINT is required for TASK_RUNTIME_BACKEND='runner'")
+        return EnvironmentRunnerBackend(endpoint)
+    raise ValueError(f"unknown TASK_RUNTIME_BACKEND={choice!r}; expected one of local|docker|k8s|runner")
 
 
 def is_in_cluster() -> bool:
@@ -56,7 +63,7 @@ def active_backend_kind() -> str:
 
 def backend_resource_key(kind: str | None = None) -> str | None:
     kind = kind if kind is not None else active_backend_kind()
-    if kind == BACKEND_DOCKER:
+    if kind in {BACKEND_DOCKER, BACKEND_RUNNER}:
         return RESOURCE_KEY_DOCKER
     if kind == BACKEND_K8S:
         return RESOURCE_KEY_K8S_POD

@@ -32,9 +32,9 @@ func AllSandboxOSes() []string {
 
 // typeOS maps a SandboxType to the single OS it always provides.
 var typeOS = map[string]SandboxOS{
-	SandboxTypeEmulator.String(): SandboxOSAndroid,
-	SandboxTypeWinCUA.String():   SandboxOSWindows,
-	SandboxTypeAio.String():      SandboxOSLinux,
+	SandboxTypeEmulator.String():         SandboxOSAndroid,
+	SandboxTypeWinCUA.String():           SandboxOSWindows,
+	SandboxTypeLinuxWorkstation.String(): SandboxOSLinux,
 }
 
 // MetadataOSKey is the resource-metadata key carrying a device's OS.

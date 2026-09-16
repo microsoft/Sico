@@ -13,8 +13,7 @@ packages/config/
 ├── .oxfmtrc.json             oxfmt formatting + Tailwind class sorting
 ├── tsconfig.base.json        TypeScript base (no JSX)
 ├── tsconfig.react.json       TypeScript + React JSX
-├── vitest.config.base.ts     Vitest base config
-└── commitlint.config.js      Conventional commit rules
+└── vitest.config.base.ts     Vitest base config
 ```
 
 **Do not modify these config files casually.** They are the single source of truth for engineering standards — every change ripples to every consumer. If a package needs different behavior, override at the consumer instead of editing the base:

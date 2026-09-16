@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+
+if [ -x /opt/mcp-proxy/bin/mcp-proxy ]; then
+  exec /opt/mcp-proxy/bin/mcp-proxy "$@"
+fi
+
+if [ -x /opt/python3.12/bin/mcp-proxy ]; then
+  exec /opt/python3.12/bin/mcp-proxy "$@"
+fi
+
+PORT=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --port=*)
+      PORT="${1#*=}"; shift ;;
+    --port)
+      PORT="$2"; shift 2 ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [ -n "$PORT" ]; then
+  export MCP_PROXY_PORT="$PORT"
+fi
+
+exec "$@"

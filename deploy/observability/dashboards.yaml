@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: Sico
+    orgId: 1
+    folder: Sico
+    folderUid: sico
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 10
+    options:
+      path: /otel-lgtm/sico-dashboards
+      foldersFromFilesStructure: false

@@ -1,0 +1,5 @@
+{
+    "BrowserLabsEnabled": false,
+    "CommandLineFlagSecurityWarningsEnabled": false,
+    "HttpsOnlyMode": "disallowed"
+}

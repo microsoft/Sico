@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	appresp "sico-backend/internal/biz/common/response"
+	"sico-backend/internal/biz/ownership"
 	"sico-backend/internal/consts"
 	coregrpc "sico-backend/internal/infra/coregrpc"
 	"sico-backend/internal/infra/storage"
@@ -36,6 +37,7 @@ type Components struct {
 	SkillRepo   repository.SkillRepository
 	ProjectRepo projectrepo.ProjectRepository
 	CoreGRPC    coregrpc.Connection
+	Ownership   ownership.Resolver
 }
 
 type Service struct {
@@ -51,6 +53,27 @@ func NewService(c *Components) *Service {
 		svc.grpcClient = skillgrpc.NewSkillServiceClient(c.CoreGRPC)
 	}
 	return svc
+}
+
+func (s *Service) requireResourceOrganization(ctx context.Context, projectID int64, agentID string) error {
+	if s == nil || s.Components == nil || s.Ownership == nil {
+		return nil
+	}
+	if projectID > 0 {
+		organizationID, err := s.Ownership.ProjectOrganization(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		return s.Ownership.RequireOrganization(ctx, organizationID, false)
+	}
+	if agentID != "" {
+		organizationID, err := s.Ownership.AgentOrganization(ctx, agentID)
+		if err != nil {
+			return err
+		}
+		return s.Ownership.RequireOrganization(ctx, organizationID, true)
+	}
+	return apperr.New(errcode.CommonInvalidParam, "projectId or agentId is required")
 }
 
 // ---------- Status helpers ----------
@@ -71,6 +94,9 @@ func (s *Service) CreateSkill(ctx context.Context, req *skill.CreateSkillRequest
 	}
 	if req.ProjectId != 0 && req.AgentId != "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "only one of projectId or agentId should be provided")
+	}
+	if err := s.requireResourceOrganization(ctx, req.ProjectId, req.AgentId); err != nil {
+		return nil, err
 	}
 
 	creator := middleware.MustGetUsernameFromCtx(ctx)
@@ -126,6 +152,9 @@ func (s *Service) GetSkill(ctx context.Context, req *skill.GetSkillRequest) (*sk
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, rec.ProjectID, rec.AgentID); err != nil {
+		return nil, err
+	}
 
 	return appresp.Success(&skill.GetSkillResponse{
 		Data: &skill.GetSkillData{
@@ -141,6 +170,9 @@ func (s *Service) UpdateSkill(ctx context.Context, req *skill.UpdateSkillRequest
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.New(errcode.CommonNotFound, "skill not found")
 		}
+		return nil, err
+	}
+	if err := s.requireResourceOrganization(ctx, rec.ProjectID, rec.AgentID); err != nil {
 		return nil, err
 	}
 
@@ -195,6 +227,9 @@ func (s *Service) DeleteSkill(ctx context.Context, req *skill.DeleteSkillRequest
 		}
 		return nil, err
 	}
+	if err := s.requireResourceOrganization(ctx, rec.ProjectID, rec.AgentID); err != nil {
+		return nil, err
+	}
 
 	if err := s.SkillRepo.Delete(ctx, req.Id); err != nil {
 		return nil, err
@@ -219,6 +254,9 @@ func (s *Service) DeleteSkill(ctx context.Context, req *skill.DeleteSkillRequest
 }
 
 func (s *Service) ListSkills(ctx context.Context, req *skill.ListSkillRequest) (*skill.ListSkillResponse, error) {
+	if err := s.requireResourceOrganization(ctx, req.ProjectId, req.AgentId); err != nil {
+		return nil, err
+	}
 	offset := int(req.Page-1) * int(req.PageSize)
 	filter := &repository.SkillFilter{
 		ProjectID: req.ProjectId,

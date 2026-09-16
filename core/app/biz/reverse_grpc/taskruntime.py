@@ -146,11 +146,11 @@ class ReverseTaskRuntimeService:
         return self.stub
 
     @_wrap_rpc("create_batch")
-    def create_batch(self, batch_json: str) -> None:
+    def create_batch(self, batch_json: str) -> pb.CreateBatchResponse:
         return self._require_stub().rpc_create_batch(pb.CreateBatchRequest(batch_json=batch_json))
 
     @_wrap_rpc("update_batch")
-    def update_batch(self, batch_json: str) -> None:
+    def update_batch(self, batch_json: str) -> pb.UpdateBatchResponse:
         return self._require_stub().rpc_update_batch(pb.UpdateBatchRequest(batch_json=batch_json))
 
     @_wrap_rpc("get_batch")

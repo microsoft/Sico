@@ -240,10 +240,12 @@ describe("createProject", () => {
     const client = { post } as Partial<AxiosInstance> as AxiosInstance;
     const result = await createProject(client, {
       name: "Aurora",
+      organizationId: 9,
       description: "launch",
     });
     expect(post).toHaveBeenCalledWith("/project", {
       name: "Aurora",
+      organizationId: 9,
       description: "launch",
       iconUri: "",
       operatorAdmins: [],
@@ -256,7 +258,9 @@ describe("createProject", () => {
       .fn()
       .mockResolvedValue({ data: { code: 101_008, msg: "denied" } });
     const client = { post } as Partial<AxiosInstance> as AxiosInstance;
-    await expect(createProject(client, { name: "X" })).rejects.toThrow();
+    await expect(
+      createProject(client, { name: "X", organizationId: 9 }),
+    ).rejects.toThrow();
   });
 });
 

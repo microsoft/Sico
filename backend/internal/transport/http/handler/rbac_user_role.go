@@ -264,11 +264,12 @@ func notifyProjectRoleChange(
 		return
 	}
 
-	receiverUsername, err := rbacbiz.ResolveUsername(ctx, userID)
-	if err != nil {
+	receiver, err := access.GetUserSummaryByID(ctx, userID)
+	if err != nil || receiver == nil {
 		logger.CtxError(ctx, "notifyRoleChange: failed to resolve user %d: %v", userID, err)
 		return
 	}
+	receiverUsername := receiver.Username
 
 	var projectDigest *commondto.ProjectDigest
 	if projSvc := projectbiz.Default(); projSvc != nil {
@@ -324,11 +325,12 @@ func notifyAgentEditorChange(
 		return
 	}
 
-	receiverUsername, err := rbacbiz.ResolveUsername(ctx, userID)
-	if err != nil {
+	receiver, err := access.GetUserSummaryByID(ctx, userID)
+	if err != nil || receiver == nil {
 		logger.CtxError(ctx, "notifyAgentEditorChange: failed to resolve user %d: %v", userID, err)
 		return
 	}
+	receiverUsername := receiver.Username
 
 	var agentDigest *commondto.AgentDigest
 	if agentSvc := singleAgentSVC.Default(); agentSvc != nil {

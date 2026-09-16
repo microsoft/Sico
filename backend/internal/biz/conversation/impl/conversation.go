@@ -19,6 +19,9 @@ const DefaultConversationTitle = "New Session"
 
 func (c *Service) UpdateConversation(ctx context.Context,
 	req *model.UpdateConversationRequest) (*model.UpdateConversationResponse, error) {
+	if err := c.requireConversationOrganization(ctx, req.GetId()); err != nil {
+		return nil, err
+	}
 	username := middleware.MustGetUsernameFromCtx(ctx)
 	conversation, err := c.conversationRepo.GetByID(ctx, req.GetId())
 	if err != nil {
@@ -49,6 +52,9 @@ func (c *Service) UpdateConversation(ctx context.Context,
 
 func (c *Service) GetConversation(ctx context.Context,
 	req *model.GetConversationRequest) (*model.GetConversationResponse, error) {
+	if err := c.requireConversationOrganization(ctx, req.GetId()); err != nil {
+		return nil, err
+	}
 	resp := new(model.GetConversationResponse)
 	conversationData, err := c.conversationRepo.GetByID(ctx, req.GetId())
 	if err != nil {
@@ -79,6 +85,9 @@ func (c *Service) GetConversation(ctx context.Context,
 
 func (c *Service) CreateConversation(ctx context.Context,
 	req *model.CreateConversationRequest) (*model.CreateConversationResponse, error) {
+	if err := c.requireAgentInstanceOrganization(ctx, req.GetAgentInstanceId()); err != nil {
+		return nil, err
+	}
 	resp := new(model.CreateConversationResponse)
 	title := strings.TrimSpace(req.GetTitle())
 	if title == "" {
@@ -104,11 +113,14 @@ func (c *Service) CreateConversation(ctx context.Context,
 
 func (c *Service) ListConversation(
 	ctx context.Context, req *model.ListConversationRequest) (*model.ListConversationResponse, error) {
+	if err := c.requireAgentInstanceOrganization(ctx, req.GetAgentInstanceId()); err != nil {
+		return nil, err
+	}
 	resp := new(model.ListConversationResponse)
 	username := middleware.MustGetUsernameFromCtx(ctx)
 	conversationDOList, hasMore, err := c.conversationRepo.List(
 		ctx,
-		conversationReadQueryUsername(ctx, username),
+		c.conversationReadQueryUsername(ctx, username),
 		"",
 		req.GetAgentInstanceId(),
 		int(req.GetPageSize()),
@@ -149,6 +161,9 @@ func (c *Service) ListConversation(
 
 func (c *Service) DeleteConversation(ctx context.Context,
 	req *model.DeleteConversationRequest) (*model.DeleteConversationResponse, error) {
+	if err := c.requireConversationOrganization(ctx, req.GetId()); err != nil {
+		return nil, err
+	}
 	username := middleware.MustGetUsernameFromCtx(ctx)
 	conversation, err := c.conversationRepo.GetByID(ctx, req.GetId())
 	if err != nil {

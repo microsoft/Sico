@@ -17,6 +17,7 @@ Each collaborator holds its own dependencies directly.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from pathlib import Path
@@ -32,6 +33,8 @@ from .domain.models import (
     BatchStatus,
     TaskRun,
 )
+from .domain.results import batch_results
+from .presentation.port import BatchProjectionOptions
 from .presentation.rendering import parent_payload
 from .presentation.progress_sink import ProgressSink
 from .orchestration.run_coordinator import RunCoordinator
@@ -141,21 +144,45 @@ class TaskManager:
             runs_after_cancel = await safe_list_batch_runs(self.store, batch.batch_id)
             cancelled_run_snapshots = _merge_run_snapshots(runs_before_cancel, runs_after_cancel)
             await self.sandbox.release_many(cancelled_run_snapshots)
+            projection_synced = False
+            refreshed_batch = batch
+            refreshed_runs = cancelled_run_snapshots
             try:
-                await self.progress.mark_cancelled_runs(ctx, cancelled_run_snapshots, reason)
                 refreshed_batch = await self.store.get_batch(batch.batch_id)
                 refreshed_runs = await self.store.list_batch_runs(batch.batch_id)
-                await self.progress.publish_parent_batch_progress(ctx, refreshed_batch, refreshed_runs)
-                terminal_status = (
-                    refreshed_batch.status if refreshed_batch.status in TERMINAL_BATCH_STATUSES else BatchStatus.CANCELLED
+                results = await batch_results(self.store, refreshed_runs)
+                if {result.run_id for result in results} != {run.run_id for run in refreshed_runs}:
+                    raise RuntimeError(f"incomplete cancellation results for batch {batch.batch_id}")
+                projection_synced = await self.progress.sync_batch_projection(
+                    ctx,
+                    refreshed_batch,
+                    refreshed_runs,
+                    results,
+                    options=BatchProjectionOptions.cancellation(),
                 )
+            except Exception:
+                _LOGGER.warning("failed to sync cancellation projection batch_id=%s", batch.batch_id, exc_info=True)
+            if projection_synced:
+                continue
+
+            await self.progress.mark_cancelled_runs(ctx, refreshed_runs, reason)
+            terminal_status = (
+                refreshed_batch.status if refreshed_batch.status in TERMINAL_BATCH_STATUSES else BatchStatus.CANCELLED
+            )
+            with contextlib.suppress(Exception):
+                await self.progress.mark_delegate_tasks_terminal(
+                    ctx,
+                    refreshed_batch.parent_tool_call_id or 0,
+                    terminal_status,
+                    batch_id=refreshed_batch.batch_id,
+                )
+            with contextlib.suppress(Exception):
                 await self.progress.mark_parent_step_terminal_if_settled(
                     ctx,
                     refreshed_batch.parent_tool_call_id or 0,
                     terminal_status,
+                    batch_id=refreshed_batch.batch_id,
                 )
-            except Exception:
-                _LOGGER.warning("failed to refresh cancellation progress batch_id=%s", batch.batch_id, exc_info=True)
         return cancelled_count
 
     # -- run / batch directory resolution ----------------------------------

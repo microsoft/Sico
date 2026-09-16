@@ -36,6 +36,7 @@ vi.mock("jotai", async () => {
 });
 
 vi.mock("@/hooks/use-bound-organization", () => ({
+  useBoundOrganizationQuery: () => mockOrganizationQuery(),
   useBoundOrganizationSuspenseQuery: () => mockOrganizationQuery(),
 }));
 

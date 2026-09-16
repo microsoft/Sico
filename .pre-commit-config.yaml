@@ -8,7 +8,8 @@
 #
 # Docs: https://pre-commit.com
 
-exclude: '^internal/'
+# Internal content remains excluded except for the frontend chart validated below.
+exclude: '^internal/(?!deployments/charts/frontend/)'
 
 repos:
   # Basic hygiene — cross-language, fast.
@@ -19,9 +20,9 @@ repos:
         # Skip generated artifacts whose upstream formatters don't guarantee
         # trailing-whitespace conventions (keeps the hook from fighting
         # ``swag init`` / protoc output on every commit).
-        exclude: '\.(svg|md)$|^backend/api/openapi/|^backend/internal/.*/internal/dal/(model|query)/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/'
+        exclude: '\.(svg|md)$|^frontend/\.agents/skills/(agent-browser|figma-code-connect-components|figma-create-design-system-rules|figma-generate-design|figma-implement-design|figma-use|shadcn|vercel-react-best-practices)/|^backend/api/openapi/|^backend/internal/.*/internal/dal/(model|query)/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/'
       - id: end-of-file-fixer
-        exclude: '\.(svg|md)$|^frontend/lingui\.config\.cjs$|^frontend/packages/app/public/landing/|^frontend/packages/shared/src/locales/.*/messages\.mjs$|^frontend/packages/ui/src/assets/loading\.json$|^backend/api/openapi/|^backend/internal/.*/internal/dal/(model|query)/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/'
+        exclude: '\.(svg|md)$|^frontend/\.agents/skills/(agent-browser|figma-code-connect-components|figma-create-design-system-rules|figma-generate-design|figma-implement-design|figma-use|shadcn|vercel-react-best-practices)/|^frontend/lingui\.config\.cjs$|^frontend/packages/app/public/landing/|^frontend/packages/shared/src/locales/.*/messages\.mjs$|^frontend/packages/ui/src/assets/loading\.json$|^backend/api/openapi/|^backend/internal/.*/internal/dal/(model|query)/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/'
       - id: check-yaml
         args: ["--unsafe"]
         exclude: '(^|/).*/deployments/(helm|charts/[^/]+)/templates/.*\.ya?ml$' # Helm templates are Go templates, not plain YAML
@@ -34,7 +35,7 @@ repos:
         # PowerShell scripts often get re-introduced as CRLF on Windows
         # commits; their execution is line-ending agnostic, so don't fail CI
         # over the mismatch.
-        exclude: '^frontend/packages/app/public/landing/|^frontend/packages/app/src/styles/globals\.css$|^backend/api/openapi/|^backend/internal/.*/internal/dal/(model|query)/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/|\.ps1$'
+        exclude: '^frontend/\.agents/skills/(agent-browser|figma-code-connect-components|figma-create-design-system-rules|figma-generate-design|figma-implement-design|figma-use|shadcn|vercel-react-best-practices)/|^frontend/packages/app/public/landing/|^frontend/packages/app/src/styles/globals\.css$|^backend/api/openapi/|^backend/internal/.*/internal/dal/(model|query)/|^backend/internal/transport/(grpc/pb|reverse_grpc/pb|http/dto)/|^core/app/pb/|\.ps1$'
 
   - repo: local
     hooks:
@@ -47,4 +48,4 @@ repos:
         entry: scripts/lint_helm_charts.py
         language: script
         pass_filenames: false
-        files: '^(backend|core)/deployments/helm/'
+        files: '^(backend|core)/deployments/helm/|^internal/deployments/charts/frontend/'

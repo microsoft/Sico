@@ -188,9 +188,6 @@ def _rerun_instruction_item(task: dict[str, Any]) -> dict[str, Any] | None:
             item["capability_id"] = str(dispatch["capability_id"])
         elif dispatch_type == "sub_agent":
             item["profile_id"] = str(dispatch.get("profile_id") or "default")
-            grants = dispatch.get("capability_grants")
-            if isinstance(grants, list) and grants:
-                item["capability_grants"] = [str(grant) for grant in grants if str(grant).strip()]
             if isinstance(dispatch.get("max_model_turns"), int) and dispatch["max_model_turns"] > 0:
                 item["max_model_turns"] = dispatch["max_model_turns"]
         elif dispatch_type:

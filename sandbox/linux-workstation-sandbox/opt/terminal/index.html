@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Terminal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #1e1e1e;
+            overflow: hidden;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+
+        #terminal {
+            width: 100%;
+            height: 100vh;
+            padding: 8px;
+        }
+
+        /* 针对 iframe 嵌入的优化 */
+        body.iframe-embedded {
+            height: 100vh;
+        }
+
+        body.iframe-embedded #terminal {
+            height: calc(100vh - 16px);
+        }
+
+        /* 确保终端在小尺寸下也能正常显示 */
+        @media (max-width: 768px) {
+            #terminal {
+                padding: 4px;
+            }
+
+            body.iframe-embedded #terminal {
+                height: calc(100vh - 8px);
+            }
+        }
+
+        /* 隐藏可能出现的滚动条 */
+        .xterm-viewport {
+            overflow-y: hidden !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
+    <script>
+        class WebTerminal {
+            constructor() {
+                this.term = new Terminal({
+                    cursorBlink: true,
+                    fontSize: 14,
+                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                    theme: {
+                        background: '#1e1e1e',
+                        foreground: '#ffffff'
+                    },
+                    // 性能优化配置
+                    scrollback: 1000,
+                    allowTransparency: false,    // 禁用透明度提高性能
+                    customGlyphs: true,         // 改善渲染性能
+                    scrollOnUserInput: true,    // 用户输入时滚动
+                    convertEol: true
+                });
+
+                this.fitAddon = new FitAddon.FitAddon();
+                this.term.loadAddon(this.fitAddon);
+
+                this.ws = null;
+                this.sessionId = this.getSessionIdFromUrl() || null;
+                this.resizeTimeout = null;
+
+                // 心跳相关配置
+                this.heartbeatInterval = null;
+                this.heartbeatTimeout = null;
+                this.pingsSent = 0;
+                this.pongsReceived = 0;
+                this.maxMissedPings = 3;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                this.reconnectDelay = 2000; // 2秒
+                this.focusRetryTimers = new Set();
+            }
+
+            focusTerminal() {
+                if (!this.term) {
+                    return;
+                }
+                try {
+                    this.term.focus();
+                    const helper = document.querySelector('.xterm-helper-textarea');
+                    if (helper instanceof HTMLElement) {
+                        helper.focus({ preventScroll: true });
+                    }
+                } catch (e) {
+                    console.debug('Failed to focus terminal:', e);
+                }
+            }
+
+            scheduleFocus(delay = 0) {
+                const timer = setTimeout(() => {
+                    this.focusRetryTimers.delete(timer);
+                    this.focusTerminal();
+                }, delay);
+                this.focusRetryTimers.add(timer);
+            }
+
+            scheduleFocusSequence(delays) {
+                delays.forEach((delay) => this.scheduleFocus(delay));
+            }
+
+            notifyParent(type, payload = {}) {
+                if (window.parent === window) {
+                    return;
+                }
+                try {
+                    window.parent.postMessage({ type, ...payload }, window.location.origin);
+                } catch (e) {
+                    console.debug('Failed to notify parent window:', e);
+                }
+            }
+
+            getSessionIdFromUrl() {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('session_id');
+            }
+
+            getProxyBase() {
+                const path = window.location.pathname || '';
+                const match = path.match(/^(.*?)(?:\/terminal(?:\/index\.html)?\/?$)/);
+                return match ? match[1] : '';
+            }
+
+            buildWebSocketUrl() {
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const proxyBase = this.getProxyBase();
+                const wsPath = proxyBase ? `${proxyBase}/v1/shell/ws` : '/v1/shell/ws';
+                const url = new URL(wsPath, window.location.origin);
+                if (this.sessionId) {
+                    url.searchParams.set('session_id', this.sessionId);
+                }
+                url.protocol = wsProtocol;
+                return url.toString();
+            }
+
+            stopHeartbeat() {
+                if (this.heartbeatInterval) {
+                    clearInterval(this.heartbeatInterval);
+                    this.heartbeatInterval = null;
+                }
+                if (this.heartbeatTimeout) {
+                    clearTimeout(this.heartbeatTimeout);
+                    this.heartbeatTimeout = null;
+                }
+            }
+
+            sendPing() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const timestamp = Date.now();
+                    this.sendMessage('ping', { timestamp });
+                    this.pingsSent++;
+
+                    // 设置超时检测
+                    this.heartbeatTimeout = setTimeout(() => {
+                        const missedPings = this.pingsSent - this.pongsReceived;
+                        if (missedPings >= this.maxMissedPings) {
+                            console.log('Heart beat timeout, attempting to reconnect...');
+                            this.handleConnectionLoss();
+                        }
+                    }, 10000); // 10秒超时
+                }
+            }
+
+            handlePong(message) {
+                this.pongsReceived++;
+                if (this.heartbeatTimeout) {
+                    clearTimeout(this.heartbeatTimeout);
+                    this.heartbeatTimeout = null;
+                }
+
+                // 计算延迟
+                const timestamp = message.timestamp || message.data?.timestamp;
+                if (timestamp) {
+                    const latency = Date.now() - timestamp;
+                    console.log(`WebSocket latency: ${latency}ms`);
+                }
+            }
+
+            handleConnectionLoss() {
+                this.stopHeartbeat();
+                if (this.ws) {
+                    this.ws.close();
+                }
+                this.attemptReconnect();
+            }
+
+            attemptReconnect() {
+                if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+                    this.term.write('\r\n\x1b[31mMax reconnection attempts reached. Please refresh the page.\x1b[0m\r\n');
+                    return;
+                }
+
+                this.reconnectAttempts++;
+                this.term.write(`\r\n\x1b[33mConnection lost. Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...\x1b[0m\r\n`);
+
+                setTimeout(() => {
+                    this.connect();
+                }, this.reconnectDelay);
+
+                // 增加重连间隔
+                this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 30000);
+            }
+
+            connect() {
+                const wsUrl = this.buildWebSocketUrl();
+                this.ws = new WebSocket(wsUrl);
+
+                this.ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    this.reconnectAttempts = 0; // 重置重连计数
+                    this.reconnectDelay = 2000; // 重置重连延迟
+                };
+
+                this.ws.onmessage = async (event) => {
+                    try {
+                        if (event.data instanceof ArrayBuffer) {
+                            const text = new TextDecoder().decode(event.data);
+                            this.term.write(text);
+                            return;
+                        }
+
+                        if (event.data instanceof Blob) {
+                            const buf = await event.data.arrayBuffer();
+                            const text = new TextDecoder().decode(buf);
+                            this.term.write(text);
+                            return;
+                        }
+
+                        if (typeof event.data === 'string') {
+                            try {
+                                const message = JSON.parse(event.data);
+                                this.handleMessage(message);
+                            } catch (e) {
+                                this.term.write(event.data);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('WebSocket message handling failed:', e);
+                    }
+                };
+
+                this.ws.onclose = (event) => {
+                    console.log('WebSocket disconnected', event.code, event.reason);
+                    this.stopHeartbeat(); // 停止心跳
+
+                    // 如果不是主动关闭，尝试重连
+                    if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
+                        this.attemptReconnect();
+                    } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+                        this.term.write('\r\n\x1b[31mConnection lost. Please refresh to reconnect.\x1b[0m\r\n');
+                    }
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+            }
+
+            handleMessage(message) {
+                switch (message.type) {
+                    case 'session_id':
+                        this.sessionId = message.data;
+                        console.log('New Session ID:', this.sessionId);
+                        // 只有当URL中没有session_id时才更新URL（新会话）
+                        if (!this.getSessionIdFromUrl()) {
+                            const url = new URL(window.location);
+                            url.searchParams.set('session_id', this.sessionId);
+                            window.history.replaceState({}, '', url);
+                        }
+                        break;
+
+                    case 'output':
+                        this.term.write(message.data);
+                        break;
+
+                    case 'ready':
+                        this.term.write(message.data + '\r\n');
+                        this.scheduleFocusSequence([0, 150, 600]);
+                        this.notifyParent('terminal-ready-for-focus');
+                        break;
+
+                    case 'restore_output':
+                    case 'current_output':
+                        // 恢复终端历史记录和当前输出
+                        if (message.data) {
+                            this.term.write(message.data);
+                        }
+                        break;
+
+                    case 'terminal_restored':
+                        // 终端状态恢复完成
+                        console.log('Terminal state restored:', message.data);
+                        break;
+
+                    case 'process_exit':
+                        this.term.write(`\r\n\x1b[33mProcess exited with code: ${message.code}\x1b[0m\r\n`);
+                        break;
+
+                    case 'error':
+                        this.term.write(`\r\n\x1b[31mError: ${message.data}\x1b[0m\r\n`);
+                        break;
+
+                    case 'ping':
+                        // 响应服务器的ping消息
+                        this.sendMessage('pong', { timestamp: message.timestamp });
+                        break;
+
+                    case 'pong':
+                        // 处理服务器的pong响应
+                        this.handlePong(message);
+                        break;
+
+                    default:
+                        console.log('Unknown message type:', message.type);
+                }
+            }
+
+            sendMessage(type, data) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    const payload = { type };
+                    if (data && typeof data === 'object' && !Array.isArray(data)) {
+                        Object.assign(payload, data);
+                    } else if (data !== undefined) {
+                        payload.data = data;
+                    }
+                    this.ws.send(JSON.stringify(payload));
+                }
+            }
+
+            init() {
+                // 检测是否在 iframe 中
+                this.detectIframeEnvironment();
+
+                // 打开终端
+                const terminalElement = document.getElementById('terminal');
+                this.term.open(terminalElement);
+                terminalElement.addEventListener('click', () => this.focusTerminal());
+                terminalElement.addEventListener('mousedown', () => this.focusTerminal());
+
+                // 延迟适配，确保 DOM 完全渲染
+                setTimeout(() => {
+                    this.fitAddon.fit();
+                    this.sendInitialResize();
+                    this.focusTerminal();
+                    this.notifyParent('terminal-ready-for-focus');
+                }, 100);
+
+                window.addEventListener('focus', () => this.scheduleFocus(0));
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden) {
+                        this.scheduleFocus(50);
+                    }
+                });
+                window.addEventListener('message', (event) => {
+                    if (event.origin !== window.location.origin) {
+                        return;
+                    }
+                    if (event.data?.type === 'focus-terminal') {
+                        this.scheduleFocus(0);
+                    }
+                });
+
+                // 处理用户输入
+                this.term.onData((data) => {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(data);
+                    }
+                });
+
+                // 处理窗口大小调整 - 使用passive监听提高性能
+                window.addEventListener('resize', this.handleResize.bind(this), { passive: true });
+
+                // 连接 WebSocket
+                this.connect();
+            }
+
+            detectIframeEnvironment() {
+                try {
+                    // 检测是否在 iframe 中
+                    if (window.self !== window.top) {
+                        document.body.classList.add('iframe-embedded');
+
+                        // 监听来自父窗口的消息
+                        window.addEventListener('message', (event) => {
+                            if (event.origin !== window.location.origin) {
+                                return;
+                            }
+                            if (event.data.type === 'resize') {
+                                setTimeout(() => this.handleResize(), 50);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    // 如果无法访问 window.top，说明在跨域 iframe 中
+                    document.body.classList.add('iframe-embedded');
+                }
+            }
+
+            handleResize() {
+                clearTimeout(this.resizeTimeout);
+                this.resizeTimeout = setTimeout(() => {
+                    this.fitAddon.fit();
+                    this.sendInitialResize();
+                }, 100);
+            }
+
+            sendInitialResize() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.sendMessage('resize', {
+                        cols: this.term.cols,
+                        rows: this.term.rows
+                    });
+                }
+            }
+        }
+
+        // 初始化终端
+        const terminal = new WebTerminal();
+        terminal.init();
+    </script>
+</body>
+</html>

@@ -10,9 +10,11 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from ..domain.models import ReservationToken, SandboxLeaseRef, SandboxRequirement
 from .types import (
+    SANDBOX_TYPES,
     TYPE_OS,
     eligible_types_for_os,
     lease_type_from_sandbox_id,
+    normalize_sandbox_type,
 )
 from ..domain.time import now_ms as _now_ms
 
@@ -61,6 +63,11 @@ class InMemorySandboxLeaseManager:
     _leases: dict[str, str] = field(default_factory=dict)
     reset_count: int = 0
 
+    def __post_init__(self) -> None:
+        self.capacities = {
+            normalize_sandbox_type(sandbox_type): capacity for sandbox_type, capacity in self.capacities.items()
+        }
+
     async def reserve(self, req: SandboxRequirement, run_id: str) -> ReservationToken:
         if req.count != 1:
             raise SandboxNoCapacityError("in-memory lease manager supports one sandbox per run")
@@ -87,11 +94,12 @@ class InMemorySandboxLeaseManager:
         # nothing to imitate, so keep the selector itself rather than index into
         # an empty tuple.
         eligible = eligible_types_for_os(token.type)
-        lease_type = eligible[0] if eligible else token.type
+        lease_type = token.type if token.type in SANDBOX_TYPES else eligible[0] if eligible else token.type
+        lease_os = TYPE_OS.get(lease_type, token.type)
         lease = SandboxLeaseRef(
             sandbox_id=f"{lease_type}:{uuid.uuid4().hex[:8]}",
             type=lease_type,
-            os=token.type,
+            os=lease_os,
             endpoint=f"memory://{lease_type}/{token.run_id}",
             provider_base_url=f"memory://{lease_type}",
             device_id=f"{lease_type}-{token.run_id}",
@@ -184,7 +192,7 @@ class ReverseGrpcSandboxLeaseManager:
         supplied_os = (getattr(result, "os", "") or "").strip() or TYPE_OS.get(lease_type or "")
         if lease_type is None:
             reason = f"backend applied an unidentifiable sandbox id {result.applied_sandbox_id!r} for a {token.type} reservation"
-        elif supplied_os and supplied_os != token.type:
+        elif token.type not in SANDBOX_TYPES and supplied_os and supplied_os != token.type:
             # A fixed-OS type states the OS it always provides, so a mismatch is
             # decidable here. Types absent from TYPE_OS span operating systems
             # (their OS is per-resource and only the backend knows it), so they

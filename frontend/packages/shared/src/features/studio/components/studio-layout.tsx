@@ -7,6 +7,7 @@ import { AgentSetupSkeleton } from "./agent-setup-skeleton";
 import { StudioAccessBoundary } from "./studio-access-boundary";
 import { StudioSkeleton } from "./studio-skeleton";
 import { ErrorView } from "../../../components/error-view/error-view";
+import { useBoundOrganizationQuery } from "../../../hooks/use-bound-organization";
 
 function isSetupPath(pathname: string): boolean {
   return (
@@ -21,6 +22,7 @@ export function StudioLayout({
   children: ReactNode;
 }): React.JSX.Element {
   const { reset } = useQueryErrorResetBoundary();
+  const { data: organization } = useBoundOrganizationQuery();
   const { pathname } = useLocation();
   const fallback = isSetupPath(pathname) ? (
     <AgentSetupSkeleton />
@@ -31,7 +33,7 @@ export function StudioLayout({
     <ErrorBoundary
       FallbackComponent={ErrorView}
       onReset={reset}
-      resetKeys={[pathname]}
+      resetKeys={[pathname, organization?.id]}
     >
       <Suspense fallback={fallback}>
         <StudioAccessBoundary>{children}</StudioAccessBoundary>

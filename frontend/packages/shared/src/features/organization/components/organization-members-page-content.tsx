@@ -37,8 +37,8 @@ export function OrganizationMembersPageContent({
             variant="subtle"
             size="icon-xs"
             aria-label={t({
-              id: "organization.editName.open",
-              message: "Rename organization",
+              id: "organization.edit.open",
+              message: "Edit organization",
             })}
             onClick={() => setEditName(true)}
           >
@@ -59,6 +59,7 @@ export function OrganizationMembersPageContent({
         <EditOrgNameDialog
           organizationId={organizationId}
           currentName={organizationDetail.name}
+          currentIconUrl={organizationDetail.iconUrl}
           open={editName}
           onOpenChange={setEditName}
         />

@@ -19,8 +19,21 @@ type sandboxPool interface {
 	UpdateResolvedResourceCache(ctx context.Context, resource *sandboximpl.Resource) error
 }
 
+type resourceProxyAuthorizer interface {
+	AuthorizeResourceProxy(ctx context.Context, resource *sandboximpl.Resource) error
+	AuthorizeSandboxProviderOperation(ctx context.Context) error
+}
+
 type httpRouteProvider interface {
 	registerHTTPRoutes(routes *gin.RouterGroup, pool sandboxPool)
+}
+
+type authorizedHTTPRouteProvider interface {
+	registerAuthorizedHTTPRoutes(
+		routes *gin.RouterGroup,
+		pool sandboxPool,
+		authorizer resourceProxyAuthorizer,
+	)
 }
 
 type Factory interface {
@@ -49,31 +62,41 @@ func NewIntegration(
 type publicFactory struct{}
 
 type publicIntegration struct {
-	providers []sandboximpl.Provider
-	pool      sandboxPool
+	providers  []sandboximpl.Provider
+	pool       sandboxPool
+	authorizer resourceProxyAuthorizer
 }
 
 func (publicFactory) Providers() []sandboximpl.Provider {
-	return []sandboximpl.Provider{NewEmulatorProvider()}
+	return []sandboximpl.Provider{NewEmulatorProvider(), NewLinuxWorkstationProvider()}
 }
 
 func (publicFactory) NewIntegration(
 	providers []sandboximpl.Provider,
-	_ *sandboximpl.Service,
+	service *sandboximpl.Service,
 	pool *sandboximpl.Pool,
 ) Integration {
-	return &publicIntegration{providers: providers, pool: pool}
+	return &publicIntegration{providers: providers, pool: pool, authorizer: service}
 }
 
 func (c *publicIntegration) RegisterHTTPRoutes(routes *gin.RouterGroup) {
-	registerProviderHTTPRoutes(routes, c.providers, c.pool)
+	registerProviderHTTPRoutes(routes, c.providers, c.pool, c.authorizer)
 }
 
 func (*publicIntegration) RegisterReverseGRPCServices(grpc.ServiceRegistrar) {}
 
-func registerProviderHTTPRoutes(routes *gin.RouterGroup, providers []sandboximpl.Provider, pool sandboxPool) {
+func registerProviderHTTPRoutes(
+	routes *gin.RouterGroup,
+	providers []sandboximpl.Provider,
+	pool sandboxPool,
+	authorizer resourceProxyAuthorizer,
+) {
 	sandboxRoutes := routes.Group("/sandbox")
 	for _, provider := range providers {
+		if routeProvider, ok := provider.(authorizedHTTPRouteProvider); ok {
+			routeProvider.registerAuthorizedHTTPRoutes(sandboxRoutes, pool, authorizer)
+			continue
+		}
 		if routeProvider, ok := provider.(httpRouteProvider); ok {
 			routeProvider.registerHTTPRoutes(sandboxRoutes, pool)
 		}

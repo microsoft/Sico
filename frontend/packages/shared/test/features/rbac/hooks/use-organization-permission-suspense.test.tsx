@@ -12,6 +12,7 @@ import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { userAtom } from "@/atoms/auth-atom";
+import { selectedOrganizationIdAtom } from "@/features/organization/atoms/selected-organization-atom";
 import { organizationKeys } from "@/features/organization/query-keys";
 import * as organizationService from "@/features/organization/services/organization";
 import { useOrganizationPermissionSuspense } from "@/features/rbac/hooks/use-organization-permission";
@@ -19,6 +20,9 @@ import { rbacKeys } from "@/features/rbac/query-keys";
 import type { UserRole } from "@/features/rbac/schemas/user-role";
 import * as roleService from "@/features/rbac/services/user-role";
 import { ApiClientProvider } from "@/services/api-client-context";
+import { persistLoginPayload } from "@/utils/auth-storage";
+
+import { makeLoginPayload } from "../../../helpers/organization-context";
 
 vi.mock("@/features/organization/services/organization");
 vi.mock("@/features/rbac/services/user-role");
@@ -62,6 +66,7 @@ function QueryBoundary({ children }: { children: ReactNode }): ReactElement {
 function makeWrapper(staleTime = 30_000): {
   Wrapper: (props: { children: ReactNode }) => ReactElement;
   queryClient: QueryClient;
+  store: ReturnType<typeof createStore>;
 } {
   const store = createStore();
   store.set(userAtom, { id: 7, email: "user@example.com", roles: [] });
@@ -81,7 +86,7 @@ function makeWrapper(staleTime = 30_000): {
     );
   }
 
-  return { Wrapper, queryClient };
+  return { Wrapper, queryClient, store };
 }
 
 function seedPermission(
@@ -104,6 +109,7 @@ function organizationRole(
 }
 
 beforeEach(() => {
+  persistLoginPayload(makeLoginPayload(7));
   vi.mocked(organizationService.fetchUserOrganizations)
     .mockReset()
     .mockResolvedValue([boundOrganization]);
@@ -143,6 +149,38 @@ describe("useOrganizationPermissionSuspense", () => {
       canManageOrganizationDevices: true,
       canManage: true,
     });
+  });
+
+  it("removes admin capabilities when selection changes to an organization where the user is a member", async () => {
+    const memberOrganization = {
+      ...boundOrganization,
+      id: 10,
+      name: "Member organization",
+    };
+    const { Wrapper, queryClient, store } = makeWrapper();
+    seedPermission(
+      queryClient,
+      [organizationRole("org_admin"), organizationRole("org_member", 10)],
+      [boundOrganization, memberOrganization],
+    );
+    const { result } = renderHook(() => useOrganizationPermissionSuspense(), {
+      wrapper: Wrapper,
+    });
+    expect(result.current.canManage).toBe(true);
+    expect(result.current.canEnterStudio).toBe(true);
+
+    act(() => store.set(selectedOrganizationIdAtom, memberOrganization.id));
+
+    await waitFor(() => expect(result.current.canManage).toBe(false));
+    expect(result.current).toEqual({
+      canEnterStudio: false,
+      canRenameOrganization: false,
+      canManageOrganizationMembers: false,
+      canManageOrganizationDevices: false,
+      canManage: false,
+    });
+    expect(organizationService.fetchUserOrganizations).not.toHaveBeenCalled();
+    expect(roleService.fetchUserRoles).not.toHaveBeenCalled();
   });
 
   it("denies Studio and management actions to a matching org_member", () => {

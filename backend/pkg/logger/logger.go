@@ -132,6 +132,7 @@ func (l *Logger) logf(level LogLevel, format string, args ...interface{}) {
 		message)
 
 	l.Println(logEntry)
+	emitOTLPLog(context.Background(), level, message, file, line)
 
 	// Exit for FATAL level
 	if level == FATAL {
@@ -176,6 +177,7 @@ func (l *Logger) logfCtx(ctx context.Context, level LogLevel, format string, arg
 		message)
 
 	l.Println(logEntry)
+	emitOTLPLog(ctx, level, message, file, line)
 
 	// Exit for FATAL level
 	if level == FATAL {

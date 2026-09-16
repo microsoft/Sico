@@ -102,7 +102,7 @@ async function mockOrganizationData(page: Page): Promise<void> {
       contentType: "application/json",
       body: JSON.stringify(
         makeOkEnvelope({
-          aio: [],
+          linux_workstation: [],
           emulator: [
             device("mobile-assigned", "emulator", 21),
             device("mobile-available", "emulator", 0),

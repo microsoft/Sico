@@ -1,9 +1,29 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { getDefaultStore } from "jotai";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { createProjectDialogOpenAtom } from "@/features/projects/atoms/create-project-dialog-atom";
 
 import { Projects } from "../../../../src/features/projects/components/projects";
 import { ProjectsGrid } from "../../../../src/features/projects/components/projects-grid";
+
+let organization: { id: number } | null | undefined;
+let organizationError: Error | null = null;
+
+vi.mock("@/hooks/use-bound-organization", () => ({
+  useBoundOrganizationQuery: () => ({
+    data: organization,
+    isError: organizationError !== null,
+    error: organizationError,
+  }),
+}));
+
+beforeEach(() => {
+  organization = { id: 9 };
+  organizationError = null;
+  getDefaultStore().set(createProjectDialogOpenAtom, false);
+});
 
 vi.mock("../../../../src/features/projects/components/projects-grid", () => ({
   ProjectsGrid: vi.fn(() => <div data-testid="projects-grid" />),
@@ -37,6 +57,59 @@ afterEach(() => {
 });
 
 describe("<Projects>", () => {
+  it.each([undefined, null])(
+    "hides creation when the resolved organization is %s",
+    (unavailable) => {
+      organization = unavailable;
+      render(<Projects />);
+
+      expect(
+        screen.queryByRole("button", { name: "Create Project" }),
+      ).not.toBeInTheDocument();
+      expect(vi.mocked(ProjectsGrid).mock.lastCall?.[0]).toEqual(
+        expect.objectContaining({ onCreate: undefined }),
+      );
+    },
+  );
+
+  it("keeps the project list visible when organization loading fails", () => {
+    organization = undefined;
+    organizationError = new Error("organization request failed");
+    getDefaultStore().set(createProjectDialogOpenAtom, true);
+    render(<Projects />);
+
+    expect(screen.getByTestId("projects-grid")).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps creation available when an organization refetch fails with cached data", async () => {
+    organizationError = new Error("organization refetch failed");
+    const user = userEvent.setup();
+    render(<Projects />);
+
+    await user.click(screen.getByRole("button", { name: "Create Project" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Create Project" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("waits for a valid organization before honoring an external create request", () => {
+    organization = undefined;
+    getDefaultStore().set(createProjectDialogOpenAtom, true);
+    const { rerender } = render(<Projects />);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    organization = { id: 9 };
+    rerender(<Projects />);
+
+    expect(
+      screen.getByRole("dialog", { name: "Create Project" }),
+    ).toBeVisible();
+  });
+
   it("renders the page <h1> 'Projects' and the subtitle copy", () => {
     render(<Projects />);
     const heading = screen.getByRole("heading", {

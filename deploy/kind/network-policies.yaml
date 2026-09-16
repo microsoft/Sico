@@ -9,6 +9,41 @@ spec:
   policyTypes:
     - Ingress
 ---
+# Default deny all ingress in the sandbox namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: sandbox
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Allow Backend to discover and control Linux Workstation over HTTP
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-to-linux-workstation
+  namespace: sandbox
+spec:
+  podSelector:
+    matchLabels:
+      app: linux-workstation-sandbox
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: sico
+          podSelector:
+            matchLabels:
+              app: sico-backend
+      ports:
+        - port: 8080
+          protocol: TCP
+---
 # Allow backend -> MySQL
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -136,6 +171,48 @@ spec:
         - port: 9092
           protocol: TCP
 ---
+# Allow core -> Qdrant
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-core-to-qdrant
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-qdrant
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-core
+      ports:
+        - port: 6333
+          protocol: TCP
+---
+# Allow core -> prepared environment runner
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-core-to-environment-runner
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-environment-runner
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-core
+      ports:
+        - port: 8080
+          protocol: TCP
+---
 # Allow external -> Kafka UI (port-forwarded)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -186,7 +263,7 @@ spec:
         - port: 19335
           protocol: TCP
 ---
-# Allow SeaweedFS internal: filer + volume -> master
+# Allow SeaweedFS internal traffic and backend storage-readiness checks -> master
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -206,15 +283,18 @@ spec:
         - podSelector:
             matchLabels:
               app: sico-seaweedfs-filer
+        - podSelector:
+            matchLabels:
+              app: sico-backend
       ports:
         # 9333 = master HTTP, 19333 = master gRPC (used by filer to assign file ids
-        # and by volume server heartbeats). Both must be reachable.
+        # and by volume server heartbeats). The backend checks /dir/assign on 9333.
         - port: 9333
           protocol: TCP
         - port: 19333
           protocol: TCP
 ---
-# Allow SeaweedFS internal: filer -> volume
+# Allow SeaweedFS internal: master + filer -> volume
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -230,9 +310,13 @@ spec:
     - from:
         - podSelector:
             matchLabels:
+              app: sico-seaweedfs-master
+        - podSelector:
+            matchLabels:
               app: sico-seaweedfs-filer
       ports:
-        # 9334 = volume HTTP, 19334 = volume gRPC (filer streams chunk uploads here).
+        # 9334 = volume HTTP, 19334 = volume gRPC (master creates volumes and
+        # filer streams chunk uploads here).
         - port: 9334
           protocol: TCP
         - port: 19334
@@ -274,4 +358,32 @@ spec:
               app: sico-nginx
       ports:
         - port: 80
+          protocol: TCP
+---
+# Allow Core and local port-forward access to Qdrant.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-qdrant-ingress
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-qdrant
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-core
+      ports:
+        - port: 6333
+          protocol: TCP
+        - port: 6334
+          protocol: TCP
+    - ports:
+        - port: 6333
+          protocol: TCP
+        - port: 6334
           protocol: TCP

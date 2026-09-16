@@ -736,6 +736,7 @@ type UpdateSingleAgentInstanceRequest struct {
 	Attachments      []*common.Attachment   `protobuf:"bytes,10,rep,name=attachments,proto3" json:"attachments"`                                   
 	ProjectId        int64                  `protobuf:"varint,12,opt,name=project_id,json=projectId,proto3" json:"projectId"`                     
 	Desc             string                 `protobuf:"bytes,13,opt,name=desc,proto3" json:"desc"`                                                 
+	IconUri          string                 `protobuf:"bytes,14,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri"`                            
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -815,6 +816,13 @@ func (x *UpdateSingleAgentInstanceRequest) GetProjectId() int64 {
 func (x *UpdateSingleAgentInstanceRequest) GetDesc() string {
 	if x != nil {
 		return x.Desc
+	}
+	return ""
+}
+
+func (x *UpdateSingleAgentInstanceRequest) GetIconUri() string {
+	if x != nil {
+		return x.IconUri
 	}
 	return ""
 }
@@ -1703,7 +1711,7 @@ const file_agent_single_agent_instance_proto_rawDesc = "" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"d\n" +
 	"\x1aGetSingleAgentInstanceData\x12F\n" +
-	"\binstance\x18\x01 \x01(\v2*.single_agent_instance.SingleAgentInstanceR\binstance\"\x82\x02\n" +
+	"\binstance\x18\x01 \x01(\v2*.single_agent_instance.SingleAgentInstanceR\binstance\"\x9d\x02\n" +
 	" UpdateSingleAgentInstanceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12+\n" +
 	"\x11operator_username\x18\x02 \x01(\tR\x10operatorUsername\x12\x1e\n" +
@@ -1715,7 +1723,8 @@ const file_agent_single_agent_instance_proto_rawDesc = "" +
 	" \x03(\v2\x12.common.AttachmentR\vattachments\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\f \x01(\x03R\tprojectId\x12\x12\n" +
-	"\x04desc\x18\r \x01(\tR\x04descJ\x04\b\v\x10\f\"K\n" +
+	"\x04desc\x18\r \x01(\tR\x04desc\x12\x19\n" +
+	"\bicon_uri\x18\x0e \x01(\tR\aiconUriJ\x04\b\v\x10\f\"K\n" +
 	"!UpdateSingleAgentInstanceResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\xaf\x01\n" +

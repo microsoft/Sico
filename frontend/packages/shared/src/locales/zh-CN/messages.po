@@ -588,6 +588,11 @@ msgid "common.field.email"
 msgstr "邮箱"
 
 #. js-lingui-explicit-id
+#: packages/shared/src/hooks/use-image-upload.ts
+msgid "common.imageUpload.failed"
+msgstr "无法上传图片。请重试。"
+
+#. js-lingui-explicit-id
 #: packages/shared/src/features/chat/components/digital-worker-home/digital-worker-home-skeleton.tsx
 #: packages/shared/src/features/studio/components/studio-editor-roster.tsx
 msgid "common.status.loading"
@@ -609,10 +614,21 @@ msgid "common.status.saving"
 msgstr "保存中…"
 
 #. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
 #: packages/shared/src/features/projects/components/add-knowledge-dialog.tsx
 #: packages/shared/src/features/skill/components/dialogs/upload-button-content.tsx
 msgid "common.status.uploading"
 msgstr "上传中"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/hooks/use-add-dw-submit.ts
+msgid "digitalWorker.addDialog.added"
+msgstr "已添加数字员工。"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/hooks/use-add-dw-submit.ts
+msgid "digitalWorker.addDialog.addFailed"
+msgstr "无法添加该数字员工。"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/digital-worker/components/avatar-field.tsx
@@ -665,6 +681,11 @@ msgid "digitalWorker.addDialog.projectsNoun"
 msgstr "项目"
 
 #. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/hooks/use-add-dw-submit.ts
+msgid "digitalWorker.addDialog.signInRequired"
+msgstr "你必须登录后才能添加数字员工。"
+
+#. js-lingui-explicit-id
 #: packages/shared/src/features/digital-worker/components/add-dw-dialog-header.tsx
 msgid "digitalWorker.addDialog.title"
 msgstr "添加数字员工"
@@ -715,8 +736,7 @@ msgid "digitalWorker.addDialog.workersNoun"
 msgstr "数字员工"
 
 #. js-lingui-explicit-id
-#. placeholder {0}: i + 1
-#: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
+#: packages/shared/src/features/digital-worker/components/dw-avatar-grid.tsx
 msgid "digitalWorker.avatarPicker.avatarAria"
 msgstr "头像 {index}"
 
@@ -726,7 +746,7 @@ msgid "digitalWorker.avatarPicker.changeAvatarAria"
 msgstr "更换头像"
 
 #. js-lingui-explicit-id
-#: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
+#: packages/shared/src/features/digital-worker/components/dw-avatar-grid.tsx
 msgid "digitalWorker.avatarPicker.groupAria"
 msgstr "头像"
 
@@ -734,6 +754,11 @@ msgstr "头像"
 #: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
 msgid "digitalWorker.avatarPicker.hint"
 msgstr "点击头像或随机按钮生成另一个。"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/digital-worker/services/load-avatar-preset.ts
+msgid "digitalWorker.avatarPicker.loadFailed"
+msgstr "无法加载头像。请重试。"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/digital-worker/components/dw-avatar-picker.tsx
@@ -1199,33 +1224,53 @@ msgstr "Windows"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
-msgid "organization.editName.failed"
-msgstr "无法重命名此组织。"
+msgid "organization.edit.failed"
+msgstr "无法更新此组织。"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-members-page-content.tsx
+msgid "organization.edit.open"
+msgstr "编辑组织"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
+msgid "organization.edit.success"
+msgstr "组织已更新。"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
+msgid "organization.edit.title"
+msgstr "编辑组织"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-avatar-field.tsx
+msgid "organization.editName.avatar.change"
+msgstr "更换头像"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-avatar-field.tsx
+msgid "organization.editName.avatar.choose"
+msgstr "选择组织头像"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-avatar-field.tsx
+msgid "organization.editName.avatar.fileInput"
+msgstr "组织头像文件"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-avatar-field.tsx
+msgid "organization.editName.avatar.label"
+msgstr "组织头像"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/organization/components/organization-name-field.tsx
 msgid "organization.editName.label"
 msgstr "组织名称"
 
 #. js-lingui-explicit-id
-#: packages/shared/src/features/organization/components/organization-members-page-content.tsx
-msgid "organization.editName.open"
-msgstr "重命名组织"
-
-#. js-lingui-explicit-id
-#: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
+#: packages/shared/src/features/organization/components/organization-name-field.tsx
 msgid "organization.editName.placeholder"
 msgstr "请输入组织名称"
-
-#. js-lingui-explicit-id
-#: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
-msgid "organization.editName.success"
-msgstr "组织名称已更新。"
-
-#. js-lingui-explicit-id
-#: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
-msgid "organization.editName.title"
-msgstr "重命名组织"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/organization/components/edit-org-name-dialog.tsx
@@ -1955,13 +2000,13 @@ msgstr "可用"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/projects/components/drawer-sandbox-section.tsx
-msgid "projects.drawerSandbox.deviceType.aio"
-msgstr "AIO"
+msgid "projects.drawerSandbox.deviceType.android"
+msgstr "Android"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/projects/components/drawer-sandbox-section.tsx
-msgid "projects.drawerSandbox.deviceType.android"
-msgstr "Android"
+msgid "projects.drawerSandbox.deviceType.linuxWorkstation"
+msgstr "Linux 工作站"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/projects/components/drawer-sandbox-section.tsx
@@ -2795,6 +2840,11 @@ msgstr "模拟器"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/sandbox-devices/components/devices-table.tsx
+msgid "sandboxDevices.type.linuxWorkstation"
+msgstr "Linux 工作站"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/sandbox-devices/components/devices-table.tsx
 msgid "sandboxDevices.type.physical"
 msgstr "实体设备"
 
@@ -3255,6 +3305,11 @@ msgid "sidebar.footer.accountOptions"
 msgstr "账户选项"
 
 #. js-lingui-explicit-id
+#: packages/shared/src/features/sidebar/components/organization-account-menu-section.tsx
+msgid "sidebar.footer.currentOrganization"
+msgstr "当前组织"
+
+#. js-lingui-explicit-id
 #: packages/shared/src/features/sidebar/components/sidebar-account-menu.tsx
 msgid "sidebar.footer.goToSico"
 msgstr "前往 SICO"
@@ -3278,6 +3333,21 @@ msgstr "退出登录"
 #: packages/shared/src/features/sidebar/components/manage-organization-menu-item.tsx
 msgid "sidebar.footer.manageOrganization"
 msgstr "管理组织"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/sidebar/components/organization-account-menu-section.tsx
+msgid "sidebar.footer.organizationsLoadError"
+msgstr "无法加载组织"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/sidebar/components/organization-account-menu-section.tsx
+msgid "sidebar.footer.organizationsLoading"
+msgstr "正在加载组织…"
+
+#. js-lingui-explicit-id
+#: packages/shared/src/features/sidebar/components/organization-account-menu-section.tsx
+msgid "sidebar.footer.switchOrganization"
+msgstr "切换组织"
 
 #. js-lingui-explicit-id
 #: packages/shared/src/features/sidebar/components/sidebar-menu.tsx

@@ -7,6 +7,77 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+func WithTracingInvitationRepository(next InvitationRepository) InvitationRepository {
+	if next == nil {
+		return nil
+	}
+	return &otelTracedInvitationRepository{next: next}
+}
+
+type otelTracedInvitationRepository struct {
+	next InvitationRepository
+}
+
+func (w *otelTracedInvitationRepository) Create(ctx context.Context, invitation *InvitationModel) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "InvitationRepository.Create")
+	defer span.End()
+
+	ret0 := w.next.Create(ctx, invitation)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedInvitationRepository) GetByID(ctx context.Context, id int64) (*InvitationModel, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "InvitationRepository.GetByID")
+	defer span.End()
+
+	ret0, ret1 := w.next.GetByID(ctx, id)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedInvitationRepository) GetByTokenHash(ctx context.Context, tokenHash string) (*InvitationModel, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "InvitationRepository.GetByTokenHash")
+	defer span.End()
+
+	ret0, ret1 := w.next.GetByTokenHash(ctx, tokenHash)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedInvitationRepository) ListByOrganization(ctx context.Context, organizationID int64, page int32, pageSize int32) ([]*InvitationModel, int64, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "InvitationRepository.ListByOrganization")
+	defer span.End()
+
+	ret0, ret1, ret2 := w.next.ListByOrganization(ctx, organizationID, page, pageSize)
+	if ret2 != nil {
+		span.RecordError(ret2)
+		span.SetStatus(codes.Error, ret2.Error())
+	}
+	return ret0, ret1, ret2
+}
+
+func (w *otelTracedInvitationRepository) Revoke(ctx context.Context, id int64, organizationID int64, revokedAt int64) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "InvitationRepository.Revoke")
+	defer span.End()
+
+	ret0 := w.next.Revoke(ctx, id, organizationID, revokedAt)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
 func WithTracingOrganizationLLMConfigRepository(next OrganizationLLMConfigRepository) OrganizationLLMConfigRepository {
 	if next == nil {
 		return nil

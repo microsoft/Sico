@@ -27,6 +27,13 @@ class DocExtractor(ABC):
             A tuple of (full_text, summary).
         """
 
+    async def extract_utf8_markdown(self, file_path: str) -> tuple[str, str]:
+        """Extract a local Markdown file known to be UTF-8 encoded.
+
+        Extractors without format metadata support retain their generic extraction behavior.
+        """
+        return await self.extract(file_path)
+
     async def extract_from_url(self, url: str) -> tuple[str, str]:
         """Extract document content from a URL.
 

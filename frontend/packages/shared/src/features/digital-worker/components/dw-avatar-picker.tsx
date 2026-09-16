@@ -1,48 +1,38 @@
-import { useLingui } from "@lingui/react/macro";
-import { cn } from "@sico/ui/lib/utils.ts";
-import { Shuffle } from "lucide-react";
-import { type JSX, useEffect, useRef, useState } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { Loader2, Shuffle } from "lucide-react";
+import { type JSX, useId, useState } from "react";
 
+import { DwAvatarGrid } from "./dw-avatar-grid";
 import { DwAvatar } from "../../../components/dw-avatar";
-import { DW_AVATAR_PRESETS, dwAvatarUrl } from "../constants";
+import { DW_AVATAR_PRESETS, type DwAvatarPreset } from "../constants";
 
 type DwAvatarPickerProps = {
-  value: string;
-  onChange: (url: string) => void;
+  preset: DwAvatarPreset;
+  onChange: (preset: DwAvatarPreset) => void;
+  disabled?: boolean;
+  uploading?: boolean;
 };
 
-/**
- * Inline avatar picker (design: Figma "Avatar Selection Grid"). Clicking the
- * current avatar reveals the preset grid below (dialog grows) instead of
- * stacking a popover; a shuffle button picks a random preset. Presets are the
- * pre-uploaded CDN URLs in `DW_AVATAR_PRESETS`, so a pick is a ready `iconUri`.
- */
+/** Local preset selection only; the containing form uploads on Save. */
 export function DwAvatarPicker({
-  value,
+  preset,
   onChange,
+  disabled = false,
+  uploading = false,
 }: DwAvatarPickerProps): JSX.Element {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
-  const gridRef = useRef<HTMLDivElement | null>(null);
-
+  const gridId = useId();
+  const locked = disabled || uploading;
   const handleShuffle = (): void => {
-    // Exclude the current avatar so shuffle never visibly no-ops.
-    const others = DW_AVATAR_PRESETS.filter((url) => url !== value);
-    const pool = others.length > 0 ? others : DW_AVATAR_PRESETS;
-    const next =
-      pool[Math.floor(Math.random() * pool.length)] ?? DW_AVATAR_PRESETS[0];
-    onChange(next);
-  };
-
-  // On open, pull the revealed grid into view — bottom-aligned so the whole
-  // grid sits above the dialog footer; the dialog's scroll region does the
-  // actual scrolling.
-  useEffect(() => {
-    if (!open) {
-      return;
+    const others = DW_AVATAR_PRESETS.filter(
+      (option) => option.id !== preset.id,
+    );
+    const next = others[Math.floor(Math.random() * others.length)];
+    if (next) {
+      onChange(next);
     }
-    gridRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [open]);
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -51,18 +41,25 @@ export function DwAvatarPicker({
           <button
             type="button"
             aria-expanded={open}
+            aria-controls={open ? gridId : undefined}
             aria-label={t({
               id: "digitalWorker.avatarPicker.changeAvatarAria",
               message: "Change avatar",
             })}
+            aria-busy={uploading}
+            disabled={locked}
             onClick={() => setOpen((prev) => !prev)}
-            className="focus-visible:outline-focus-rest rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="focus-visible:outline-focus-rest relative rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none"
           >
-            <DwAvatar
-              agent={{ iconUri: dwAvatarUrl(value) }}
-              size="2xl"
-              decorative
-            />
+            <DwAvatar agent={{ iconUri: preset.src }} size="2xl" decorative />
+            {uploading ? (
+              <span
+                // eslint-disable-next-line tailwindcss/no-custom-classname -- Semantic Tailwind v4 overlay token; shared has no globals.css for the plugin to resolve it.
+                className="bg-overlay-black-50 absolute inset-0 flex items-center justify-center rounded-full"
+              >
+                <Loader2 className="text-icon-on-inverted size-5 animate-spin" />
+              </span>
+            ) : null}
           </button>
           <button
             type="button"
@@ -70,56 +67,30 @@ export function DwAvatarPicker({
               id: "digitalWorker.avatarPicker.shuffleAvatarAria",
               message: "Shuffle avatar",
             })}
+            disabled={locked}
             onClick={handleShuffle}
-            className="bg-surface-basic text-foreground-primary shadow-s focus-visible:outline-focus-rest absolute -right-0.5 bottom-0 flex size-5 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="bg-surface-basic text-foreground-primary shadow-s focus-visible:outline-focus-rest absolute -right-0.5 bottom-0 flex size-5 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none"
           >
             <Shuffle className="size-2.5" />
           </button>
         </div>
         <div className="text-foreground-secondary text-sm">
-          {t({
-            id: "digitalWorker.avatarPicker.hint",
-            message: "Click the avatar or Shuffle to generate another one.",
-          })}
+          {uploading ? (
+            <Trans id="common.status.uploading">Uploading…</Trans>
+          ) : (
+            <Trans id="digitalWorker.avatarPicker.hint">
+              Click the avatar or Shuffle to generate another one.
+            </Trans>
+          )}
         </div>
       </div>
       {open ? (
-        <div
-          ref={gridRef}
-          role="radiogroup"
-          aria-label={t({
-            id: "digitalWorker.avatarPicker.groupAria",
-            message: "Avatar",
-          })}
-          className="flex flex-wrap gap-2 p-1"
-        >
-          {DW_AVATAR_PRESETS.map((url, i) => {
-            const selected = value === url;
-            return (
-              <button
-                key={url}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                aria-label={t({
-                  id: "digitalWorker.avatarPicker.avatarAria",
-                  message: `Avatar ${i + 1}`,
-                })}
-                onClick={() => onChange(url)}
-                className={cn(
-                  "focus-visible:outline-focus-rest rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2",
-                  selected && "ring-focus-rest ring-2 ring-offset-2",
-                )}
-              >
-                <DwAvatar
-                  agent={{ iconUri: dwAvatarUrl(url) }}
-                  size="lg"
-                  decorative
-                />
-              </button>
-            );
-          })}
-        </div>
+        <DwAvatarGrid
+          id={gridId}
+          preset={preset}
+          onChange={onChange}
+          disabled={locked}
+        />
       ) : null}
     </div>
   );

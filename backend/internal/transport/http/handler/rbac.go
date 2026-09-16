@@ -7,11 +7,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	orgbiz "sico-backend/internal/biz/organization"
 	rbacbiz "sico-backend/internal/biz/rbac"
+	sandboxbiz "sico-backend/internal/biz/sandbox"
+	organizationdto "sico-backend/internal/transport/http/dto/organization"
 	rbacCommon "sico-backend/internal/transport/http/dto/rbac/common"
 	"sico-backend/internal/transport/http/dto/rbac/token"
 	"sico-backend/internal/transport/http/dto/rbac/user"
 	"sico-backend/internal/transport/http/middleware"
+	"sico-backend/pkg/env"
+	"sico-backend/pkg/logger"
 )
 
 // CreateUser creates a new user
@@ -41,8 +46,42 @@ func CreateUser(ctx *gin.Context) {
 		internalServerErrorResponse(ctx, err)
 		return
 	}
+	organizationName := splitEmail[0] + "'s Organization"
+	organizationService := orgbiz.Default()
+	if organizationService == nil {
+		logger.CtxWarn(reqctx(ctx), "organization service unavailable after user creation: username=%s", req.Username)
+	} else if organizationResp, err := organizationService.CreateOrganizationInternal(
+		reqctx(ctx),
+		&organizationdto.CreateOrganizationRequest{Name: organizationName},
+		req.Username,
+	); err != nil {
+		logger.CtxWarn(
+			reqctx(ctx),
+			"failed to provision organization after user creation: username=%s, organization=%s, err=%v",
+			req.Username,
+			organizationName,
+			err,
+		)
+	} else if !env.SeedAgentInstances() {
+		claimInitialSandboxes(ctx, organizationResp.GetData().GetId())
+	}
 
 	ctx.JSON(http.StatusOK, resp)
+}
+
+func claimInitialSandboxes(ctx *gin.Context, organizationID int64) {
+	sandboxService := sandboxbiz.Default()
+	if sandboxService == nil {
+		logger.CtxWarn(
+			reqctx(ctx),
+			"sandbox service unavailable for initial organization claim: organizationId=%d",
+			organizationID,
+		)
+		return
+	}
+	if _, err := sandboxService.ClaimUnassignedSandboxesForOrg(reqctx(ctx), organizationID); err != nil {
+		logger.CtxWarn(reqctx(ctx), "failed to claim initial sandboxes: organizationId=%d, err=%v", organizationID, err)
+	}
 }
 
 // UpdateUser updates an existing user

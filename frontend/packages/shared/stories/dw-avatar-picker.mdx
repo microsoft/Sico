@@ -1,0 +1,119 @@
+import {
+  Canvas,
+  ColorItem,
+  ColorPalette,
+  Controls,
+  Description,
+  Meta,
+} from "@storybook/addon-docs/blocks";
+
+import * as DwAvatarPickerStories from "./dw-avatar-picker.stories";
+
+<Meta of={DwAvatarPickerStories} />
+
+# DwAvatarPicker
+
+Controlled preset selector for adding a Digital Worker, composed from `DwAvatar`
+and native buttons. Clicking the current portrait expands the original 18-avatar
+radio grid; Shuffle selects a preset other than the current one. All images are
+bundled locally, with no runtime CDN dependency or custom file picker.
+
+## Examples
+
+### Selection inside a field
+
+Every example composes the picker inside `Field` with an avatar label. Selection
+uses local React state only: no API provider, fake upload, or network mutation is
+needed. The containing form chooses the first preset when it opens.
+
+<Description of={DwAvatarPickerStories.Default} />
+<Canvas of={DwAvatarPickerStories.Default} />
+
+<Description of={DwAvatarPickerStories.Expanded} />
+<Canvas of={DwAvatarPickerStories.Expanded} />
+
+<Description of={DwAvatarPickerStories.SelectedPreset} />
+<Canvas of={DwAvatarPickerStories.SelectedPreset} />
+
+### Save-time states
+
+<Description of={DwAvatarPickerStories.Uploading} />
+<Canvas of={DwAvatarPickerStories.Uploading} />
+
+<Description of={DwAvatarPickerStories.Disabled} />
+<Canvas of={DwAvatarPickerStories.Disabled} />
+
+## API
+
+<Controls of={DwAvatarPickerStories.Default} />
+
+- `preset` is a `DwAvatarPreset` from `DW_AVATAR_PRESETS`, containing a stable
+  original image `id` and bundled local `src`. Neither value is a backend URI.
+- `onChange(preset)` updates selection only; picking and shuffling never upload.
+- `disabled` locks the avatar trigger, all visible radio options, and Shuffle
+  throughout the containing form's save transaction.
+- `uploading` also locks selection and displays the loading overlay while the
+  selected image is prepared or uploaded.
+- The shared `useAddDwForm` validates on Save, reads the selected PNG, uploads it
+  through the current backend, then creates the DW using the returned URI. Even
+  an unchanged default selection is uploaded on Save.
+- Upload failure keeps the selection for retry. Closing and reopening the form
+  restores the first preset and invalidates pending image work. Add DW and Team
+  Invite DW share this flow; Project Cover retains custom-file uploading.
+
+---
+
+## Token Audit
+
+The picker owns hint text, the shuffle surface and icon, focus and selection rings,
+and the uploading overlay. Portrait dimensions, fallback art and clipping are
+owned by `DwAvatar` and the UI Avatar.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Hint text"
+    subtitle="Secondary foreground"
+    colors={{ Hint: "var(--color-foreground-secondary)" }}
+  />
+  <ColorItem
+    title="Shuffle"
+    subtitle="Button surface and foreground"
+    colors={{
+      Surface: "var(--color-surface-basic)",
+      Icon: "var(--color-foreground-primary)",
+    }}
+  />
+  <ColorItem
+    title="Focus and selection"
+    subtitle="Keyboard outline and selected-preset ring"
+    colors={{ Ring: "var(--color-focus-rest)" }}
+  />
+  <ColorItem
+    title="Uploading overlay"
+    subtitle="Image scrim"
+    colors={{ Overlay: "var(--color-overlay-black-50)" }}
+  />
+  <ColorItem
+    title="Loading icon"
+    subtitle="Icon over the scrim"
+    colors={{ Spinner: "var(--color-icon-on-inverted)" }}
+  />
+</ColorPalette>
+
+### Sizing & shape
+
+| Property             | Class / prop                                             | Value                   |
+| -------------------- | -------------------------------------------------------- | ----------------------- |
+| Current avatar       | `size="2xl"`                                             | 48 px, owned by Avatar  |
+| Grid avatar          | `size="lg"`                                              | 40 px, owned by Avatar  |
+| Row and section gaps | `gap-3`                                                  | 12 px                   |
+| Grid gap and padding | `gap-2 p-1`                                              | 8 px gap, 4 px padding  |
+| Trigger and overlay  | `rounded-full`                                           | Circular                |
+| Shuffle button       | `size-5 shadow-s`                                        | 20 px, small shadow     |
+| Shuffle icon         | `size-2.5`                                               | 10 px                   |
+| Spinner              | `size-5`                                                 | 20 px                   |
+| Hint text            | `text-sm`                                                | Small text              |
+| Focus outline        | `focus-visible:outline-2 focus-visible:outline-offset-2` | 2 px outline and offset |
+| Selected ring        | `ring-2 ring-offset-2`                                   | 2 px ring and offset    |

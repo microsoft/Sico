@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
 from typing import Never
 
@@ -15,25 +15,30 @@ from .contracts import (
     AgentLoopRuntime,
     AgentLoopSnapshot,
     AgentModel,
+    AgentModelOutputDelta,
     AgentModelState,
+    AgentModelTurn,
     BoundAgentTool,
     CapabilityCall,
     FinalAnswer,
     InvalidAction,
     Observation,
     TokenUsage,
+    current_toolset,
+    stream_model_turn,
 )
 from .events import (
     AgentLoopEvent,
     CompletionProposedEvent,
     ContextPreparedEvent,
     LoopFinishedEvent,
+    ModelOutputDeltaEvent,
     ModelTurnCompletedEvent,
     ModelTurnStartedEvent,
     ToolCallCompletedEvent,
     ToolCallRequestedEvent,
 )
-from .native import _call_id, _failed_observation, _normalized_call_id, _signature, _stalled
+from .native import _call_id, _failed_observation, _normalized_call_id, _normalized_capability_id, _signature, _stalled
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +53,7 @@ class _LoopState:
     stall_count: int = 0
     action: AgentAction | None = None
     terminal: LoopFinishedEvent | None = None
+    toolset_revision: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,11 +78,8 @@ class MafAgentLoopEngine:
             yield _turn_budget_exhausted(request, TokenUsage(), 0)
             return
 
-        model_executor = _ModelExecutor(self._model, runtime)
-        action_executor = _ActionExecutor(
-            {tool.descriptor.tool_id: tool for tool in tools},
-            runtime,
-        )
+        model_executor = _ModelExecutor(self._model, tools, runtime)
+        action_executor = _ActionExecutor(tools, runtime)
         finish_executor = _FinishExecutor()
         workflow = (
             WorkflowBuilder(
@@ -95,28 +98,41 @@ class MafAgentLoopEngine:
 
 
 class _ModelExecutor(Executor):
-    def __init__(self, model: AgentModel, runtime: AgentLoopRuntime) -> None:
+    def __init__(self, model: AgentModel, fallback_tools: tuple[BoundAgentTool, ...], runtime: AgentLoopRuntime) -> None:
         super().__init__(id="sico-model")
         self._model = model
+        self._fallback_tools = fallback_tools
         self._runtime = runtime
 
     @handler
     async def complete_turn(self, state: _LoopState, ctx: WorkflowContext[_LoopState]) -> None:
-        prepared = await self._runtime.context_controller.before_model(_snapshot(state))
+        toolset = await current_toolset(self._runtime, self._fallback_tools)
+        prepared = await self._runtime.context_controller.before_model(_snapshot(state, toolset.revision))
         await _emit(ctx, ContextPreparedEvent(turn=state.turn, block_count=len(prepared.blocks)))
         await _emit(ctx, ModelTurnStartedEvent(turn=state.turn))
         model_state = AgentModelState(
             task=state.request.task,
-            tools=state.request.tools,
+            tools=toolset.descriptors,
             turn=state.turn,
             max_model_turns=state.request.limits.max_model_turns,
             system_prompt=state.request.system_prompt,
             context=prepared.blocks,
             history=prepared.history if prepared.history is not None else state.history,
             initial_messages=state.request.initial_messages,
+            toolset_revision=toolset.revision,
+            provider_tools=state.request.provider_tools,
         )
         started = time.perf_counter()
-        model_turn = await self._model.complete_turn(model_state)
+        model_turn: AgentModelTurn | None = None
+        async for item in stream_model_turn(self._model, model_state):
+            if isinstance(item, AgentModelOutputDelta):
+                await _emit(ctx, ModelOutputDeltaEvent(turn=state.turn, content=item.content))
+            elif model_turn is None:
+                model_turn = item
+            else:
+                raise RuntimeError("agent model stream emitted more than one terminal turn")
+        if model_turn is None:
+            raise RuntimeError("agent model stream ended without a terminal turn")
         latency_ms = model_turn.latency_ms or int((time.perf_counter() - started) * 1000)
         await _emit(ctx, ModelTurnCompletedEvent(state.turn, model_turn.usage, model_turn.model, latency_ms))
         await ctx.send_message(
@@ -124,14 +140,15 @@ class _ModelExecutor(Executor):
                 state,
                 action=model_turn.action,
                 usage=state.usage + model_turn.usage,
+                toolset_revision=toolset.revision,
             )
         )
 
 
 class _ActionExecutor(Executor):
-    def __init__(self, tools: Mapping[str, BoundAgentTool], runtime: AgentLoopRuntime) -> None:
+    def __init__(self, fallback_tools: tuple[BoundAgentTool, ...], runtime: AgentLoopRuntime) -> None:
         super().__init__(id="sico-action")
-        self._tools = tools
+        self._fallback_tools = fallback_tools
         self._runtime = runtime
 
     @handler
@@ -171,7 +188,7 @@ class _ActionExecutor(Executor):
         if directive.outcome == "reject":
             return replace(state, terminal=_failed_terminal(state, reason, "policy_denied"))
         history = (*state.history, _failed_observation("", _call_id(state.turn, 1), reason, "policy_deny"))
-        return _continue_or_stop(state, history, _signature("final_answer", {}, reason), failed=True)
+        return _continue_or_stop(state, history, _signature("final_answer", {}, reason))
 
     def _invalid(self, state: _LoopState, action: InvalidAction) -> _LoopState:
         message = f"Could not decode the requested action: {action.reason}"
@@ -179,7 +196,7 @@ class _ActionExecutor(Executor):
             *state.history,
             _failed_observation(action.capability, _call_id(state.turn, 1), message, "internal"),
         )
-        return _continue_or_stop(state, history, _signature(action.capability, {}, action.reason), failed=True)
+        return _continue_or_stop(state, history, _signature(action.capability, {}, action.reason))
 
     async def _call_tool(
         self,
@@ -187,7 +204,21 @@ class _ActionExecutor(Executor):
         action: CapabilityCall,
         ctx: WorkflowContext[_LoopState],
     ) -> _LoopState:
-        call = replace(action, call_id=_normalized_call_id(action.call_id, state.turn, 1))
+        capability = _normalized_capability_id(action.capability)
+        if capability is None:
+            return replace(
+                state,
+                terminal=_failed_terminal(
+                    state,
+                    f"Agent requested disallowed capability {action.capability!r}.",
+                    "policy_denied",
+                ),
+            )
+        call = replace(
+            action,
+            capability=capability,
+            call_id=_normalized_call_id(action.call_id, state.turn, 1),
+        )
         if call.call_id in state.used_call_ids:
             return replace(
                 state,
@@ -198,7 +229,9 @@ class _ActionExecutor(Executor):
                 ),
             )
         used_call_ids = state.used_call_ids | {call.call_id}
-        tool = self._tools.get(call.capability)
+        toolset = await current_toolset(self._runtime, self._fallback_tools)
+        tools = {tool.descriptor.tool_id: tool for tool in toolset.tools}
+        tool = tools.get(call.capability)
         if tool is None:
             return replace(
                 state,
@@ -223,16 +256,17 @@ class _ActionExecutor(Executor):
 
         await _emit(ctx, ToolCallRequestedEvent(state.turn, call))
         started = time.perf_counter()
-        observation = await tool.invoke(call, _snapshot(state))
+        observation = await tool.invoke(call, _snapshot(state, toolset.revision))
+        observation = replace(observation, arguments=call.args)
         duration_ms = int((time.perf_counter() - started) * 1000)
         tool_calls = state.tool_calls + 1
         await _emit(ctx, ToolCallCompletedEvent(state.turn, call, observation, duration_ms))
+        charged_state = replace(state, usage=state.usage + observation.usage)
         return replace(
             _continue_or_stop(
-                state,
+            charged_state,
                 (*state.history, observation),
                 _signature(call.capability, call.args, ""),
-                failed=not observation.ok,
                 tool_calls=tool_calls,
             ),
             used_call_ids=used_call_ids,
@@ -260,11 +294,10 @@ def _continue_or_stop(
     history: tuple[Observation, ...],
     signature: str,
     *,
-    failed: bool,
     tool_calls: int | None = None,
 ) -> _LoopState:
     next_tool_calls = state.tool_calls if tool_calls is None else tool_calls
-    stall_signature, stall_count = _next_stall(state, signature, failed=failed)
+    stall_signature, stall_count = _next_stall(state, signature)
     terminal = None
     stall_limit = max(1, state.request.limits.stall_limit)
     if stall_count >= stall_limit:
@@ -283,16 +316,21 @@ def _continue_or_stop(
     )
 
 
-def _next_stall(state: _LoopState, signature: str, *, failed: bool) -> tuple[str, int]:
-    if not failed:
-        return "", 0
+def _next_stall(state: _LoopState, signature: str) -> tuple[str, int]:
     if signature != state.stall_signature:
         return signature, 1
     return signature, state.stall_count + 1
 
 
-def _snapshot(state: _LoopState) -> AgentLoopSnapshot:
-    return AgentLoopSnapshot(state.request, state.turn, state.history, state.usage, state.tool_calls)
+def _snapshot(state: _LoopState, toolset_revision: int | None = None) -> AgentLoopSnapshot:
+    return AgentLoopSnapshot(
+        state.request,
+        state.turn,
+        state.history,
+        state.usage,
+        state.tool_calls,
+        state.toolset_revision if toolset_revision is None else toolset_revision,
+    )
 
 
 def _failed_terminal(state: _LoopState, summary: str, error_kind: str) -> LoopFinishedEvent:

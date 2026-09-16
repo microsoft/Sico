@@ -266,6 +266,7 @@ run_core() {
     done
     "$python_bin" gen_core_relink_dependencies.py "${relink_args[@]}"
   done
+
 }
 
 # ---------------------------------------------------------------------------

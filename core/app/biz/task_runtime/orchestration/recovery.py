@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..domain.results import aggregate, batch_results, persist_stranded_result, stranded_result
-from ..domain.models import TERMINAL_BATCH_STATUSES, TERMINAL_STATUSES
+from ..domain.models import RUNTIME_METADATA_KEY, TERMINAL_BATCH_STATUSES, TERMINAL_STATUSES
 from ..config import _stale_run_after_ms, _task_runtime_heartbeat_interval_seconds
 from ..context import TurnContext
 from ..domain.models import (
@@ -29,8 +29,7 @@ from ..domain.models import (
     TaskRun,
     TaskStatus,
 )
-from ..presentation.rendering.batch_view import tool_call_status_for_batch
-from ..presentation.port import RuntimeProgressPort
+from ..presentation.port import BatchProjectionOptions, ProjectionIntegrityError, RuntimeProgressPort
 from ..sandbox.coordinator import SandboxCoordinator
 from ..sandbox.lease_manager import SandboxLeaseManager
 from ..domain.state_machine import transition_batch
@@ -80,7 +79,7 @@ def _plan_context_for_batch(ctx: TurnContext | None, batch: BatchRecord, runs: l
     from app.tools.plan import PlanEditor
 
     task_runtime_batch_ids = list(ctx.task_runtime_batch_ids) if ctx is not None else [batch.batch_id]
-    runtime_metadata = batch.metadata.get("_task_runtime", {})
+    runtime_metadata = batch.metadata.get(RUNTIME_METADATA_KEY, {})
     submission_id = str(runtime_metadata.get("submission_id", "")) if isinstance(runtime_metadata, dict) else ""
     submission_source = str(runtime_metadata.get("submission_source", "")) if isinstance(runtime_metadata, dict) else ""
     if not submission_id:
@@ -157,12 +156,6 @@ class StaleReconciler:
             )
             return str(workspace_root / "results" / batch.batch_id)
 
-    async def _update_parent_tool_call(self, ctx: TurnContext, batch: BatchRecord) -> None:
-        await ctx.plan_editor.update_tool_call_status(
-            batch.parent_tool_call_id or 0,
-            tool_call_status_for_batch(batch.status),
-        )
-
     async def _persist_recovered_parent_message(
         self,
         batch: BatchRecord,
@@ -220,15 +213,11 @@ class StaleReconciler:
         plan_ctx = _plan_context_for_batch(ctx, batch, runs)
         batch_result = self._aggregate(batch, results, runs)
         if plan_ctx is not None and batch.parent_tool_call_id:
-            await self._progress.refresh_batch_run_cards(plan_ctx, runs)
-            await self._progress.publish_parent_batch_progress(plan_ctx, batch, runs)
-            await self._update_parent_tool_call(plan_ctx, batch)
-            await self._progress.mark_parent_step_terminal_if_settled(
+            await self._reconcile_recovered_projection(
                 plan_ctx,
-                batch.parent_tool_call_id,
-                batch.status,
-                finish_unstarted_tail=True,
-                recovering=True,
+                batch,
+                runs,
+                results,
             )
         await self._persist_recovered_parent_message(batch, batch_result, runs)
 
@@ -267,24 +256,36 @@ class StaleReconciler:
         results = await batch_results(self._store, final_runs)
         if len(results) < len(final_runs):
             return
-        if plan_ctx is not None:
-            await self._progress.refresh_batch_run_cards(plan_ctx, final_runs)
         batch_result = self._aggregate(batch, results, final_runs)
         transition_batch(batch, batch_result.status)
         batch.counts = BatchResultDigest.from_result(batch_result).counts
         batch.ended_at = batch.ended_at or _now_ms()
-        await self._store.update_batch(batch)
+        batch = (await self._store.update_batch(batch)).batch
+        if batch.status != batch_result.status:
+            batch_result = batch_result.model_copy(update={"status": batch.status})
         if plan_ctx is not None and batch.parent_tool_call_id:
-            await self._progress.publish_parent_batch_progress(plan_ctx, batch, final_runs)
-            await self._update_parent_tool_call(plan_ctx, batch)
-            await self._progress.mark_parent_step_terminal_if_settled(
+            await self._reconcile_recovered_projection(
                 plan_ctx,
-                batch.parent_tool_call_id,
-                batch.status,
-                finish_unstarted_tail=True,
-                recovering=True,
+                batch,
+                final_runs,
+                results,
             )
         await self._persist_recovered_parent_message(batch, batch_result, final_runs)
+
+    async def _reconcile_recovered_projection(
+        self,
+        ctx: TurnContext,
+        batch: BatchRecord,
+        runs: list[TaskRun],
+        results: list[TaskResult],
+    ) -> None:
+        await self._progress.sync_batch_projection(
+            ctx,
+            batch,
+            runs,
+            results,
+            options=BatchProjectionOptions.recovery(),
+        )
 
     # -- entrypoint ---------------------------------------------------------
 
@@ -317,8 +318,16 @@ class StaleReconciler:
                 with contextlib.suppress(Exception):
                     await persist_stranded_result(self._store, run, result)
         for batch_id in affected_batch_ids:
-            with contextlib.suppress(Exception):
+            try:
                 await self._finalize_stale_batch(ctx, batch_id, stale_before_ms)
+            except ProjectionIntegrityError:
+                _LOGGER.error(
+                    "stale batch plan projection conflicts with another owner batch_id=%s",
+                    batch_id,
+                    exc_info=True,
+                )
+            except Exception:
+                _LOGGER.debug("failed to finalize stale batch batch_id=%s", batch_id, exc_info=True)
 
 
 # ---------------------------------------------------------------------------

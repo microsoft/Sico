@@ -609,6 +609,258 @@ func (x *ResetSandboxResponse) GetMsg() string {
 	return ""
 }
 
+type LinuxWorkstationSandboxHttpFormField struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name"`                                   
+	TextValue     string                 `protobuf:"bytes,2,opt,name=text_value,json=textValue,proto3" json:"textValue"`        
+	BytesValue    []byte                 `protobuf:"bytes,3,opt,name=bytes_value,json=bytesValue,proto3" json:"bytesValue"`     
+	FileName      string                 `protobuf:"bytes,4,opt,name=file_name,json=fileName,proto3" json:"fileName"`           
+	ContentType   string                 `protobuf:"bytes,5,opt,name=content_type,json=contentType,proto3" json:"contentType"`  
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinuxWorkstationSandboxHttpFormField) Reset() {
+	*x = LinuxWorkstationSandboxHttpFormField{}
+	mi := &file_sandbox_reverse_rpc_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinuxWorkstationSandboxHttpFormField) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinuxWorkstationSandboxHttpFormField) ProtoMessage() {}
+
+func (x *LinuxWorkstationSandboxHttpFormField) ProtoReflect() protoreflect.Message {
+	mi := &file_sandbox_reverse_rpc_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinuxWorkstationSandboxHttpFormField.ProtoReflect.Descriptor instead.
+func (*LinuxWorkstationSandboxHttpFormField) Descriptor() ([]byte, []int) {
+	return file_sandbox_reverse_rpc_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *LinuxWorkstationSandboxHttpFormField) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpFormField) GetTextValue() string {
+	if x != nil {
+		return x.TextValue
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpFormField) GetBytesValue() []byte {
+	if x != nil {
+		return x.BytesValue
+	}
+	return nil
+}
+
+func (x *LinuxWorkstationSandboxHttpFormField) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpFormField) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+type LinuxWorkstationSandboxHttpRequest struct {
+	state           protoimpl.MessageState                  `protogen:"open.v1"`
+	ProxyBasePath   string                                  `protobuf:"bytes,1,opt,name=proxy_base_path,json=proxyBasePath,proto3" json:"proxyBasePath"`        
+	Method          string                                  `protobuf:"bytes,2,opt,name=method,proto3" json:"method"`                                             
+	Path            string                                  `protobuf:"bytes,3,opt,name=path,proto3" json:"path"`                                                 
+	QueryJson       string                                  `protobuf:"bytes,4,opt,name=query_json,json=queryJson,proto3" json:"queryJson"`                      
+	JsonBodyJson    string                                  `protobuf:"bytes,5,opt,name=json_body_json,json=jsonBodyJson,proto3" json:"jsonBodyJson"`           
+	FormFields      []*LinuxWorkstationSandboxHttpFormField `protobuf:"bytes,6,rep,name=form_fields,json=formFields,proto3" json:"formFields"`                   
+	AgentInstanceId string                                  `protobuf:"bytes,7,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId"`  
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) Reset() {
+	*x = LinuxWorkstationSandboxHttpRequest{}
+	mi := &file_sandbox_reverse_rpc_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinuxWorkstationSandboxHttpRequest) ProtoMessage() {}
+
+func (x *LinuxWorkstationSandboxHttpRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sandbox_reverse_rpc_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinuxWorkstationSandboxHttpRequest.ProtoReflect.Descriptor instead.
+func (*LinuxWorkstationSandboxHttpRequest) Descriptor() ([]byte, []int) {
+	return file_sandbox_reverse_rpc_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) GetProxyBasePath() string {
+	if x != nil {
+		return x.ProxyBasePath
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) GetQueryJson() string {
+	if x != nil {
+		return x.QueryJson
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) GetJsonBodyJson() string {
+	if x != nil {
+		return x.JsonBodyJson
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) GetFormFields() []*LinuxWorkstationSandboxHttpFormField {
+	if x != nil {
+		return x.FormFields
+	}
+	return nil
+}
+
+func (x *LinuxWorkstationSandboxHttpRequest) GetAgentInstanceId() string {
+	if x != nil {
+		return x.AgentInstanceId
+	}
+	return ""
+}
+
+type LinuxWorkstationSandboxHttpResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StatusCode    int32                  `protobuf:"varint,1,opt,name=status_code,json=statusCode,proto3" json:"statusCode"`    
+	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"contentType"`  
+	BodyText      string                 `protobuf:"bytes,3,opt,name=body_text,json=bodyText,proto3" json:"bodyText"`           
+	BodyBytes     []byte                 `protobuf:"bytes,4,opt,name=body_bytes,json=bodyBytes,proto3" json:"bodyBytes"`        
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                                
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                                   
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinuxWorkstationSandboxHttpResponse) Reset() {
+	*x = LinuxWorkstationSandboxHttpResponse{}
+	mi := &file_sandbox_reverse_rpc_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinuxWorkstationSandboxHttpResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinuxWorkstationSandboxHttpResponse) ProtoMessage() {}
+
+func (x *LinuxWorkstationSandboxHttpResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sandbox_reverse_rpc_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinuxWorkstationSandboxHttpResponse.ProtoReflect.Descriptor instead.
+func (*LinuxWorkstationSandboxHttpResponse) Descriptor() ([]byte, []int) {
+	return file_sandbox_reverse_rpc_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *LinuxWorkstationSandboxHttpResponse) GetStatusCode() int32 {
+	if x != nil {
+		return x.StatusCode
+	}
+	return 0
+}
+
+func (x *LinuxWorkstationSandboxHttpResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpResponse) GetBodyText() string {
+	if x != nil {
+		return x.BodyText
+	}
+	return ""
+}
+
+func (x *LinuxWorkstationSandboxHttpResponse) GetBodyBytes() []byte {
+	if x != nil {
+		return x.BodyBytes
+	}
+	return nil
+}
+
+func (x *LinuxWorkstationSandboxHttpResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *LinuxWorkstationSandboxHttpResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
 var File_sandbox_reverse_rpc_proto protoreflect.FileDescriptor
 
 const file_sandbox_reverse_rpc_proto_rawDesc = "" +
@@ -662,12 +914,40 @@ const file_sandbox_reverse_rpc_proto_rawDesc = "" +
 	"sandbox_id\x18\x02 \x01(\tR\tsandboxId\">\n" +
 	"\x14ResetSandboxResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg2\x99\x03\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\xba\x01\n" +
+	"$LinuxWorkstationSandboxHttpFormField\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"text_value\x18\x02 \x01(\tR\ttextValue\x12\x1f\n" +
+	"\vbytes_value\x18\x03 \x01(\fR\n" +
+	"bytesValue\x12\x1b\n" +
+	"\tfile_name\x18\x04 \x01(\tR\bfileName\x12!\n" +
+	"\fcontent_type\x18\x05 \x01(\tR\vcontentType\"\xbd\x02\n" +
+	"\"LinuxWorkstationSandboxHttpRequest\x12&\n" +
+	"\x0fproxy_base_path\x18\x01 \x01(\tR\rproxyBasePath\x12\x16\n" +
+	"\x06method\x18\x02 \x01(\tR\x06method\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x12\x1d\n" +
+	"\n" +
+	"query_json\x18\x04 \x01(\tR\tqueryJson\x12$\n" +
+	"\x0ejson_body_json\x18\x05 \x01(\tR\fjsonBodyJson\x12R\n" +
+	"\vform_fields\x18\x06 \x03(\v21.reverse_rpc.LinuxWorkstationSandboxHttpFormFieldR\n" +
+	"formFields\x12*\n" +
+	"\x11agent_instance_id\x18\a \x01(\tR\x0fagentInstanceId\"\xcd\x01\n" +
+	"#LinuxWorkstationSandboxHttpResponse\x12\x1f\n" +
+	"\vstatus_code\x18\x01 \x01(\x05R\n" +
+	"statusCode\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x1b\n" +
+	"\tbody_text\x18\x03 \x01(\tR\bbodyText\x12\x1d\n" +
+	"\n" +
+	"body_bytes\x18\x04 \x01(\fR\tbodyBytes\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg2\xa6\x04\n" +
 	"\x11ReverseSandboxRPC\x12X\n" +
 	"\x0fRpcApplySandbox\x12 .reverse_rpc.ApplySandboxRequest\x1a!.reverse_rpc.ApplySandboxResponse\"\x00\x12^\n" +
 	"\x11RpcReleaseSandbox\x12\".reverse_rpc.ReleaseSandboxRequest\x1a#.reverse_rpc.ReleaseSandboxResponse\"\x00\x12p\n" +
 	"\x17RpcGetInstanceSandboxes\x12(.reverse_rpc.GetInstanceSandboxesRequest\x1a).reverse_rpc.GetInstanceSandboxesResponse\"\x00\x12X\n" +
-	"\x0fRpcResetSandbox\x12 .reverse_rpc.ResetSandboxRequest\x1a!.reverse_rpc.ResetSandboxResponse\"\x00BEZCsico-backend/internal/transport/reverse_grpc/pb/sandbox/reverse_rpcb\x06proto3"
+	"\x0fRpcResetSandbox\x12 .reverse_rpc.ResetSandboxRequest\x1a!.reverse_rpc.ResetSandboxResponse\"\x00\x12\x8a\x01\n" +
+	"#RpcProxyLinuxWorkstationSandboxHttp\x12/.reverse_rpc.LinuxWorkstationSandboxHttpRequest\x1a0.reverse_rpc.LinuxWorkstationSandboxHttpResponse\"\x00BEZCsico-backend/internal/transport/reverse_grpc/pb/sandbox/reverse_rpcb\x06proto3"
 
 var (
 	file_sandbox_reverse_rpc_proto_rawDescOnce sync.Once
@@ -681,33 +961,39 @@ func file_sandbox_reverse_rpc_proto_rawDescGZIP() []byte {
 	return file_sandbox_reverse_rpc_proto_rawDescData
 }
 
-var file_sandbox_reverse_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_sandbox_reverse_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_sandbox_reverse_rpc_proto_goTypes = []any{
-	(*InstanceSandboxInfo)(nil),          // 0: reverse_rpc.InstanceSandboxInfo
-	(*GetInstanceSandboxesRequest)(nil),  // 1: reverse_rpc.GetInstanceSandboxesRequest
-	(*ApplySandboxRequest)(nil),          // 2: reverse_rpc.ApplySandboxRequest
-	(*ReleaseSandboxRequest)(nil),        // 3: reverse_rpc.ReleaseSandboxRequest
-	(*GetInstanceSandboxesResponse)(nil), // 4: reverse_rpc.GetInstanceSandboxesResponse
-	(*ApplySandboxResponse)(nil),         // 5: reverse_rpc.ApplySandboxResponse
-	(*ReleaseSandboxResponse)(nil),       // 6: reverse_rpc.ReleaseSandboxResponse
-	(*ResetSandboxRequest)(nil),          // 7: reverse_rpc.ResetSandboxRequest
-	(*ResetSandboxResponse)(nil),         // 8: reverse_rpc.ResetSandboxResponse
+	(*InstanceSandboxInfo)(nil),                  // 0: reverse_rpc.InstanceSandboxInfo
+	(*GetInstanceSandboxesRequest)(nil),          // 1: reverse_rpc.GetInstanceSandboxesRequest
+	(*ApplySandboxRequest)(nil),                  // 2: reverse_rpc.ApplySandboxRequest
+	(*ReleaseSandboxRequest)(nil),                // 3: reverse_rpc.ReleaseSandboxRequest
+	(*GetInstanceSandboxesResponse)(nil),         // 4: reverse_rpc.GetInstanceSandboxesResponse
+	(*ApplySandboxResponse)(nil),                 // 5: reverse_rpc.ApplySandboxResponse
+	(*ReleaseSandboxResponse)(nil),               // 6: reverse_rpc.ReleaseSandboxResponse
+	(*ResetSandboxRequest)(nil),                  // 7: reverse_rpc.ResetSandboxRequest
+	(*ResetSandboxResponse)(nil),                 // 8: reverse_rpc.ResetSandboxResponse
+	(*LinuxWorkstationSandboxHttpFormField)(nil), // 9: reverse_rpc.LinuxWorkstationSandboxHttpFormField
+	(*LinuxWorkstationSandboxHttpRequest)(nil),   // 10: reverse_rpc.LinuxWorkstationSandboxHttpRequest
+	(*LinuxWorkstationSandboxHttpResponse)(nil),  // 11: reverse_rpc.LinuxWorkstationSandboxHttpResponse
 }
 var file_sandbox_reverse_rpc_proto_depIdxs = []int32{
-	0, // 0: reverse_rpc.GetInstanceSandboxesResponse.sandboxes:type_name -> reverse_rpc.InstanceSandboxInfo
-	2, // 1: reverse_rpc.ReverseSandboxRPC.RpcApplySandbox:input_type -> reverse_rpc.ApplySandboxRequest
-	3, // 2: reverse_rpc.ReverseSandboxRPC.RpcReleaseSandbox:input_type -> reverse_rpc.ReleaseSandboxRequest
-	1, // 3: reverse_rpc.ReverseSandboxRPC.RpcGetInstanceSandboxes:input_type -> reverse_rpc.GetInstanceSandboxesRequest
-	7, // 4: reverse_rpc.ReverseSandboxRPC.RpcResetSandbox:input_type -> reverse_rpc.ResetSandboxRequest
-	5, // 5: reverse_rpc.ReverseSandboxRPC.RpcApplySandbox:output_type -> reverse_rpc.ApplySandboxResponse
-	6, // 6: reverse_rpc.ReverseSandboxRPC.RpcReleaseSandbox:output_type -> reverse_rpc.ReleaseSandboxResponse
-	4, // 7: reverse_rpc.ReverseSandboxRPC.RpcGetInstanceSandboxes:output_type -> reverse_rpc.GetInstanceSandboxesResponse
-	8, // 8: reverse_rpc.ReverseSandboxRPC.RpcResetSandbox:output_type -> reverse_rpc.ResetSandboxResponse
-	5, // [5:9] is the sub-list for method output_type
-	1, // [1:5] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0,  // 0: reverse_rpc.GetInstanceSandboxesResponse.sandboxes:type_name -> reverse_rpc.InstanceSandboxInfo
+	9,  // 1: reverse_rpc.LinuxWorkstationSandboxHttpRequest.form_fields:type_name -> reverse_rpc.LinuxWorkstationSandboxHttpFormField
+	2,  // 2: reverse_rpc.ReverseSandboxRPC.RpcApplySandbox:input_type -> reverse_rpc.ApplySandboxRequest
+	3,  // 3: reverse_rpc.ReverseSandboxRPC.RpcReleaseSandbox:input_type -> reverse_rpc.ReleaseSandboxRequest
+	1,  // 4: reverse_rpc.ReverseSandboxRPC.RpcGetInstanceSandboxes:input_type -> reverse_rpc.GetInstanceSandboxesRequest
+	7,  // 5: reverse_rpc.ReverseSandboxRPC.RpcResetSandbox:input_type -> reverse_rpc.ResetSandboxRequest
+	10, // 6: reverse_rpc.ReverseSandboxRPC.RpcProxyLinuxWorkstationSandboxHttp:input_type -> reverse_rpc.LinuxWorkstationSandboxHttpRequest
+	5,  // 7: reverse_rpc.ReverseSandboxRPC.RpcApplySandbox:output_type -> reverse_rpc.ApplySandboxResponse
+	6,  // 8: reverse_rpc.ReverseSandboxRPC.RpcReleaseSandbox:output_type -> reverse_rpc.ReleaseSandboxResponse
+	4,  // 9: reverse_rpc.ReverseSandboxRPC.RpcGetInstanceSandboxes:output_type -> reverse_rpc.GetInstanceSandboxesResponse
+	8,  // 10: reverse_rpc.ReverseSandboxRPC.RpcResetSandbox:output_type -> reverse_rpc.ResetSandboxResponse
+	11, // 11: reverse_rpc.ReverseSandboxRPC.RpcProxyLinuxWorkstationSandboxHttp:output_type -> reverse_rpc.LinuxWorkstationSandboxHttpResponse
+	7,  // [7:12] is the sub-list for method output_type
+	2,  // [2:7] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_sandbox_reverse_rpc_proto_init() }
@@ -721,7 +1007,7 @@ func file_sandbox_reverse_rpc_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sandbox_reverse_rpc_proto_rawDesc), len(file_sandbox_reverse_rpc_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

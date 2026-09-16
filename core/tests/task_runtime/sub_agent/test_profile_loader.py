@@ -17,14 +17,7 @@ from app.biz.task_runtime.sub_agent.profile_loader import (
     resolve_agent_profile_dir,
 )
 
-_REPOSITORY_PROFILE_DIR = (
-    Path(__file__).resolve().parents[4]
-    / "deploy"
-    / "config"
-    / "task_runtime"
-    / "sub_agent"
-    / "profiles"
-)
+_REPOSITORY_PROFILE_DIR = Path(__file__).resolve().parents[4] / "deploy" / "config" / "task_runtime" / "sub_agent" / "profiles"
 
 
 def _write_profile(
@@ -110,9 +103,7 @@ def test_loader_compiles_markdown_body_and_namespaced_ceiling(tmp_path: Path) ->
 
     assert list(catalog.profiles) == ["default", "research"]
     assert catalog.profiles["research"].system_prompt == "Research carefully."
-    assert catalog.profiles["research"].capability_ceiling == frozenset(
-        ("builtin:echo", "skill:web-search.run")
-    )
+    assert catalog.profiles["research"].capability_ceiling == frozenset(("builtin:echo", "skill:web-search:run"))
     assert [path.name for path in catalog.sources] == ["default.md", "research.md"]
 
 

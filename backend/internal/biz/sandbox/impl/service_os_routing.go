@@ -25,6 +25,26 @@ func resolveSandboxOS(selector string) (enum.SandboxOS, error) {
 	return "", apperr.New(errcode.CommonInvalidParam, "invalid sandbox os: "+selector)
 }
 
+func isConcreteLinuxWorkstationSelector(selector string) bool {
+	return enum.NormalizeSandboxType(selector) == enum.SandboxTypeLinuxWorkstation.String()
+}
+
+func resolveInstanceSandboxSelector(selector string) (enum.SandboxOS, bool, error) {
+	if selector == "" || isConcreteLinuxWorkstationSelector(selector) {
+		return "", false, nil
+	}
+	os, err := resolveSandboxOS(selector)
+	return os, err == nil, err
+}
+
+func leaseMatchesSelector(lease *Lease, selector string, os enum.SandboxOS, hasOSFilter bool) bool {
+	if hasOSFilter {
+		return leaseMatchesOS(lease, os)
+	}
+	return !isConcreteLinuxWorkstationSelector(selector) || lease != nil &&
+		enum.NormalizeSandboxType(lease.Type) == enum.NormalizeSandboxType(selector)
+}
+
 // leaseMatchesOS reports whether a lease supplies the given OS. A lease's OS is
 // resolved from its concrete type (fixed-OS types) or, for physical devices,
 // from its metadata["os"] — see enum.ResolveResourceOS.
@@ -83,5 +103,32 @@ func (s *Service) appliableResourcesForOS(
 		ordered = append(ordered, byType[t]...)
 	}
 
+	return ordered, byID, age, nil
+}
+
+func (s *Service) appliableResourcesForType(
+	ctx context.Context, sandboxType string,
+) ([]string, map[string]*Resource, time.Duration, error) {
+	resources, age, ok, err := s.Pool.loadSnapshotResources(ctx, sandboxType)
+	if err != nil {
+		return nil, nil, age, apperr.New(errcode.SandboxProviderUnavailable,
+			fmt.Sprintf("failed to load sandbox resources: %v", err))
+	}
+	if !ok {
+		return nil, nil, age, apperr.New(errcode.SandboxProviderUnavailable,
+			"sandbox resource snapshot unavailable")
+	}
+
+	ordered := make([]string, 0, len(resources))
+	byID := make(map[string]*Resource, len(resources))
+	for _, resource := range resources {
+		if resource == nil || resource.Type != sandboxType || resource.ResourceID == "" ||
+			resource.Status != ResourceStatusAvailable {
+			continue
+		}
+		sandboxID := resource.Type + ":" + resource.ResourceID
+		ordered = append(ordered, sandboxID)
+		byID[sandboxID] = resource
+	}
 	return ordered, byID, age, nil
 }

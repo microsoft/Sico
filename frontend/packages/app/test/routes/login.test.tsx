@@ -1,4 +1,11 @@
-import { AUTH_EXPIRES_AT_LS, AUTH_TOKEN_LS, AUTH_USER_LS } from "@sico/shared";
+import {
+  AUTH_EXPIRES_AT_LS,
+  AUTH_TOKEN_LS,
+  AUTH_USER_LS,
+  loginAtom,
+  userAtom,
+} from "@sico/shared";
+import { loadFromLS } from "@sico/shared/utils/auth-storage.ts";
 import { setItemToLocalStorage } from "@sico/shared/utils/local-storage.ts";
 import { toast } from "@sico/ui";
 import { QueryClient } from "@tanstack/react-query";
@@ -15,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routeTree } from "../../src/routeTree.gen";
 import { store } from "../../src/store";
 import { clearAuthStorage } from "../_helpers/clear-auth-storage";
+import { seedOrganizationContext } from "../_helpers/organization-context";
 
 // `<LoginForm>` is exercised by its own RTL test in @sico/shared; mock
 // it here so route-level assertions (beforeLoad, toast, ?code strip)
@@ -31,7 +39,17 @@ vi.mock("@sico/shared/features/rbac-login/components/login-form.tsx", () => ({
         <button
           data-testid="login-form"
           type="button"
-          onClick={() => props.onSuccess?.({}, "developer")}
+          onClick={() => {
+            const payload = {
+              tokenInfo: {
+                accessToken: "login-test-session",
+                expiresAt: Math.floor(Date.now() / 1000) + 3600,
+              },
+              user: { id: 1, email: "u@example.test", roles: [] },
+            };
+            store.set(loginAtom, payload);
+            props.onSuccess?.(payload, "developer");
+          }}
         />
         <button
           data-testid="register-link"
@@ -56,11 +74,14 @@ vi.mock("@sico/ui", async (importActual) => {
 const mockedToastError = vi.mocked(toast.error);
 
 function renderAt(initialPath: string): { router: RegisteredRouter } {
+  store.set(userAtom, loadFromLS());
   const history = createMemoryHistory({ initialEntries: [initialPath] });
+  const queryClient = new QueryClient();
+  seedOrganizationContext(queryClient);
   const router = createRouter({
     routeTree,
     history,
-    context: { queryClient: new QueryClient(), apiClient: {} as never, store },
+    context: { queryClient, apiClient: {} as never, store },
   });
   render(
     <JotaiProvider store={store}>

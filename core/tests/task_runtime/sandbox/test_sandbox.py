@@ -7,10 +7,22 @@ import pytest
 import app.biz.task_runtime.sandbox.lease_manager as sandbox_module
 from app.biz.task_runtime.domain.models import ReservationToken, SandboxLeaseRef, SandboxRequirement
 from app.biz.task_runtime.sandbox.lease_manager import (
+    InMemorySandboxLeaseManager,
     ReverseGrpcSandboxLeaseManager,
     SandboxNoCapacityError,
     SandboxUnhealthyError,
 )
+
+
+@pytest.mark.asyncio
+async def test_in_memory_manager_preserves_concrete_linux_workstation_selector() -> None:
+    manager = InMemorySandboxLeaseManager({"linux_workstation": 1})
+
+    token = await manager.reserve(SandboxRequirement(type="linux_workstation"), "run-1")
+    lease = await manager.acquire(token)
+
+    assert lease.type == "linux_workstation"
+    assert lease.os == "linux"
 
 
 @pytest.mark.asyncio
@@ -47,6 +59,22 @@ async def test_reverse_grpc_acquire_retries_until_apply_succeeds() -> None:
     assert lease.sandbox_id == "emulator:sandbox-1"
     assert lease.type == "emulator"
     assert service.apply_calls == 2
+
+
+@pytest.mark.asyncio
+async def test_reverse_grpc_acquire_accepts_concrete_linux_workstation_selector() -> None:
+    service = _FakeReverseSandboxService(
+        sandbox_statuses=[("assigned",)],
+        apply_results=[
+            _applied_result("linux_workstation:desktop-1", os="linux", provider_type="linux_workstation")
+        ],
+    )
+    manager = ReverseGrpcSandboxLeaseManager(agent_instance_id=2, service=service, acquire_timeout_seconds=1)
+
+    lease = await manager.acquire(_token("linux_workstation"))
+
+    assert lease.type == "linux_workstation"
+    assert lease.os == "linux"
 
 
 @pytest.mark.asyncio

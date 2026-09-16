@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { routeTree } from "../../../src/routeTree.gen";
 import { clearAuthStorage } from "../../_helpers/clear-auth-storage";
+import { seedOrganizationContext } from "../../_helpers/organization-context";
 
 // Chat is now addressed by conversation: `/collaboration/$conversationId`
 // renders the chat, while a BARE `/collaboration` (no conversation) redirects to
@@ -53,6 +54,7 @@ function renderAt(path: string): { router: RegisteredRouter } {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  seedOrganizationContext(queryClient);
   const apiClient = {} as AxiosInstance;
   const router = createRouter({
     routeTree,

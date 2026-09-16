@@ -21,6 +21,7 @@ from app.biz.task_runtime.execution.command.docker import DockerBackend
 from app.biz.task_runtime.execution.command.kubernetes import K8sPodBackend
 from app.biz.task_runtime.execution.command.limiter import limit_backend
 from app.biz.task_runtime.execution.command.local import LocalBackend
+from app.biz.task_runtime.execution.command.runner import EnvironmentRunnerBackend
 from app.biz.task_runtime.execution.command.selection import select_backend
 from app.biz.task_runtime.execution.resources import ResourceGate
 
@@ -170,10 +171,26 @@ def test_select_backend_explicit_env_is_case_insensitive(monkeypatch):
     assert isinstance(select_backend(), DockerBackend)
 
 
+def test_select_backend_explicit_kind_overrides_environment(monkeypatch):
+    monkeypatch.setenv("TASK_RUNTIME_BACKEND", "docker")
+
+    assert isinstance(select_backend(kind="local"), LocalBackend)
+
+
 def test_select_backend_rejects_unknown_value(monkeypatch):
     monkeypatch.setenv("TASK_RUNTIME_BACKEND", "podman")
     with pytest.raises(ValueError, match="unknown TASK_RUNTIME_BACKEND"):
         select_backend()
+
+
+def test_select_backend_uses_environment_runner(monkeypatch):
+    monkeypatch.setenv("TASK_RUNTIME_BACKEND", "runner")
+    monkeypatch.setenv("TASK_RUNTIME_COMMAND_RUNNER_ENDPOINT", "http://environment-runner:8080")
+
+    chosen = select_backend()
+
+    assert isinstance(chosen, EnvironmentRunnerBackend)
+    assert chosen.endpoint == "http://environment-runner:8080"
 
 
 def test_select_backend_auto_detects_k8s_in_cluster(monkeypatch):
@@ -194,6 +211,28 @@ def test_select_backend_never_auto_selects_docker(monkeypatch):
     assert not isinstance(select_backend(), DockerBackend)
 
 
+@pytest.mark.asyncio
+async def test_docker_session_applies_default_image_and_name(monkeypatch):
+    backend = DockerBackend()
+    captured: list[CommandSpec] = []
+
+    async def capture(spec: CommandSpec) -> CommandResult:
+        captured.append(spec)
+        return CommandResult(return_code=0)
+
+    monkeypatch.setattr(backend, "run", capture)
+    session = backend.open_session(
+        pod_name="prepared-skill",
+        image="registry.test/prepared@sha256:" + "1" * 64,
+    )
+
+    await session.run(CommandSpec(argv=["echo", "ready"]))
+    await session.aclose()
+
+    assert captured[0].pod_name == "prepared-skill"
+    assert captured[0].image == "registry.test/prepared@sha256:" + "1" * 64
+
+
 def test_auto_detect_falls_back_to_local_when_detection_raises(monkeypatch):
     def boom() -> bool:
         raise RuntimeError("no kube config")
@@ -207,7 +246,7 @@ def test_auto_detect_falls_back_to_local_when_detection_raises(monkeypatch):
 
 @pytest.mark.parametrize(
     ("kind", "expected"),
-    [("local", None), ("docker", "docker"), ("k8s", "k8s_pod")],
+    [("local", None), ("docker", "docker"), ("runner", "docker"), ("k8s", "k8s_pod")],
 )
 def test_backend_resource_key_maps_each_backend(kind, expected):
     assert backend.backend_resource_key(kind) == expected
@@ -496,9 +535,8 @@ async def test_local_session_runs_each_spec_independently(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_docker_session_is_stateless_passthrough():
+async def test_docker_session_close_is_noop():
     session = DockerBackend().open_session()
-    assert isinstance(session, command_contracts.StatelessSession)
     await session.aclose()  # no daemon required; teardown is a no-op
 
 

@@ -13,7 +13,11 @@ from json_schema_to_pydantic import SchemaError, create_model
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import app.llmhubs
-from app.biz.task_runtime.planning import CapabilityDescriptor, ProfileDescriptor, ceiling_allows, profile_descriptor_payload
+from app.biz.task_runtime.planning import (
+    CapabilityDescriptor,
+    ProfileDescriptor,
+    profile_descriptor_payload,
+)
 from app.llmhubs.request_builder import build_llm_request
 
 from .models import (
@@ -32,6 +36,7 @@ _JSON_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL | re
 _HOST_PROVIDED_ARGUMENTS = frozenset(("instructions", "task_id", "task_name", "title"))
 _MAX_TASK_PLANNER_ITEMS = 100
 _MAX_TASK_PLANNER_PAYLOAD_CHARS = 500_000
+_TASK_PLANNER_GENERATE_ATTEMPTS = 2
 
 
 class _StrictArguments(BaseModel):
@@ -49,7 +54,6 @@ class PlannedDecision(BaseModel):
     capability_id: str = ""
     profile_id: str = "default"
     max_model_turns: int | None = Field(default=None, ge=1)
-    capability_grants: list[str] = Field(default_factory=list)
     stage: int = Field(default=0, ge=0)
     args_json: str = ""
     rationale: str = ""
@@ -208,7 +212,7 @@ def _planned_from_output(
     decoded = _decode_arguments(raw.args_json)
     if isinstance(decoded, Rejected):
         return decoded
-    decision = _decision_from_output(raw)
+    decision = _decision_from_output(raw, descriptors)
     if isinstance(decision, Rejected):
         return decision
     source = replace(item, params={**decoded, **dict(item.params)})
@@ -275,25 +279,7 @@ def _validate_planned_item(  # noqa: PLR0911, PLR0913 - fail-fast outcomes keep 
                 code="preparation_unknown_profile",
                 details={"item_id": item.item_id, "profile_id": decision.profile_id},
             )
-        grants = decision.capability_grants
-        if item.allowed_capability_ids is not None:
-            disallowed = sorted(set(grants) - set(item.allowed_capability_ids))
-            if disallowed:
-                return Rejected(
-                    f"sub-agent grants exceed the source allow-list for {item.item_id!r}",
-                    code="preparation_invalid_agent_grants",
-                    details={"item_id": item.item_id, "disallowed_capabilities": disallowed},
-                )
-        unknown = sorted({grant for grant in grants if grant not in descriptors})
-        outside_ceiling = sorted({grant for grant in grants if not ceiling_allows(profile.capability_ceiling, grant)})
-        if unknown or outside_ceiling:
-            return Rejected(
-                f"sub-agent grants are outside the available catalogue or profile ceiling for {item.item_id!r}",
-                code="preparation_invalid_agent_grants",
-                details={"item_id": item.item_id, "unknown_capabilities": unknown, "outside_profile_ceiling": outside_ceiling},
-            )
-        decision = replace(decision, capability_grants=tuple(grants))
-        sandbox = _agent_sandbox_selection(item, tuple(descriptors[grant] for grant in grants))
+        sandbox = _agent_sandbox_selection(item)
         if isinstance(sandbox, Rejected):
             return sandbox
         required_sandbox, selected_sandbox = sandbox
@@ -425,27 +411,15 @@ def _sandbox_selection(
     return tuple(required_sandbox), hint or None
 
 
-def _agent_sandbox_selection(
-    item: WorkItem,
-    descriptors: tuple[CapabilityDescriptor, ...],
-) -> tuple[tuple[str, ...], str | None] | Rejected:
-    constrained = [set(descriptor.required_sandbox) for descriptor in descriptors if descriptor.required_sandbox]
-    if not constrained:
-        return _sandbox_selection(item, ())
-    compatible = set.intersection(*constrained)
-    if not compatible:
-        return Rejected(
-            f"sub-agent grants for {item.item_id!r} do not share a compatible sandbox",
-            code="preparation_incompatible_agent_grants",
-            details={"item_id": item.item_id},
-        )
-    ordered = tuple(os_name for os_name in descriptors[0].required_sandbox if os_name in compatible)
-    if not ordered:
-        ordered = tuple(sorted(compatible))
-    return _sandbox_selection(item, ordered)
+def _agent_sandbox_selection(item: WorkItem) -> tuple[tuple[str, ...], str | None]:
+    hint = item.sandbox_hint.strip()
+    return ((hint,), hint) if hint else ((), None)
 
 
-def _decision_from_output(raw: PlannedDecision) -> ExecutionDecision | Rejected:
+def _decision_from_output(
+    raw: PlannedDecision,
+    descriptors: Mapping[str, CapabilityDescriptor],
+) -> ExecutionDecision | Rejected:
     if raw.dispatch_type == "capability":
         if not raw.capability_id.strip():
             return Rejected(
@@ -453,7 +427,7 @@ def _decision_from_output(raw: PlannedDecision) -> ExecutionDecision | Rejected:
                 code="task_planner_invalid_output",
             )
         return DirectCapability(raw.capability_id)
-    return AgentInvocation(raw.profile_id, tuple(raw.capability_grants), raw.max_model_turns)
+    return AgentInvocation(raw.profile_id, raw.max_model_turns)
 
 
 def _decode_arguments(args_json: str) -> dict[str, Any] | Rejected:
@@ -483,8 +457,9 @@ You plan a batch of durable tasks. For each unresolved work item, choose exactly
 one namespaced capability or one sub-agent profile from the supplied catalogues.
 Return one decision per unresolved item, preserving item_id. A capability call
 must provide literal JSON arguments matching its parameter_schema. A sub-agent
-is appropriate only when execution needs a bounded observe/reason/act loop;
-keep its grants inside both the supplied catalogue and profile ceiling.
+is appropriate when execution needs a bounded observe/reason/act loop. Choose
+its human-defined profile, but do not choose or grant its capabilities: the
+sub-agent discovers and invokes tools within the profile ceiling at runtime.
 
 Items sharing a stage run in parallel. Higher stages wait for every lower stage
 to settle. Respect every stage_hint exactly and use higher stages only for real
@@ -509,16 +484,23 @@ async def _run_planner(
         model=_model_name(),
         response_format=PlannerOutput,
     )
-    try:
-        response = await app.llmhubs.generate(request=request)
-    except Exception as exc:  # noqa: BLE001
-        raise PlannerCallError(f"planner LLM call failed: {exc}", code="task_planner_llm_failed") from exc
-    if response.code != 0:
-        raise PlannerCallError(
-            f"planner LLM returned non-zero code: {response.msg}",
-            code="task_planner_llm_failed",
-            details={"code": response.code, "msg": response.msg},
-        )
+    response = None
+    for attempt in range(1, _TASK_PLANNER_GENERATE_ATTEMPTS + 1):
+        try:
+            response = await app.llmhubs.generate(request=request)
+        except Exception as exc:  # noqa: BLE001 - retry happens before any prepared batch exists.
+            if attempt == _TASK_PLANNER_GENERATE_ATTEMPTS:
+                raise PlannerCallError(f"planner LLM call failed: {exc}", code="task_planner_llm_failed") from exc
+            continue
+        if response.code == 0:
+            break
+        if attempt == _TASK_PLANNER_GENERATE_ATTEMPTS:
+            raise PlannerCallError(
+                f"planner LLM returned non-zero code: {response.msg}",
+                code="task_planner_llm_failed",
+                details={"code": response.code, "msg": response.msg},
+            )
+    assert response is not None
     structured = _structured_response(response)
     try:
         return PlannerOutput.model_validate(structured)
@@ -627,6 +609,8 @@ def _descriptor_payload(descriptor: CapabilityDescriptor) -> dict[str, Any]:
         "when_to_use": descriptor.when_to_use,
         "parameter_schema": dict(descriptor.parameter_schema),
         "required_sandbox": list(descriptor.required_sandbox),
+        "workspace_access": descriptor.workspace_access,
+        "effect": descriptor.effect,
     }
 
 

@@ -10,9 +10,11 @@ the real local backend, and the parameter-projection helpers.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import time
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import pytest
@@ -27,6 +29,8 @@ from app.biz.task_runtime.capabilities.skill import (
 from app.biz.task_runtime.capabilities.executor import CapabilityExecutor
 from app.biz.task_runtime.execution.command.contracts import CommandResult, CommandSpec
 from app.biz.task_runtime.execution.command.local import LocalBackend
+from app.biz.task_runtime.execution.command.routing import SkillCommandBackendResolver
+from app.biz.task_runtime.execution.environment import PreparedEnvironmentError, PreparedEnvironmentRef
 from app.biz.task_runtime.storage.artifact_store import FileArtifactStore
 from app.biz.task_runtime.domain.models import (
     CapabilityDispatch,
@@ -94,6 +98,61 @@ class _FakeBackend:
         return _FakeSession(self)
 
 
+class _FailOpenBackend(_FakeBackend):
+    def open_session(self, *, pod_name: str = "", image: str = "") -> _FakeSession:
+        raise RuntimeError("worker startup failed")
+
+
+class _FailCloseSession(_FakeSession):
+    async def aclose(self) -> None:
+        raise RuntimeError("result transfer failed")
+
+
+class _FailCloseBackend(_FakeBackend):
+    def open_session(self, *, pod_name: str = "", image: str = "") -> _FailCloseSession:
+        self.open_calls.append({"pod_name": pod_name, "image": image})
+        return _FailCloseSession(self)
+
+
+class _BlockingSession(_FakeSession):
+    async def run(self, spec: CommandSpec) -> CommandResult:
+        self._backend.started.set()
+        await self._backend.release.wait()
+        return await super().run(spec)
+
+
+class _BlockingBackend(_FakeBackend):
+    def __init__(self) -> None:
+        super().__init__(CommandResult(return_code=0))
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    def open_session(self, *, pod_name: str = "", image: str = "") -> _BlockingSession:
+        self.open_calls.append({"pod_name": pod_name, "image": image})
+        return _BlockingSession(self)
+
+
+class _FakeEnvironmentManager:
+    def __init__(self, *, image: str = "registry.test/prepared@sha256:" + "2" * 64, error: str = "") -> None:
+        self.image = image
+        self.error = error
+        self.calls = []
+        self.active = False
+        self.releases = 0
+
+    @asynccontextmanager
+    async def use(self, action, runtime_root: Path):
+        self.calls.append((action, runtime_root))
+        if self.error:
+            raise PreparedEnvironmentError(self.error)
+        self.active = True
+        try:
+            yield PreparedEnvironmentRef(key="1" * 64, image=self.image)
+        finally:
+            self.active = False
+            self.releases += 1
+
+
 class _FakeWorkspaceLayout:
     def __init__(self, workspace_root: Path) -> None:
         self._workspace_root = workspace_root
@@ -131,7 +190,14 @@ def _workspace_layout(tmp_path, request) -> None:
     request.addfinalizer(lambda: reset_workspace_layout(token))
 
 
-def _write_skill(workspace: Path, *, skill_id: int = 100, name: str, steps: list[dict]) -> None:
+def _write_skill(
+    workspace: Path,
+    *,
+    skill_id: int = 100,
+    name: str,
+    steps: list[dict],
+    execution_requirement: dict | None = None,
+) -> None:
     """Stage a resolved skill so ``SkillLoader(workspace).load_action`` finds it."""
     staged_root = workspace.parent / "skills" / str(skill_id)
     (staged_root / "runtime").mkdir(parents=True, exist_ok=True)
@@ -146,6 +212,7 @@ def _write_skill(workspace: Path, *, skill_id: int = 100, name: str, steps: list
                         "name": "run",
                         "description": "Run a test.",
                         "parameters": [{"name": "greeting", "description": "Greeting text."}],
+                        **({"execution_requirement": execution_requirement} if execution_requirement else {}),
                         "steps": steps,
                     }
                 ],
@@ -161,7 +228,12 @@ def _write_skill(workspace: Path, *, skill_id: int = 100, name: str, steps: list
     )
 
 
-def _skill_run(*, args: dict | None = None, timeout_seconds: int = 600) -> TaskRun:
+def _skill_run(
+    *,
+    args: dict | None = None,
+    timeout_seconds: int = 600,
+    sandbox: SandboxLeaseRef | None = None,
+) -> TaskRun:
     spec = TaskSpec(
         task_id="t-skill",
         title="Run a skill",
@@ -183,6 +255,7 @@ def _skill_run(*, args: dict | None = None, timeout_seconds: int = 600) -> TaskR
         idempotency_key=spec.task_id,
         executor="local_subprocess",
         queued_at=int(time.time() * 1000),
+        sandbox=sandbox,
     )
 
 
@@ -190,11 +263,20 @@ def _artifact_store(tmp_path: Path) -> FileArtifactStore:
     return FileArtifactStore(tmp_path / "artifacts")
 
 
-def _skill_executor(workspace: Path, tmp_path: Path, backend) -> CapabilityExecutor:
+def _skill_executor(
+    workspace: Path,
+    tmp_path: Path,
+    backend,
+    *,
+    backend_resolver=None,
+    environment_manager=None,
+) -> CapabilityExecutor:
     provider = SkillCapabilityProvider(
         SkillLoader(workspace),
         artifact_store=_artifact_store(tmp_path),
         command_backend=backend,
+        command_backend_resolver=backend_resolver,
+        environment_manager=environment_manager,
     )
     return CapabilityExecutor(CapabilityResolver((provider,)))
 
@@ -238,6 +320,388 @@ async def test_skill_builds_specs_and_reuses_one_session(tmp_path, monkeypatch) 
     assert runtime_mount.mount_path == str(run_runtime)
     assert backend.runtime_file_seen is True
     assert not run_runtime.exists()
+
+
+@pytest.mark.asyncio
+async def test_skill_workspace_access_none_omits_workspace_mount(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(workspace, name="android-test", steps=[{"argv": ["echo", "{greeting}"]}])
+    actions_path = workspace.parent / "skills" / "100" / "resolved" / "actions.json"
+    manifest = json.loads(actions_path.read_text(encoding="utf-8"))
+    manifest["actions"][0]["workspace_access"] = "none"
+    actions_path.write_text(json.dumps(manifest), encoding="utf-8")
+    backend = _FakeBackend(CommandResult(return_code=0))
+    executor = _skill_executor(workspace, tmp_path, backend)
+
+    result = await executor.run(_skill_run(), _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    assert {mount.name for mount in backend.ran_specs[0].mounts} == {"skill-runtime", "skill-result"}
+
+
+@pytest.mark.asyncio
+async def test_skill_execution_requirement_selects_declared_backend_and_image(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "docker", "image": "example.test/skill@sha256:1234"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    configured = _FakeBackend(CommandResult(return_code=0))
+    selected = _FakeBackend(CommandResult(return_code=0))
+    backend_resolver = SkillCommandBackendResolver(configured, factories={"docker": lambda: selected})
+    executor = _skill_executor(workspace, tmp_path, configured, backend_resolver=backend_resolver)
+
+    result = await executor.run(_skill_run(), _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    assert configured.open_calls == []
+    assert selected.open_calls == [
+        {"pod_name": "skill-run-skill", "image": "example.test/skill@sha256:1234"}
+    ]
+    assert [spec.argv for spec in selected.ran_specs] == [["echo", "hello"]]
+
+
+@pytest.mark.asyncio
+async def test_skill_execution_requirement_any_uses_configured_worker(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "any"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    configured = _FakeBackend(CommandResult(return_code=0))
+    alternate = _FakeBackend(CommandResult(return_code=0))
+    backend_resolver = SkillCommandBackendResolver(configured, factories={"docker": lambda: alternate})
+    executor = _skill_executor(workspace, tmp_path, configured, backend_resolver=backend_resolver)
+
+    result = await executor.run(_skill_run(), _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    assert len(configured.open_calls) == 1
+    assert alternate.open_calls == []
+
+
+@pytest.mark.asyncio
+async def test_skill_execution_requirement_rejects_worker_unavailable_in_deployment(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TASK_RUNTIME_BACKEND", "local")
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "docker"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    configured = _FakeBackend(CommandResult(return_code=0))
+    executor = _skill_executor(workspace, tmp_path, configured)
+
+    result = await executor.run(_skill_run(), _FakeStore())
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.USER_INPUT
+    assert "execution backend 'docker' is unavailable" in result.error_message
+    assert configured.open_calls == []
+
+
+@pytest.mark.asyncio
+async def test_skill_with_preparation_requires_environment_manager(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(workspace, name="android-test", steps=[{"argv": ["echo", "{greeting}"]}])
+    actions_path = workspace.parent / "skills" / "100" / "resolved" / "actions.json"
+    manifest = json.loads(actions_path.read_text(encoding="utf-8"))
+    manifest["schema_version"] = 3
+    manifest["review_status"] = "accepted"
+    manifest["source_provenance"] = "author"
+    manifest["actions"][0]["preparation"] = {"steps": [{"argv": ["uv", "sync", "--frozen"]}]}
+    actions_path.write_text(json.dumps(manifest), encoding="utf-8")
+    configured = _FakeBackend(CommandResult(return_code=0))
+    executor = _skill_executor(workspace, tmp_path, configured)
+
+    result = await executor.run(_skill_run(), _FakeStore())
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.TRANSIENT
+    assert "prepared environment manager is not configured" in result.error_message
+    assert configured.open_calls == []
+
+
+@pytest.mark.asyncio
+async def test_skill_uses_prepared_digest_and_runs_only_action_steps(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TASK_RUNTIME_BACKEND", "k8s")
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "kubernetes", "image": "registry.test/base:latest"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    actions_path = workspace.parent / "skills" / "100" / "resolved" / "actions.json"
+    manifest = json.loads(actions_path.read_text(encoding="utf-8"))
+    manifest.update(schema_version=3, review_status="accepted", source_provenance="author")
+    manifest["actions"][0]["preparation"] = {"steps": [{"argv": ["uv", "sync", "--frozen"]}]}
+    actions_path.write_text(json.dumps(manifest), encoding="utf-8")
+    backend = _FakeBackend(CommandResult(return_code=0))
+    environments = _FakeEnvironmentManager()
+    executor = _skill_executor(workspace, tmp_path, backend, environment_manager=environments)
+
+    result = await executor.run(_skill_run(), _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    assert len(environments.calls) == 1
+    assert backend.open_calls == [{"pod_name": "skill-run-skill", "image": environments.image}]
+    assert [spec.argv for spec in backend.ran_specs] == [["echo", "hello"]]
+    assert backend.ran_specs[0].cwd == "/opt/sico-skill"
+    assert {mount.name for mount in backend.ran_specs[0].mounts} == {"workspace", "skill-result"}
+    assert environments.releases == 1
+    assert environments.active is False
+
+
+@pytest.mark.asyncio
+async def test_skill_environment_failure_does_not_open_worker(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TASK_RUNTIME_BACKEND", "k8s")
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "kubernetes", "image": "registry.test/base:latest"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    actions_path = workspace.parent / "skills" / "100" / "resolved" / "actions.json"
+    manifest = json.loads(actions_path.read_text(encoding="utf-8"))
+    manifest.update(schema_version=3, review_status="accepted", source_provenance="author")
+    manifest["actions"][0]["preparation"] = {"steps": [{"argv": ["uv", "sync", "--frozen"]}]}
+    actions_path.write_text(json.dumps(manifest), encoding="utf-8")
+    backend = _FakeBackend(CommandResult(return_code=0))
+    executor = _skill_executor(
+        workspace,
+        tmp_path,
+        backend,
+        environment_manager=_FakeEnvironmentManager(error="build unavailable"),
+    )
+
+    result = await executor.run(_skill_run(), _FakeStore())
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.TRANSIENT
+    assert "build unavailable" in result.error_message
+    assert backend.open_calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("backend", [_FakeBackend(CommandResult(return_code=1)), _FailOpenBackend()])
+async def test_prepared_environment_lease_releases_after_worker_failure(tmp_path, monkeypatch, backend) -> None:
+    monkeypatch.setenv("TASK_RUNTIME_BACKEND", "k8s")
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "kubernetes", "image": "registry.test/base:latest"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    actions_path = workspace.parent / "skills" / "100" / "resolved" / "actions.json"
+    manifest = json.loads(actions_path.read_text(encoding="utf-8"))
+    manifest.update(schema_version=3, review_status="accepted", source_provenance="author")
+    manifest["actions"][0]["preparation"] = {"steps": [{"argv": ["uv", "sync", "--frozen"]}]}
+    actions_path.write_text(json.dumps(manifest), encoding="utf-8")
+    environments = _FakeEnvironmentManager()
+    executor = _skill_executor(workspace, tmp_path, backend, environment_manager=environments)
+
+    await executor.run(_skill_run(), _FakeStore())
+
+    assert environments.releases == 1
+    assert environments.active is False
+
+
+@pytest.mark.asyncio
+async def test_prepared_environment_lease_releases_after_cancellation(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TASK_RUNTIME_BACKEND", "k8s")
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "kubernetes", "image": "registry.test/base:latest"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    actions_path = workspace.parent / "skills" / "100" / "resolved" / "actions.json"
+    manifest = json.loads(actions_path.read_text(encoding="utf-8"))
+    manifest.update(schema_version=3, review_status="accepted", source_provenance="author")
+    manifest["actions"][0]["preparation"] = {"steps": [{"argv": ["uv", "sync", "--frozen"]}]}
+    actions_path.write_text(json.dumps(manifest), encoding="utf-8")
+    backend = _BlockingBackend()
+    environments = _FakeEnvironmentManager()
+    executor = _skill_executor(workspace, tmp_path, backend, environment_manager=environments)
+    execution = asyncio.create_task(executor.run(_skill_run(), _FakeStore()))
+    await backend.started.wait()
+
+    execution.cancel()
+    with suppress(asyncio.CancelledError):
+        await execution
+
+    assert backend.close_calls == 1
+    assert environments.releases == 1
+    assert environments.active is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("sandbox", "message"),
+    [
+        (None, "needs one of ['linux_workstation'], but this task selected no sandbox"),
+        (
+            SandboxLeaseRef(
+                sandbox_id="emulator:1",
+                type="emulator",
+                os="android",
+                endpoint="127.0.0.1:5555",
+                acquired_at=1,
+            ),
+            "requires lease type 'linux_workstation', got 'emulator'",
+        ),
+    ],
+)
+async def test_skill_linux_workstation_execution_requirement_fails_without_available_backend(
+    tmp_path,
+    sandbox: SandboxLeaseRef | None,
+    message: str,
+) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "linux_workstation"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    configured = _FakeBackend(CommandResult(return_code=0))
+    executor = _skill_executor(workspace, tmp_path, configured)
+    run = _skill_run(sandbox=sandbox)
+    if sandbox is not None:
+        run.spec.required_sandbox = ["linux_workstation"]
+
+    result = await executor.run(run, _FakeStore())
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.USER_INPUT
+    assert message in result.error_message
+    assert configured.open_calls == []
+
+
+@pytest.mark.asyncio
+async def test_skill_linux_workstation_execution_runs_preparation_then_action_in_one_session(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "linux_workstation"},
+        steps=[{"argv": ["python", "runner.py", "{greeting}"]}],
+    )
+    actions_path = workspace.parent / "skills" / "100" / "resolved" / "actions.json"
+    manifest = json.loads(actions_path.read_text(encoding="utf-8"))
+    manifest.update(schema_version=3, review_status="accepted", source_provenance="author")
+    manifest["actions"][0]["preparation"] = {"steps": [{"argv": ["uv", "sync", "--frozen"]}]}
+    actions_path.write_text(json.dumps(manifest), encoding="utf-8")
+    configured = _FakeBackend(CommandResult(return_code=0))
+    linux_workstation_backend = _FakeBackend(CommandResult(return_code=0))
+    backend_resolver = SkillCommandBackendResolver(
+        configured, linux_workstation_factory=lambda run: linux_workstation_backend
+    )
+    environments = _FakeEnvironmentManager(error="Linux Workstation must not build an OCI environment")
+    executor = _skill_executor(
+        workspace,
+        tmp_path,
+        configured,
+        backend_resolver=backend_resolver,
+        environment_manager=environments,
+    )
+    lease = SandboxLeaseRef(
+        sandbox_id="linux_workstation:http://linux-workstation:8080",
+        type="linux_workstation",
+        os="linux",
+        endpoint="/api/sico/sandbox/resources/linux_workstation/1/",
+        acquired_at=1,
+    )
+
+    run = _skill_run(sandbox=lease)
+    run.spec.required_sandbox = ["linux_workstation"]
+    result = await executor.run(run, _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    assert configured.open_calls == []
+    assert linux_workstation_backend.close_calls == 1
+    assert [spec.argv for spec in linux_workstation_backend.ran_specs] == [
+        ["uv", "sync", "--frozen"],
+        ["python", "runner.py", "hello"],
+    ]
+    assert environments.calls == []
+
+
+@pytest.mark.asyncio
+async def test_skill_linux_workstation_result_transfer_failure_is_transient(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        execution_requirement={"backend": "linux_workstation"},
+        steps=[{"argv": ["echo", "{greeting}"]}],
+    )
+    configured = _FakeBackend(CommandResult(return_code=0))
+    linux_workstation_backend = _FailCloseBackend(CommandResult(return_code=0))
+    executor = _skill_executor(
+        workspace,
+        tmp_path,
+        configured,
+        backend_resolver=SkillCommandBackendResolver(
+            configured, linux_workstation_factory=lambda run: linux_workstation_backend
+        ),
+    )
+    lease = SandboxLeaseRef(
+        sandbox_id="linux_workstation:http://linux-workstation:8080",
+        type="linux_workstation",
+        os="linux",
+        endpoint="/api/sico/sandbox/resources/linux_workstation/1/",
+        acquired_at=1,
+    )
+
+    run = _skill_run(sandbox=lease)
+    run.spec.required_sandbox = ["linux_workstation"]
+    result = await executor.run(run, _FakeStore())
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.TRANSIENT
+    assert "result transfer failed" in result.error_message
+
+
+@pytest.mark.asyncio
+async def test_skill_execution_baseline_repeats_setup_for_each_invocation(tmp_path) -> None:
+    workspace = tmp_path / "workspace"
+    _write_skill(
+        workspace,
+        name="android-test",
+        steps=[
+            {"argv": ["uv", "sync", "--frozen"]},
+            {"argv": ["python", "runner.py", "{greeting}"]},
+        ],
+    )
+    backend = _FakeBackend(CommandResult(return_code=0))
+    executor = _skill_executor(workspace, tmp_path, backend)
+
+    first = await executor.run(_skill_run(), _FakeStore())
+    second = await executor.run(_skill_run(), _FakeStore())
+
+    assert first.status == TaskStatus.COMPLETED
+    assert second.status == TaskStatus.COMPLETED
+    assert backend.open_calls == [
+        {"pod_name": "skill-run-skill", "image": ""},
+        {"pod_name": "skill-run-skill", "image": ""},
+    ]
+    assert backend.close_calls == 2
+    assert [spec.argv for spec in backend.ran_specs] == [
+        ["uv", "sync", "--frozen"],
+        ["python", "runner.py", "hello"],
+        ["uv", "sync", "--frozen"],
+        ["python", "runner.py", "hello"],
+    ]
 
 
 @pytest.mark.asyncio

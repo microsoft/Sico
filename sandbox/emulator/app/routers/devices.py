@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocke
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
+from app.auth import require_emulator_websocket_token
 from app.deps import get_device_index_map, get_mumu
 from app.routers.h264_hub import H264DeviceHub
 from app.scrcpy import ScrcpyConfig
@@ -169,6 +170,8 @@ async def device_h264_ws_scrcpy(
     - Low latency (~35ms)
     - Touch/keyboard control support
     """
+    if not await require_emulator_websocket_token(websocket, settings):
+        return
     await websocket.accept()
 
     if max_size < 128 or max_size > 4096:

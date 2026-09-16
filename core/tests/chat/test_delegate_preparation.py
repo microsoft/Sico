@@ -135,6 +135,16 @@ async def test_delegate_function_tool_requires_request_json() -> None:
         await tool.invoke(arguments={"kind": "general", "options_json": "{}"})
 
 
+def test_delegate_function_tool_lists_available_profile_ids() -> None:
+    tool = build_delegate_tool(
+        _Service(Rejected("no")),
+        available_profile_ids=("default", "research"),
+    )
+
+    assert "Caller-visible sub-agent profile IDs: default, research" in tool.description
+    assert "Never guess a profile ID" in tool.description
+
+
 @pytest.mark.asyncio
 async def test_delegate_function_tool_rejects_legacy_fields_with_request_json() -> None:
     tool = build_delegate_tool(_Service(Rejected("no")))

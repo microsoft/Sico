@@ -97,6 +97,7 @@ message UpdateSingleAgentInstanceRequest {
   reserved 11;
   int64 project_id = 12;                    // @gotag: json:"projectId"
   string desc = 13;                            // @gotag: json:"desc"
+  string icon_uri = 14;                     // @gotag: json:"iconUri"
 }
 
 // Response for updating a single agent instance

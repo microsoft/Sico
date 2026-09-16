@@ -12,9 +12,13 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator,
 from ..capabilities.ids import (
     builtin_tool_of,
     normalize_capability_id,
+    normalize_capability_selector,
     skill_action_of,
 )
-from ..sandbox.types import SandboxOS
+from ..guides import SkillGuideRef
+from ..sandbox.types import SANDBOX_SELECTORS, SandboxOS, normalize_sandbox_type
+
+RUNTIME_METADATA_KEY = "_task_runtime"
 
 
 class TaskStatus(str, Enum):
@@ -67,7 +71,7 @@ class RetryPolicy(BaseModel):
 
 
 class TaskExecutionPolicy(BaseModel):
-    timeout_seconds: int = 600
+    timeout_seconds: int = 900
     retry: RetryPolicy = Field(default_factory=RetryPolicy)
     # Execution semantics only: ``in_process`` = pure-Python builtin tool (echo /
     # file_convert) run inside the worker; ``command_backend`` = work lowered to a
@@ -82,21 +86,34 @@ class TaskExecutionPolicy(BaseModel):
 
 
 class SandboxRequirement(BaseModel):
-    # An OS capability the task needs (e.g. ``windows``); the backend resolves it
-    # to whichever concrete sandbox type has a free machine.
-    type: SandboxOS
+    # An OS selector resolves to any compatible provider; a concrete selector
+    # such as ``linux_workstation`` requires that exact provider type.
+    type: str
     count: int = 1
     reset_before_run: bool = True
     release_after_run: bool = True
     affinity_key: str | None = None
 
+    @field_validator("type")
+    @classmethod
+    def _valid_selector(cls, value: str) -> str:
+        normalized = normalize_sandbox_type(str(value))
+        if normalized not in SANDBOX_SELECTORS:
+            raise ValueError(f"unknown sandbox selector: {normalized}")
+        return normalized
+
 
 class ReservationToken(BaseModel):
     reservation_id: str
     run_id: str
-    # The OS selector the reservation was made against (mirrors SandboxRequirement).
-    type: SandboxOS
+    # The OS or concrete selector used by the reservation.
+    type: str
     expires_at: int
+
+    @field_validator("type")
+    @classmethod
+    def _canonical_type(cls, value: str) -> str:
+        return normalize_sandbox_type(value)
 
 
 class SandboxLeaseRef(BaseModel):
@@ -111,12 +128,17 @@ class SandboxLeaseRef(BaseModel):
     acquired_at: int
     expires_at: int | None = None
 
+    @field_validator("type")
+    @classmethod
+    def _canonical_type(cls, value: str) -> str:
+        return normalize_sandbox_type(value)
+
 
 class CapabilityDispatch(BaseModel):
     """Dispatch to one capability resolved from the capability catalogue.
 
     ``capability_id`` is namespaced by the provider that owns it
-    (``builtin:echo``, ``skill:android-tester.run``) so ids stay unambiguous as
+    (``builtin:echo``, ``skill:android-tester:run``) so ids stay unambiguous as
     sources multiply. Normalising on the way in makes that an *invariant* rather
     than a convention, which is what lets policy, bucketing and presentation
     compare ``provider_of(capability_id)`` without each re-normalising — a bare
@@ -140,9 +162,9 @@ class SubAgentDispatch(BaseModel):
     - ``profile_id`` selects the behaviour configuration (system prompt,
       capability ceiling, policies). Unknown ids are rejected deterministically.
     - ``max_model_turns`` caps the loop. ``None`` defers to the executor default.
-    - ``capability_grants`` is the allow-list of namespaced capability ids the
-      planner explicitly grants. It is intersected with the profile's ceiling at
-      execution time; the executor never widens it.
+        - ``requested_capability_selectors`` and ``effective_capability_ids`` retain old
+            persisted payloads for compatibility. New preparation leaves both empty and
+            execution ignores them; the resolved profile is the capability authority.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -150,7 +172,9 @@ class SubAgentDispatch(BaseModel):
     type: Literal["sub_agent"] = "sub_agent"
     profile_id: str = "default"
     max_model_turns: int | None = Field(default=None, ge=1)
-    capability_grants: list[str] = Field(default_factory=list)
+    requested_capability_selectors: list[str] = Field(default_factory=list)
+    effective_capability_ids: list[str] = Field(default_factory=list)
+    instruction_refs: list[SkillGuideRef] = Field(default_factory=list)
 
     @field_validator("profile_id")
     @classmethod
@@ -177,13 +201,32 @@ class SubAgentDispatch(BaseModel):
             if "capabilities" in data:
                 capabilities = data.pop("capabilities")
                 data.setdefault("capability_grants", capabilities)
+            if "capability_grants" in data:
+                grants = data.pop("capability_grants")
+                data.setdefault("effective_capability_ids", grants)
         return data
 
-    @field_validator("capability_grants")
+    @field_validator("requested_capability_selectors")
     @classmethod
-    def _namespaced(cls, value: list[str]) -> list[str]:
+    def _selectors(cls, value: list[str]) -> list[str]:
+        normalized = (normalize_capability_selector(selector) for selector in value if selector.strip())
+        return list(dict.fromkeys(normalized))
+
+    @field_validator("effective_capability_ids")
+    @classmethod
+    def _effective_ids(cls, value: list[str]) -> list[str]:
         normalized = (normalize_capability_id(name) for name in value if name.strip())
         return list(dict.fromkeys(normalized))
+
+    @property
+    def capability_grants(self) -> list[str]:
+        """Compatibility view of ignored legacy effective IDs."""
+        return self.effective_capability_ids
+
+    @field_validator("instruction_refs")
+    @classmethod
+    def _deduplicate_instruction_refs(cls, value: list[SkillGuideRef]) -> list[SkillGuideRef]:
+        return list(dict.fromkeys(value))
 
 
 Dispatch = Annotated[CapabilityDispatch | SubAgentDispatch, Field(discriminator="type")]
@@ -221,9 +264,8 @@ class TaskSpec(BaseModel):
     display: TaskDisplay = Field(default_factory=TaskDisplay)
     args: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
-    # The OS capabilities this task may run on, derived from the skill's
-    # ``infra_requirements``. Empty for tasks that need no sandbox.
-    required_sandbox: list[SandboxOS] = Field(default_factory=list)
+    # OS or concrete sandbox selectors accepted for this task.
+    required_sandbox: list[str] = Field(default_factory=list)
     # Execution order within a batch. Tasks sharing a ``stage`` run in parallel;
     # lower stages run to completion before higher stages start. ``0`` (the
     # default) means the whole batch runs in parallel. Only raise it when a task
@@ -233,7 +275,7 @@ class TaskSpec(BaseModel):
     stage: int = 0
     # Optional caller-supplied task identity within one logical submission.
     # The runtime scopes it with the submission id and batch position, so a new
-    # user-requested submission still executes while transport replay reuses.
+    # user-requested submission still executes while duplicate transport delivery reuses.
     idempotency_key: str = ""
 
     @field_validator("task_id", "title")
@@ -271,6 +313,14 @@ class TaskSpec(BaseModel):
             return cleaned
         return value
 
+    @field_validator("required_sandbox")
+    @classmethod
+    def _valid_required_sandbox(cls, value: list[str]) -> list[str]:
+        unknown = [selector for selector in value if selector not in SANDBOX_SELECTORS]
+        if unknown:
+            raise ValueError(f"unknown sandbox selectors: {unknown}")
+        return value
+
     @property
     def sandbox_options(self) -> tuple[str, ...]:
         return tuple(str(item) for item in self.required_sandbox)
@@ -302,7 +352,7 @@ class TaskSpec(BaseModel):
 
     @property
     def selected_sandbox(self) -> str | None:
-        runtime_metadata = self.metadata.get("_task_runtime")
+        runtime_metadata = self.metadata.get(RUNTIME_METADATA_KEY)
         selected = ""
         if isinstance(runtime_metadata, dict):
             selected = str(runtime_metadata.get("selected_sandbox") or "").strip()
@@ -314,17 +364,17 @@ class TaskSpec(BaseModel):
 
     def set_selected_sandbox(self, sandbox: str | None) -> None:
         if not sandbox:
-            runtime_metadata = self.metadata.get("_task_runtime")
+            runtime_metadata = self.metadata.get(RUNTIME_METADATA_KEY)
             if isinstance(runtime_metadata, dict):
                 runtime_metadata.pop("selected_sandbox", None)
             return
         normalized = str(sandbox).strip()
         if normalized not in self.sandbox_options:
             raise ValueError(f"selected sandbox {normalized!r} is not in required_sandbox")
-        runtime_metadata = self.metadata.get("_task_runtime")
+        runtime_metadata = self.metadata.get(RUNTIME_METADATA_KEY)
         if not isinstance(runtime_metadata, dict):
             runtime_metadata = {}
-            self.metadata["_task_runtime"] = runtime_metadata
+            self.metadata[RUNTIME_METADATA_KEY] = runtime_metadata
         runtime_metadata["selected_sandbox"] = normalized
 
 
@@ -337,10 +387,17 @@ class BatchRecord(BaseModel):
     reason: str = ""
     join_strategy: JoinStrategy = "partial_ok"
     max_concurrency: int | None = None
-    # The OS capability shared by the batch's sandbox tasks (used for sizing and
-    # display); ``None`` for batches that need no sandbox.
-    sandbox_type: SandboxOS | None = None
+    # The OS or concrete selector shared by the batch's sandbox tasks.
+    sandbox_type: str | None = None
     sandbox_task_count: int = 0
+
+    @field_validator("sandbox_type")
+    @classmethod
+    def _valid_sandbox_type(cls, value: str | None) -> str | None:
+        if value is not None and value not in SANDBOX_SELECTORS:
+            raise ValueError(f"unknown sandbox selector: {value}")
+        return value
+
     sandbox_concurrency: int | None = None
     available_sandbox_count: int | None = None
     planned_batch_sizes: list[int] = Field(default_factory=list)
@@ -351,6 +408,11 @@ class BatchRecord(BaseModel):
     ended_at: int | None = None
     cancellation_reason: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def materialization_token(self) -> str:
+        runtime_metadata = self.metadata.get(RUNTIME_METADATA_KEY, {})
+        return str(runtime_metadata.get("materialization_token", "")) if isinstance(runtime_metadata, dict) else ""
 
 
 class FencingToken(BaseModel):
@@ -455,6 +517,11 @@ class ArtifactRef(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class TaskOutputRef(BaseModel):
+    path: str
+    size: int = Field(ge=0)
+
+
 class TaskResult(BaseModel):
     run_id: str
     task_id: str
@@ -462,6 +529,7 @@ class TaskResult(BaseModel):
     title: str
     summary: str
     output: str = ""
+    output_ref: TaskOutputRef | None = None
     primary_artifact: ArtifactRef | None = None
     error_class: ErrorClass | None = None
     error_message: str = ""
@@ -542,14 +610,10 @@ class BatchResultDigest(BaseModel):
         max_result_items: int | None = None,
     ) -> "BatchResultDigest":
         non_success_indexes = [
-            index
-            for index, task_result in enumerate(result.results)
-            if task_result.status != TaskStatus.COMPLETED
+            index for index, task_result in enumerate(result.results) if task_result.status != TaskStatus.COMPLETED
         ]
         success_indexes = [
-            index
-            for index, task_result in enumerate(result.results)
-            if task_result.status == TaskStatus.COMPLETED
+            index for index, task_result in enumerate(result.results) if task_result.status == TaskStatus.COMPLETED
         ][:max_success_items]
         if max_result_items is None:
             selected_indexes = set((*non_success_indexes, *success_indexes))

@@ -15,6 +15,7 @@ import (
 
 	"sico-backend/internal/di"
 	"sico-backend/internal/embeddata"
+	"sico-backend/pkg/env"
 )
 
 const (
@@ -77,6 +78,10 @@ func (s seedSkillFile) asExtraInfo() types.FileExtraInfo {
 	}
 }
 
+func shouldSeedAgentInstances() bool {
+	return env.SeedAgentInstances()
+}
+
 // ---------- Required Data ------------
 
 func getDefaultProject(iconURI string) *projectrepo.ProjectModel {
@@ -103,7 +108,7 @@ func getAgentSimpleChat(iconURI string) (*agententity.SingleAgent, *agententity.
 			Desc:            "This is the default chat agent that is created by the system.",
 			IconUri:         iconURI,
 			UpdaterUsername: defaultSystemUser,
-			OrganizationId:  defaultOrganizationId,
+			OrganizationId:  0,
 			PublishStatus:   agentdto.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED,
 		},
 	}
@@ -135,7 +140,7 @@ func getAgentAndroidTester(iconURI string) (*agententity.SingleAgent, *agententi
 			Desc:            "This is an Android tester agent for testing purposes.",
 			IconUri:         iconURI,
 			UpdaterUsername: defaultSystemUser,
-			OrganizationId:  defaultOrganizationId,
+			OrganizationId:  0,
 			PublishStatus:   agentdto.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED,
 		},
 	}
@@ -167,7 +172,7 @@ func getAgent3DArtist(iconURI string) (*agententity.SingleAgent, *agententity.Si
 			Desc:            "This is a 3D artist agent that can generate 3D models based on text or image prompts.",
 			IconUri:         iconURI,
 			UpdaterUsername: defaultSystemUser,
-			OrganizationId:  defaultOrganizationId,
+			OrganizationId:  0,
 			PublishStatus:   agentdto.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED,
 		},
 	}
@@ -200,7 +205,7 @@ func getAgentProductManager(iconURI string) (*agententity.SingleAgent, *agentent
 				"manage product requirements, user stories, and backlogs.",
 			IconUri:         iconURI,
 			UpdaterUsername: defaultSystemUser,
-			OrganizationId:  defaultOrganizationId,
+			OrganizationId:  0,
 			PublishStatus:   agentdto.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED,
 		},
 	}
@@ -233,7 +238,7 @@ func getAgentMarketing(iconURI string) (*agententity.SingleAgent, *agententity.S
 				"market research, content creation, and campaign management.",
 			IconUri:         iconURI,
 			UpdaterUsername: defaultSystemUser,
-			OrganizationId:  defaultOrganizationId,
+			OrganizationId:  0,
 			PublishStatus:   agentdto.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED,
 		},
 	}
@@ -254,38 +259,53 @@ func getAgentMarketing(iconURI string) (*agententity.SingleAgent, *agententity.S
 	return agent, instance
 }
 
-// Run seeds default data required for the application to work out of the box.
-func Run(ctx context.Context, injector *di.Injector) error {
-	if err := checkDefaultOperatorUser(ctx, injector); err != nil {
-		return err
-	}
-
-	// Upload default icons (idempotent) before the project/instance records
-	// are created/updated so that their IconURI fields can reference them.
-	projectIDStr := strconv.FormatInt(defaultProjectId, 10)
-	_, projectIconURI, err := ensureAsset(ctx, injector, projectIDStr,
-		embeddedFile{bytes.NewReader(embeddata.ProjectDefaultIcon)},
-		types.FileExtraInfo{
-			FileName:    projectDefaultIconName,
-			ContentType: iconContentType,
-			FileExt:     iconExt,
-			FileType:    iconFileType,
+func getAgentLinuxWorkstationPilot(iconURI string) (*agententity.SingleAgent, *agententity.SingleAgentInstance) {
+	agentID := "00000000-0000-0000-0000-000000000006"
+	agent := &agententity.SingleAgent{
+		SingleAgent: &agentdto.SingleAgent{
+			AgentId:         agentID,
+			CreatorUsername: defaultSystemUser,
+			Name:            "Linux Workstation Pilot",
+			Role:            enum.AgentRoleGeneral.String(),
+			Desc:            "A local agent for controlling the Linux Workstation browser and desktop.",
+			IconUri:         iconURI,
+			UpdaterUsername: defaultSystemUser,
+			OrganizationId:  0,
+			PublishStatus:   agentdto.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED,
 		},
-	)
-	if err != nil {
-		return err
 	}
+	instance := &agententity.SingleAgentInstance{
+		SingleAgentInstance: &agentdto.SingleAgentInstance{
+			Id:               6,
+			AgentId:          agentID,
+			EmployerUsername: defaultSystemUser,
+			OperatorUsername: defaultOperatorUser,
+			Name:             "Alex",
+			Role:             enum.AgentRoleGeneral.String(),
+			Desc:             "A local Linux Workstation browser and desktop agent instance.",
+			IconUri:          iconURI,
+			ProjectId:        defaultProjectId,
+			Status:           agentdto.SingleAgentInstanceStatus_INSTANCE_ACTIVE,
+		},
+	}
+	return agent, instance
+}
 
+func ensureDefaultOrganizationAndProject(
+	ctx context.Context,
+	injector *di.Injector,
+	projectIconURI string,
+) error {
 	if err := ensureOrganization(ctx, injector); err != nil {
 		return err
 	}
 	if err := ensureOrganizationMembership(
-		ctx, defaultOrganizationId, defaultOperatorUser, rbac.RoleOrgMember,
+		ctx, injector, defaultOrganizationId, defaultOperatorUser, rbac.RoleOrgMember,
 	); err != nil {
 		return err
 	}
 	if err := ensureOrganizationMembership(
-		ctx, defaultOrganizationId, defaultOperatorUser, rbac.RoleOrgAdmin,
+		ctx, injector, defaultOrganizationId, defaultOperatorUser, rbac.RoleOrgAdmin,
 	); err != nil {
 		return err
 	}
@@ -300,25 +320,61 @@ func Run(ctx context.Context, injector *di.Injector) error {
 	); err != nil {
 		return err
 	}
-	if err := ensureProjectMembership(
+	return ensureProjectMembership(
 		ctx, injector, defaultProjectId, defaultOperatorUser,
 		int32(projectdto.MemberType_MEMBER_TYPE_ADMIN),
-	); err != nil {
+	)
+}
+
+// Run seeds default data required for the application to work out of the box.
+func Run(ctx context.Context, injector *di.Injector) error {
+	seedAgentInstances := shouldSeedAgentInstances()
+
+	if seedAgentInstances {
+		if err := checkDefaultOperatorUser(ctx, injector); err != nil {
+			return err
+		}
+	}
+
+	// Upload default icons (idempotent) before the project/instance records
+	// are created/updated so that their IconURI fields can reference them.
+	projectIDStr := ""
+	if seedAgentInstances {
+		projectIDStr = strconv.FormatInt(defaultProjectId, 10)
+	}
+	_, projectIconURI, err := ensureAsset(ctx, injector, projectIDStr,
+		embeddedFile{bytes.NewReader(embeddata.ProjectDefaultIcon)},
+		types.FileExtraInfo{
+			FileName:    projectDefaultIconName,
+			ContentType: iconContentType,
+			FileExt:     iconExt,
+			FileType:    iconFileType,
+		},
+	)
+	if err != nil {
 		return err
 	}
 
-	if err := ensureAgentAndroidTester(ctx, injector); err != nil {
-		return err
-	}
-	if err := ensureAgent3DArtist(ctx, injector); err != nil {
-		return err
-	}
-	if err := ensureAgentProductManager(ctx, injector); err != nil {
-		return err
-	}
-	if err := ensureAgentMarketing(ctx, injector); err != nil {
-		return err
+	if seedAgentInstances {
+		if err := ensureDefaultOrganizationAndProject(ctx, injector, projectIconURI); err != nil {
+			return err
+		}
 	}
 
+	if err := ensureAgentLinuxWorkstationPilot(ctx, injector, projectIconURI, seedAgentInstances); err != nil {
+		return err
+	}
+	if err := ensureAgentAndroidTester(ctx, injector, seedAgentInstances); err != nil {
+		return err
+	}
+	if err := ensureAgent3DArtist(ctx, injector, seedAgentInstances); err != nil {
+		return err
+	}
+	if err := ensureAgentProductManager(ctx, injector, seedAgentInstances); err != nil {
+		return err
+	}
+	if err := ensureAgentMarketing(ctx, injector, seedAgentInstances); err != nil {
+		return err
+	}
 	return nil
 }

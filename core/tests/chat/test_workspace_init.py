@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.biz.chat import workspace_init
+from app.biz.chat import service as chat_service
 from app.biz.chat.prompt import compose_system_prompt
 from app.biz.chat.service import ChatService, _load_prior_rerun_sources
 from app.biz.source.persistence.repository import WorkspaceSourceRepository
@@ -24,6 +25,41 @@ class FakeResponse:
 
     def raise_for_status(self) -> None:
         return None
+
+
+@pytest.mark.asyncio
+async def test_assigned_sandbox_types_include_only_instance_assignments(monkeypatch: pytest.MonkeyPatch) -> None:
+    sandbox_service = SimpleNamespace(
+        get_instance_sandboxes=lambda instance_id, selector: [
+            SimpleNamespace(type="linux_workstation", status="assigned"),
+            SimpleNamespace(type="emulator", status="in_use"),
+            SimpleNamespace(type="physical", status="available"),
+            SimpleNamespace(type="wincua", status="unhealthy"),
+        ]
+    )
+    monkeypatch.setattr(chat_service.ReverseSandboxService, "get_instance", lambda: sandbox_service)
+    service = object.__new__(ChatService)
+    service._logger = SimpleNamespace(warning=lambda *_args, **_kwargs: None)
+
+    assigned = await service._assigned_sandbox_types(6)
+
+    assert assigned == frozenset({"linux_workstation", "emulator"})
+
+
+@pytest.mark.asyncio
+async def test_assigned_sandbox_type_failure_hides_sandbox_capabilities(monkeypatch: pytest.MonkeyPatch) -> None:
+    sandbox_service = SimpleNamespace(
+        get_instance_sandboxes=lambda instance_id, selector: (_ for _ in ()).throw(RuntimeError("unavailable"))
+    )
+    monkeypatch.setattr(chat_service.ReverseSandboxService, "get_instance", lambda: sandbox_service)
+    warnings: list[str] = []
+    service = object.__new__(ChatService)
+    service._logger = SimpleNamespace(warning=lambda message, *_args: warnings.append(message))
+
+    assigned = await service._assigned_sandbox_types(6)
+
+    assert assigned == frozenset()
+    assert warnings
 
 
 def test_copy_attachments_retains_previous_turn_files_when_requested(tmp_path: Path, monkeypatch) -> None:
@@ -692,19 +728,25 @@ def test_capability_cards_read_actions_from_skill_storage(tmp_path: Path, monkey
         project_id=1,
         message=ChatContent(type=ChatContentType.TEXT, content="Run it"),
     )
-    sections = service._build_context_sections(request, SkillLoader(workspace, project_id=1, agent_id="agent"))
+    sections = service._build_context_sections(
+        request,
+        SkillLoader(workspace, project_id=1, agent_id="agent"),
+        assigned_sandbox_types=frozenset({"linux_workstation"}),
+    )
     skills_section = sections["skills"]
 
     assert not (workspace / "skills" / "7" / "resolved" / "actions.json").exists()
-    assert "These skills are available" in skills_section
+    assert "These executable skill actions are available" in skills_section
     assert "kind: executable_action" in skills_section
     assert "action_name: run_from_storage" in skills_section
     assert "requires_sandbox:" not in skills_section
     assert "parameters:" in skills_section
+    assert "These sandbox capability namespaces are available to delegated sub-agents" in skills_section
+    assert "namespace: linux_workstation:shell:**" in skills_section
 
     system_prompt = compose_system_prompt(prompt_mode="task", skills_section=skills_section)
 
-    assert "These skills are available" in system_prompt
+    assert "These executable skill actions are available" in system_prompt
     assert "kind: executable_action" in system_prompt
     assert "action_name: run_from_storage" in system_prompt
     assert "parameters:" in system_prompt
@@ -717,7 +759,7 @@ def test_capability_cards_read_actions_from_skill_storage(tmp_path: Path, monkey
     assert "parameters:" not in message.text
 
 
-def test_manifest_only_skill_snapshot_uses_staged_runtime(tmp_path: Path, monkeypatch) -> None:
+def test_manifest_only_skill_snapshot_does_not_create_capability(tmp_path: Path, monkeypatch) -> None:
     source_root = tmp_path / "source"
     skill_source = source_root / "1"
     (skill_source / "scripts").mkdir(parents=True)
@@ -748,10 +790,7 @@ entrypoint:
     assert (staged_skill_root / "runtime" / "scripts" / "runner.py").exists()
     assert not (workspace / "skills" / ".runtime-map.json").exists()
 
-    card = SkillLoader(workspace).resolve("sample-skill")
-    assert card is not None
-    assert card.skill_dir == str(staged_skill_root / "runtime")
-    assert not card.is_executable
+    assert SkillLoader(workspace).resolve("sample-skill") is None
 
 
 def test_copy_skills_stages_original_runtime_and_resolved_metadata(tmp_path: Path, monkeypatch) -> None:

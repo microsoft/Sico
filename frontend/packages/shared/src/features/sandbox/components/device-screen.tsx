@@ -19,7 +19,7 @@ export type DeviceScreenProps = {
 
 /**
  * The live device screen under the instance header: a take-over accent border,
- * the aio/wincua "taking over" badge + input-blocking overlay, a loading spinner
+ * the Linux Workstation/WinCUA "taking over" badge + input-blocking overlay, a loading spinner
  * until the frame paints, and the VNC iframe itself — or a blocked message when
  * the url isn't https. Extracted so `SandboxInstance` stays within its budget.
  *
@@ -51,7 +51,7 @@ export function DeviceScreen({
               : "border-stroke-subtle-card-rest"),
         )}
       >
-        {/* aio/wincua: a "taking over" badge + an input-blocking overlay that
+        {/* Linux Workstation/WinCUA: a "taking over" badge + an input-blocking overlay that
             lifts only in take-over. Emulators handle this in-frame, so they get
             neither. */}
         {!isEmulator && takeOver ? (

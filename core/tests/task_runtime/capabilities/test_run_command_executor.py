@@ -9,6 +9,7 @@ fake backend, plus one end-to-end run against the real local backend.
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -156,6 +157,26 @@ def _file_convert_run(**args) -> TaskRun:
     return _run(spec)
 
 
+def _read_file_run(**args) -> TaskRun:
+    spec = TaskSpec(
+        task_id="t-read",
+        title="Read a file",
+        dispatch=CapabilityDispatch(capability_id="builtin:read_file"),
+        args=args,
+    )
+    return _run(spec)
+
+
+def _write_artifact_run(**args) -> TaskRun:
+    spec = TaskSpec(
+        task_id="t-write",
+        title="Write artifact",
+        dispatch=CapabilityDispatch(capability_id="builtin:write_artifact"),
+        args=args,
+    )
+    return _run(spec)
+
+
 def _tool_executor(tmp_path: Path, backend: _FakeBackend | LocalBackend) -> CapabilityExecutor:
     provider = BuiltinCapabilityProvider(
         artifact_store=FileArtifactStore(tmp_path / "artifacts"),
@@ -186,6 +207,42 @@ async def test_unknown_capability_is_user_input_failure(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_read_file_reads_bounded_workspace_text(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    guide = workspace / ".sico" / "runs" / "run-cmd" / "skills" / "100" / "v1" / "references" / "api.md"
+    guide.parent.mkdir(parents=True)
+    guide.write_text("line one\nline two\nline three\n", encoding="utf-8")
+    executor = _tool_executor(tmp_path, _FakeBackend(CommandResult(return_code=0)))
+
+    result = await executor.execute(
+        _read_file_run(file_path=".sico/runs/run-cmd/skills/100/v1/references/api.md", offset=1, lines=1)
+    )
+
+    assert result.status == TaskStatus.COMPLETED
+    assert json.loads(result.output) == {
+        "file_path": ".sico/runs/run-cmd/skills/100/v1/references/api.md",
+        "content": "line two\n",
+        "total_lines": 3,
+        "offset": 1,
+        "lines_returned": 1,
+        "truncated": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_read_file_rejects_path_outside_workspace(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.md"
+    outside.write_text("secret", encoding="utf-8")
+    executor = _tool_executor(tmp_path, _FakeBackend(CommandResult(return_code=0)))
+
+    result = await executor.execute(_read_file_run(file_path="../outside.md"))
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.USER_INPUT
+    assert "must stay within" in result.summary
+
+
+@pytest.mark.asyncio
 async def test_file_convert_converts_xlsx_to_csv(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     attachments = workspace / "attachments"
@@ -207,6 +264,32 @@ async def test_file_convert_converts_xlsx_to_csv(tmp_path: Path) -> None:
     assert result.primary_artifact.filepath.endswith("output/csv/cases.csv")
     csv_path = workspace / "results" / "batch-1" / "run-cmd" / "result" / "output" / "csv" / "cases.csv"
     assert csv_path.read_text(encoding="utf-8").splitlines() == ["ID,Title", "TC-1,Open settings"]
+
+
+@pytest.mark.asyncio
+async def test_write_artifact_creates_and_publishes_primary_artifact(tmp_path: Path) -> None:
+    executor = _tool_executor(tmp_path, _FakeBackend(CommandResult(return_code=0)))
+
+    result = await executor.execute(_write_artifact_run(filepath="prd/product.md", content="# Product\n"))
+
+    assert result.status == TaskStatus.COMPLETED
+    assert result.primary_artifact is not None
+    assert result.primary_artifact.name == "product.md"
+    assert result.primary_artifact.filepath.endswith("result/prd/product.md")
+    assert result.artifacts == [result.primary_artifact]
+    target = tmp_path / "workspace" / "results" / "batch-1" / "run-cmd" / "result" / "prd" / "product.md"
+    assert target.read_text(encoding="utf-8") == "# Product\n"
+
+
+@pytest.mark.asyncio
+async def test_write_artifact_rejects_path_traversal(tmp_path: Path) -> None:
+    executor = _tool_executor(tmp_path, _FakeBackend(CommandResult(return_code=0)))
+
+    result = await executor.execute(_write_artifact_run(filepath="../escaped.md", content="no"))
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.USER_INPUT
+    assert not (tmp_path / "workspace" / "results" / "batch-1" / "run-cmd" / "escaped.md").exists()
 
 
 @pytest.mark.asyncio
@@ -498,3 +581,18 @@ async def test_run_command_runs_for_real_via_local_backend(tmp_path) -> None:
 
     assert result.status == TaskStatus.COMPLETED
     assert "sico-rocks" in result.output
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="requires POSIX shell (sh)")
+@pytest.mark.asyncio
+async def test_run_command_publishes_files_written_to_result_dir(tmp_path: Path) -> None:
+    executor = _tool_executor(tmp_path, LocalBackend())
+    run = _command_run('mkdir -p "$SICO_RESULT_DIR/report" && printf done > "$SICO_RESULT_DIR/report/out.txt"')
+
+    result = await executor.run(run, _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    assert result.primary_artifact is not None
+    assert result.primary_artifact.name == "out.txt"
+    assert result.primary_artifact.filepath.endswith("result/report/out.txt")
+    assert result.artifacts == [result.primary_artifact]

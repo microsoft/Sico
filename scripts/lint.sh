@@ -6,7 +6,7 @@
 #   ./scripts/lint.sh --fix           # apply auto-fixes where possible (ruff, eslint)
 #   ./scripts/lint.sh --backend       # lint backend only
 #   ./scripts/lint.sh --core          # lint core only
-#   ./scripts/lint.sh --frontend      # lint frontend only when frontend/package.json exists
+#   ./scripts/lint.sh --frontend      # lint frontend only
 #
 # Flags may be combined: ./scripts/lint.sh --backend --core
 set -euo pipefail
@@ -42,7 +42,6 @@ fi
 FAILED=0
 section() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 missing() { printf '\033[1;33m==> %s\033[0m\n' "$*" >&2; FAILED=1; }
-skipped() { printf '\033[1;33m==> %s\033[0m\n' "$*" >&2; }
 
 if $RUN_BACKEND; then
   section "Backend: OpenTelemetry wrapper generation"
@@ -89,7 +88,7 @@ fi
 if $RUN_FRONTEND; then
   section "Frontend: eslint + tsc"
   if [[ ! -f "$REPO_ROOT/frontend/package.json" ]]; then
-    skipped "frontend/package.json is not included in this public checkout; skipping frontend lint because the frontend source package is distributed separately."
+    missing "frontend/package.json is required for the canonical frontend."
   elif command -v pnpm >/dev/null 2>&1; then
     source "$REPO_ROOT/scripts/load-env.sh"
     load_env_file "$REPO_ROOT/.env"
@@ -103,7 +102,6 @@ if $RUN_FRONTEND; then
     else
       (cd "$REPO_ROOT/frontend" && pnpm lint) || FAILED=1
     fi
-    (cd "$REPO_ROOT/frontend" && pnpm exec tsc --noEmit) || FAILED=1
   else
     missing "pnpm not found. Run 'make setup'."
   fi

@@ -2,6 +2,7 @@ import {
   API_BASE_URL,
   buildLoginRedirect,
   createApiClient,
+  getBoundOrganizationId,
 } from "@sico/shared";
 import { type AxiosInstance } from "axios";
 
@@ -14,6 +15,7 @@ import { store } from "@/store";
 export const api: AxiosInstance = createApiClient({
   baseURL: API_BASE_URL,
   store,
+  getOrganizationId: () => getBoundOrganizationId(store, queryClient),
   onUnauthorized: (): void => {
     queryClient.clear();
     void router.navigate(buildLoginRedirect(router.state.location.pathname));

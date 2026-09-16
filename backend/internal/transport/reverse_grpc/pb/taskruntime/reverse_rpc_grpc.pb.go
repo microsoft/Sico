@@ -43,8 +43,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ReverseTaskRuntimeRPCClient interface {
-	RpcCreateBatch(ctx context.Context, in *CreateBatchRequest, opts ...grpc.CallOption) (*EmptyTaskRuntimeResponse, error)
-	RpcUpdateBatch(ctx context.Context, in *UpdateBatchRequest, opts ...grpc.CallOption) (*EmptyTaskRuntimeResponse, error)
+	RpcCreateBatch(ctx context.Context, in *CreateBatchRequest, opts ...grpc.CallOption) (*CreateBatchResponse, error)
+	RpcUpdateBatch(ctx context.Context, in *UpdateBatchRequest, opts ...grpc.CallOption) (*UpdateBatchResponse, error)
 	RpcGetBatch(ctx context.Context, in *GetBatchRequest, opts ...grpc.CallOption) (*GetBatchResponse, error)
 	RpcCreateRun(ctx context.Context, in *CreateRunRequest, opts ...grpc.CallOption) (*EmptyTaskRuntimeResponse, error)
 	RpcUpdateRun(ctx context.Context, in *UpdateRunRequest, opts ...grpc.CallOption) (*EmptyTaskRuntimeResponse, error)
@@ -71,9 +71,9 @@ func NewReverseTaskRuntimeRPCClient(cc grpc.ClientConnInterface) ReverseTaskRunt
 	return &reverseTaskRuntimeRPCClient{cc}
 }
 
-func (c *reverseTaskRuntimeRPCClient) RpcCreateBatch(ctx context.Context, in *CreateBatchRequest, opts ...grpc.CallOption) (*EmptyTaskRuntimeResponse, error) {
+func (c *reverseTaskRuntimeRPCClient) RpcCreateBatch(ctx context.Context, in *CreateBatchRequest, opts ...grpc.CallOption) (*CreateBatchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EmptyTaskRuntimeResponse)
+	out := new(CreateBatchResponse)
 	err := c.cc.Invoke(ctx, ReverseTaskRuntimeRPC_RpcCreateBatch_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -81,9 +81,9 @@ func (c *reverseTaskRuntimeRPCClient) RpcCreateBatch(ctx context.Context, in *Cr
 	return out, nil
 }
 
-func (c *reverseTaskRuntimeRPCClient) RpcUpdateBatch(ctx context.Context, in *UpdateBatchRequest, opts ...grpc.CallOption) (*EmptyTaskRuntimeResponse, error) {
+func (c *reverseTaskRuntimeRPCClient) RpcUpdateBatch(ctx context.Context, in *UpdateBatchRequest, opts ...grpc.CallOption) (*UpdateBatchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EmptyTaskRuntimeResponse)
+	out := new(UpdateBatchResponse)
 	err := c.cc.Invoke(ctx, ReverseTaskRuntimeRPC_RpcUpdateBatch_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -255,8 +255,8 @@ func (c *reverseTaskRuntimeRPCClient) RpcReopenRunForRetry(ctx context.Context, 
 // All implementations must embed UnimplementedReverseTaskRuntimeRPCServer
 // for forward compatibility.
 type ReverseTaskRuntimeRPCServer interface {
-	RpcCreateBatch(context.Context, *CreateBatchRequest) (*EmptyTaskRuntimeResponse, error)
-	RpcUpdateBatch(context.Context, *UpdateBatchRequest) (*EmptyTaskRuntimeResponse, error)
+	RpcCreateBatch(context.Context, *CreateBatchRequest) (*CreateBatchResponse, error)
+	RpcUpdateBatch(context.Context, *UpdateBatchRequest) (*UpdateBatchResponse, error)
 	RpcGetBatch(context.Context, *GetBatchRequest) (*GetBatchResponse, error)
 	RpcCreateRun(context.Context, *CreateRunRequest) (*EmptyTaskRuntimeResponse, error)
 	RpcUpdateRun(context.Context, *UpdateRunRequest) (*EmptyTaskRuntimeResponse, error)
@@ -283,10 +283,10 @@ type ReverseTaskRuntimeRPCServer interface {
 // pointer dereference when methods are called.
 type UnimplementedReverseTaskRuntimeRPCServer struct{}
 
-func (UnimplementedReverseTaskRuntimeRPCServer) RpcCreateBatch(context.Context, *CreateBatchRequest) (*EmptyTaskRuntimeResponse, error) {
+func (UnimplementedReverseTaskRuntimeRPCServer) RpcCreateBatch(context.Context, *CreateBatchRequest) (*CreateBatchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RpcCreateBatch not implemented")
 }
-func (UnimplementedReverseTaskRuntimeRPCServer) RpcUpdateBatch(context.Context, *UpdateBatchRequest) (*EmptyTaskRuntimeResponse, error) {
+func (UnimplementedReverseTaskRuntimeRPCServer) RpcUpdateBatch(context.Context, *UpdateBatchRequest) (*UpdateBatchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RpcUpdateBatch not implemented")
 }
 func (UnimplementedReverseTaskRuntimeRPCServer) RpcGetBatch(context.Context, *GetBatchRequest) (*GetBatchResponse, error) {

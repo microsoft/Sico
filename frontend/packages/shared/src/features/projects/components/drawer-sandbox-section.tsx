@@ -18,14 +18,14 @@ type DeviceSummaryItem = {
   Icon: React.ComponentType<{ className?: string }>;
 };
 
-// Wire device `type` → its icon. Windows-class desktops (aio/physical/wincua)
+// Wire device `type` → its icon. Desktop sandboxes share the desktop glyph.
 // share the desktop glyph; the Android emulator gets the mobile glyph. Order
 // fixes the row order. The row LABEL is NOT here — it is computed in the
 // component body via the locale-subscribed hook `t` (a bare `t()` in a
 // module-scope helper is neither extractable nor locale-subscribed).
 const DEVICE_TYPE_META: Record<string, { Icon: DeviceSummaryItem["Icon"] }> = {
   wincua: { Icon: IconDeviceDesktop },
-  aio: { Icon: IconDeviceDesktop },
+  linux_workstation: { Icon: IconDeviceDesktop },
   physical: { Icon: IconDeviceDesktop },
   emulator: { Icon: IconDeviceMobile },
 };
@@ -81,7 +81,10 @@ export function DrawerSandboxSection({
       id: "projects.drawerSandbox.deviceType.windows",
       message: "Windows",
     }),
-    aio: t({ id: "projects.drawerSandbox.deviceType.aio", message: "AIO" }),
+    linux_workstation: t({
+      id: "projects.drawerSandbox.deviceType.linuxWorkstation",
+      message: "Linux Workstation",
+    }),
     physical: t({
       id: "projects.drawerSandbox.deviceType.physical",
       message: "Physical",

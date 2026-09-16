@@ -30,6 +30,20 @@ spec:
             {{- $taskRuntime := index .Values "taskRuntime" | default dict }}
             - name: TASK_RUNTIME_PYTHON_RUNNER_IMAGE
               value: {{ default (printf "%s:%s" .Values.image.repository .Values.image.tag) (index $taskRuntime "pythonRunnerImage") | quote }}
+            - name: TASK_RUNTIME_DEFAULT_RUNNER_COMMANDS
+              value: {{ default "adb,bash,curl,python,rg,sh,uv" (index $taskRuntime "defaultRunnerCommands") | quote }}
+            {{- if .Values.preparedEnvironment.enabled }}
+            - name: TASK_RUNTIME_ENVIRONMENT_BUILDER_ENDPOINT
+              value: {{ printf "http://sico-environment-runner:%v" .Values.preparedEnvironment.service.port | quote }}
+            - name: TASK_RUNTIME_PREPARED_ENV_ROOT
+              value: {{ .Values.preparedEnvironment.stateRoot | quote }}
+            - name: TASK_RUNTIME_ENVIRONMENT_BUILDER_VERSION
+              value: {{ .Values.preparedEnvironment.builderVersion | quote }}
+            - name: TASK_RUNTIME_PREPARED_ENV_ARCHITECTURE
+              value: {{ .Values.preparedEnvironment.architecture | quote }}
+            - name: TASK_RUNTIME_ENVIRONMENT_QUOTA_BYTES
+              value: {{ .Values.preparedEnvironment.gc.quotaBytes | int64 | quote }}
+            {{- end }}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -56,12 +70,7 @@ spec:
             - name: mem0-data
               mountPath: /root/.mem0
           resources:
-            requests:
-              memory: 128Mi
-              cpu: 100m
-            limits:
-              memory: 512Mi
-              cpu: 500m
+            {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir: {}

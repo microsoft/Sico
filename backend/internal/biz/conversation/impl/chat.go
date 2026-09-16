@@ -256,11 +256,12 @@ func (s *Service) tryPushChatResponseToConnections(ctx context.Context, topicMes
 
 func (s *Service) handleEventBusMessage(ctx context.Context, message *eventbus.EventBusMessage) error {
 	topicMessage := &conversationdto.TopicMessage{}
-	logger.Info("received %s", string(message.Payload))
 	if err := jsoniter.Unmarshal(message.Payload, topicMessage); err != nil {
 		logger.CtxError(ctx, "chat_eventbus_message_unmarshal_failed err=%v", err)
 		return err
 	}
+	logger.CtxDebug(ctx, "chat_eventbus_message_received conversationId=%d turnId=%d seq=%d",
+		topicMessage.ConversationId, topicMessage.TurnId, topicMessage.Seq)
 	if err := s.tryPushChatResponseToConnections(ctx, topicMessage); err != nil {
 		logger.CtxError(ctx, "chat_connection_push_failed conversationId=%d turnId=%d seq=%d err=%v",
 			topicMessage.ConversationId, topicMessage.TurnId, topicMessage.Seq, err)
@@ -527,7 +528,9 @@ func (s *Service) resolveAndAuthorizeAgent(
 		return nil, nil, apperr.New(errcode.ConversationAgentRequired, "agent not found for the given agent instance")
 	}
 	if agentInstance.GetProjectId() != 0 {
-		if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, agentInstance.GetProjectId(), "dw", "use"); err != nil {
+		if err := s.rbacAccess().Require(
+			ctx, rbac.ProjectScope(agentInstance.GetProjectId()), rbac.PermissionWorkspaceUse,
+		); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -616,6 +619,14 @@ func (s *Service) resolveAndAuthorizeChat(
 	if agentInstanceID == 0 {
 		return nil, nil, nil, apperr.New(errcode.ConversationAgentInstanceRequired, "agentInstanceId is required")
 	}
+	if err := s.requireAgentInstanceOrganization(ctx, agentInstanceID); err != nil {
+		return nil, nil, nil, err
+	}
+	if conversationID > 0 {
+		if err := s.requireConversationOrganization(ctx, conversationID); err != nil {
+			return nil, nil, nil, err
+		}
+	}
 
 	singleAgent, agentInstance, err := s.resolveAgentContext(ctx, agentInstanceID)
 	if err != nil {
@@ -624,7 +635,9 @@ func (s *Service) resolveAndAuthorizeChat(
 	agentID := singleAgent.GetAgentId()
 
 	if agentInstance != nil && agentInstance.GetProjectId() != 0 {
-		if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, agentInstance.GetProjectId(), "dw", "use"); err != nil {
+		if err := s.rbacAccess().Require(
+			ctx, rbac.ProjectScope(agentInstance.GetProjectId()), rbac.PermissionWorkspaceUse,
+		); err != nil {
 			return nil, nil, nil, err
 		}
 	}

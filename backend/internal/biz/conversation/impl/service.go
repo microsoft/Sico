@@ -10,7 +10,9 @@ import (
 
 	"sico-backend/internal/biz/agent"
 	llmhubsbiz "sico-backend/internal/biz/llmhubs"
+	"sico-backend/internal/biz/ownership"
 	"sico-backend/internal/biz/project"
+	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/infra/coregrpc"
 	"sico-backend/internal/infra/eventbus"
 	"sico-backend/internal/infra/idgen"
@@ -36,6 +38,8 @@ type Components struct {
 	CoreGRPC         coregrpc.Connection
 	Cache            *redis.Client
 	DB               *gorm.DB
+	Access           rbac.Access
+	Ownership        ownership.Resolver
 }
 
 type ChatConnection struct {
@@ -90,6 +94,8 @@ type Service struct {
 	eventBusSubscription eventbus.EventBusSubscription
 	cache                *redis.Client
 	db                   *gorm.DB
+	access               rbac.Access
+	ownership            ownership.Resolver
 }
 
 // NewService wires dependencies into a conversation service implementation.
@@ -112,9 +118,40 @@ func NewService(c *Components) *Service {
 		chatConnections:  make(map[ChatConnectionIdentifier][]*ChatConnection),
 		cache:            c.Cache,
 		db:               c.DB,
+		access:           c.Access,
+		ownership:        c.Ownership,
 	}
 
 	_ = svc.SubscribeTopic()
 
 	return svc
+}
+
+func (s *Service) rbacAccess() rbac.Access {
+	if s != nil && s.access != nil {
+		return s.access
+	}
+	return rbac.NewUninitializedAccessServices()
+}
+
+func (s *Service) requireAgentInstanceOrganization(ctx context.Context, instanceID int64) error {
+	if s == nil || s.ownership == nil {
+		return nil
+	}
+	organizationID, err := s.ownership.AgentInstanceOrganization(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	return s.ownership.RequireOrganization(ctx, organizationID, false)
+}
+
+func (s *Service) requireConversationOrganization(ctx context.Context, conversationID int64) error {
+	if s == nil || s.ownership == nil {
+		return nil
+	}
+	organizationID, err := s.ownership.ConversationOrganization(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+	return s.ownership.RequireOrganization(ctx, organizationID, false)
 }

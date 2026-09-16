@@ -22,13 +22,17 @@ import (
 //go:embed emulator_view.html
 var embeddedEmulatorViewHTML string
 
-func (p *EmulatorProvider) registerHTTPRoutes(routes *gin.RouterGroup, pool sandboxPool) {
+func (p *EmulatorProvider) registerAuthorizedHTTPRoutes(
+	routes *gin.RouterGroup,
+	pool sandboxPool,
+	authorizer resourceProxyAuthorizer,
+) {
 	routes.GET("/resources/emulator/:rid/vnc", p.resourceUI)
 	routes.GET("/resources/emulator/:rid/ws/h264", func(ctx *gin.Context) {
-		p.resourceH264WebSocket(ctx, pool)
+		p.resourceH264WebSocket(ctx, pool, authorizer)
 	})
 	routes.Any("/resources/emulator/:rid/api/*path", func(ctx *gin.Context) {
-		p.resourceAPIProxy(ctx, pool)
+		p.resourceAPIProxy(ctx, pool, authorizer)
 	})
 }
 
@@ -50,14 +54,29 @@ func (p *EmulatorProvider) resourceUI(ctx *gin.Context) {
 	ctx.String(http.StatusOK, "%s", html)
 }
 
-func (p *EmulatorProvider) resourceAPIProxy(ctx *gin.Context, pool sandboxPool) {
+func (p *EmulatorProvider) resourceAPIProxy(
+	ctx *gin.Context,
+	pool sandboxPool,
+	authorizer resourceProxyAuthorizer,
+) {
+	if !authenticateBackendRequest(ctx) {
+		return
+	}
 	resource, ok := p.resolveResource(ctx, pool)
 	if !ok {
 		return
 	}
-	baseURL, _, err := p.ParseResourceIDForProxy(resource.ResourceID)
+	if !authorizeEmulatorResource(ctx, authorizer, resource) {
+		return
+	}
+	baseURL, deviceID, err := p.ParseResourceIDForProxy(resource.ResourceID)
 	if err != nil {
 		writeSandboxHandlerError(ctx, err)
+		return
+	}
+	path := ctx.Param("path")
+	if !emulatorAPIRequestTargetsResource(path, deviceID) &&
+		!authorizeEmulatorProviderOperation(ctx, authorizer) {
 		return
 	}
 	target, err := url.Parse(strings.TrimRight(baseURL, "/"))
@@ -66,7 +85,6 @@ func (p *EmulatorProvider) resourceAPIProxy(ctx *gin.Context, pool sandboxPool) 
 		return
 	}
 
-	path := ctx.Param("path")
 	if path == "" {
 		path = "/"
 	}
@@ -86,21 +104,91 @@ func (p *EmulatorProvider) resourceAPIProxy(ctx *gin.Context, pool sandboxPool) 
 				request.Header.Del(header)
 			}
 		}
+		request.Header.Set("Authorization", "Bearer "+p.serviceToken)
 	}
 	proxy.ServeHTTP(ctx.Writer, ctx.Request)
 }
 
-func (p *EmulatorProvider) resourceH264WebSocket(ctx *gin.Context, pool sandboxPool) {
-	resource, ok := p.resolveResource(ctx, pool)
-	if !ok {
-		return
+func emulatorAPIRequestTargetsResource(path, deviceID string) bool {
+	segments, ok := emulatorAPIPathSegments(path)
+	if !ok || len(segments) < 3 || segments[0] != "v1" {
+		return false
 	}
-	baseURL, deviceID, err := p.ParseResourceIDForProxy(resource.ResourceID)
+	if segments[1] == "devices" {
+		return segments[2] == deviceID
+	}
+	if segments[1] != "emulators" {
+		return false
+	}
+	return segments[2] == deviceID && (len(segments) < 4 || segments[3] != "clone")
+}
+
+func emulatorAPIPathSegments(path string) ([]string, bool) {
+	rawSegments := strings.Split(strings.Trim(path, "/"), "/")
+	segments := make([]string, len(rawSegments))
+	for index, rawSegment := range rawSegments {
+		segment, err := url.PathUnescape(rawSegment)
+		if err != nil || segment == "" || segment == "." || segment == ".." || strings.Contains(segment, "/") {
+			return nil, false
+		}
+		segments[index] = segment
+	}
+	return segments, true
+}
+
+func (p *EmulatorProvider) resourceH264WebSocket(
+	ctx *gin.Context,
+	pool sandboxPool,
+	authorizer resourceProxyAuthorizer,
+) {
+	upgrader := websocket.Upgrader{
+		ReadBufferSize: 32768, WriteBufferSize: 32768,
+		CheckOrigin: checkSameOrigin,
+	}
+	client, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		writeSandboxHandlerError(ctx, err)
 		return
 	}
 
+	defer func() { _ = client.Close() }()
+	if !authenticateBackendWebSocket(ctx, client) {
+		return
+	}
+	rid := strings.TrimSpace(ctx.Param("rid"))
+	if rid == "" {
+		closeBackendWebSocket(client, 4400, "rid is required")
+		return
+	}
+
+	resource, err := pool.ResolveResourceByHash(ctx.Request.Context(), p.Type(), rid)
+	if err != nil {
+		if appError, ok := apperr.As(err); ok &&
+			(appError.Code() == errcode.CommonNotFound || appError.Code() == errcode.SandboxNoAvailableResource) {
+			closeBackendWebSocket(client, 4404, "resource not found")
+		} else {
+			closeBackendWebSocket(client, 1011, "resource lookup unavailable")
+		}
+		return
+	}
+	if authorizer == nil {
+		closeBackendWebSocket(client, 1011, "resource authorization unavailable")
+		return
+	}
+
+	if err := authorizer.AuthorizeResourceProxy(ctx.Request.Context(), resource); err != nil {
+		if isResourceAccessDenied(err) {
+			closeBackendWebSocket(client, 4403, "resource access denied")
+		} else {
+			closeBackendWebSocket(client, 1011, "resource authorization unavailable")
+		}
+		return
+	}
+
+	baseURL, deviceID, err := p.ParseResourceIDForProxy(resource.ResourceID)
+	if err != nil {
+		closeBackendWebSocket(client, 4400, "invalid emulator resource")
+		return
+	}
 	query := ctx.Request.URL.Query()
 	query.Del("rid")
 	encodedQuery := query.Encode()
@@ -114,23 +202,16 @@ func (p *EmulatorProvider) resourceH264WebSocket(ctx *gin.Context, pool sandboxP
 		encodedQuery,
 	)
 
-	upgrader := websocket.Upgrader{
-		ReadBufferSize: 32768, WriteBufferSize: 32768,
-		CheckOrigin: func(*http.Request) bool { return true },
-	}
-	client, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
-	if err != nil {
-		return
-	}
-	defer func() { _ = client.Close() }()
-
 	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
-	server, _, err := dialer.DialContext(ctx.Request.Context(), upstream, nil)
+	upstreamHeaders := http.Header{}
+	upstreamHeaders.Set("Authorization", "Bearer "+p.serviceToken)
+	server, _, err := dialer.DialContext(ctx.Request.Context(), upstream, upstreamHeaders)
 	if err != nil {
 		log.Printf("[Emulator WS Proxy] Failed to dial upstream %s: %v", upstream, err)
 		_ = client.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","message":"upstream dial failed"}`))
 		return
 	}
+
 	defer func() { _ = server.Close() }()
 	proxyEmulatorWebSocketBidirectional(client, server)
 }

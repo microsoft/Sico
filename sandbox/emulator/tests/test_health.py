@@ -13,3 +13,14 @@ def test_health_endpoint():
     assert resp.status_code == 200 or resp.status_code == 503
     data = resp.json()
     assert "status" in data
+
+
+def test_non_health_routes_require_emulator_token():
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=False)
+
+    assert client.get("/docs").status_code == 401
+    assert client.get(
+        "/docs",
+        headers={"Authorization": f"Bearer {'a' * 64}"},
+    ).status_code == 200

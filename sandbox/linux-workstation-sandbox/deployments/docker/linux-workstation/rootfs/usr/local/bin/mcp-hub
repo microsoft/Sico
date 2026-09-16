@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e
+
+if [ -x /usr/bin/mcp-hub ]; then
+  exec /usr/bin/mcp-hub "$@"
+fi
+
+HOST="0.0.0.0"
+PORT="${MCP_HUB_PORT:-8079}"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --host)
+      HOST="$2"; shift 2 ;;
+    --port)
+      PORT="$2"; shift 2 ;;
+    *)
+      shift ;;
+  esac
+done
+
+exec /opt/python3.12/bin/python3.12 -m uvicorn linux_workstation_server.app:app --host "$HOST" --port "$PORT"

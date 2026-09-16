@@ -42,16 +42,102 @@ func (s *Service) resolveEmulatorAppTargets(
 		)
 	}
 
-	if instanceID != "" {
-		targets, err := s.resolveEmulatorAppTargetsByInstance(ctx, emulator, instanceID)
-		return targets, emulator, err
+	scopes, err := s.resolveSandboxAuthorizationScopes(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
-	if len(normalizedSandboxIDs) > 0 {
-		targets, err := s.resolveEmulatorAppTargetsBySandboxID(ctx, emulator, normalizedSandboxIDs)
-		return targets, emulator, err
+
+	targets, filterDenied, err := s.resolveRequestedEmulatorAppTargets(
+		ctx,
+		emulator,
+		normalizedSandboxIDs,
+		instanceID,
+		scopes,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	targets, err = s.authorizeEmulatorAppTargets(ctx, targets, filterDenied, scopes)
+	return targets, emulator, err
+}
+
+func (s *Service) resolveRequestedEmulatorAppTargets(
+	ctx context.Context,
+	emulator EmulatorAppProvider,
+	sandboxIDs []string,
+	instanceID string,
+	scopes *sandboxAuthorizationScopes,
+) ([]*emulatorAppTarget, bool, error) {
+	if instanceID != "" {
+		if _, _, err := s.authorizeInstanceOperationForScopes(ctx, instanceID, true, false, scopes); err != nil {
+			return nil, false, err
+		}
+		targets, err := s.resolveEmulatorAppTargetsByInstance(ctx, emulator, instanceID)
+		return targets, false, err
+	}
+	if len(sandboxIDs) > 0 {
+		targets, err := s.resolveEmulatorAppTargetsBySandboxID(ctx, emulator, sandboxIDs)
+		return targets, false, err
 	}
 	targets, err := s.resolveAllEmulatorAppTargets(ctx, emulator)
-	return targets, emulator, err
+	return targets, true, err
+}
+
+func (s *Service) authorizeEmulatorAppTargets(
+	ctx context.Context,
+	targets []*emulatorAppTarget,
+	filterDenied bool,
+	scopes *sandboxAuthorizationScopes,
+) ([]*emulatorAppTarget, error) {
+	authorized := make([]*emulatorAppTarget, 0, len(targets))
+	for _, target := range targets {
+		if target == nil {
+			continue
+		}
+		if err := s.authorizeSandboxOperationForScopes(ctx, target.sandboxID, true, scopes); err != nil {
+			if filterDenied && isUnavailableEmulatorAppTarget(err) {
+				continue
+			}
+			return nil, err
+		}
+		authorized = append(authorized, target)
+	}
+	return authorized, nil
+}
+
+func isUnavailableEmulatorAppTarget(err error) bool {
+	appError, ok := apperr.As(err)
+	return ok && (appError.Code() == errcode.CommonForbidden || appError.Code() == errcode.CommonNotFound)
+}
+
+func (s *Service) withLockedEmulatorAppTargets(
+	ctx context.Context,
+	sandboxIDs []string,
+	instanceID string,
+	originalTargets map[string]struct{},
+	operation func(EmulatorAppProvider, []*emulatorAppTarget),
+) error {
+	lockIDs := make([]string, 0, len(originalTargets))
+	for sandboxID := range originalTargets {
+		lockIDs = append(lockIDs, sandboxID)
+	}
+
+	return s.withSandboxOperationLocksFor(ctx, lockIDs, emulatorAppOperationLockTTL, func() error {
+		currentTargets, emulator, err := s.resolveEmulatorAppTargets(ctx, sandboxIDs, instanceID, false)
+		if err != nil {
+			return err
+		}
+		effectiveTargets, missing := filterEmulatorAppTargets(originalTargets, currentTargets)
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			return apperr.New(
+				errcode.CommonConflict,
+				"sandbox assignment changed before operation started: "+strings.Join(missing, ","),
+			)
+		}
+		operation(emulator, effectiveTargets)
+		return nil
+	})
 }
 
 func (s *Service) emulatorProviderForAppManagement() (EmulatorAppProvider, error) {

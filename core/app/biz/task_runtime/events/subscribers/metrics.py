@@ -1,17 +1,16 @@
-"""In-process metrics subscriber.
+"""In-process transition diagnostics subscriber.
 
 Counts state transitions by ``(from_status, to_status)`` separately for runs
-and batches. Exposes a snapshot API for introspection (tests, debug
-endpoints, future metrics exporters). This is intentionally a tiny
-in-process aggregator — when we wire a real metrics backend (Prometheus,
-StatsD, OTel) we can either add a second subscriber or have the exporter
-read this snapshot.
+and batches. Exposes a snapshot API for tests and debug introspection. These
+counts are process-local and are not exported as telemetry. The Backend owns
+the exported OpenTelemetry counters at successful persistence call sites.
+Exporting these Core events as well would duplicate the same operational
+activity across two services.
 
 Extension points:
 
 * :class:`TransitionMetrics` is a plain class with ``record`` /
-  ``snapshot`` / ``reset``; alternate implementations (e.g. one that
-  forwards to OpenTelemetry) can be drop-in replacements.
+    ``snapshot`` / ``reset`` for local diagnostics.
 * :func:`register` accepts an optional ``metrics`` argument so tests and
   future exporters can use a dedicated aggregator without colliding with
   the module-level default.

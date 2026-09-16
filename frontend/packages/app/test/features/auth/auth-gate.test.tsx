@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { routeTree } from "../../../src/routeTree.gen";
 import { clearAuthStorage } from "../../_helpers/clear-auth-storage";
+import { seedOrganizationContext } from "../../_helpers/organization-context";
 
 // `<LoginForm>` mounts react-query / react-hook-form — out of scope for
 // the AuthGate redirect contract being exercised here.
@@ -31,7 +32,10 @@ vi.mock("@sico/shared/features/sidebar/components/sidebar.tsx", () => ({
 
 vi.mock(
   "@sico/shared/features/organization/hooks/use-organization-query.ts",
-  () => ({
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import("@sico/shared/features/organization/hooks/use-organization-query.ts")
+    >()),
     useUserOrganizationsQuery: vi.fn(),
   }),
 );
@@ -57,11 +61,13 @@ function renderAt(initialPath: string): { router: RegisteredRouter } {
   // router context and the Provider share it so a `context.store` read matches
   // what the tree renders.
   const store = createStore();
+  const queryClient = new QueryClient();
+  seedOrganizationContext(queryClient);
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [initialPath] }),
     context: {
-      queryClient: new QueryClient(),
+      queryClient,
       apiClient: {} as never,
       store,
     },

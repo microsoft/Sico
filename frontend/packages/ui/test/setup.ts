@@ -18,11 +18,11 @@ Object.defineProperty(window, "matchMedia", {
 
 Object.defineProperty(global, "ResizeObserver", {
   writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  })),
+  value: class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  },
 });
 
 // jsdom has no canvas 2D context; `lottie-web` (pulled in eagerly by Spinner)

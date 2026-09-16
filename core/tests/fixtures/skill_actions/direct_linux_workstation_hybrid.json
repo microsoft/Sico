@@ -1,0 +1,37 @@
+{
+  "schema_version": 3,
+  "review_status": "accepted",
+  "source_provenance": "author",
+  "actions": [
+    {
+      "name": "run_inside_linux_workstation",
+      "description": "Run directly inside Linux Workstation for a hybrid shell and GUI workflow.",
+      "infra_requirements": ["sandbox.linux"],
+      "parameters": [
+        {
+          "name": "task",
+          "description": "Task to perform inside Linux Workstation."
+        }
+      ],
+      "execution_requirement": {
+        "backend": "linux_workstation"
+      },
+      "preparation": {
+        "steps": [
+          {
+            "argv": ["uv", "sync", "--frozen"]
+          }
+        ]
+      },
+      "target_requirements": {
+        "type": "linux_workstation",
+        "os": "linux"
+      },
+      "steps": [
+        {
+          "argv": ["uv", "run", "python", "-m", "desktop_task", "--task", "{task}"]
+        }
+      ]
+    }
+  ]
+}

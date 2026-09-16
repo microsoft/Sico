@@ -184,9 +184,9 @@ All LLM traffic flows through the **LLM Hub** (`core/app/llmhubs/`), a unified r
 
 - **Model resolution**: built-in models are loaded from Core YAML configs; for DB-sourced custom models, Backend resolves the model per request and passes a `RuntimeModelDefinition` (including decrypted secrets) alongside the gRPC call, so the current main path does not require Backend DB models to be globally registered in Core
 - **Adapter pattern**: selects the right adapter based on `provider_template_type` from six implementations. Four target specific vendor protocols (Azure OpenAI, OpenAI-compatible, Anthropic, Gemini); two are generic, config-driven adapters (HTTP-JSON, HTTP-binary) that let an operator wire an arbitrary HTTP model endpoint into the hub purely through field mapping and JSONPath extraction, with HTTP-binary streaming returned artifacts (images, audio) to blob storage.
-- **ChatClient**: bridges the Microsoft Agent Framework's `BaseChatClient` interface to LLMHub, handling tool calls, image input, streaming, and reasoning effort control
+- **Streaming agent adapter**: translates framework-neutral agent state into LLMHub requests and maps streamed text, tool calls, and usage back into typed loop events
 
-The agent execution loop (`ChatAgent.run_stream()`) builds on top of ChatClient: `ChatClient` handles LLM communication, while `ChatAgent` orchestrates the full execution cycle (workspace setup, tool binding, streaming, and cleanup). ChatAgent leverages the Agent Framework's `FunctionInvocationLayer` for automatic tool call orchestration: the LLM outputs a function call -> the Framework executes it -> the result is injected back -> the LLM continues. This enables multi-step reasoning with tool use in a single streaming pass.
+The main and delegated agents use the same framework-neutral loop infrastructure. `ChatAgent` hosts a `NativeAgentLoopEngine`, while `HubStreamingAgentLLM` handles LLMHub streaming and `ChatCapabilityToolController` executes route-scoped capabilities. Every model turn, capability request/result, completion, and usage update is represented as a typed event and written to a JSONL transcript.
 
 **Planning** is implemented through autonomous LLM tool calls, not hard-coded workflows. The LLM uses three plan tools (`plan_read`, `plan_write`, `plan_tool_call_message_update`) to create and manage execution plans in real time. Plans support cancellation (via marker files polled every 2 seconds) and status tracking (`pending`, `in_progress`, `completed`, `failed`, `require_human_input`).
 
@@ -489,35 +489,28 @@ A confident hard-guard hit (`FAST` or `TASK`) is used directly with `confidence 
 
 ### 4.4 Agent Execution Loop
 
-The agent loop is built on the **Microsoft Agent Framework**. Two key abstractions divide responsibility:
+The main and delegated agents share the same framework-neutral execution loop. Three key abstractions divide responsibility:
 
 | Component | Role |
 |-----------|------|
-| **ChatClient** | LLM communication layer to bridge Agent Framework's `BaseChatClient` to LLMHub, and to handle tool call/result serialization, image input, streaming, reasoning effort control. |
-| **ChatAgent** | Execution orchestrator to prepare messages, run the streaming loop, and manage text buffering, plan finalization, and cleanup. |
+| **ChatAgent** | Main-chat host that loads compact history, binds route-scoped capabilities, streams user-visible output, and persists conversation and event transcripts. |
+| **NativeAgentLoopEngine** | Framework-neutral state machine shared with sub-agents; emits typed model, capability, completion, and usage events. |
+| **HubStreamingAgentLLM** | LLMHub adapter that serializes loop state and maps streamed provider output into typed model actions. |
 
 `ChatAgent.run_stream()` drives the main loop:
 
 ```
-prepared_messages = system_prompt + last_3_turns_history + user_message
+request = system_prompt + compact_history + user_message + route_capabilities
 
-async for update in client.get_response(prepared_messages, stream=True, options={
-    tools:                    route_tools,   # per-route built-ins + delegate_* adapter tools
-    tool_choice:              "auto",
-    allow_multiple_tool_calls: True,     # parallel tool execution
-    reasoning.effort:         "high",    # extended thinking
-}):
-    ├── Check plan cancellation (every 2 seconds via marker file)
-    ├── If text update -> buffer (flush at 32 chars or before non-text content)
-    ├── If tool call / tool result -> log + flush buffered text (not forwarded to client)
-   └── Text / plan / error updates -> response_queue -> reverse gRPC + Redis cache + Kafka
+async for event in NativeAgentLoopEngine.run(request):
+   ├── Record every typed event in events.jsonl
+   ├── Stream model text deltas to the response queue
+   ├── Execute one capability call and feed its observation into the next model turn
+   ├── Persist conversation state at capability boundaries and completion
+   └── Stop when completion is accepted, cancellation is detected, or the turn limit is reached
 ```
 
-The Agent Framework's `FunctionInvocationLayer` automates the tool call cycle: when the LLM emits a `function_call`, the Framework executes the corresponding tool, injects the `function_result` back into the conversation, and lets the LLM continue. This loop repeats until the LLM produces a final text response or hits `max_iterations`.
-
-**Text buffering**: Pure text updates are accumulated until 32 characters before flushing, reducing SSE push frequency. Non-text content (tool calls, tool results) triggers an immediate flush of any buffered text; the tool-call and tool-result events themselves are logged and recorded in the turn's `conversation.json`, not forwarded to the client over SSE and not persisted as individual messages.
-
-**Retry**: The agent retries once on failure (`max_attempts = 2`).
+The loop admits at most one capability call per model turn. Capability observations are retained in loop state, while user-visible text continues through the existing response queue, reverse gRPC, Redis replay cache, Kafka, and SSE path.
 
 ### 4.5 Planning
 

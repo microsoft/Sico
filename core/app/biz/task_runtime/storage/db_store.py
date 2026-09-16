@@ -3,29 +3,57 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Awaitable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ..domain.models import ArtifactRef, BatchRecord, FencingToken, StaleRun, TaskDetail, TaskResult, TaskRun, TaskStatus
 from ..domain.time import now_ms as _now_ms
-from .run_store import IdempotencyCollisionError, StaleWorkerError, TaskDetailView
+from .run_store import (
+    BatchCreateResult,
+    BatchUpdateResult,
+    IdempotencyCollisionError,
+    StaleWorkerError,
+    TaskDetailView,
+    _hydrate_result_output,
+    _persisted_result_payload,
+)
 
 if TYPE_CHECKING:
     from app.biz.reverse_grpc.taskruntime import ReverseTaskRuntimeService
 
 
 class DBRunStore:
-    def __init__(self, service: ReverseTaskRuntimeService | None = None) -> None:
+    def __init__(self, service: ReverseTaskRuntimeService | None = None, *, results_root: Path | None = None) -> None:
         if service is None:
             from app.biz.reverse_grpc.taskruntime import ReverseTaskRuntimeService
 
             service = ReverseTaskRuntimeService.get_instance()
         self.service = service
+        self.results_root = results_root
 
-    async def create_batch(self, batch: BatchRecord) -> None:
-        await asyncio.to_thread(self.service.create_batch, batch.model_dump_json())
+    async def create_batch(self, batch: BatchRecord) -> BatchCreateResult:
+        resp = await asyncio.to_thread(self.service.create_batch, batch.model_dump_json())
+        if not resp.batch_json:
+            authoritative = await self.get_batch(batch.batch_id)
+            return BatchCreateResult(
+                batch=authoritative,
+                created=bool(batch.materialization_token)
+                and authoritative.materialization_token == batch.materialization_token,
+            )
+        return BatchCreateResult(
+            batch=BatchRecord.model_validate_json(resp.batch_json),
+            created=resp.created,
+        )
 
-    async def update_batch(self, batch: BatchRecord) -> None:
-        await asyncio.to_thread(self.service.update_batch, batch.model_dump_json())
+    async def update_batch(self, batch: BatchRecord) -> BatchUpdateResult:
+        resp = await asyncio.to_thread(self.service.update_batch, batch.model_dump_json())
+        if not resp.batch_json:
+            authoritative = await self.get_batch(batch.batch_id)
+            return BatchUpdateResult(batch=authoritative, applied=authoritative.status == batch.status)
+        return BatchUpdateResult(
+            batch=BatchRecord.model_validate_json(resp.batch_json),
+            applied=resp.applied,
+        )
 
     async def get_batch(self, batch_id: str) -> BatchRecord:
         resp = await asyncio.to_thread(self.service.get_batch, batch_id)
@@ -91,8 +119,14 @@ class DBRunStore:
         await asyncio.to_thread(self.service.set_run_progress, run_id, message[:1000], now_ms)
 
     async def write_result(self, run_id: str, result: TaskResult, token: FencingToken) -> None:
+        if result.output:
+            run = await self.get_run(run_id)
+            result_payload = _persisted_result_payload(self._results_root_for_run(run), run, result)
+        else:
+            result_payload = result.model_dump(mode="json", exclude={"output"})
+        result_json = json.dumps(result_payload, ensure_ascii=False, separators=(",", ":"))
         await self._translate_stale_token(
-            asyncio.to_thread(self.service.write_result, run_id, result.model_dump_json(), token.model_dump_json())
+            asyncio.to_thread(self.service.write_result, run_id, result_json, token.model_dump_json())
         )
 
     async def cancel_batch(self, batch_id: str, reason: str) -> None:
@@ -121,6 +155,8 @@ class DBRunStore:
             TaskStatus.BLOCKED,
         }:
             result = None
+        if result is not None:
+            result = _hydrate_result_output(self._results_root_for_run(run), run, result)
         artifacts = [] if result is None or not resp.artifacts_json else result_artifacts(resp.artifacts_json)
         return TaskDetail(
             run=run,
@@ -169,6 +205,18 @@ class DBRunStore:
             if "stale worker token" in str(exc):
                 raise StaleWorkerError(str(exc)) from exc
             raise
+
+    def _results_root_for_run(self, run: TaskRun) -> Path:
+        if self.results_root is not None:
+            return self.results_root
+        from ..workspace.layout import workspace_layout
+
+        workspace_root = workspace_layout().workspace_path(
+            run.agent_instance_id,
+            run.username,
+            conversation_id=run.parent_conversation_id,
+        )
+        return workspace_root / "results"
 
 
 def result_artifacts(payload: str) -> list[ArtifactRef]:

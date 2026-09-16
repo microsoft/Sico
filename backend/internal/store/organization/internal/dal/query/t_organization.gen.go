@@ -31,6 +31,7 @@ func newTOrganization(db *gorm.DB, opts ...gen.DOOption) tOrganization {
 	_tOrganization.ID = field.NewInt64(tableName, "id")
 	_tOrganization.Name = field.NewString(tableName, "name")
 	_tOrganization.Description = field.NewString(tableName, "description")
+	_tOrganization.IconURI = field.NewString(tableName, "icon_uri")
 	_tOrganization.CreatorUsername = field.NewString(tableName, "creator_username")
 	_tOrganization.CreatedAt = field.NewInt64(tableName, "created_at")
 	_tOrganization.UpdatedAt = field.NewInt64(tableName, "updated_at")
@@ -49,6 +50,7 @@ type tOrganization struct {
 	ID              field.Int64
 	Name            field.String
 	Description     field.String
+	IconURI         field.String // Organization icon URI
 	CreatorUsername field.String // Creator username
 	CreatedAt       field.Int64
 	UpdatedAt       field.Int64
@@ -72,6 +74,7 @@ func (t *tOrganization) updateTableName(table string) *tOrganization {
 	t.ID = field.NewInt64(table, "id")
 	t.Name = field.NewString(table, "name")
 	t.Description = field.NewString(table, "description")
+	t.IconURI = field.NewString(table, "icon_uri")
 	t.CreatorUsername = field.NewString(table, "creator_username")
 	t.CreatedAt = field.NewInt64(table, "created_at")
 	t.UpdatedAt = field.NewInt64(table, "updated_at")
@@ -92,10 +95,11 @@ func (t *tOrganization) GetFieldByName(fieldName string) (field.OrderExpr, bool)
 }
 
 func (t *tOrganization) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 7)
+	t.fieldMap = make(map[string]field.Expr, 8)
 	t.fieldMap["id"] = t.ID
 	t.fieldMap["name"] = t.Name
 	t.fieldMap["description"] = t.Description
+	t.fieldMap["icon_uri"] = t.IconURI
 	t.fieldMap["creator_username"] = t.CreatorUsername
 	t.fieldMap["created_at"] = t.CreatedAt
 	t.fieldMap["updated_at"] = t.UpdatedAt

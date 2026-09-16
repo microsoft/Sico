@@ -477,6 +477,11 @@ class ExtractDocumentResponse(betterproto2.Message):
     @gotag: json:"message"
     """
 
+    title: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"title"
+    """
+
     code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
     """
     @gotag: json:"code"
@@ -503,6 +508,13 @@ class GetDocumentDetailsRequest(betterproto2.Message):
     agent_id: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
     """
     @gotag: json:"agentId"
+    """
+
+    document_type: "KnowledgeDocumentType" = betterproto2.field(
+        4, betterproto2.TYPE_ENUM, default_factory=lambda: KnowledgeDocumentType(0)
+    )
+    """
+    @gotag: json:"documentType"
     """
 
 

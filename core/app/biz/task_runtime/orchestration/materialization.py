@@ -1,4 +1,4 @@
-"""Batch/run materialization, replay identity, and idempotent rebinding."""
+"""Batch/run materialization, duplicate-submission identity, and idempotent rebinding."""
 
 from __future__ import annotations
 
@@ -7,17 +7,18 @@ import hashlib
 import json
 import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from ..config import _replay_run_materialization_timeout_seconds
+from ..config import _duplicate_submission_materialization_timeout_seconds
 from ..context import TurnContext
 from ..domain.models import (
     TERMINAL_BATCH_STATUSES,
     BatchRecord,
     BatchStatus,
     PreparedTaskBatch,
+    RUNTIME_METADATA_KEY,
     TaskRun,
     TaskSpec,
     compute_idempotency_key,
@@ -32,7 +33,6 @@ from ..workspace.layout import workspace_layout
 from .execution_plan import BatchExecutionPlan
 
 _LOGGER = logging.getLogger(__name__)
-RUNTIME_METADATA_KEY = "_task_runtime"
 
 
 class SubmissionMaterializer:
@@ -47,6 +47,66 @@ class SubmissionMaterializer:
         self._store = store
         self._progress = progress
         self._batch_dir = batch_dir
+        self._background_tasks: set[asyncio.Task[None]] = set()
+
+    def converge_failed_materialization(
+        self,
+        candidate: BatchRecord | None,
+        *,
+        remove_foreign_owner_projection: Callable[[], Awaitable[bool]],
+    ) -> None:
+        if candidate is None:
+            return
+        task = asyncio.create_task(
+            self._cancel_owned_batch_when_visible(candidate, remove_foreign_owner_projection)
+        )
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _cancel_owned_batch_when_visible(
+        self,
+        candidate: BatchRecord,
+        remove_foreign_owner_projection: Callable[[], Awaitable[bool]],
+    ) -> None:
+        timeout_seconds = _duplicate_submission_materialization_timeout_seconds()
+        last_error: Exception | None = None
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                while True:
+                    try:
+                        persisted = await self._store.get_batch(candidate.batch_id)
+                    except Exception as exc:
+                        last_error = exc
+                    else:
+                        if persisted.materialization_token != candidate.materialization_token:
+                            if persisted.parent_tool_call_id != candidate.parent_tool_call_id:
+                                try:
+                                    await remove_foreign_owner_projection()
+                                except Exception:
+                                    _LOGGER.warning(
+                                        "failed to remove abandoned materialization projection batch_id=%s",
+                                        candidate.batch_id,
+                                        exc_info=True,
+                                    )
+                            return
+                        try:
+                            await self._store.cancel_batch(
+                                candidate.batch_id,
+                                "Task runtime interrupted during batch materialization.",
+                            )
+                            return
+                        except Exception as exc:
+                            last_error = exc
+                    await asyncio.sleep(0.1)
+        except TimeoutError:
+            pass
+        _LOGGER.warning(
+            "failed to converge batch after materialization interruption batch_id=%s timeout_seconds=%d "
+            "last_error=%r",
+            candidate.batch_id,
+            timeout_seconds,
+            last_error,
+        )
 
     async def materialize_batch(
         self,
@@ -54,21 +114,21 @@ class SubmissionMaterializer:
         prepared: PreparedTaskBatch,
         batch: BatchRecord,
     ) -> tuple[BatchRecord, bool]:
-        await self._store.create_batch(batch)
-        persisted_batch = await self._store.get_batch(batch.batch_id)
-        if _batch_materialization_token(persisted_batch) != _batch_materialization_token(batch):
+        """Return the authoritative batch and whether this caller owns its execution."""
+        create_result = await self._store.create_batch(batch)
+        persisted_batch = create_result.batch
+        if not create_result.created:
             _validate_submission_fingerprint_value(persisted_batch, _batch_submission_fingerprint(batch))
             _LOGGER.info(
-                "task submission replay detected submission_id=%s batch_id=%s",
+                "duplicate task submission detected submission_id=%s batch_id=%s",
                 ctx.submission_id,
                 batch.batch_id,
             )
-            replay = persisted_batch.model_copy(update={"parent_tool_call_id": batch.parent_tool_call_id})
             self._save_rerun_source(ctx, prepared, persisted_batch)
-            return replay, True
-        self._save_prepared_input(batch.batch_id, prepared)
-        self._save_rerun_source(ctx, prepared, batch)
-        return batch, False
+            return persisted_batch, False
+        self._save_prepared_input(persisted_batch.batch_id, prepared)
+        self._save_rerun_source(ctx, prepared, persisted_batch)
+        return persisted_batch, True
 
     def build_batch(
         self,
@@ -156,13 +216,8 @@ class SubmissionMaterializer:
         except FileNotFoundError:
             return None
 
-    async def reuse_existing_batch_runs(
-        self,
-        ctx: TurnContext,
-        batch: BatchRecord,
-        parent_tool_call_id: int,
-    ) -> list[TaskRun]:
-        timeout_seconds = _replay_run_materialization_timeout_seconds()
+    async def load_existing_batch_runs(self, batch: BatchRecord) -> list[TaskRun]:
+        timeout_seconds = _duplicate_submission_materialization_timeout_seconds()
         deadline = asyncio.get_running_loop().time() + timeout_seconds
         stored_runs: list[TaskRun] = []
         while True:
@@ -179,7 +234,8 @@ class SubmissionMaterializer:
         if len(stored_runs) != batch.total_count or actual_indices != expected_indices:
             missing_indices = sorted(expected_indices - actual_indices)
             _LOGGER.warning(
-                "replayed task submission incomplete batch_id=%s expected=%d found=%d missing_indices=%s timeout_seconds=%d",
+                "duplicate task submission has incomplete runs batch_id=%s expected=%d found=%d "
+                "missing_indices=%s timeout_seconds=%d",
                 batch.batch_id,
                 batch.total_count,
                 len(stored_runs),
@@ -187,27 +243,11 @@ class SubmissionMaterializer:
                 timeout_seconds,
             )
             raise RuntimeError(
-                f"replayed task submission {batch.batch_id} expected {batch.total_count} materialized runs, "
+                f"duplicate task submission {batch.batch_id} expected {batch.total_count} materialized runs, "
                 f"found {len(stored_runs)}"
             )
 
-        rebound: list[TaskRun] = []
-        for run in sorted(stored_runs, key=lambda item: item.batch_item_index):
-            child_tool_call_id = await self._progress.add_task_sub_call(
-                ctx,
-                parent_tool_call_id=parent_tool_call_id,
-                task=run.spec,
-                sub_call_index=run.batch_item_index,
-            )
-            current = run.model_copy(
-                update={
-                    "parent_tool_call_id": parent_tool_call_id,
-                    "plan_batch_call_id": child_tool_call_id,
-                }
-            )
-            current._runtime_reuse = True
-            rebound.append(current)
-        return rebound
+        return sorted(stored_runs, key=lambda item: item.batch_item_index)
 
     def _save_prepared_input(self, batch_id: str, prepared: PreparedTaskBatch) -> None:
         try:
@@ -306,11 +346,6 @@ def _batch_id_for_submission(submission_id: str) -> str:
     return f"batch-{digest}"
 
 
-def _batch_materialization_token(batch: BatchRecord) -> str:
-    runtime_metadata = batch.metadata.get(RUNTIME_METADATA_KEY, {})
-    return str(runtime_metadata.get("materialization_token", "")) if isinstance(runtime_metadata, dict) else ""
-
-
 def _prepared_submission_fingerprint(prepared: PreparedTaskBatch, submission_source: str = "") -> str:
     payload = {
         "submission_source": submission_source,
@@ -337,11 +372,12 @@ def _validate_submission_fingerprint_value(existing: BatchRecord, incoming_finge
     if existing_fingerprint and existing_fingerprint == incoming_fingerprint:
         return
     _LOGGER.warning(
-        "task submission replay diverged batch_id=%s existing_fingerprint=%s incoming_fingerprint=%s",
+        "duplicate task submission diverged batch_id=%s existing_fingerprint=%s incoming_fingerprint=%s",
         existing.batch_id,
         existing_fingerprint[:12],
         incoming_fingerprint[:12],
     )
     raise RuntimeError(
-        f"task submission replay diverged for batch {existing.batch_id}; refusing to reuse results for regenerated tasks"
+        f"duplicate task submission diverged for batch {existing.batch_id}; "
+        "refusing to reuse results for regenerated tasks"
     )

@@ -87,6 +87,9 @@ pyinstaller --noconfirm --clean --onedir -n mumu-api app\main.py `
 
 Notes:
 
+- Except for `GET /health`, all HTTP endpoints and the H264 WebSocket require
+    `Authorization: Bearer <SICO_SANDBOX_SERVICE_TOKEN>`. Browser viewing goes
+    through Backend, which keeps this service credential server-side.
 - `POST /api/v1/emulators/{id}/stop` is idempotent and succeeds even if the emulator is already stopped.
 - `POST /api/v1/emulators/{id}/reset`, `POST /api/v1/emulators/{id}/soft-reset`, and `POST /api/v1/emulators/{id}/restart` require the emulator to already be running.
 - App install URLs may resolve to public, private, or loopback addresses. Only HTTP(S) URLs without embedded credentials are accepted, and redirects are rejected.
@@ -108,4 +111,3 @@ Notes:
 | `GET /api/v1/emulators/devices`          | GET    | List devices                                                                      |
 | `GET /api/v1/devices/{index}/snapshot`   | GET    | Screenshot (PNG)                                                                  |
 | `WS /api/v1/devices/{index}/ws/h264`     | WS     | H264 live stream                                                                  |
-| `/vnc/view/{deviceId}`                   | GET    | VNC viewer (H264 + JMuxer)                                                        |

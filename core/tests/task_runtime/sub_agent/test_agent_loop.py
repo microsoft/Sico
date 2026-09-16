@@ -10,9 +10,12 @@ from app.biz.task_runtime.sub_agent.loop import (
     AgentLoopLimits,
     AgentLoopRequest,
     AgentLoopRuntime,
+    AgentContent,
+    AgentModelOutputDelta,
     AgentModelTurn,
     AgentTask,
     AgentToolDescriptor,
+    AgentToolsetSnapshot,
     BoundAgentTool,
     CapabilityCall,
     CompletionDirective,
@@ -22,6 +25,7 @@ from app.biz.task_runtime.sub_agent.loop import (
     LoopFinishedEvent,
     MafAgentLoopEngine,
     ModelTurnCompletedEvent,
+    ModelOutputDeltaEvent,
     NativeAgentLoopEngine,
     Observation,
     PreparedModelContext,
@@ -46,6 +50,15 @@ class _ScriptedModel:
     async def complete_turn(self, state):
         self.states.append(state)
         return self._turns.pop(0)
+
+
+class _StreamingModel:
+    def __init__(self, *items) -> None:
+        self._items = items
+
+    async def stream_turn(self, state):
+        for item in self._items:
+            yield item
 
 
 class _RecordingContext:
@@ -78,7 +91,7 @@ def _request(*, max_turns: int = 4, max_tool_calls: int | None = None) -> AgentL
     )
 
 
-async def _events(engine, request, tool, context, completion):
+async def _events(engine, request, tool, context, completion, tool_controller=None):
     return [
         event
         async for event in engine.run(
@@ -87,9 +100,66 @@ async def _events(engine, request, tool, context, completion):
             runtime=AgentLoopRuntime(
                 context_controller=context,
                 evaluate_completion=completion.evaluate,
+                tool_controller=tool_controller,
             ),
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_engine_uses_promoted_native_tool_on_next_turn(engine_cls) -> None:
+    discover_descriptor = AgentToolDescriptor(tool_id="runtime:capability:discover")
+    echo_descriptor = AgentToolDescriptor(
+        tool_id="builtin:echo",
+        parameter_schema={"type": "object", "properties": {"text": {"type": "string"}}},
+    )
+    calls: list[tuple[CapabilityCall, int]] = []
+
+    class _Controller:
+        def __init__(self) -> None:
+            self.revision = 1
+            self.tools = (BoundAgentTool(discover_descriptor, self.discover),)
+
+        async def snapshot(self):
+            return AgentToolsetSnapshot(self.revision, self.tools)
+
+        async def discover(self, call, snapshot):
+            self.tools = (*self.tools, BoundAgentTool(echo_descriptor, self.echo))
+            self.revision = 2
+            return Observation(capability=call.capability, call_id=call.call_id, ok=True, content="promoted builtin:echo")
+
+        async def echo(self, call, snapshot):
+            calls.append((call, snapshot.toolset_revision))
+            return Observation(capability=call.capability, call_id=call.call_id, ok=True, content="hi")
+
+    controller = _Controller()
+    model = _ScriptedModel(
+        AgentModelTurn(CapabilityCall(capability="runtime:capability:discover")),
+        AgentModelTurn(CapabilityCall(capability="builtin:echo", args={"text": "hi"})),
+        AgentModelTurn(FinalAnswer(summary="done")),
+    )
+    discover_tool = controller.tools[0]
+
+    events = await _events(
+        engine_cls(model),
+        AgentLoopRequest(
+            engine_run_id="run-1",
+            task=AgentTask(title="Discover then echo"),
+            system_prompt="",
+            tools=(discover_descriptor,),
+            limits=AgentLoopLimits(max_model_turns=3),
+        ),
+        discover_tool,
+        _RecordingContext(),
+        _Completion(CompletionDirective(outcome="accept")),
+        controller,
+    )
+
+    assert model.states[0].capabilities == ("runtime:capability:discover",)
+    assert model.states[1].capabilities == ("runtime:capability:discover", "builtin:echo")
+    assert [state.toolset_revision for state in model.states] == [1, 2, 2]
+    assert calls == [(CapabilityCall(capability="builtin:echo", args={"text": "hi"}, call_id="turn-2-call-1"), 2)]
+    assert next(event for event in events if isinstance(event, LoopFinishedEvent)).outcome == "completed"
 
 
 @pytest.mark.asyncio
@@ -108,7 +178,13 @@ async def test_engine_binds_tool_results_and_accumulates_usage(engine_cls) -> No
 
     async def invoke(call, snapshot):
         calls.append(call)
-        return Observation(capability=call.capability, call_id=call.call_id, ok=True, content="hi")
+        return Observation(
+            capability=call.capability,
+            call_id=call.call_id,
+            ok=True,
+            content="hi",
+            usage=TokenUsage(input_tokens=4, output_tokens=1, total_tokens=5),
+        )
 
     descriptor = AgentToolDescriptor(tool_id="builtin:echo")
     context = _RecordingContext()
@@ -129,9 +205,36 @@ async def test_engine_binds_tool_results_and_accumulates_usage(engine_cls) -> No
     assert sum(isinstance(event, ToolCallCompletedEvent) for event in events) == 1
     finished = next(event for event in events if isinstance(event, LoopFinishedEvent))
     assert finished.outcome == "completed"
-    assert finished.usage == TokenUsage(input_tokens=25, output_tokens=5, total_tokens=30)
+    assert finished.usage == TokenUsage(input_tokens=29, output_tokens=6, total_tokens=35)
     assert finished.model_turns == 2
     assert finished.tool_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_engine_emits_streamed_model_output_before_turn_completion(engine_cls) -> None:
+    model = _StreamingModel(
+        AgentModelOutputDelta(AgentContent(type="text", text="hello")),
+        AgentModelOutputDelta(AgentContent(type="text", text=" world")),
+        AgentModelTurn(FinalAnswer(summary="hello world"), usage=TokenUsage(total_tokens=3)),
+    )
+    descriptor = AgentToolDescriptor(tool_id="builtin:echo")
+
+    async def invoke(call, snapshot):
+        raise AssertionError("tool should not be called")
+
+    events = await _events(
+        engine_cls(model),
+        _request(),
+        BoundAgentTool(descriptor, invoke),
+        _RecordingContext(),
+        _Completion(CompletionDirective(outcome="accept")),
+    )
+
+    streamed = [event.content.text for event in events if isinstance(event, ModelOutputDeltaEvent)]
+    assert streamed == ["hello", " world"]
+    assert next(index for index, event in enumerate(events) if isinstance(event, ModelOutputDeltaEvent)) < next(
+        index for index, event in enumerate(events) if isinstance(event, ModelTurnCompletedEvent)
+    )
 
 
 @pytest.mark.asyncio
@@ -299,6 +402,54 @@ async def test_engine_rejects_duplicate_model_call_ids(engine_cls) -> None:
     finished = next(event for event in events if isinstance(event, LoopFinishedEvent))
     assert finished.error_kind == "internal"
     assert "duplicate capability call id" in finished.summary
+
+
+@pytest.mark.asyncio
+async def test_engine_denies_model_emitted_capability_selector(engine_cls) -> None:
+    selector = "linux_workstation:browser:**"
+    model = _ScriptedModel(AgentModelTurn(CapabilityCall(capability=selector)))
+
+    async def invoke(call, snapshot):
+        raise AssertionError("selector must not be invoked as an executable capability")
+
+    descriptor = AgentToolDescriptor(tool_id="builtin:echo")
+    events = await _events(
+        engine_cls(model),
+        _request(),
+        BoundAgentTool(descriptor, invoke),
+        _RecordingContext(),
+        _Completion(),
+    )
+
+    finished = next(event for event in events if isinstance(event, LoopFinishedEvent))
+    assert finished.outcome == "failed"
+    assert finished.error_kind == "policy_denied"
+    assert selector in finished.summary
+
+
+@pytest.mark.asyncio
+async def test_engine_normalizes_model_emitted_legacy_capability_id(engine_cls) -> None:
+    model = _ScriptedModel(
+        AgentModelTurn(CapabilityCall(capability="echo")),
+        AgentModelTurn(FinalAnswer(summary="done")),
+    )
+    calls: list[CapabilityCall] = []
+
+    async def invoke(call, snapshot):
+        calls.append(call)
+        return Observation(capability=call.capability, call_id=call.call_id, ok=True)
+
+    descriptor = AgentToolDescriptor(tool_id="builtin:echo")
+    events = await _events(
+        engine_cls(model),
+        _request(),
+        BoundAgentTool(descriptor, invoke),
+        _RecordingContext(),
+        _Completion(CompletionDirective(outcome="accept")),
+    )
+
+    assert calls == [CapabilityCall(capability="builtin:echo", call_id="turn-1-call-1")]
+    assert next(event for event in events if isinstance(event, LoopFinishedEvent)).outcome == "completed"
 
 
 @pytest.mark.asyncio

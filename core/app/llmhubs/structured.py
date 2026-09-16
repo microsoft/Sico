@@ -11,6 +11,7 @@ JSON answer" can depend on it without reaching across domain packages.
 from __future__ import annotations
 
 import json
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -25,7 +26,8 @@ from app.llmhubs.types import Input, InputContent, Request, Response, Trace, Usa
 T = TypeVar("T", bound=BaseModel)
 ContentBlocks = Sequence[dict[str, Any]]
 
-DEFAULT_CHAT_MODEL = "gpt5.4"
+_MALFORMED_RESPONSE_EXCERPT_CHARS = 4_000
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +35,23 @@ class StructuredCompletion(Generic[T]):
     value: T
     usage: Usage
     trace: Trace
+
+
+class StructuredResponseDecodeError(ValueError):
+    """A structured completion did not resolve to one valid semantic value."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        candidates: tuple[BaseModel, ...] = (),
+        usage: Usage | None = None,
+        trace: Trace | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.candidates = candidates
+        self.usage = usage or Usage()
+        self.trace = trace or Trace()
 
 
 class LLMClient(ABC):
@@ -70,8 +89,8 @@ class LLMClient(ABC):
 class HubLLMClient(LLMClient):
     """Async wrapper over :class:`LLMHub` structured generation."""
 
-    def __init__(self, *, model: str = DEFAULT_CHAT_MODEL) -> None:
-        self.model = model
+    def __init__(self, *, model: str | None = None) -> None:
+        self.model = model or ""
         self._hub = LLMHub()
 
     async def complete_structured_result(
@@ -112,13 +131,63 @@ class HubLLMClient(LLMClient):
         if response.code != 0:
             raise RuntimeError(f"LLMHub generate failed: {response.msg}")
 
+        text_outputs = [output.text for output in response.outputs if output.type == "text" and output.text]
+        validated_outputs = _validated_structured_outputs(text_outputs, response_model)
+        duplicate_value = _equivalent_structured_outputs(validated_outputs)
+        if duplicate_value is not None:
+            _LOGGER.warning(
+                "structured_completion_collapsed_equivalent_outputs model=%s output_count=%d",
+                response.trace.model or self.model,
+                len(text_outputs),
+            )
+            return StructuredCompletion(value=duplicate_value, usage=response.usage, trace=response.trace)
+
         raw_text = response.text
-        parsed = json.loads(raw_text)
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            excerpt = _malformed_response_excerpt(raw_text)
+            raise StructuredResponseDecodeError(
+                "Structured LLM response was not valid single-value JSON: "
+                f"{exc.msg} at line {exc.lineno} column {exc.colno} (char {exc.pos}); "
+                f"text_output_count={len(text_outputs)}; response_chars={len(raw_text)}; "
+                f"raw_response={excerpt!r}",
+                candidates=tuple(validated_outputs),
+                usage=response.usage,
+                trace=response.trace,
+            ) from exc
         return StructuredCompletion(
             value=response_model.model_validate(parsed),
             usage=response.usage,
             trace=response.trace,
         )
+
+
+def _validated_structured_outputs(text_outputs: list[str], response_model: type[T]) -> list[T]:
+    if len(text_outputs) < 2:
+        return []
+    values: list[T] = []
+    try:
+        for text in text_outputs:
+            values.append(response_model.model_validate(json.loads(text)))
+    except (json.JSONDecodeError, ValueError):
+        return []
+    return values
+
+
+def _equivalent_structured_outputs(values: list[T]) -> T | None:
+    if len(values) < 2:
+        return None
+    first = values[0]
+    return first if all(value == first for value in values[1:]) else None
+
+
+def _malformed_response_excerpt(raw_text: str) -> str:
+    if len(raw_text) <= _MALFORMED_RESPONSE_EXCERPT_CHARS:
+        return raw_text
+    half = _MALFORMED_RESPONSE_EXCERPT_CHARS // 2
+    omitted = len(raw_text) - (half * 2)
+    return f"{raw_text[:half]}\n...[{omitted} chars omitted]...\n{raw_text[-half:]}"
 
 
 def _resolve_user_content(
@@ -134,4 +203,10 @@ def _resolve_user_content(
     raise ValueError("Either prompt or content_blocks must be provided for structured completion.")
 
 
-__all__ = ["ContentBlocks", "DEFAULT_CHAT_MODEL", "HubLLMClient", "LLMClient", "StructuredCompletion"]
+__all__ = [
+    "ContentBlocks",
+    "HubLLMClient",
+    "LLMClient",
+    "StructuredCompletion",
+    "StructuredResponseDecodeError",
+]

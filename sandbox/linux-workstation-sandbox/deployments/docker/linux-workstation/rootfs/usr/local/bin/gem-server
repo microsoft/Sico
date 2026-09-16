@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+if [ -x /opt/python3.12/bin/gem-server ]; then
+  exec /opt/python3.12/bin/gem-server "$@"
+fi
+
+HOST="0.0.0.0"
+PORT="${GEM_SERVER_PORT:-8088}"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --host)
+      HOST="$2"; shift 2 ;;
+    --port)
+      PORT="$2"; shift 2 ;;
+    --ws-ping-interval)
+      shift 2 ;;
+    --cdp-origin)
+      shift 2 ;;
+    *)
+      shift ;;
+  esac
+done
+
+exec /opt/python3.12/bin/python3.12 -m uvicorn linux_workstation_server.app:app --app-dir /opt/linux-workstation-server --host "$HOST" --port "$PORT"

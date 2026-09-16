@@ -2,8 +2,6 @@
 
 Sico frontend application — TanStack Router file-based routing, Jotai state, react-query + axios data layer, zod validation.
 
-Thin route-only scaffold. Features live in `@sico/shared/features/{name}/` so DWP can consume them. **No `src/features/` here** — route files mount shared features.
-
 ## Commands
 
 `npm run dev` / `build` / `preview` / `lint` / `test` / `test:build` / `e2e` (Playwright builds first).

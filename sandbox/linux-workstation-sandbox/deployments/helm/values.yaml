@@ -1,0 +1,42 @@
+replicaCount: 1
+
+image:
+  repository: sico/linux-workstation-sandbox
+  tag: local
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  clusterIP: None
+  port: 8080
+
+env:
+  SANDBOX_LINUX_WORKSTATION_K8S: "true"
+  SANDBOX_LINUX_WORKSTATION_K8S_NAMESPACE: "sandbox"
+  SANDBOX_LINUX_WORKSTATION_K8S_SERVICE: "linux-workstation-sandbox"
+  SANDBOX_LINUX_WORKSTATION_K8S_STATEFULSET: "linux-workstation-sandbox"
+  SANDBOX_LINUX_WORKSTATION_K8S_POD_SELECTOR: "app=linux-workstation-sandbox"
+  SANDBOX_LINUX_WORKSTATION_K8S_PORT: "8080"
+  PUBLIC_PORT: "8080"
+  SANDBOX_LINUX_WORKSTATION_K8S_MIN_IDLE: "1"
+  SANDBOX_LINUX_WORKSTATION_K8S_MAX_IDLE: "1"
+  SANDBOX_LINUX_WORKSTATION_K8S_MAX_REPLICAS: "1"
+  PROXY_SERVER: ""
+  JWT_PUBLIC_KEY: ""
+  DNS_OVER_HTTPS_TEMPLATES: ""
+  WORKSPACE: "/home/gem"
+  HOMEPAGE: ""
+  BROWSER_EXTRA_ARGS: ""
+  TZ: "Asia/Singapore"
+  WAIT_PORTS: ""
+  DISABLE_CODE_SERVER: "false"
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

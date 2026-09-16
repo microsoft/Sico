@@ -24,13 +24,26 @@ type fakeEmulatorAppProvider struct {
 	listResponse      *EmulatorAppBatchResponse
 	installResponse   *EmulatorAppBatchResponse
 	uninstallResponse *EmulatorAppBatchResponse
+	resetFn           func(context.Context, string) error
+	uninstallFn       func(
+		context.Context,
+		string,
+		[]int,
+		string,
+		int32,
+	) (*EmulatorAppBatchResponse, error)
 }
 
 func (*fakeEmulatorAppProvider) Type() string { return enum.SandboxTypeEmulator.String() }
 
 func (*fakeEmulatorAppProvider) ListResources(context.Context) ([]*Resource, error) { return nil, nil }
 
-func (*fakeEmulatorAppProvider) ResetResource(context.Context, string) error { return nil }
+func (p *fakeEmulatorAppProvider) ResetResource(ctx context.Context, resourceID string) error {
+	if p.resetFn != nil {
+		return p.resetFn(ctx, resourceID)
+	}
+	return nil
+}
 
 func (*fakeEmulatorAppProvider) ParseResourceIDForProxy(resourceID string) (string, string, error) {
 	parts := strings.SplitN(resourceID, "|", 2)
@@ -61,12 +74,15 @@ func (p *fakeEmulatorAppProvider) InstallAppBatch(
 }
 
 func (p *fakeEmulatorAppProvider) UninstallAppBatch(
-	context.Context,
-	string,
-	[]int,
-	string,
-	int32,
+	ctx context.Context,
+	baseURL string,
+	indices []int,
+	packageName string,
+	maxParallel int32,
 ) (*EmulatorAppBatchResponse, error) {
+	if p.uninstallFn != nil {
+		return p.uninstallFn(ctx, baseURL, indices, packageName, maxParallel)
+	}
 	return p.uninstallResponse, nil
 }
 

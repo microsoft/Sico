@@ -24,6 +24,27 @@ type TaskDetail struct {
 	ArtifactsJSON string
 }
 
+type BatchCreateResult struct {
+	BatchJSON string
+	Created   bool
+}
+
+type BatchUpdateResult struct {
+	BatchJSON            string
+	Applied              bool
+	TerminalTransitioned bool
+}
+
+type BatchCancelResult struct {
+	DurationMS   int64
+	Transitioned bool
+}
+
+type RunCancelResult struct {
+	DurationMS   int64
+	Transitioned bool
+}
+
 // TaskRuntimeDAO owns all task-runtime persistence: the run/batch JSON-blob
 // projection, the fencing/compare-and-set guards, and the stale-run sweep. It
 // speaks the JSON document contract Core sends over reverse gRPC; the generated
@@ -58,42 +79,81 @@ func (d *TaskRuntimeDAO) runTransaction(ctx context.Context, fn func(tx *gorm.DB
 // CreateBatch inserts a batch row. A duplicate batch_id that already exists is
 // treated as an idempotent success; a duplicate whose row vanished underneath
 // the lookup surfaces as ErrDuplicate.
-func (d *TaskRuntimeDAO) CreateBatch(ctx context.Context, batchJSON string) error {
+func (d *TaskRuntimeDAO) CreateBatch(ctx context.Context, batchJSON string) (BatchCreateResult, error) {
 	row, err := batchRowFromJSON(batchJSON)
 	if err != nil {
-		return err
+		return BatchCreateResult{}, err
 	}
 
 	if err := d.db.WithContext(ctx).Create(row).Error; err != nil {
 		if !isDuplicateKey(err) {
-			return err
+			return BatchCreateResult{}, err
 		}
 		var existing batchRow
 		lookupErr := d.db.WithContext(ctx).Where(columnBatchID+" = ?", row.BatchID).First(&existing).Error
 		if errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-			return ErrDuplicate
+			return BatchCreateResult{}, ErrDuplicate
 		}
 		if lookupErr != nil {
-			return lookupErr
+			return BatchCreateResult{}, lookupErr
 		}
+		return BatchCreateResult{BatchJSON: canonicalBatchJSON(existing)}, nil
 	}
 
-	return nil
+	return BatchCreateResult{BatchJSON: canonicalBatchJSON(*row), Created: true}, nil
 }
 
-// UpdateBatch writes the projected batch columns, guarding against resurrecting
-// a batch that already reached a terminal status.
-func (d *TaskRuntimeDAO) UpdateBatch(ctx context.Context, batchJSON string) error {
+// UpdateBatch serializes state changes on the batch row and returns the
+// authoritative payload. A different terminal state wins over a stale writer.
+func (d *TaskRuntimeDAO) UpdateBatch(ctx context.Context, batchJSON string) (BatchUpdateResult, error) {
 	row, err := batchRowFromJSON(batchJSON)
 	if err != nil {
-		return err
+		return BatchUpdateResult{}, err
 	}
 
-	query := d.db.WithContext(ctx).
-		Model(&batchRow{}).
-		Where(columnBatchID+" = ?", row.BatchID)
-	query = protectTerminalStatus(query, columnStatus, row.Status, terminalBatchStatuses())
-	return query.UpdateColumns(batchUpdateMap(row)).Error
+	var authoritative batchRow
+	var applied, terminalTransitioned bool
+	err = d.runTransaction(ctx, func(tx *gorm.DB) error {
+		authoritative = batchRow{}
+		applied = false
+		terminalTransitioned = false
+		var existing batchRow
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where(columnBatchID+" = ?", row.BatchID).
+			First(&existing).Error; err != nil {
+			return err
+		}
+
+		applyUpdate, transitioned := batchUpdateDecision(existing.Status, row.Status)
+		if !applyUpdate {
+			authoritative = existing
+			return nil
+		}
+		terminalTransitioned = transitioned
+		if err := tx.Model(&batchRow{}).
+			Where(columnBatchID+" = ?", row.BatchID).
+			UpdateColumns(batchUpdateMap(row)).Error; err != nil {
+			return err
+		}
+		applied = true
+		return tx.Where(columnBatchID+" = ?", row.BatchID).First(&authoritative).Error
+	})
+	if err != nil {
+		return BatchUpdateResult{}, err
+	}
+	return BatchUpdateResult{
+		BatchJSON:            canonicalBatchJSON(authoritative),
+		Applied:              applied,
+		TerminalTransitioned: terminalTransitioned,
+	}, nil
+}
+
+func batchUpdateDecision(existingStatus, incomingStatus string) (bool, bool) {
+	existingTerminal := containsStatus(terminalBatchStatuses(), existingStatus)
+	if existingTerminal {
+		return false, false
+	}
+	return true, !existingTerminal && containsStatus(terminalBatchStatuses(), incomingStatus)
 }
 
 // GetBatch returns the canonical batch JSON for batchID. A missing row is a
@@ -115,30 +175,30 @@ func (d *TaskRuntimeDAO) GetBatch(ctx context.Context, batchID string) (string, 
 // CreateRun inserts a run row. A duplicate that matches the existing run's
 // identity (run_id + batch_id + idempotency_key) is an idempotent success;
 // any other collision surfaces as ErrDuplicate.
-func (d *TaskRuntimeDAO) CreateRun(ctx context.Context, runJSON string) error {
+func (d *TaskRuntimeDAO) CreateRun(ctx context.Context, runJSON string) (bool, error) {
 	row, err := runRowFromJSON(runJSON)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := d.db.WithContext(ctx).Create(row).Error; err != nil {
 		if !isDuplicateKey(err) {
-			return err
+			return false, err
 		}
 		var existing runRow
 		lookupErr := d.db.WithContext(ctx).Where(columnRunID+" = ?", row.RunID).First(&existing).Error
 		if errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-			return ErrDuplicate
+			return false, ErrDuplicate
 		}
 		if lookupErr != nil {
-			return lookupErr
+			return false, lookupErr
 		}
 		if duplicateRunCreateMatchesExisting(existing, *row) {
-			return nil
+			return false, nil
 		}
-		return ErrDuplicate
+		return false, ErrDuplicate
 	}
 
-	return nil
+	return true, nil
 }
 
 func duplicateRunCreateMatchesExisting(existing, incoming runRow) bool {
@@ -330,8 +390,9 @@ func (d *TaskRuntimeDAO) SetRunProgress(ctx context.Context, runID, message stri
 
 // WriteResult validates the worker's fencing token, projects the terminal
 // result back into the run payload, and persists the raw result JSON.
-func (d *TaskRuntimeDAO) WriteResult(ctx context.Context, runID, tokenJSON, resultJSONStr string) error {
-	return d.runTransaction(ctx, func(tx *gorm.DB) error {
+func (d *TaskRuntimeDAO) WriteResult(ctx context.Context, runID, tokenJSON, resultJSONStr string) (int64, error) {
+	var durationMS int64
+	err := d.runTransaction(ctx, func(tx *gorm.DB) error {
 		row, runJSON, err := lockRun(tx, strings.TrimSpace(runID))
 		if err != nil {
 			return err
@@ -343,9 +404,15 @@ func (d *TaskRuntimeDAO) WriteResult(ctx context.Context, runID, tokenJSON, resu
 		if err != nil {
 			return err
 		}
+		if err := ensureTerminalResultStatus(resultJSON.Status); err != nil {
+			return err
+		}
 
 		now := nowMS()
 		putValue(runJSON, jsonKeyStatus, resultJSON.Status)
+		// A fencing token authorizes exactly one terminal commit. Consuming it
+		// prevents a delayed duplicate worker from replacing the canonical result.
+		putValue(runJSON, jsonKeyFencingToken, "")
 		if resultJSON.EndedAt != nil {
 			putValue(runJSON, jsonKeyEndedAt, *resultJSON.EndedAt)
 		}
@@ -357,15 +424,22 @@ func (d *TaskRuntimeDAO) WriteResult(ctx context.Context, runID, tokenJSON, resu
 		if err := updateRunPayload(tx, row, runJSON, now); err != nil {
 			return err
 		}
+		endedAt := getInt64(runJSON, jsonKeyEndedAt)
+		if endedAt > 0 && row.QueuedAt > 0 {
+			durationMS = endedAt - row.QueuedAt
+		}
 
 		updates := map[string]any{columnResultJSON: jsonBytes(compactJSON(resultJSONStr)), columnUpdatedAt: now}
 		return tx.Model(&runRow{}).Where(columnRunID+" = ?", row.RunID).UpdateColumns(updates).Error
 	})
+	return durationMS, err
 }
 
 // CancelBatch cancels an active batch and every still-active run inside it.
-func (d *TaskRuntimeDAO) CancelBatch(ctx context.Context, batchID, reason string) error {
-	return d.runTransaction(ctx, func(tx *gorm.DB) error {
+func (d *TaskRuntimeDAO) CancelBatch(ctx context.Context, batchID, reason string) (BatchCancelResult, error) {
+	var result BatchCancelResult
+	err := d.runTransaction(ctx, func(tx *gorm.DB) error {
+		result = BatchCancelResult{}
 		var batch batchRow
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where(columnBatchID+" = ?", batchID).
@@ -389,10 +463,8 @@ func (d *TaskRuntimeDAO) CancelBatch(ctx context.Context, batchID, reason string
 		batch.CancellationReason = reason
 		batch.EndedAt = &now
 		batch.UpdatedAt = now
-		batch.BatchJSON = marshalJSON(batchJSON)
-		if err := tx.Save(&batch).Error; err != nil {
-			return err
-		}
+		result.DurationMS = now - batch.CreatedAt
+		result.Transitioned = true
 
 		var runs []runRow
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -406,21 +478,53 @@ func (d *TaskRuntimeDAO) CancelBatch(ctx context.Context, batchID, reason string
 				return err
 			}
 		}
+		counts := runStatusCounts(runs)
+		putValue(batchJSON, jsonKeyCounts, counts)
+		batch.CountsJSON = marshalJSON(counts)
+		batch.BatchJSON = marshalJSON(batchJSON)
+		if err := tx.Save(&batch).Error; err != nil {
+			return err
+		}
 
 		return nil
 	})
+	return result, err
+}
+
+func runStatusCounts(runs []runRow) map[string]int {
+	counts := map[string]int{
+		statusCompleted: 0,
+		statusFailed:    0,
+		statusCancelled: 0,
+		statusTimedOut:  0,
+		statusBlocked:   0,
+	}
+	for _, run := range runs {
+		if _, ok := counts[run.Status]; ok {
+			counts[run.Status]++
+		}
+	}
+	return counts
 }
 
 // CancelRun cancels a single active run.
-func (d *TaskRuntimeDAO) CancelRun(ctx context.Context, runID, reason string) error {
-	return d.runTransaction(ctx, func(tx *gorm.DB) error {
+func (d *TaskRuntimeDAO) CancelRun(ctx context.Context, runID, reason string) (RunCancelResult, error) {
+	var result RunCancelResult
+	err := d.runTransaction(ctx, func(tx *gorm.DB) error {
+		result = RunCancelResult{}
 		row, err := findRun(tx, strings.TrimSpace(runID), true)
 		if err != nil {
 			return err
 		}
 
-		return cancelRunRowTx(tx, row, reason, nowMS())
+		now := nowMS()
+		if row.Status == statusQueued || row.Status == statusRunning {
+			result.DurationMS = now - row.QueuedAt
+			result.Transitioned = true
+		}
+		return cancelRunRowTx(tx, row, reason, now)
 	})
+	return result, err
 }
 
 // GetRun returns the canonical run JSON for runID, or found=false when absent.
@@ -459,8 +563,11 @@ func (d *TaskRuntimeDAO) GetTaskDetail(ctx context.Context, runID, view string) 
 // ListBatchRuns returns the canonical run JSON for every run in a batch, ordered
 // by batch item index then insertion order.
 func (d *TaskRuntimeDAO) ListBatchRuns(ctx context.Context, batchID string) ([]string, error) {
+	// The response contains only canonical run_json values. result_json can hold
+	// large task output and is neither inspected nor returned by this query.
 	var rows []runRow
 	if err := d.db.WithContext(ctx).
+		Omit(columnResultJSON).
 		Where(columnBatchID+" = ?", strings.TrimSpace(batchID)).
 		Order(columnBatchItemIndex + " ASC, " + columnId + " ASC").
 		Find(&rows).Error; err != nil {

@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-otel-lgtm
+  namespace: sico
+  labels:
+    app: sico-otel-lgtm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sico-otel-lgtm
+  template:
+    metadata:
+      labels:
+        app: sico-otel-lgtm
+    spec:
+      containers:
+        - name: otel-lgtm
+          image: grafana/otel-lgtm:0.11.10
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grafana
+              containerPort: 3000
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: grafana
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: grafana
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: grafana
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /otel-lgtm/loki-config.yaml
+              subPath: loki-config.yaml
+              readOnly: true
+            - name: config
+              mountPath: /otel-lgtm/tempo-config.yaml
+              subPath: tempo-config.yaml
+              readOnly: true
+            - name: config
+              mountPath: /otel-lgtm/run-prometheus.sh
+              subPath: run-prometheus.sh
+              readOnly: true
+            - name: config
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/sico.yaml
+              subPath: dashboards.yaml
+              readOnly: true
+            - name: dashboards
+              mountPath: /otel-lgtm/sico-dashboards
+              readOnly: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 5Gi
+        - name: config
+          configMap:
+            name: sico-otel-lgtm-config
+            defaultMode: 0755
+        - name: dashboards
+          configMap:
+            name: sico-otel-lgtm-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-otel-lgtm
+  namespace: sico
+  labels:
+    app: sico-otel-lgtm
+spec:
+  selector:
+    app: sico-otel-lgtm
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: grafana
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+---
+# Allow Backend/Core OTLP export and local port-forward access to LGTM.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-otel-lgtm-ingress
+  namespace: sico
+spec:
+  podSelector:
+    matchLabels:
+      app: sico-otel-lgtm
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sico-backend
+        - podSelector:
+            matchLabels:
+              app: sico-core
+      ports:
+        - port: 4317
+          protocol: TCP
+    # Kind observability is local-development only; these ports are exposed
+    # through kubectl port-forward for Grafana and host-side OTLP smoke tests.
+    - ports:
+        - port: 3000
+          protocol: TCP
+        - port: 4317
+          protocol: TCP
+        - port: 4318
+          protocol: TCP

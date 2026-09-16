@@ -75,8 +75,8 @@ func (CaseReplayStatus) EnumDescriptor() ([]byte, []int) {
 
 type EmptyCaseReplayResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -127,14 +127,14 @@ func (x *EmptyCaseReplayResponse) GetMsg() string {
 
 type CaseReplay struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
-	CaseId          string                 `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"caseId"`
-	SiteHost        string                 `protobuf:"bytes,3,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`
-	Platform        string                 `protobuf:"bytes,4,opt,name=platform,proto3" json:"platform"`
-	ActiveVersionId int64                  `protobuf:"varint,5,opt,name=active_version_id,json=activeVersionId,proto3" json:"activeVersionId"`
-	Status          CaseReplayStatus       `protobuf:"varint,6,opt,name=status,proto3,enum=reverse_rpc.CaseReplayStatus" json:"status"`
-	CreatedAt       int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`
-	UpdatedAt       int64                  `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`
+	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                     
+	CaseId          string                 `protobuf:"bytes,2,opt,name=case_id,json=caseId,proto3" json:"caseId"`                                
+	SiteHost        string                 `protobuf:"bytes,3,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`                          
+	Platform        string                 `protobuf:"bytes,4,opt,name=platform,proto3" json:"platform"`                                          
+	ActiveVersionId int64                  `protobuf:"varint,5,opt,name=active_version_id,json=activeVersionId,proto3" json:"activeVersionId"`  
+	Status          CaseReplayStatus       `protobuf:"varint,6,opt,name=status,proto3,enum=reverse_rpc.CaseReplayStatus" json:"status"`           
+	CreatedAt       int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                      
+	UpdatedAt       int64                  `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                      
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -227,13 +227,13 @@ func (x *CaseReplay) GetUpdatedAt() int64 {
 
 type CaseReplayVersion struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
-	CaseReplayId    int64                  `protobuf:"varint,2,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`
-	Version         string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version"`
-	ActionsBlobPath string                 `protobuf:"bytes,4,opt,name=actions_blob_path,json=actionsBlobPath,proto3" json:"actionsBlobPath"`
-	Metadata        string                 `protobuf:"bytes,5,opt,name=metadata,proto3" json:"metadata"`
-	CreatedAt       int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`
-	UpdatedAt       int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`
+	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                    
+	CaseReplayId    int64                  `protobuf:"varint,2,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`          
+	Version         string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version"`                                           
+	ActionsBlobPath string                 `protobuf:"bytes,4,opt,name=actions_blob_path,json=actionsBlobPath,proto3" json:"actionsBlobPath"`  
+	Metadata        string                 `protobuf:"bytes,5,opt,name=metadata,proto3" json:"metadata"`                                         
+	CreatedAt       int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                     
+	UpdatedAt       int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                     
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -319,9 +319,9 @@ func (x *CaseReplayVersion) GetUpdatedAt() int64 {
 
 type GetActiveCaseReplayRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	CaseId        string                 `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"caseId"`
-	SiteHost      string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`
-	Platform      string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform"`
+	CaseId        string                 `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"caseId"`        
+	SiteHost      string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`  
+	Platform      string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform"`                  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -379,11 +379,11 @@ func (x *GetActiveCaseReplayRequest) GetPlatform() string {
 
 type GetActiveCaseReplayResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found"`
-	CaseReplay    *CaseReplay            `protobuf:"bytes,2,opt,name=case_replay,json=caseReplay,proto3" json:"caseReplay"`
-	ActiveVersion *CaseReplayVersion     `protobuf:"bytes,3,opt,name=active_version,json=activeVersion,proto3" json:"activeVersion"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found"`                                      
+	CaseReplay    *CaseReplay            `protobuf:"bytes,2,opt,name=case_replay,json=caseReplay,proto3" json:"caseReplay"`           
+	ActiveVersion *CaseReplayVersion     `protobuf:"bytes,3,opt,name=active_version,json=activeVersion,proto3" json:"activeVersion"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                                      
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                                         
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -455,9 +455,9 @@ func (x *GetActiveCaseReplayResponse) GetMsg() string {
 
 type GetOrCreateCaseReplayRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	CaseId        string                 `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"caseId"`
-	SiteHost      string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`
-	Platform      string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform"`
+	CaseId        string                 `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"caseId"`        
+	SiteHost      string                 `protobuf:"bytes,2,opt,name=site_host,json=siteHost,proto3" json:"siteHost"`  
+	Platform      string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform"`                  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -515,10 +515,10 @@ func (x *GetOrCreateCaseReplayRequest) GetPlatform() string {
 
 type GetOrCreateCaseReplayResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	CaseReplayId  int64                  `protobuf:"varint,1,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`
-	Created       bool                   `protobuf:"varint,2,opt,name=created,proto3" json:"created"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	CaseReplayId  int64                  `protobuf:"varint,1,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`  
+	Created       bool                   `protobuf:"varint,2,opt,name=created,proto3" json:"created"`                                  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                                      
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                                         
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -583,11 +583,11 @@ func (x *GetOrCreateCaseReplayResponse) GetMsg() string {
 
 type CreateCaseReplayVersionRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	CaseReplayId    int64                  `protobuf:"varint,1,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`
-	Version         string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version"`
-	ActionsBlobPath string                 `protobuf:"bytes,3,opt,name=actions_blob_path,json=actionsBlobPath,proto3" json:"actionsBlobPath"`
-	Metadata        string                 `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata"`
-	Activate        bool                   `protobuf:"varint,5,opt,name=activate,proto3" json:"activate"`
+	CaseReplayId    int64                  `protobuf:"varint,1,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`          
+	Version         string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version"`                                           
+	ActionsBlobPath string                 `protobuf:"bytes,3,opt,name=actions_blob_path,json=actionsBlobPath,proto3" json:"actionsBlobPath"`  
+	Metadata        string                 `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata"`                                         
+	Activate        bool                   `protobuf:"varint,5,opt,name=activate,proto3" json:"activate"`                                        
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -659,9 +659,9 @@ func (x *CreateCaseReplayVersionRequest) GetActivate() bool {
 
 type CreateCaseReplayVersionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	VersionId     int64                  `protobuf:"varint,1,opt,name=version_id,json=versionId,proto3" json:"versionId"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	VersionId     int64                  `protobuf:"varint,1,opt,name=version_id,json=versionId,proto3" json:"versionId"`  
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`                           
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`                              
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -719,8 +719,8 @@ func (x *CreateCaseReplayVersionResponse) GetMsg() string {
 
 type SetCaseReplayVersionActionsRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	VersionId       int64                  `protobuf:"varint,1,opt,name=version_id,json=versionId,proto3" json:"versionId"`
-	ActionsBlobPath string                 `protobuf:"bytes,2,opt,name=actions_blob_path,json=actionsBlobPath,proto3" json:"actionsBlobPath"`
+	VersionId       int64                  `protobuf:"varint,1,opt,name=version_id,json=versionId,proto3" json:"versionId"`                     
+	ActionsBlobPath string                 `protobuf:"bytes,2,opt,name=actions_blob_path,json=actionsBlobPath,proto3" json:"actionsBlobPath"`  
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -771,8 +771,8 @@ func (x *SetCaseReplayVersionActionsRequest) GetActionsBlobPath() string {
 
 type ActivateCaseReplayVersionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	CaseReplayId  int64                  `protobuf:"varint,1,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`
-	VersionId     int64                  `protobuf:"varint,2,opt,name=version_id,json=versionId,proto3" json:"versionId"`
+	CaseReplayId  int64                  `protobuf:"varint,1,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`  
+	VersionId     int64                  `protobuf:"varint,2,opt,name=version_id,json=versionId,proto3" json:"versionId"`             
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -823,7 +823,7 @@ func (x *ActivateCaseReplayVersionRequest) GetVersionId() int64 {
 
 type MarkCaseReplayStaleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	CaseReplayId  int64                  `protobuf:"varint,1,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`
+	CaseReplayId  int64                  `protobuf:"varint,1,opt,name=case_replay_id,json=caseReplayId,proto3" json:"caseReplayId"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

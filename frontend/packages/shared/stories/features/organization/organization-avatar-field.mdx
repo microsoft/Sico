@@ -1,0 +1,113 @@
+import {
+  Canvas,
+  ColorItem,
+  ColorPalette,
+  Controls,
+  Description,
+  Meta,
+} from "@storybook/addon-docs/blocks";
+
+import * as OrganizationAvatarFieldStories from "./organization-avatar-field.stories";
+
+<Meta of={OrganizationAvatarFieldStories} />
+
+# OrganizationAvatarField
+
+A presentational avatar picker for the organization edit form. It composes the
+shared `Field` and `Avatar` primitives with a native image input; the parent
+owns selected-file upload, preview state, and saving state.
+
+## Examples
+
+### Avatar source
+
+The initial state derives one letter from the entered organization name. A
+persisted or local preview image replaces that fallback without changing the
+field's file-picker contract.
+
+<Description of={OrganizationAvatarFieldStories.Default} />
+<Canvas of={OrganizationAvatarFieldStories.Default} />
+
+<Description of={OrganizationAvatarFieldStories.SavedImage} />
+<Canvas of={OrganizationAvatarFieldStories.SavedImage} />
+
+<Description of={OrganizationAvatarFieldStories.ImageFailureFallback} />
+<Canvas of={OrganizationAvatarFieldStories.ImageFailureFallback} />
+
+### Save-time states
+
+Uploading adds an avatar scrim and spinner; disabled prevents the trigger and
+native input from accepting a new image while the dialog saves.
+
+<Description of={OrganizationAvatarFieldStories.Uploading} />
+<Canvas of={OrganizationAvatarFieldStories.Uploading} />
+
+<Description of={OrganizationAvatarFieldStories.Disabled} />
+<Canvas of={OrganizationAvatarFieldStories.Disabled} />
+
+### Edit dialog composition
+
+This recipe uses the production `EditOrgNameDialog` and its shared
+`useImageUpload` flow. Its isolated Axios adapter explicitly mocks only the
+image-upload and organization-update responses; it is not a live backend.
+
+<Description of={OrganizationAvatarFieldStories.InEditDialog} />
+<Canvas of={OrganizationAvatarFieldStories.InEditDialog} />
+
+## API
+
+<Controls of={OrganizationAvatarFieldStories.Default} />
+
+- `name` supplies the one-character fallback when neither image source renders.
+- `currentIconUrl` is the persisted icon and `previewSrc` takes precedence for
+  an in-progress selection.
+- `inputRef` connects the visible trigger to the hidden native file input;
+  `onPick` receives its change event and is owned by the parent upload flow.
+- `uploading` renders the loading overlay, while `disabled` locks both picker
+  controls during a save transaction.
+
+---
+
+## Token Audit
+
+The field owns the avatar fallback surface, primary copy, keyboard focus
+outline, and upload scrim. The shared `Avatar` primitive supplies its own
+border and image clipping.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Fallback avatar"
+    subtitle="Initial-letter surface and foreground"
+    colors={{
+      Surface: "var(--color-surface-sunken)",
+      Foreground: "var(--color-foreground-primary)",
+    }}
+  />
+  <ColorItem
+    title="Picker copy and focus"
+    subtitle="Change label and keyboard outline"
+    colors={{
+      Foreground: "var(--color-foreground-primary)",
+      Focus: "var(--color-focus-rest)",
+    }}
+  />
+  <ColorItem
+    title="Upload scrim"
+    subtitle="80% opaque overlay over the selected avatar"
+    colors={{ Surface: "var(--color-surface-basic)" }}
+  />
+</ColorPalette>
+
+### Sizing & shape
+
+| Property                  | Class / prop                 | Value                    |
+| ------------------------- | ---------------------------- | ------------------------ |
+| Avatar                    | `size="2xl"`                 | 48 px, owned by `Avatar` |
+| Trigger gap               | `gap-3`                      | 12 px                    |
+| Avatar and overlay radius | `rounded-lg`                 | 8 px                     |
+| Initial                   | `text-base font-medium`      | Base, medium weight      |
+| Label                     | `text-sm font-medium`        | Small, medium weight     |
+| Spinner                   | `size-4`                     | 16 px                    |
+| Keyboard focus            | `outline-2 outline-offset-2` | 2 px outline and offset  |

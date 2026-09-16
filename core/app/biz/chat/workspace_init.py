@@ -268,7 +268,11 @@ def _skill_actions_for_index(skill_dir: Path) -> list[dict[str, Any]]:
                 "description": action.description,
                 "infra_requirements": list(action.infra_requirements),
                 "parameters": [
-                    {**parameter.model_dump(), "required": parameter.name in required} for parameter in action.parameters
+                    {
+                        **parameter.model_dump(exclude={"type"} if parameter.type == "string" else set()),
+                        "required": parameter.name in required,
+                    }
+                    for parameter in action.parameters
                 ],
             }
         )

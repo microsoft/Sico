@@ -18,28 +18,28 @@ type otelTracedTaskRuntimeRepository struct {
 	next TaskRuntimeRepository
 }
 
-func (w *otelTracedTaskRuntimeRepository) CancelBatch(ctx context.Context, batchID string, reason string) error {
+func (w *otelTracedTaskRuntimeRepository) CancelBatch(ctx context.Context, batchID string, reason string) (BatchCancelResult, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "TaskRuntimeRepository.CancelBatch")
 	defer span.End()
 
-	ret0 := w.next.CancelBatch(ctx, batchID, reason)
-	if ret0 != nil {
-		span.RecordError(ret0)
-		span.SetStatus(codes.Error, ret0.Error())
+	ret0, ret1 := w.next.CancelBatch(ctx, batchID, reason)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
 	}
-	return ret0
+	return ret0, ret1
 }
 
-func (w *otelTracedTaskRuntimeRepository) CancelRun(ctx context.Context, runID string, reason string) error {
+func (w *otelTracedTaskRuntimeRepository) CancelRun(ctx context.Context, runID string, reason string) (RunCancelResult, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "TaskRuntimeRepository.CancelRun")
 	defer span.End()
 
-	ret0 := w.next.CancelRun(ctx, runID, reason)
-	if ret0 != nil {
-		span.RecordError(ret0)
-		span.SetStatus(codes.Error, ret0.Error())
+	ret0, ret1 := w.next.CancelRun(ctx, runID, reason)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
 	}
-	return ret0
+	return ret0, ret1
 }
 
 func (w *otelTracedTaskRuntimeRepository) ClaimRun(ctx context.Context, runID string, workerID string) (string, error) {
@@ -54,28 +54,28 @@ func (w *otelTracedTaskRuntimeRepository) ClaimRun(ctx context.Context, runID st
 	return tokenJSON, err
 }
 
-func (w *otelTracedTaskRuntimeRepository) CreateBatch(ctx context.Context, batchJSON string) error {
+func (w *otelTracedTaskRuntimeRepository) CreateBatch(ctx context.Context, batchJSON string) (BatchCreateResult, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "TaskRuntimeRepository.CreateBatch")
 	defer span.End()
 
-	ret0 := w.next.CreateBatch(ctx, batchJSON)
-	if ret0 != nil {
-		span.RecordError(ret0)
-		span.SetStatus(codes.Error, ret0.Error())
+	ret0, ret1 := w.next.CreateBatch(ctx, batchJSON)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
 	}
-	return ret0
+	return ret0, ret1
 }
 
-func (w *otelTracedTaskRuntimeRepository) CreateRun(ctx context.Context, runJSON string) error {
+func (w *otelTracedTaskRuntimeRepository) CreateRun(ctx context.Context, runJSON string) (bool, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "TaskRuntimeRepository.CreateRun")
 	defer span.End()
 
-	ret0 := w.next.CreateRun(ctx, runJSON)
-	if ret0 != nil {
-		span.RecordError(ret0)
-		span.SetStatus(codes.Error, ret0.Error())
+	created, err := w.next.CreateRun(ctx, runJSON)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 	}
-	return ret0
+	return created, err
 }
 
 func (w *otelTracedTaskRuntimeRepository) GetBatch(ctx context.Context, batchID string) (string, bool, error) {
@@ -198,16 +198,16 @@ func (w *otelTracedTaskRuntimeRepository) SweepStaleRuns(ctx context.Context, be
 	return staleRunsJSON, err
 }
 
-func (w *otelTracedTaskRuntimeRepository) UpdateBatch(ctx context.Context, batchJSON string) error {
+func (w *otelTracedTaskRuntimeRepository) UpdateBatch(ctx context.Context, batchJSON string) (BatchUpdateResult, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "TaskRuntimeRepository.UpdateBatch")
 	defer span.End()
 
-	ret0 := w.next.UpdateBatch(ctx, batchJSON)
-	if ret0 != nil {
-		span.RecordError(ret0)
-		span.SetStatus(codes.Error, ret0.Error())
+	ret0, ret1 := w.next.UpdateBatch(ctx, batchJSON)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
 	}
-	return ret0
+	return ret0, ret1
 }
 
 func (w *otelTracedTaskRuntimeRepository) UpdateRun(ctx context.Context, runJSON string) error {
@@ -222,14 +222,14 @@ func (w *otelTracedTaskRuntimeRepository) UpdateRun(ctx context.Context, runJSON
 	return ret0
 }
 
-func (w *otelTracedTaskRuntimeRepository) WriteResult(ctx context.Context, runID string, tokenJSON string, resultJSON string) error {
+func (w *otelTracedTaskRuntimeRepository) WriteResult(ctx context.Context, runID string, tokenJSON string, resultJSON string) (int64, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "TaskRuntimeRepository.WriteResult")
 	defer span.End()
 
-	ret0 := w.next.WriteResult(ctx, runID, tokenJSON, resultJSON)
-	if ret0 != nil {
-		span.RecordError(ret0)
-		span.SetStatus(codes.Error, ret0.Error())
+	durationMS, err := w.next.WriteResult(ctx, runID, tokenJSON, resultJSON)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 	}
-	return ret0
+	return durationMS, err
 }

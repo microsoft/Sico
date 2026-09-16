@@ -57,6 +57,30 @@ func (m *mockNotificationRepo) SetStatus(_ context.Context, id int64, status ent
 	return nil
 }
 
+func (m *mockNotificationRepo) GetByOrganization(
+	_ context.Context,
+	id, organizationID int64,
+) (*entity.Notification, error) {
+	notification, exists := m.notifications[id]
+	if !exists || notification.OrganizationId != organizationID {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return proto.Clone(notification).(*entity.Notification), nil
+}
+
+func (m *mockNotificationRepo) SetStatusByOrganization(
+	_ context.Context,
+	id, organizationID int64,
+	status entity.NotificationStatus,
+) error {
+	notification, exists := m.notifications[id]
+	if !exists || notification.OrganizationId != organizationID {
+		return gorm.ErrRecordNotFound
+	}
+	notification.Status = status
+	return nil
+}
+
 func (m *mockNotificationRepo) ListByReceiverUsername(
 	_ context.Context,
 	receiverUsername string,
@@ -78,6 +102,21 @@ func (m *mockNotificationRepo) ListByReceiverUsername(
 		end = len(filtered)
 	}
 	return filtered[offset:end], total, nil
+}
+
+func (m *mockNotificationRepo) ListByReceiverUsernameInOrganization(
+	_ context.Context,
+	receiverUsername string,
+	organizationID int64,
+	offset, limit int,
+) ([]*entity.Notification, int64, error) {
+	filtered := make([]*entity.Notification, 0)
+	for _, notification := range m.notifications {
+		if notification.ReceiverUsername == receiverUsername && notification.OrganizationId == organizationID {
+			filtered = append(filtered, proto.Clone(notification).(*entity.Notification))
+		}
+	}
+	return paginateNotifications(filtered, offset, limit)
 }
 
 func (m *mockNotificationRepo) ListByProjectID(
@@ -103,6 +142,21 @@ func (m *mockNotificationRepo) ListByProjectID(
 	return filtered[offset:end], total, nil
 }
 
+func (m *mockNotificationRepo) ListByProjectIDInOrganization(
+	_ context.Context,
+	projectID, organizationID int64,
+	offset, limit int,
+) ([]*entity.Notification, int64, error) {
+	filtered := make([]*entity.Notification, 0)
+	for _, notification := range m.notifications {
+		if notification.ProjectId == projectID && notification.OrganizationId == organizationID &&
+			notification.ReceiverUsername == "" {
+			filtered = append(filtered, proto.Clone(notification).(*entity.Notification))
+		}
+	}
+	return paginateNotifications(filtered, offset, limit)
+}
+
 func (m *mockNotificationRepo) MarkAllAsReadByReceiverUsername(
 	_ context.Context,
 	receiverUsername string,
@@ -116,4 +170,36 @@ func (m *mockNotificationRepo) MarkAllAsReadByReceiverUsername(
 		}
 	}
 	return ids, nil
+}
+
+func (m *mockNotificationRepo) MarkAllAsReadByReceiverUsernameInOrganization(
+	_ context.Context,
+	receiverUsername string,
+	organizationID int64,
+) ([]int64, error) {
+	ids := make([]int64, 0)
+	for _, notification := range m.notifications {
+		if notification.ReceiverUsername == receiverUsername &&
+			notification.OrganizationId == organizationID &&
+			notification.Status == pb.NotificationStatus_NOTIFICATION_STATUS_UNREAD {
+			notification.Status = pb.NotificationStatus_NOTIFICATION_STATUS_READ
+			ids = append(ids, notification.Id)
+		}
+	}
+	return ids, nil
+}
+
+func paginateNotifications(
+	notifications []*entity.Notification,
+	offset, limit int,
+) ([]*entity.Notification, int64, error) {
+	total := int64(len(notifications))
+	if offset >= len(notifications) {
+		return []*entity.Notification{}, total, nil
+	}
+	end := offset + limit
+	if end > len(notifications) {
+		end = len(notifications)
+	}
+	return notifications[offset:end], total, nil
 }

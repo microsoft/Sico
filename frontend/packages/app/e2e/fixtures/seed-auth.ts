@@ -110,10 +110,31 @@ export async function mockBoundOrganizationAccess(
 // Defensive stub so an accidental fetch can't reach the real backend.
 export async function mockSicoApi(page: Page): Promise<void> {
   await page.route("**/api/sico/**", async (route) => {
+    const isMembership =
+      new URL(route.request().url()).pathname ===
+      "/api/sico/organization/user_organizations";
+    const data = isMembership
+      ? {
+          organizations: [
+            {
+              id: 9,
+              name: "SICO 1",
+              description: "",
+              createdAt: 1,
+              updatedAt: 1,
+              creatorUsername: "owner@example.com",
+              roleCodes: [],
+              isOwner: false,
+            },
+          ],
+          total: 1,
+          hasNext: false,
+        }
+      : {};
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(makeOkEnvelope({})),
+      body: JSON.stringify(makeOkEnvelope(data)),
     });
   });
 }

@@ -76,17 +76,20 @@ export async function fetchOrganization(
   ).organization;
 }
 
-export async function renameOrganization(
+export type OrganizationUpdate = { name: string; iconUri?: string };
+
+export async function updateOrganization(
   apiClient: AxiosInstance,
   id: number,
-  name: string,
+  values: OrganizationUpdate,
 ): Promise<void> {
   const response = await apiClient.put<unknown>(ORGANIZATION_ENDPOINTS.root, {
     id,
-    name,
+    name: values.name,
+    ...(values.iconUri ? { iconUri: values.iconUri } : {}),
   });
   assertOk(
     apiResponseSchema(z.unknown()).parse(response.data),
-    "renameOrganization",
+    "updateOrganization",
   );
 }

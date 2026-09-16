@@ -66,6 +66,7 @@ class AgentLoopRequest:
     limits: AgentLoopLimits
     context: tuple[AgentContextBlock, ...] = ()
     initial_messages: tuple[AgentMessage, ...] = ()
+    provider_tools: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +115,7 @@ class Observation:
     ok: bool
     content: str = ""
     call_id: str = ""
+    arguments: Mapping[str, object] | None = None
     run_id: str = ""
     status: str = ""
     summary: str = ""
@@ -121,6 +123,7 @@ class Observation:
     error_message: str = ""
     artifacts: tuple[str, ...] = ()
     contents: tuple[AgentContent, ...] = ()
+    usage: TokenUsage = TokenUsage()
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +139,7 @@ class AgentLoopSnapshot:
     history: tuple[Observation, ...]
     usage: TokenUsage = TokenUsage()
     tool_call_count: int = 0
+    toolset_revision: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +152,8 @@ class AgentModelState:
     context: tuple[AgentContextBlock, ...] = ()
     history: tuple[Observation, ...] = ()
     initial_messages: tuple[AgentMessage, ...] = ()
+    toolset_revision: int = 0
+    provider_tools: tuple[Mapping[str, object], ...] = ()
 
     @property
     def capabilities(self) -> tuple[str, ...]:
@@ -166,8 +172,25 @@ class AgentModelTurn:
     latency_ms: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class AgentModelOutputDelta:
+    content: AgentContent
+
+
+AgentModelStreamItem: TypeAlias = AgentModelOutputDelta | AgentModelTurn
+
+
 class AgentModel(Protocol):
     async def complete_turn(self, state: AgentModelState) -> AgentModelTurn: ...
+
+
+async def stream_model_turn(model: AgentModel, state: AgentModelState) -> AsyncIterator[AgentModelStreamItem]:
+    stream_turn = getattr(model, "stream_turn", None)
+    if stream_turn is None:
+        yield await model.complete_turn(state)
+        return
+    async for item in stream_turn(state):
+        yield item
 
 
 ToolCallback: TypeAlias = Callable[[CapabilityCall, AgentLoopSnapshot], Awaitable[Observation]]
@@ -177,6 +200,20 @@ ToolCallback: TypeAlias = Callable[[CapabilityCall, AgentLoopSnapshot], Awaitabl
 class BoundAgentTool:
     descriptor: AgentToolDescriptor
     invoke: ToolCallback
+
+
+@dataclass(frozen=True, slots=True)
+class AgentToolsetSnapshot:
+    revision: int
+    tools: tuple[BoundAgentTool, ...]
+
+    @property
+    def descriptors(self) -> tuple[AgentToolDescriptor, ...]:
+        return tuple(tool.descriptor for tool in self.tools)
+
+
+class AgentToolController(Protocol):
+    async def snapshot(self) -> AgentToolsetSnapshot: ...
 
 
 class AgentContextController(Protocol):
@@ -202,6 +239,16 @@ CompletionEvaluator: TypeAlias = Callable[[FinalAnswer, AgentLoopSnapshot], Awai
 class AgentLoopRuntime:
     context_controller: AgentContextController
     evaluate_completion: CompletionEvaluator
+    tool_controller: AgentToolController | None = None
+
+
+async def current_toolset(
+    runtime: AgentLoopRuntime,
+    fallback: tuple[BoundAgentTool, ...],
+) -> AgentToolsetSnapshot:
+    if runtime.tool_controller is None:
+        return AgentToolsetSnapshot(revision=0, tools=fallback)
+    return await runtime.tool_controller.snapshot()
 
 
 class AgentLoopEngine(Protocol):

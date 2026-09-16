@@ -2,8 +2,6 @@ import { i18n } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { z } from "zod";
 
-import { DW_AVATAR_PRESETS } from "../constants";
-
 // Module-scope `msg()` descriptors (statically extractable); the text resolves
 // lazily via zod v4's `error` callback at validation time, so the schema is a
 // plain module const — no factory, no injected `t`, and always in the active
@@ -46,5 +44,5 @@ export const ADD_DW_INITIAL_VALUES: AddDwValues = {
   projectId: "",
   agentId: "",
   name: "",
-  iconUri: DW_AVATAR_PRESETS[0],
+  iconUri: "",
 };

@@ -11,4 +11,4 @@ Makefile text eol=lf
 *.bash      text eol=lf
 Dockerfile  text eol=lf
 *.Dockerfile text eol=lf
-docs/videos/what_is_sico.mp4 filter=lfs diff=lfs merge=lfs -text
+frontend/.agents/skills/vercel-react-best-practices/**/*.md whitespace=-trailing-space

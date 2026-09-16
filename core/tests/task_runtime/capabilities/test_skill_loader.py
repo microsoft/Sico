@@ -7,9 +7,19 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from app.biz.task_runtime.capabilities.catalogue import skill_descriptors
 from app.biz.task_runtime.capabilities.loader import SkillLoader
 from app.biz.task_runtime.workspace.layout import reset_workspace_layout, set_workspace_layout
-from app.biz.skill.resolver import ResolvedAction, ResolvedActionStep, load_resolved_actions
+from app.biz.skill.resolver import (
+    ACTION_MANIFEST_SCHEMA_VERSION,
+    ResolvedAction,
+    ResolvedActionStep,
+    load_actions_manifest,
+    load_resolved_actions,
+)
+
+
+_ACTION_FIXTURES = Path(__file__).parents[2] / "fixtures" / "skill_actions"
 
 
 class _FakeWorkspaceLayout:
@@ -75,7 +85,7 @@ def test_skill_resolver_projects_actions_json_as_cards(tmp_path: Path) -> None:
     assert card.requires_sandbox == ["android"]
     assert card.parameters == [{"name": "instructions", "description": "Test instructions.", "required": True}]
     section = SkillLoader(workspace).render_cards_section()
-    assert "These skills are available" in section
+    assert "These executable skill actions are available" in section
     assert "kind: executable_action" in section
     assert "infra_requirements:" in section
     assert "requires_sandbox:" not in section
@@ -109,6 +119,103 @@ def test_skill_loader_projects_multiple_sandbox_options(tmp_path: Path) -> None:
     assert card is not None
     assert card.requires_sandbox == ["windows", "macos"]
     assert card.sandbox_options == ("windows", "macos")
+
+
+def test_skill_loader_does_not_register_proposed_manifest_when_legacy_env_is_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    skill_root = tmp_path / "runtime" / "100"
+    (skill_root / "resolved").mkdir(parents=True)
+    (skill_root / "resolved" / "actions.proposal.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "review_status": "proposed",
+                "source_provenance": "resolver",
+                "actions": [{"name": "run", "steps": [{"argv": ["runner"]}]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_workspace_index(workspace, skill_root, name="proposed")
+    monkeypatch.setenv("SKILL_ALLOW_PROPOSED_ACTION_EXECUTION", "true")
+
+    loader = SkillLoader(workspace)
+
+    assert loader.resolve("proposed.run") is None
+    assert loader.list_cards() == []
+
+
+def test_skill_loader_prefers_accepted_manifest_over_proposal(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    skill_root = tmp_path / "runtime" / "100"
+    (skill_root / "resolved").mkdir(parents=True)
+    (skill_root / "resolved" / "actions.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "review_status": "accepted",
+                "source_provenance": "author",
+                "actions": [{"name": "accepted", "steps": [{"argv": ["accepted"]}]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (skill_root / "resolved" / "actions.proposal.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "review_status": "proposed",
+                "source_provenance": "resolver",
+                "actions": [{"name": "proposed", "steps": [{"argv": ["proposed"]}]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_workspace_index(workspace, skill_root, name="mixed")
+
+    loader = SkillLoader(workspace)
+
+    assert [card.name for card in loader.list_cards()] == ["mixed.accepted"]
+
+
+def test_skill_loader_projects_reviewed_manifest_deterministically(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    skill_root = tmp_path / "runtime" / "100"
+    (skill_root / "resolved").mkdir(parents=True)
+    (skill_root / "resolved" / "actions.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "review_status": "accepted",
+                "source_provenance": "author",
+                "actions": [
+                    {
+                        "name": "inspect",
+                        "description": "Inspect without mutation.",
+                        "workspace_access": "read_only",
+                        "effect": "read",
+                        "parameters": [{"name": "path", "type": "string"}],
+                        "steps": [{"argv": ["inspect", "{path}"]}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_workspace_index(workspace, skill_root, name="reviewed")
+
+    first = skill_descriptors(SkillLoader(workspace).list_cards())
+    second = skill_descriptors(SkillLoader(workspace).list_cards())
+
+    assert first == second
+    assert len(first) == 1
+    assert first[0].capability_id == "skill:reviewed:inspect"
+    assert first[0].workspace_access == "read_only"
+    assert first[0].effect == "read"
+    assert first[0].parameter_schema["properties"]["path"]["type"] == "string"
 
 
 def test_skill_loader_reads_latest_persisted_skill_version(tmp_path: Path, request) -> None:
@@ -168,12 +275,11 @@ entrypoint:
 
     card = SkillLoader(workspace).resolve("legacy-skill")
 
-    assert card is not None
-    assert not card.is_executable
-    assert "entrypoint_inputs:" not in SkillLoader(workspace).render_cards_section()
+    assert card is None
+    assert SkillLoader(workspace).render_cards_section() == ""
 
 
-def test_skill_resolver_includes_no_action_skill_as_capability_card(tmp_path: Path) -> None:
+def test_skill_loader_does_not_project_instruction_only_skill_as_capability(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     skill_root = tmp_path / "runtime" / "100"
     skill_root.mkdir(parents=True)
@@ -186,16 +292,8 @@ def test_skill_resolver_includes_no_action_skill_as_capability_card(tmp_path: Pa
     card = SkillLoader(workspace).resolve("docs-only")
     section = SkillLoader(workspace).render_cards_section()
 
-    assert card is not None
-    assert not card.is_executable
-    assert card.description == "Test skill."
-    assert "skill_name: docs-only" in section
-    assert "description: Test skill." in section
-    assert "kind: instruction_only" in section
-    assert "skill_path: skills/100/SKILL.md" in section
-    assert "available chat tools such as curl" in section
-    assert "action_name:" not in section
-    assert "delegated task runtime skill action" not in section
+    assert card is None
+    assert section == ""
 
 
 def test_skill_with_both_a_script_and_a_workflow_surfaces_both(tmp_path: Path) -> None:
@@ -229,14 +327,70 @@ def test_skill_with_both_a_script_and_a_workflow_surfaces_both(tmp_path: Path) -
     cards = loader.list_cards()
     section = loader.render_cards_section()
 
-    assert {card.name for card in cards} == {"ppt-designer", "ppt-designer.validate"}
+    assert {card.name for card in cards} == {"ppt-designer.validate"}
     assert loader.resolve("ppt-designer.validate").is_executable  # type: ignore[union-attr]
-    # The prose entry carries the path a reader needs, and says it is not the
-    # skill's only entry point.
     assert "kind: executable_action" in section
-    assert "kind: instruction_workflow" in section
-    assert "kind: instruction_only" not in section
-    assert "skill_path: skills/100/SKILL.md" in section
+    assert "instruction_" not in section
+
+
+def test_skill_projection_baseline_covers_prose_action_and_mixed_packages(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    packages = [
+        {
+            "id": 101,
+            "name": "docs-only",
+            "description": "Follow a documentation workflow.",
+            "guide": "# Documentation workflow\n" + ("Inspect the source before answering. " * 20),
+            "actions": [],
+        },
+        {
+            "id": 102,
+            "name": "runner",
+            "description": "Run deterministic checks.",
+            "guide": "",
+            "actions": [{"name": "run", "steps": [{"argv": ["runner"]}]}],
+        },
+        {
+            "id": 103,
+            "name": "deck",
+            "description": "Build and validate decks.",
+            "guide": "# Deck workflow\n" + ("Apply the documented layout constraints. " * 20),
+            "actions": [
+                {"name": "render", "steps": [{"argv": ["render"]}]},
+                {"name": "validate", "steps": [{"argv": ["validate"]}]},
+            ],
+        },
+    ]
+    skills_dir = workspace / "skills"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "index.json").write_text(
+        json.dumps([{key: package[key] for key in ("id", "name", "description")} for package in packages]),
+        encoding="utf-8",
+    )
+    for package in packages:
+        skill_root = workspace.parent / "skills" / str(package["id"])
+        if package["guide"]:
+            skill_root.mkdir(parents=True)
+            (skill_root / "SKILL.md").write_text(str(package["guide"]), encoding="utf-8")
+        if package["actions"]:
+            (skill_root / "resolved").mkdir(parents=True, exist_ok=True)
+            (skill_root / "resolved" / "actions.json").write_text(
+                json.dumps({"schema_version": 1, "actions": package["actions"]}),
+                encoding="utf-8",
+            )
+
+    loader = SkillLoader(workspace)
+    cards = loader.list_cards()
+    section = loader.render_cards_section()
+
+    assert [(card.name, card.is_executable) for card in cards] == [
+        ("runner.run", True),
+        ("deck.render", True),
+        ("deck.validate", True),
+    ]
+    assert section.count("kind: executable_action") == 3
+    assert "Inspect the source before answering." not in section
+    assert "Apply the documented layout constraints." not in section
 
 
 def test_skill_prose_stub_is_not_advertised_as_a_workflow(tmp_path: Path) -> None:
@@ -340,6 +494,149 @@ def test_resolved_action_rejects_path_literals_that_leave_parameters_unused() ->
                 ],
             }
         )
+
+
+@pytest.mark.parametrize(
+    "placeholder",
+    ["{instructions}", "{workspace_dir}", "{result_dir}", "{_sandbox}", "{sandbox.android}"],
+)
+def test_resolved_action_rejects_invocation_dependent_preparation(placeholder: str) -> None:
+    with pytest.raises(ValidationError, match="preparation steps must not use placeholders"):
+        ResolvedAction.model_validate(
+            {
+                "name": "run",
+                "parameters": [{"name": "instructions", "description": "Test instructions."}],
+                "preparation": {"steps": [{"argv": ["prepare", placeholder]}]},
+                "steps": [{"argv": ["runner", "{instructions}"]}],
+            }
+        )
+
+
+def test_resolved_action_rejects_optional_preparation_argv() -> None:
+    with pytest.raises(ValidationError, match="preparation steps must not have optional argv"):
+        ResolvedAction.model_validate(
+            {
+                "name": "run",
+                "preparation": {"steps": [{"argv": ["uv", "sync"], "optional_argv": [["--upgrade"]]}]},
+                "steps": [{"argv": ["runner"]}],
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "backend", "target_type"),
+    [
+        ("prepared_android_controller.json", "kubernetes", ""),
+        ("prepared_worker_controls_linux_workstation.json", "kubernetes", "linux_workstation"),
+        ("direct_linux_workstation_hybrid.json", "linux_workstation", "linux_workstation"),
+    ],
+)
+def test_phase_zero_action_manifest_fixtures(
+    fixture_name: str,
+    backend: str,
+    target_type: str,
+) -> None:
+    manifest = load_actions_manifest(_ACTION_FIXTURES / fixture_name)
+
+    assert manifest.schema_version == ACTION_MANIFEST_SCHEMA_VERSION
+    assert manifest.review_status == "accepted"
+    assert len(manifest.actions) == 1
+    action = manifest.actions[0]
+    assert action.execution_requirement.backend == backend
+    assert action.preparation.steps
+    assert action.target_requirements.type == target_type
+
+
+def test_skill_card_carries_execution_and_target_requirements(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    skill_root = tmp_path / "runtime" / "100"
+    (skill_root / "resolved").mkdir(parents=True)
+    shutil.copyfile(
+        _ACTION_FIXTURES / "direct_linux_workstation_hybrid.json",
+        skill_root / "resolved" / "actions.json",
+    )
+    _write_workspace_index(workspace, skill_root, name="linux-workstation-hybrid")
+
+    card = SkillLoader(workspace).resolve("linux-workstation-hybrid.run_inside_linux_workstation")
+
+    assert card is not None
+    assert card.execution_backend == "linux_workstation"
+    assert card.target_os == "linux"
+    assert card.target_type == "linux_workstation"
+    assert card.sandbox_options == ("linux_workstation",)
+
+
+def test_direct_linux_workstation_execution_requires_a_linux_workstation_lease(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    skill_root = tmp_path / "runtime" / "100"
+    (skill_root / "resolved").mkdir(parents=True)
+    (skill_root / "resolved" / "actions.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "review_status": "accepted",
+                "source_provenance": "author",
+                "actions": [
+                    {
+                        "name": "run",
+                        "execution_requirement": {"backend": "linux_workstation"},
+                        "steps": [{"argv": ["true"]}],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_workspace_index(workspace, skill_root, name="linux-workstation")
+
+    card = SkillLoader(workspace).resolve("linux-workstation.run")
+
+    assert card is not None
+    assert card.sandbox_options == ("linux_workstation",)
+
+
+def test_new_target_requirements_reject_capability_lists() -> None:
+    with pytest.raises(ValidationError):
+        ResolvedAction.model_validate(
+            {
+                "name": "run",
+                "target_requirements": {"capabilities": ["linux_workstation.shell"]},
+                "steps": [{"argv": ["true"]}],
+            }
+        )
+
+
+def test_schema_v2_setup_steps_remain_invocation_steps(tmp_path: Path) -> None:
+    actions_file = tmp_path / "actions.json"
+    actions_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "review_status": "accepted",
+                "source_provenance": "author",
+                "actions": [
+                    {
+                        "name": "run",
+                        "steps": [
+                            {"argv": ["uv", "sync", "--frozen"]},
+                            {"argv": ["uv", "run", "python", "runner.py"]},
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = load_actions_manifest(actions_file, legacy_provenance="author")
+
+    assert manifest.schema_version == ACTION_MANIFEST_SCHEMA_VERSION
+    assert manifest.source_provenance == "author"
+    assert manifest.actions[0].preparation.steps == []
+    assert [step.argv for step in manifest.actions[0].steps] == [
+        ["uv", "sync", "--frozen"],
+        ["uv", "run", "python", "runner.py"],
+    ]
 
 
 def test_load_resolved_actions_strips_legacy_step_env(tmp_path: Path) -> None:

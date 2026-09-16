@@ -39,10 +39,22 @@ class MarkitdownDocExtractor(DocExtractor):
 
     async def extract(self, file_path: str) -> tuple[str, str]:
         _LOGGER.info("Extracting document via markitdown file_path=%s", file_path)
+        return await self._convert_and_summarize(file_path)
+
+    async def extract_utf8_markdown(self, file_path: str) -> tuple[str, str]:
+        _LOGGER.info("Extracting UTF-8 Markdown via markitdown file_path=%s", file_path)
+        from markitdown import StreamInfo
+
+        return await self._convert_and_summarize(
+            file_path,
+            stream_info=StreamInfo(charset="utf-8", mimetype="text/markdown", extension=".md"),
+        )
+
+    async def _convert_and_summarize(self, file_path: str, **convert_options: object) -> tuple[str, str]:
         from markitdown import MarkItDown
 
         md = MarkItDown()
-        result = md.convert(file_path)
+        result = md.convert(file_path, **convert_options)
         full_text = result.text_content or ""
         summary = await _generate_summary_via_llm(full_text)
         return full_text, summary

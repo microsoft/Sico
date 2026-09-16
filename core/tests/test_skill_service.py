@@ -6,7 +6,16 @@ import zipfile
 
 import pytest
 
-from app.biz.skill.resolver import _MAX_SCRIPT_BYTES, _RESOLVER_SYSTEM_PROMPT, ResolvedSkillOutput, SkillResolver
+from app.biz.skill.resolver import (
+    _MAX_MARKDOWN_BYTES,
+    _MAX_SCRIPT_BYTES,
+    _MAX_TOTAL_MARKDOWN_BYTES,
+    _RESOLVER_SYSTEM_PROMPT,
+    ResolverExecutionEnvironment,
+    ResolvedSkillOutput,
+    SkillResolver,
+    validate_action_execution_environment,
+)
 from app.biz.skill import service as skill_service_module
 from app.pb.skill.skill import ExtractSkillRequest
 
@@ -16,6 +25,8 @@ def test_skill_resolver_prompt_prefers_uv_run_for_python_entrypoints() -> None:
     assert "over plain" in _RESOLVER_SYSTEM_PROMPT
     assert "Preserve documented platform/tooling dependency setup commands" in _RESOLVER_SYSTEM_PROMPT
     assert '["sh", "scripts/install-adb.sh"]' in _RESOLVER_SYSTEM_PROMPT
+    assert "preparation.steps" in _RESOLVER_SYSTEM_PROMPT
+    assert 'execution_requirement.backend "any"' in _RESOLVER_SYSTEM_PROMPT
 
 
 def test_skill_resolver_prompt_uses_sandbox_builtin_for_desktop_sandboxes() -> None:
@@ -25,7 +36,7 @@ def test_skill_resolver_prompt_uses_sandbox_builtin_for_desktop_sandboxes() -> N
 
 
 @pytest.mark.asyncio
-async def test_skill_resolver_retries_invalid_schema_output(tmp_path) -> None:
+async def test_skill_resolver_retries_invalid_schema_output(tmp_path, caplog: pytest.LogCaptureFixture) -> None:
     original_root = tmp_path / "original"
     original_root.mkdir()
     (original_root / "SKILL.md").write_text(
@@ -34,7 +45,18 @@ async def test_skill_resolver_retries_invalid_schema_output(tmp_path) -> None:
     )
     outputs = iter(
         [
-            json.dumps({"cortex": [{"name": "SKILL.md"}], "actions": [{"name": "bad", "steps": []}]}),
+            json.dumps(
+                {
+                    "cortex": [{"name": "SKILL.md"}],
+                    "actions": [
+                        {
+                            "name": "bad",
+                            "description": "DO_NOT_LOG_GENERATED_PAYLOAD",
+                            "steps": [],
+                        }
+                    ],
+                }
+            ),
             json.dumps({"cortex": [{"name": "SKILL.md"}], "actions": []}),
         ]
     )
@@ -54,6 +76,49 @@ async def test_skill_resolver_retries_invalid_schema_output(tmp_path) -> None:
     assert resolved.actions == []
     assert len(resolver.prompts) == 2
     assert "failed JSON/schema validation" in resolver.prompts[1]
+    assert "skill_resolver_generated_actions_rejected" in caplog.text
+    assert "attempt=1/3" in caplog.text
+    assert "stage=schema_validation" in caplog.text
+    assert "action_count=1" in caplog.text
+    assert "error_type=ValidationError" in caplog.text
+    assert "DO_NOT_LOG_GENERATED_PAYLOAD" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_skill_resolver_logs_prompt_extraction_failure(tmp_path, caplog: pytest.LogCaptureFixture) -> None:
+    class ExtractionFailureResolver(SkillResolver):
+        def _build_prompt(self, *_args, **_kwargs):
+            raise OSError("cannot read skill source")
+
+    original_root = tmp_path / "original"
+
+    with pytest.raises(OSError, match="cannot read skill source"):
+        await ExtractionFailureResolver().resolve(original_root)
+
+    assert "skill_resolver_prompt_extraction_failed" in caplog.text
+    assert f"original_root={original_root}" in caplog.text
+    assert "error_type=OSError" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_skill_resolver_logs_generation_failure(tmp_path, caplog: pytest.LogCaptureFixture) -> None:
+    original_root = tmp_path / "original"
+    original_root.mkdir()
+    (original_root / "SKILL.md").write_text(
+        "---\nname: sample\ndescription: Sample skill.\n---\n# Sample\n",
+        encoding="utf-8",
+    )
+
+    class GenerationFailureResolver(SkillResolver):
+        async def _generate(self, prompt: str) -> str:
+            raise RuntimeError("provider unavailable")
+
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        await GenerationFailureResolver().resolve(original_root)
+
+    assert "skill_resolver_generation_failed" in caplog.text
+    assert "attempt=1/3" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -85,6 +150,10 @@ async def test_skill_resolver_retries_deprecated_sandbox_placeholder(tmp_path) -
                         {
                             "name": "run",
                             "infra_requirements": ["sandbox.windows", "sandbox.macos"],
+                                "execution_requirement": {
+                                    "backend": "docker",
+                                    "image": "example.test/runner:latest",
+                                },
                             "steps": [{"argv": ["runner", "{_sandbox}"]}],
                         }
                     ],
@@ -197,6 +266,118 @@ def test_skill_resolver_prompt_includes_small_scripts_fully_with_total_budget(tm
     assert total_content_bytes <= _MAX_SCRIPT_BYTES
 
 
+def test_skill_resolver_prompt_includes_configured_execution_environment(tmp_path) -> None:
+    original_root = tmp_path / "original"
+    original_root.mkdir()
+    (original_root / "SKILL.md").write_text(
+        "---\nname: sample\ndescription: Sample skill.\n---\n# Sample\n",
+        encoding="utf-8",
+    )
+    resolver = SkillResolver(
+        ResolverExecutionEnvironment(
+            default_image="registry.test/python-runner:latest",
+            guaranteed_commands=("python", "sh", "uv"),
+        )
+    )
+
+    payload = json.loads(resolver._build_prompt(original_root))
+
+    assert payload["execution_environment"] == {
+        "default_image": "registry.test/python-runner:latest",
+        "guaranteed_commands": ["python", "sh", "uv"],
+        "image_selection": (
+            "When an action requires commands outside guaranteed_commands, either add preparation steps executable "
+            "by the default image or set execution_requirement.image to a suitable OCI image."
+        ),
+    }
+
+
+def test_skill_resolver_requires_image_for_command_outside_default_environment() -> None:
+    output = ResolvedSkillOutput.model_validate(
+        {
+            "cortex": [{"name": "SKILL.md"}],
+            "actions": [
+                {
+                    "name": "export-pdf",
+                    "steps": [{"argv": ["bash", "scripts/export-pdf.sh", "{workspace_dir}/deck.html"]}],
+                }
+            ],
+        }
+    )
+    environment = ResolverExecutionEnvironment(
+        default_image="ghcr.io/astral-sh/uv:python3.14-alpine",
+        guaranteed_commands=("apk", "python", "sh", "uv"),
+    )
+
+    with pytest.raises(ValueError, match="requires commands not guaranteed.*bash"):
+        validate_action_execution_environment(output, environment)
+
+
+def test_skill_resolver_accepts_explicit_image_for_additional_toolchain() -> None:
+    output = ResolvedSkillOutput.model_validate(
+        {
+            "cortex": [{"name": "SKILL.md"}],
+            "actions": [
+                {
+                    "name": "export-pdf",
+                    "execution_requirement": {
+                        "backend": "docker",
+                        "image": "mcr.microsoft.com/playwright:v1.55.0-noble",
+                    },
+                    "steps": [{"argv": ["bash", "scripts/export-pdf.sh", "{workspace_dir}/deck.html"]}],
+                }
+            ],
+        }
+    )
+
+    validate_action_execution_environment(
+        output,
+        ResolverExecutionEnvironment(default_image="python:alpine", guaranteed_commands=("python", "sh")),
+    )
+
+
+def test_skill_resolver_does_not_apply_default_image_inventory_to_workstation_action() -> None:
+    output = ResolvedSkillOutput.model_validate(
+        {
+            "cortex": [{"name": "SKILL.md"}],
+            "actions": [
+                {
+                    "name": "desktop-task",
+                    "execution_requirement": {"backend": "linux_workstation", "image": ""},
+                    "steps": [{"argv": ["powershell", "-Command", "Write-Output ok"]}],
+                }
+            ],
+        }
+    )
+
+    validate_action_execution_environment(
+        output,
+        ResolverExecutionEnvironment(default_image="python:alpine", guaranteed_commands=("python", "sh")),
+    )
+
+
+def test_skill_resolver_prompt_prioritizes_skill_docs_with_total_markdown_budget(tmp_path) -> None:
+    original_root = tmp_path / "original"
+    original_root.mkdir()
+    skill_content = "---\nname: sample\ndescription: Sample skill.\n---\n# Sample\n"
+    (original_root / "SKILL.md").write_text(skill_content, encoding="utf-8")
+    references = original_root / "references"
+    references.mkdir()
+    nested_skill = references / "SKILL.md"
+    nested_skill.write_bytes(b"y" * _MAX_MARKDOWN_BYTES)
+    for index in range(4):
+        (references / f"guide-{index}.md").write_bytes(b"x" * _MAX_MARKDOWN_BYTES)
+
+    payload = json.loads(SkillResolver()._build_prompt(original_root))
+    markdown_files = {item["path"]: item for item in payload["markdown_files"]}
+
+    assert payload["markdown_files"][0]["path"] == "SKILL.md"
+    assert "name: sample" in markdown_files["SKILL.md"]["content"]
+    assert any("content_omitted" in item for item in payload["markdown_files"])
+    total_content_bytes = sum(len(item.get("content", "").encode("utf-8")) for item in payload["markdown_files"])
+    assert total_content_bytes <= _MAX_TOTAL_MARKDOWN_BYTES
+
+
 class _FakeResponse:
     def __init__(self, content: bytes) -> None:
         self.content = content
@@ -218,7 +399,7 @@ class _FakeAssetUploadResponse:
 
 
 @pytest.mark.asyncio
-async def test_extract_skill_writes_resolved_actions_manifest(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_extract_skill_accepts_resolved_actions(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     skill_md = b"""
 ---
 name: sample-skill
@@ -251,10 +432,99 @@ Use this skill for smoke checks.
     assert response.name == "sample-skill"
     skill_dir = tmp_path / "skills" / "project" / "1" / "skill" / "7" / "versions" / "v1"
     manifest = json.loads((skill_dir / "resolved" / "actions.json").read_text(encoding="utf-8"))
-    assert manifest == {"schema_version": 1, "actions": []}
+    assert manifest["schema_version"] == 3
+    assert manifest["review_status"] == "accepted"
+    assert manifest["source_provenance"] == "resolver"
+    status = json.loads((skill_dir / "resolved" / "actions.status.json").read_text(encoding="utf-8"))
+    assert status["status"] == "accepted"
+    assert not (skill_dir / "resolved" / "actions.proposal.json").exists()
     assert (skill_dir / "resolved" / "cortex" / "SKILL.md").exists()
     assert (skill_dir / "original" / "SKILL.md").exists()
     assert (tmp_path / "skills" / "project" / "1" / "skill" / "7" / "current_version.txt").read_text(encoding="utf-8") == "v1"
+
+
+@pytest.mark.asyncio
+async def test_extract_skill_admits_author_manifest_without_resolver(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as archive:
+        archive.writestr(
+            "SKILL.md",
+            "---\nname: authored\ndescription: Authored skill.\n---\n# Authored\n",
+        )
+        archive.writestr("run.py", "print('ok')\n")
+        archive.writestr(
+            "actions.json",
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "review_status": "accepted",
+                    "source_provenance": "author",
+                    "actions": [
+                        {
+                            "name": "run",
+                            "effect": "read",
+                            "workspace_access": "read_only",
+                            "steps": [{"argv": ["python", "run.py"]}],
+                        }
+                    ],
+                }
+            ),
+        )
+    monkeypatch.setattr(skill_service_module.SKILLS_FS, "_root", tmp_path / "skills")
+    monkeypatch.setattr(skill_service_module.requests, "get", lambda *_args, **_kwargs: _FakeResponse(buf.getvalue()))
+
+    class FailResolver:
+        async def resolve(self, *_args, **_kwargs):
+            raise AssertionError("author manifests must not invoke the resolver")
+
+    monkeypatch.setattr(skill_service_module, "SkillResolver", FailResolver)
+
+    response = await skill_service_module.SkillService().extract_skill(
+        ExtractSkillRequest(skill_id=7, project_id=1, version="v1", download_url="https://example.test/skill.zip")
+    )
+
+    assert response.code == 0
+    skill_dir = tmp_path / "skills" / "project" / "1" / "skill" / "7" / "versions" / "v1"
+    manifest = json.loads((skill_dir / "resolved" / "actions.json").read_text(encoding="utf-8"))
+    assert manifest["review_status"] == "accepted"
+    assert manifest["source_provenance"] == "author"
+    assert manifest["actions"][0]["workspace_access"] == "read_only"
+    assert not (skill_dir / "resolved" / "actions.proposal.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_extract_skill_keeps_guide_when_author_manifest_is_invalid(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as archive:
+        archive.writestr(
+            "SKILL.md",
+            "---\nname: invalid-action\ndescription: Guide remains usable.\n---\n# Required guide instruction\n",
+        )
+        archive.writestr(
+            "actions.json",
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "review_status": "accepted",
+                    "source_provenance": "author",
+                    "actions": [{"name": "run", "steps": []}],
+                }
+            ),
+        )
+    monkeypatch.setattr(skill_service_module.SKILLS_FS, "_root", tmp_path / "skills")
+    monkeypatch.setattr(skill_service_module.requests, "get", lambda *_args, **_kwargs: _FakeResponse(buf.getvalue()))
+
+    response = await skill_service_module.SkillService().extract_skill(
+        ExtractSkillRequest(skill_id=7, project_id=1, version="v1", download_url="https://example.test/skill.zip")
+    )
+
+    assert response.code == 0
+    skill_dir = tmp_path / "skills" / "project" / "1" / "skill" / "7" / "versions" / "v1"
+    assert (skill_dir / "resolved" / "cortex" / "SKILL.md").exists()
+    assert not (skill_dir / "resolved" / "actions.json").exists()
+    status = json.loads((skill_dir / "resolved" / "actions.status.json").read_text(encoding="utf-8"))
+    assert status["status"] == "invalid"
+    assert "action steps are required" in status["message"]
 
 
 @pytest.mark.asyncio
@@ -503,7 +773,10 @@ async def test_write_skill_version_requires_update_source() -> None:
 
 
 @pytest.mark.asyncio
-async def test_write_skill_version_resolves_file_edits_and_sets_current(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_write_skill_version_preserves_accepted_actions_and_sets_current(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     skill_root = tmp_path / "skills"
     skill_dir = skill_root / "project" / "1" / "skill" / "7"
     source_dir = skill_dir / "versions" / "v1" / "original"
@@ -518,14 +791,11 @@ async def test_write_skill_version_resolves_file_edits_and_sets_current(tmp_path
     monkeypatch.setenv("SICO_ENDPOINT", "https://backend.example.test")
     uploads: list[dict[str, object]] = []
 
-    resolver_kwargs: list[dict[str, object]] = []
+    class FailResolver:
+        async def resolve(self, *_args, **_kwargs):
+            raise AssertionError("accepted manifests must not invoke the resolver")
 
-    class FakeResolver:
-        async def resolve(self, _original_root, **kwargs):
-            resolver_kwargs.append(kwargs)
-            return ResolvedSkillOutput(cortex=[{"name": "SKILL.md"}], actions=[])
-
-    monkeypatch.setattr(skill_service_module, "SkillResolver", FakeResolver)
+    monkeypatch.setattr(skill_service_module, "SkillResolver", FailResolver)
 
     def fake_post_file(url, *, file_name, data, content_type, form_data=None, timeout=None, **_kwargs):  # noqa: ANN001
         uploads.append(
@@ -573,8 +843,10 @@ async def test_write_skill_version_resolves_file_edits_and_sets_current(tmp_path
     assert (new_version_dir / "original" / "existing.py").read_text(encoding="utf-8") == "VALUE = 1\n"
     assert (new_version_dir / "original" / "hello.txt").read_text(encoding="utf-8") == "123"
     assert (new_version_dir / "resolved" / "cortex" / "SKILL.md").exists()
-    assert resolver_kwargs[0]["previous_original_root"] == source_dir
-    assert resolver_kwargs[0]["previous_actions_file"] == source_actions
+    manifest = json.loads((new_version_dir / "resolved" / "actions.json").read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 3
+    assert manifest["review_status"] == "accepted"
+    assert manifest["source_provenance"] == "legacy"
     assert (skill_dir / "current_version.txt").read_text(encoding="utf-8") == "v2"
 
 

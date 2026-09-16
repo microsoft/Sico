@@ -29,6 +29,9 @@ import (
 	"sico-backend/internal/di"
 	"sico-backend/internal/infra/migration"
 	"sico-backend/internal/infra/telemetry"
+	telemetrymetrics "sico-backend/internal/infra/telemetry/metrics"
+	"sico-backend/internal/shared/tenantctx"
+	"sico-backend/internal/transport/http/handler"
 	"sico-backend/internal/transport/reverse_grpc"
 	"sico-backend/internal/transport/router"
 	"sico-backend/pkg/env"
@@ -59,7 +62,7 @@ func main() {
 		}
 	}
 
-	logger.Info("Starting DWP Backend application (env=%s, gin_mode=%s)", env.AppEnv(), gin.Mode())
+	logger.Info("Starting Sico Backend application (env=%s, gin_mode=%s)", env.AppEnv(), gin.Mode())
 	shutdownTelemetry := initializeTelemetry(appCtx)
 	defer shutdownTelemetry()
 
@@ -71,7 +74,8 @@ func main() {
 	}
 	logger.Info("Database migrations applied successfully, version: %d", version)
 
-	ginEngine := gin.Default()
+	ginEngine := gin.New()
+	ginEngine.Use(gin.Recovery())
 	// ensure *gin.Context.Value() works for custom type keys.
 	ginEngine.ContextWithFallback = true
 	openapi.SwaggerInfo.BasePath = "/"
@@ -83,6 +87,7 @@ func main() {
 	if cleanup != nil {
 		defer cleanup()
 	}
+	telemetrymetrics.RegisterBusinessMetrics(injector.DB)
 
 	if err := initializeSandboxAndSeeds(appCtx, injector); err != nil {
 		panic(fmt.Sprintf("failed to initialize sandbox and seeds: %v", err))
@@ -104,6 +109,7 @@ func main() {
 		grpc.MaxSendMsgSize(consts.GRPCMaxSendMsgSize),
 	)
 	reverse_grpc.RegisterReverseGRPCServer(grpcServer, injector.SandboxIntegration)
+	handler.InitDependencies(injector.Access)
 	router.RegisterAPIs(ginEngine, injector.SandboxIntegration)
 
 	safego.Go(context.Background(), func() {
@@ -167,7 +173,7 @@ func initializeSandboxAndSeeds(
 		return fmt.Errorf("start scheduled task worker: %w", err)
 	}
 	if shouldRunSeeds() {
-		if err := seeds.Run(ctx, injector); err != nil {
+		if err := seeds.Run(tenantctx.WithTrustedInternal(ctx), injector); err != nil {
 			return fmt.Errorf("run seeds: %w", err)
 		}
 	} else {

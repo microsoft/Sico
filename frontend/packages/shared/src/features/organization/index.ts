@@ -2,6 +2,7 @@ export { OrganizationManagementShell } from "./components/organization-managemen
 export { OrganizationMembersPage } from "./components/organization-members-page";
 export { OrganizationProjectsPage } from "./components/organization-projects-page";
 export { organizationProjectsQueryOptions } from "./hooks/use-organization-projects-query";
+export { initializeOrganizationContext } from "./utils/initialize-organization-context";
 export {
   boundOrganizationQueryOptions,
   organizationDetailQueryOptions,
@@ -16,5 +17,5 @@ export {
 export {
   fetchFirstOrganization,
   fetchOrganization,
-  renameOrganization,
+  updateOrganization,
 } from "./services/organization";

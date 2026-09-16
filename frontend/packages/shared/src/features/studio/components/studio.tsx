@@ -10,6 +10,7 @@ import { StudioGrid } from "./studio-grid";
 import { StudioGridSkeleton } from "./studio-grid-skeleton";
 import { StudioTabs } from "./studio-tabs";
 import { ErrorView } from "../../../components/error-view";
+import { useBoundOrganizationQuery } from "../../../hooks/use-bound-organization";
 import { type StudioTab } from "../utils/studio-agent-selectors";
 
 export type StudioProps = {
@@ -20,6 +21,7 @@ export function Studio({ activeTab = "all" }: StudioProps): ReactElement {
   const { t } = useLingui();
   const [createOpen, setCreateOpen] = useState(false);
   const { reset } = useQueryErrorResetBoundary();
+  const { data: organization } = useBoundOrganizationQuery();
   return (
     <div className="bg-surface-canvas flex h-full w-full flex-col gap-6 pt-6 pb-2">
       <header className="px-5 lg:px-16">
@@ -46,7 +48,7 @@ export function Studio({ activeTab = "all" }: StudioProps): ReactElement {
         <ErrorBoundary
           FallbackComponent={ErrorView}
           onReset={reset}
-          resetKeys={[activeTab]}
+          resetKeys={[activeTab, organization?.id]}
         >
           <Suspense fallback={<StudioGridSkeleton />}>
             <StudioGrid activeTab={activeTab} />

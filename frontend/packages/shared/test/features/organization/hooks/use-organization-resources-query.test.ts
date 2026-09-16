@@ -17,6 +17,9 @@ import { organizationKeys } from "@/features/organization/query-keys";
 import * as organizationService from "@/features/organization/services/organization";
 import { type OrganizationProject } from "@/features/projects/schemas/project";
 import * as projectsService from "@/features/projects/services/projects";
+import { persistLoginPayload } from "@/utils/auth-storage";
+
+import { makeLoginPayload } from "../../../helpers/organization-context";
 
 vi.mock("@/features/organization/services/organization");
 vi.mock("@/features/projects/services/projects");
@@ -63,6 +66,7 @@ function project(
 
 describe("organization resource queries", () => {
   it("selects the first organization under the user-scoped list key", async () => {
+    persistLoginPayload(makeLoginPayload());
     const apiClient = {} as AxiosInstance;
     const options = boundOrganizationQueryOptions(apiClient, 7);
 

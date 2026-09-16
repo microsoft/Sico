@@ -650,6 +650,13 @@ class NotificationExtraInfoScheduledTaskFinished(betterproto2.Message):
     @gotag: json:"scheduledFor"
     """
 
+    agent_instance: "_common__.AgentInstanceDigest | None" = betterproto2.field(
+        6, betterproto2.TYPE_MESSAGE, optional=True
+    )
+    """
+    @gotag: json:"agentInstance,omitempty"
+    """
+
 
 default_message_pool.register_message(
     "notification",

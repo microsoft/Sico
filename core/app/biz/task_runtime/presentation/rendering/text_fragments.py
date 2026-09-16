@@ -75,8 +75,7 @@ def _recovered_batch_status_label(status: BatchStatus) -> str:
     return status.value.replace("_", " ")
 
 
-def _parent_tool_call_name(prepared: PreparedTaskBatch) -> str:
-    _ = prepared
+def _parent_tool_call_name() -> str:
     return "Run Tasks"
 
 

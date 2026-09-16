@@ -11,6 +11,7 @@ import (
 	"sico-backend/internal/biz/llmhubs"
 	"sico-backend/internal/biz/notification"
 	"sico-backend/internal/biz/organization"
+	"sico-backend/internal/biz/ownership"
 	"sico-backend/internal/biz/project"
 	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/biz/sandbox"
@@ -22,6 +23,7 @@ import (
 var ProviderSet = wire.NewSet(
 	project.ProviderSet,
 	rbac.ProviderSet,
+	ownership.ProviderSet,
 	organization.ProviderSet,
 	knowledge.ProviderSet,
 	agent.ProviderSet,

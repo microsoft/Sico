@@ -30,6 +30,7 @@ Edit `.env`:
 
 - Set `DB_PASSWORD`, `REDIS_PASSWORD`, and other secrets (the defaults are only safe for quick local use).
 - Keep `APP_ENV=development` for verbose logs locally.
+- Keep `SEED_AGENT_INSTANCES=true` to create the default organization, project, and ready-to-use agent instances. Set it to `false` for a clean or production deployment.
 - Set `PYPI_INDEX_URL` and `NPM_REGISTRY` to the package mirrors available in your environment; local installs and image builds read both values from this file.
 
 ### LLM provider configuration
@@ -94,8 +95,17 @@ If the API service is already running but `make emulator-bootstrap` reports a mi
 `make emulator-setup`, then retry `make emulator-bootstrap` so the host Java/SDK/AVD prerequisites are repaired before
 bootstrap.
 
-Set `SANDBOX_EMULATOR_BASE_URL` in `.env` so the Backend can reach it. For local
-compose/kind it is pre-set to `http://host.docker.internal:8000`.
+Set `SANDBOX_EMULATOR_BASE_URL` in the repository-root `.env` so the Backend can
+reach the Emulator. For local compose/kind it is pre-set to
+`http://host.docker.internal:8000`.
+
+Leave `SICO_SANDBOX_SERVICE_TOKEN` blank after copying `.env.example`. The first
+local Compose, Kind, or Emulator setup command generates a random token and
+writes it to `.env`; `openssl` is optional because Python and `/dev/urandom`
+fallbacks are supported. The token format is exactly 64 lowercase hexadecimal
+characters. Existing values are never overwritten. The local
+Backend and host Emulator then reuse this credential, as can future sandbox
+services that adopt the same service-authentication contract.
 
 See [sandbox/emulator/setup/README.md](../sandbox/emulator/setup/README.md) for
 host setup and lifecycle management. The lower-level service API is documented
@@ -118,13 +128,17 @@ This starts:
 | **core** | Python service: gRPC `:50053` |
 | **mysql** | Database |
 | **redis** | Cache, locks, blacklist |
+| **otel-lgtm** | Local OpenTelemetry backend and Grafana at http://localhost:14005 (admin/admin) |
 
 ```bash
-make compose-logs     # tail logs from all services
-make compose-down     # stop and remove containers
+make compose-logs        # tail logs from all services
+make compose-down        # stop and remove containers
+make observability-smoke # verify local traces, metrics, and logs
 ```
 
-The compose stack builds and runs nginx, backend, core, the frontend SPA (built from source in `frontend/`), and the supporting infrastructure services they depend on.
+The compose stack builds and runs nginx, backend, core, the frontend SPA (built from source in `frontend/`), Grafana LGTM, and the supporting infrastructure services they depend on.
+See [Local observability](observability.md) for signal endpoints, retention,
+storage cleanup, Kind persistence, and troubleshooting.
 
 ### Minimal sandbox example path
 
@@ -212,7 +226,7 @@ curl http://localhost:8080/api/sico/health
 # Core is internal, but the Backend exposes an aggregated health view.
 ```
 
-Sign in with the seeded default account (local development only — rotate or remove before exposing the stack outside your machine):
+With `SEED_AGENT_INSTANCES=true`, sign in with the seeded default account (local development only — rotate or remove before exposing the stack outside your machine):
 
 - **Username**: `operator@sico.local`
 - **Password**: `operator`

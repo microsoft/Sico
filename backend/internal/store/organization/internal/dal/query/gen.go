@@ -18,12 +18,14 @@ import (
 var (
 	Q                          = new(Query)
 	TOrganization              *tOrganization
+	TOrganizationInvitation    *tOrganizationInvitation
 	TOrganizationLlmhubsConfig *tOrganizationLlmhubsConfig
 )
 
 func SetDefault(db *gorm.DB, opts ...gen.DOOption) {
 	*Q = *Use(db, opts...)
 	TOrganization = &Q.TOrganization
+	TOrganizationInvitation = &Q.TOrganizationInvitation
 	TOrganizationLlmhubsConfig = &Q.TOrganizationLlmhubsConfig
 }
 
@@ -31,6 +33,7 @@ func Use(db *gorm.DB, opts ...gen.DOOption) *Query {
 	return &Query{
 		db:                         db,
 		TOrganization:              newTOrganization(db, opts...),
+		TOrganizationInvitation:    newTOrganizationInvitation(db, opts...),
 		TOrganizationLlmhubsConfig: newTOrganizationLlmhubsConfig(db, opts...),
 	}
 }
@@ -39,6 +42,7 @@ type Query struct {
 	db *gorm.DB
 
 	TOrganization              tOrganization
+	TOrganizationInvitation    tOrganizationInvitation
 	TOrganizationLlmhubsConfig tOrganizationLlmhubsConfig
 }
 
@@ -48,6 +52,7 @@ func (q *Query) clone(db *gorm.DB) *Query {
 	return &Query{
 		db:                         db,
 		TOrganization:              q.TOrganization.clone(db),
+		TOrganizationInvitation:    q.TOrganizationInvitation.clone(db),
 		TOrganizationLlmhubsConfig: q.TOrganizationLlmhubsConfig.clone(db),
 	}
 }
@@ -64,18 +69,21 @@ func (q *Query) ReplaceDB(db *gorm.DB) *Query {
 	return &Query{
 		db:                         db,
 		TOrganization:              q.TOrganization.replaceDB(db),
+		TOrganizationInvitation:    q.TOrganizationInvitation.replaceDB(db),
 		TOrganizationLlmhubsConfig: q.TOrganizationLlmhubsConfig.replaceDB(db),
 	}
 }
 
 type queryCtx struct {
 	TOrganization              ITOrganizationDo
+	TOrganizationInvitation    ITOrganizationInvitationDo
 	TOrganizationLlmhubsConfig ITOrganizationLlmhubsConfigDo
 }
 
 func (q *Query) WithContext(ctx context.Context) *queryCtx {
 	return &queryCtx{
 		TOrganization:              q.TOrganization.WithContext(ctx),
+		TOrganizationInvitation:    q.TOrganizationInvitation.WithContext(ctx),
 		TOrganizationLlmhubsConfig: q.TOrganizationLlmhubsConfig.WithContext(ctx),
 	}
 }

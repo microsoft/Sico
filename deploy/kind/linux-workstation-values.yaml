@@ -1,0 +1,28 @@
+replicaCount: 1
+
+image:
+  repository: localhost:5000/sico/sico-linux-workstation-sandbox
+  tag: local
+  pullPolicy: IfNotPresent
+
+env:
+  SANDBOX_LINUX_WORKSTATION_K8S: "true"
+  SANDBOX_LINUX_WORKSTATION_K8S_NAMESPACE: sandbox
+  SANDBOX_LINUX_WORKSTATION_K8S_SERVICE: linux-workstation-sandbox
+  SANDBOX_LINUX_WORKSTATION_K8S_STATEFULSET: linux-workstation-sandbox
+  SANDBOX_LINUX_WORKSTATION_K8S_POD_SELECTOR: app=linux-workstation-sandbox
+  SANDBOX_LINUX_WORKSTATION_K8S_PORT: "8080"
+  SANDBOX_LINUX_WORKSTATION_K8S_MIN_IDLE: "1"
+  SANDBOX_LINUX_WORKSTATION_K8S_MAX_IDLE: "1"
+  SANDBOX_LINUX_WORKSTATION_K8S_MAX_REPLICAS: "1"
+  PUBLIC_PORT: "8080"
+  WORKSPACE: /home/gem
+  WAIT_PORTS: ""
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi

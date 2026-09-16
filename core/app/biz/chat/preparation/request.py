@@ -44,7 +44,6 @@ class InstructionItemSpec(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     capability_id: str = Field(default="", max_length=512)
     profile_id: str = Field(default="", max_length=512)
-    capability_grants: list[str] = Field(default_factory=list, max_length=MAX_SOURCE_CAPABILITY_IDS)
     max_model_turns: int | None = Field(default=None, ge=1)
     stage: int | None = Field(default=None, ge=0)
     source_materialization: InstructionSourceMaterializationSpec | None = None
@@ -53,8 +52,8 @@ class InstructionItemSpec(BaseModel):
     def one_prebound_target(self) -> "InstructionItemSpec":
         if self.capability_id.strip() and self.profile_id.strip():
             raise ValueError("instruction item cannot prebind both capability_id and profile_id")
-        if not self.profile_id.strip() and (self.capability_grants or self.max_model_turns is not None):
-            raise ValueError("capability_grants and max_model_turns require profile_id")
+        if not self.profile_id.strip() and self.max_model_turns is not None:
+            raise ValueError("max_model_turns requires profile_id")
         if self.source_materialization is not None and not self.capability_id.strip():
             raise ValueError("source_materialization requires capability_id")
         if not self.goal.strip():
@@ -190,9 +189,7 @@ def parse_delegate_request(request_json: str) -> DelegateRequest | Rejected:
             code=code,
             details={"errors": errors},
         )
-    instruction_count = sum(
-        len(source.items) for source in request.sources if isinstance(source, InstructionsSourceSpec)
-    )
+    instruction_count = sum(len(source.items) for source in request.sources if isinstance(source, InstructionsSourceSpec))
     if instruction_count > MAX_DELEGATE_WORK_ITEMS:
         return Rejected(
             f"delegate request contains {instruction_count} instruction items; limit is {MAX_DELEGATE_WORK_ITEMS}",

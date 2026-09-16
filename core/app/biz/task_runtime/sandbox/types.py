@@ -6,7 +6,7 @@ The runtime separates *what a task needs* from *how the platform delivers it*:
   skill declares it through ``infra_requirements`` (e.g. ``sandbox.android``),
   and the scheduler matches it against any sandbox that can supply that OS.
 - :class:`SandboxType` -- the concrete *lease* types a task can end up running
-    in (``emulator`` / ``wincua`` / ``aio`` / ``physical``). Several types may
+    in (``emulator`` / ``wincua`` / ``linux_workstation`` / ``physical``). Several types may
     satisfy one OS, so the type is an outcome of scheduling, not an input to it.
 - :data:`INFRA_TO_OS` -- the authoritative map from a skill's
   ``infra_requirements`` token to the OS capability it needs.
@@ -42,7 +42,7 @@ class SandboxType(StrEnum):
 
     EMULATOR = "emulator"
     WINCUA = "wincua"
-    AIO = "aio"
+    LINUX_WORKSTATION = "linux_workstation"
     PHYSICAL = "physical"
 
 
@@ -84,9 +84,12 @@ INFRA_TO_OS: dict[str, str] = {
 TYPE_OS: dict[str, str] = {
     SandboxType.EMULATOR.value: SandboxOS.ANDROID.value,
     SandboxType.WINCUA.value: SandboxOS.WINDOWS.value,
-    SandboxType.AIO.value: SandboxOS.LINUX.value,
+    SandboxType.LINUX_WORKSTATION.value: SandboxOS.LINUX.value,
 }
 
+def normalize_sandbox_type(value: str) -> str:
+    """Normalize whitespace around a concrete sandbox type."""
+    return value.strip()
 
 def eligible_types_for_os(os: str) -> tuple[str, ...]:
     """Return the concrete types that can supply *os*, in scheduling-priority order.
@@ -106,7 +109,7 @@ def lease_type_from_sandbox_id(sandbox_id: str) -> str | None:
     type actually acquired. Returns ``None`` when the id has no recognizable type
     prefix so the caller can fall back.
     """
-    prefix = sandbox_id.split(":", 1)[0].strip()
+    prefix = normalize_sandbox_type(sandbox_id.split(":", 1)[0])
     return prefix if prefix in SANDBOX_TYPES else None
 
 

@@ -131,7 +131,7 @@ function getResponseData(url: string | undefined, params: unknown): unknown {
       vnc_url: "",
     };
     return success({
-      aio: [],
+      linux_workstation: [],
       emulator: [
         {
           ...base,

@@ -6,7 +6,7 @@ import (
 )
 
 func TestEnsureTokenAcceptsMatchingToken(t *testing.T) {
-	row := &runRow{RunID: "r1", FencingToken: "tok-abc"}
+	row := &runRow{RunID: "r1", Status: statusRunning, FencingToken: "tok-abc"}
 	payload := `{"run_id":"r1","token":"tok-abc","issued_at":1}`
 	if err := ensureToken(row, payload); err != nil {
 		t.Fatalf("expected nil for matching token, got %v", err)
@@ -14,7 +14,7 @@ func TestEnsureTokenAcceptsMatchingToken(t *testing.T) {
 }
 
 func TestEnsureTokenRejectsMismatch(t *testing.T) {
-	row := &runRow{RunID: "r1", FencingToken: "tok-current"}
+	row := &runRow{RunID: "r1", Status: statusRunning, FencingToken: "tok-current"}
 	payload := `{"run_id":"r1","token":"tok-old","issued_at":1}`
 	err := ensureToken(row, payload)
 	if err == nil {
@@ -38,13 +38,35 @@ func TestEnsureTokenRejectsEmptyServerToken(t *testing.T) {
 }
 
 func TestEnsureTokenSurfaceMalformedJSON(t *testing.T) {
-	row := &runRow{RunID: "r1", FencingToken: "tok-x"}
+	row := &runRow{RunID: "r1", Status: statusRunning, FencingToken: "tok-x"}
 	err := ensureToken(row, "not-json")
 	if err == nil {
 		t.Fatal("expected error for malformed token payload")
 	}
 	if IsStaleToken(err) {
 		t.Fatalf("malformed JSON should not masquerade as a stale-token error, got %v", err)
+	}
+}
+
+func TestEnsureTokenRejectsTerminalRunWithMatchingToken(t *testing.T) {
+	row := &runRow{RunID: "r1", Status: statusCompleted, FencingToken: "tok-abc"}
+	payload := `{"run_id":"r1","token":"tok-abc","issued_at":1}`
+	err := ensureToken(row, payload)
+	if !IsStaleToken(err) {
+		t.Fatalf("expected terminal run to reject reused token, got %v", err)
+	}
+}
+
+func TestEnsureTerminalResultStatus(t *testing.T) {
+	for _, status := range terminalRunStatuses() {
+		if err := ensureTerminalResultStatus(status); err != nil {
+			t.Fatalf("terminal status %q should be accepted: %v", status, err)
+		}
+	}
+	for _, status := range []string{"", statusQueued, statusRunning} {
+		if err := ensureTerminalResultStatus(status); err == nil {
+			t.Fatalf("non-terminal status %q should be rejected", status)
+		}
 	}
 }
 

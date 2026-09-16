@@ -32,3 +32,28 @@ type NotificationRepo interface {
 	) ([]*entity.Notification, int64, error)
 	MarkAllAsReadByReceiverUsername(ctx context.Context, receiverUsername string) ([]int64, error)
 }
+
+type OrganizationScopedNotificationRepo interface {
+	GetByOrganization(ctx context.Context, id, organizationID int64) (*entity.Notification, error)
+	SetStatusByOrganization(
+		ctx context.Context,
+		id, organizationID int64,
+		status entity.NotificationStatus,
+	) error
+	ListByReceiverUsernameInOrganization(
+		ctx context.Context,
+		receiverUsername string,
+		organizationID int64,
+		offset, limit int,
+	) ([]*entity.Notification, int64, error)
+	ListByProjectIDInOrganization(
+		ctx context.Context,
+		projectID, organizationID int64,
+		offset, limit int,
+	) ([]*entity.Notification, int64, error)
+	MarkAllAsReadByReceiverUsernameInOrganization(
+		ctx context.Context,
+		receiverUsername string,
+		organizationID int64,
+	) ([]int64, error)
+}

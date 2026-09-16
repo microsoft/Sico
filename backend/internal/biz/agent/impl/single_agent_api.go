@@ -32,6 +32,9 @@ import (
 func (s *Service) CreateSingleAgent(
 	ctx context.Context, req *single_agent.CreateSingleAgentRequest,
 ) (*single_agent.CreateSingleAgentResponse, error) {
+	if err := s.requireOrganization(ctx, req.OrganizationId, true); err != nil {
+		return nil, err
+	}
 	agentEntity := &entity.SingleAgent{
 		SingleAgent: &single_agent.SingleAgent{
 			AgentId:         req.AgentId,
@@ -68,6 +71,9 @@ func (s *Service) CreateSingleAgent(
 func (s *Service) GetSingleAgent(
 	ctx context.Context, req *single_agent.GetSingleAgentRequest,
 ) (*single_agent.GetSingleAgentResponse, error) {
+	if err := s.requireAgentOrganization(ctx, req.AgentId); err != nil {
+		return nil, err
+	}
 	agent, err := s.getSingleAgent(ctx, req.AgentId)
 	if err != nil {
 		return nil, err
@@ -90,6 +96,9 @@ func (s *Service) GetSingleAgent(
 func (s *Service) UpdateSingleAgent(
 	ctx context.Context, req *single_agent.UpdateSingleAgentRequest,
 ) (*single_agent.UpdateSingleAgentResponse, error) {
+	if err := s.requireAgentOrganization(ctx, req.AgentId); err != nil {
+		return nil, err
+	}
 	existing, err := s.getSingleAgent(ctx, req.AgentId)
 	if err != nil {
 		return nil, err
@@ -98,9 +107,7 @@ func (s *Service) UpdateSingleAgent(
 		return nil, apperr.New(errcode.CommonNotFound, "agent not found")
 	}
 
-	if err := rbac.CheckCtxAccessScopedOrIsOwner(
-		ctx, rbac.ScopeAgent, req.AgentId, "agent", "manage", existing.CreatorUsername,
-	); err != nil {
+	if err := s.access().RequireAgentManageOrOwner(ctx, req.AgentId, existing.CreatorUsername); err != nil {
 		return nil, err
 	}
 
@@ -130,6 +137,13 @@ func (s *Service) UpdateSingleAgent(
 func (s *Service) DeleteSingleAgent(
 	ctx context.Context, req *single_agent.DeleteSingleAgentRequest,
 ) (*single_agent.DeleteSingleAgentResponse, error) {
+	if err := s.requireAgentOrganization(ctx, req.AgentId); err != nil {
+		return nil, err
+	}
+	if err := s.CheckAgentOwner(ctx, req.AgentId); err != nil {
+		return nil, err
+	}
+
 	if err := s.withRepositories(ctx, func(
 		agentRepo repository.SingleAgentRepository,
 		instanceRepo repository.SingleAgentInstanceRepository,
@@ -154,6 +168,13 @@ func (s *Service) DeleteSingleAgent(
 func (s *Service) PublishSingleAgent(
 	ctx context.Context, req *single_agent.PublishSingleAgentRequest,
 ) (*single_agent.PublishSingleAgentResponse, error) {
+	if err := s.requireAgentOrganization(ctx, req.AgentId); err != nil {
+		return nil, err
+	}
+	if err := s.CheckAgentManageAccess(ctx, req.AgentId); err != nil {
+		return nil, err
+	}
+
 	targetStatus := single_agent.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_PUBLISHED
 	if req.PublishStatus != nil {
 		targetStatus = req.GetPublishStatus()
@@ -272,29 +293,41 @@ func (s *Service) listVisibleAgents(
 	publishStatusArr []single_agent.SingleAgentPublishStatus,
 	intent single_agent.ListAgentIntent,
 ) ([]*entity.SingleAgent, error) {
+	if s.Ownership != nil {
+		selectedOrganizationID, err := s.Ownership.RequireSelected(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if organizationID != nil && *organizationID != selectedOrganizationID {
+			return nil, apperr.New(errcode.CommonNotFound, "resource not found")
+		}
+		organizationID = &selectedOrganizationID
+	}
 	filter := &entity.ListSingleAgentFilter{
 		PublishStatuses: publishStatusesOrDefault(publishStatusArr),
 		OrganizationID:  organizationID,
 	}
 
-	if !rbac.Initialized() {
+	access := s.access()
+	if !access.Initialized() {
 		filter.Unrestricted = true
 		agents, _, err := s.SingleAgentRepo.ListByFilter(ctx, filter)
 		return agents, err
 	}
 
 	filter.OwnerUsername = middleware.MustGetUsernameFromCtx(ctx)
-	if rbac.IsPlatformAdmin(ctx) {
+	filter.IncludeOwnerDrafts = shouldIncludeOwnerDrafts(publishStatusArr, intent)
+	if access.IsPlatformAdmin(ctx) {
 		filter.IncludeOrgFreeAgents = true
 	} else if intent == single_agent.ListAgentIntent_LIST_AGENT_INTENT_DEPLOY {
 		filter.IncludeOrgFreePublishedOnly = true
 	}
-	orgIDs, err := rbac.ListOrgIDsWithPermission(ctx, "sicodev", "entry")
+	orgIDs, err := access.ListOrganizationIDs(ctx, rbac.PermissionSicoDevEntry)
 	if err != nil {
 		return nil, err
 	}
 	filter.VisibleOrgIDs = orgIDs
-	managed, err := rbac.ListAgentIDsWithPermission(ctx, "agent", "manage")
+	managed, err := access.ListAgentIDs(ctx, rbac.PermissionAgentManage)
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +335,13 @@ func (s *Service) listVisibleAgents(
 
 	agents, _, err := s.SingleAgentRepo.ListByFilter(ctx, filter)
 	return agents, err
+}
+
+func shouldIncludeOwnerDrafts(
+	publishStatusArr []single_agent.SingleAgentPublishStatus,
+	intent single_agent.ListAgentIntent,
+) bool {
+	return len(publishStatusArr) == 0 && intent == single_agent.ListAgentIntent_LIST_AGENT_INTENT_DEPLOY
 }
 
 func publishStatusesOrDefault(arr []single_agent.SingleAgentPublishStatus) []int32 {
@@ -332,7 +372,8 @@ func (s *Service) CheckAgentVisibility(ctx context.Context, agentID string) erro
 		return apperr.New(errcode.CommonNotFound, "agent not found")
 	}
 
-	if !rbac.Initialized() {
+	access := s.access()
+	if !access.Initialized() {
 		return nil
 	}
 
@@ -340,15 +381,16 @@ func (s *Service) CheckAgentVisibility(ctx context.Context, agentID string) erro
 	if agent.CreatorUsername == username {
 		return nil
 	}
-	if err := rbac.CheckCtxAccessScoped(ctx, rbac.ScopeAgent, agentID, "agent", "manage"); err == nil {
+	if err := access.Require(ctx, rbac.AgentScope(agentID), rbac.PermissionAgentManage); err == nil {
 		return nil
 	}
-	if agent.OrganizationId == 0 && rbac.IsPlatformAdmin(ctx) {
+	if agent.OrganizationId == 0 && access.IsPlatformAdmin(ctx) {
 		return nil
 	}
 	if agent.OrganizationId > 0 {
-		orgID := strconv.FormatInt(agent.OrganizationId, 10)
-		if err := rbac.CheckCtxAccessScoped(ctx, rbac.ScopeOrg, orgID, "sicodev", "entry"); err == nil {
+		if err := access.Require(
+			ctx, rbac.OrganizationScope(agent.OrganizationId), rbac.PermissionSicoDevEntry,
+		); err == nil {
 			return nil
 		}
 	}
@@ -372,7 +414,7 @@ func (s *Service) CheckAgentOwner(ctx context.Context, agentID string) error {
 		return apperr.New(errcode.CommonNotFound, "agent not found")
 	}
 
-	if !rbac.Initialized() {
+	if !s.access().Initialized() {
 		return nil
 	}
 
@@ -397,9 +439,7 @@ func (s *Service) CheckAgentManageAccess(ctx context.Context, agentID string) er
 	if agent == nil {
 		return apperr.New(errcode.CommonNotFound, "agent not found")
 	}
-	return rbac.CheckCtxAccessScopedOrIsOwner(
-		ctx, rbac.ScopeAgent, agentID, "agent", "manage", agent.CreatorUsername,
-	)
+	return s.access().RequireAgentManageOrOwner(ctx, agentID, agent.CreatorUsername)
 }
 
 func (s *Service) DeploySingleAgent(
@@ -468,9 +508,17 @@ func (s *Service) CreateSingleAgentInstance(
 	if len(agentID) == 0 {
 		return nil, apperr.New(errcode.CommonInvalidParam, "agentId is required")
 	}
+	if err := s.requireAgentOrganization(ctx, agentID); err != nil {
+		return nil, err
+	}
+	if req.ProjectId > 0 {
+		if err := s.requireProjectOrganization(ctx, req.ProjectId); err != nil {
+			return nil, err
+		}
+	}
 
 	if req.ProjectId > 0 {
-		if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, req.ProjectId, "dw", "manage"); err != nil {
+		if err := s.access().Require(ctx, rbac.ProjectScope(req.ProjectId), rbac.PermissionWorkspaceManage); err != nil {
 			return nil, err
 		}
 	}
@@ -518,6 +566,9 @@ func (s *Service) GetSingleAgentInstance(
 func (s *Service) GetSingleAgentInstanceHTTP(
 	ctx context.Context, req *single_agent.GetSingleAgentInstanceRequest,
 ) (*single_agent.GetSingleAgentInstanceResponse, error) {
+	if err := s.requireAgentInstanceOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	instance, err := s.getSingleAgentInstance(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -638,6 +689,9 @@ func (s *Service) populateOnboardKnowledge(ctx context.Context, instanceID int64
 func (s *Service) UpdateSingleAgentInstance(
 	ctx context.Context, req *single_agent.UpdateSingleAgentInstanceRequest,
 ) (resp *single_agent.UpdateSingleAgentInstanceResponse, err error) {
+	if err := s.requireAgentInstanceOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	previousEntity, err := s.getSingleAgentInstance(ctx, req.Id)
 	if err != nil {
 		return nil, err
@@ -647,11 +701,13 @@ func (s *Service) UpdateSingleAgentInstance(
 	if projectID == 0 {
 		projectID = previousEntity.ProjectId
 	}
+	if projectID > 0 {
+		if err := s.requireProjectOrganization(ctx, projectID); err != nil {
+			return nil, err
+		}
+	}
 	if projectID != 0 {
-		if err := rbac.CheckCtxAccessOrOwner(
-			ctx, rbac.ScopeProject, projectID,
-			"dw", "manage", previousEntity.EmployerUsername,
-		); err != nil {
+		if err := s.access().RequireWorkspaceManageOrOwner(ctx, projectID, previousEntity.EmployerUsername); err != nil {
 			return nil, err
 		}
 	}
@@ -663,6 +719,7 @@ func (s *Service) UpdateSingleAgentInstance(
 			OperatorUsername: req.OperatorUsername,
 			Permission:       req.Permission,
 			Name:             req.Name,
+			IconUri:          req.IconUri,
 			Attachments:      req.Attachments,
 			Desc:             req.Desc,
 			ProjectId:        req.ProjectId,
@@ -680,14 +737,16 @@ func (s *Service) UpdateSingleAgentInstance(
 func (s *Service) DeleteSingleAgentInstance(
 	ctx context.Context, req *single_agent.DeleteSingleAgentInstanceRequest,
 ) (resp *single_agent.DeleteSingleAgentInstanceResponse, err error) {
+	if err := s.requireAgentInstanceOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	instance, err := s.getSingleAgentInstance(ctx, req.Id)
 	if err != nil {
 		return nil, err
 	}
 	if instance.ProjectId != 0 {
-		if err := rbac.CheckCtxAccessOrOwner(
-			ctx, rbac.ScopeProject, instance.ProjectId,
-			"dw", "manage", instance.EmployerUsername,
+		if err := s.access().RequireWorkspaceManageOrOwner(
+			ctx, instance.ProjectId, instance.EmployerUsername,
 		); err != nil {
 			return nil, err
 		}
@@ -706,6 +765,9 @@ func (s *Service) DeleteSingleAgentInstance(
 func (s *Service) DismissSingleAgentInstance(
 	ctx context.Context, req *single_agent.DismissSingleAgentInstanceRequest,
 ) (*single_agent.DismissSingleAgentInstanceResponse, error) {
+	if err := s.requireAgentInstanceOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	instance, err := s.getSingleAgentInstance(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -715,9 +777,8 @@ func (s *Service) DismissSingleAgentInstance(
 	}
 
 	if instance.ProjectId > 0 {
-		if err := rbac.CheckCtxAccessOrOwner(
-			ctx, rbac.ScopeProject, instance.ProjectId,
-			"dw", "manage", instance.EmployerUsername,
+		if err := s.access().RequireWorkspaceManageOrOwner(
+			ctx, instance.ProjectId, instance.EmployerUsername,
 		); err != nil {
 			return nil, err
 		}
@@ -751,6 +812,9 @@ func (s *Service) DismissSingleAgentInstance(
 func (s *Service) ReassignSingleAgentInstance(
 	ctx context.Context, req *single_agent.ReassignSingleAgentInstanceRequest,
 ) (*single_agent.ReassignSingleAgentInstanceResponse, error) {
+	if err := s.requireAgentInstanceOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	instance, err := s.getSingleAgentInstance(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -763,7 +827,7 @@ func (s *Service) ReassignSingleAgentInstance(
 		return nil, apperr.New(errcode.CommonInvalidParam, "agent instance has no project; cannot reassign")
 	}
 
-	if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, instance.ProjectId, "project", "manage"); err != nil {
+	if err := s.access().Require(ctx, rbac.ProjectScope(instance.ProjectId), rbac.PermissionProjectManage); err != nil {
 		return nil, err
 	}
 
@@ -849,7 +913,7 @@ func (s *Service) notifyDwAction(
 		recipients[instance.OperatorUsername] = struct{}{}
 	}
 	if instance.ProjectId > 0 {
-		admins, err := rbac.ListProjectAdminUsernames(ctx, []int64{instance.ProjectId})
+		admins, err := s.access().ListProjectAdminUsernames(ctx, []int64{instance.ProjectId})
 		if err == nil {
 			for _, name := range admins[instance.ProjectId] {
 				if name != sender {
@@ -880,7 +944,7 @@ func (s *Service) ListSingleAgentInstancesByFilter(
 		filter = &entity.ListSingleAgentInstanceFilter{}
 	}
 
-	instances, total, err = s.SingleAgentInstanceRepo.ListByFilter(ctx, filter, offset, limit)
+	instances, total, err = s.listSingleAgentInstances(ctx, filter, offset, limit)
 	if err != nil {
 		return nil, 0, apperr.New(errcode.AgentInstanceQueryDatabaseError,
 			fmt.Sprintf("failed to list agent instances by filter: %v", err))
@@ -890,6 +954,53 @@ func (s *Service) ListSingleAgentInstancesByFilter(
 	s.enrichSingleAgentInstances(ctx, instances)
 
 	return instances, total, err
+}
+
+func (s *Service) ListSingleAgentInstancesForDashboard(
+	ctx context.Context,
+) ([]*entity.SingleAgentInstance, error) {
+	instances, _, err := s.SingleAgentInstanceRepo.ListByFilter(
+		ctx, &entity.ListSingleAgentInstanceFilter{}, 0, 0,
+	)
+	if err != nil {
+		return nil, apperr.New(
+			errcode.AgentInstanceQueryDatabaseError,
+			fmt.Sprintf("failed to list agent instances for dashboard: %v", err),
+		)
+	}
+	s.populateSingleAgentInstanceProjects(ctx, instances...)
+	s.enrichSingleAgentInstances(ctx, instances)
+	return instances, nil
+}
+
+func (s *Service) listSingleAgentInstances(
+	ctx context.Context,
+	filter *entity.ListSingleAgentInstanceFilter,
+	offset, limit int,
+) ([]*entity.SingleAgentInstance, int64, error) {
+	if s.Ownership == nil {
+		return s.SingleAgentInstanceRepo.ListByFilter(ctx, filter, offset, limit)
+	}
+	selectedOrganizationID, err := s.Ownership.RequireSelected(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if filter.ProjectId != nil {
+		if err := s.requireProjectOrganization(ctx, *filter.ProjectId); err != nil {
+			return nil, 0, err
+		}
+	}
+	projectIDs, err := s.Ownership.ProjectIDs(ctx, selectedOrganizationID)
+	if err != nil {
+		return nil, 0, err
+	}
+	scopedRepo, ok := s.SingleAgentInstanceRepo.(repository.OrganizationScopedSingleAgentInstanceRepository)
+	if !ok {
+		return nil, 0, apperr.New(
+			errcode.CommonUnavailable, "agent instance repository does not support organization scoping",
+		)
+	}
+	return scopedRepo.ListByFilterInProjects(ctx, filter, projectIDs, offset, limit)
 }
 
 // enrichSingleAgentInstances converts icon URIs to CDN and populates capability tags from the agent.
@@ -938,6 +1049,9 @@ func (s *Service) GetSingleAgentInstanceIconURIs(ctx context.Context, ids []int6
 func (s *Service) UpdateSingleAgentInstanceStatus(
 	ctx context.Context, req *single_agent.UpdateSingleAgentInstanceStatusRequest,
 ) (*single_agent.UpdateSingleAgentInstanceStatusResponse, error) {
+	if err := s.requireAgentInstanceOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	if err := s.SingleAgentInstanceRepo.UpdateStatus(ctx, req.Id, req.Status); err != nil {
 		return nil, apperr.New(errcode.AgentInstanceQueryDatabaseError,
 			fmt.Sprintf("failed to update agent instance status: %v", err))

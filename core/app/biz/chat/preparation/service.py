@@ -13,10 +13,10 @@ from typing import Any
 from app.biz.task_runtime import AgentProfileResolver, BatchResult, TaskManager
 from app.biz.task_runtime.planning import (
     CapabilityDescriptor,
-    CatalogueQuery,
     ProfileQuery,
     ResolveContext,
     normalize_capability_id,
+    sandbox_capability_provider_ids,
 )
 from app.biz.source import (
     NormalizedRow,
@@ -33,7 +33,7 @@ from app.biz.source import (
 from app.tools.common import ToolContext, is_internal_workspace_path
 
 from .assembly import assemble_batch
-from .catalogue import CapabilityCatalogue
+from .catalogue import CapabilityCatalogue, CapabilityRetriever
 from .models import (
     AgentInvocation,
     DirectCapability,
@@ -85,10 +85,11 @@ class DelegatePreparationService:
         normalizers: NormalizerSelector | None = None,
         binder: ArgumentBinder | None = None,
         tabular_planner: LlmTabularPlanner | None = None,
+        capability_retriever: CapabilityRetriever | None = None,
     ) -> None:
         self._planner = planner
         self._profile_resolver = profile_resolver
-        self._catalogue = capability_catalogue
+        self._retriever = capability_retriever or CapabilityRetriever(capability_catalogue)
         self._sources = source_service or WorkspaceSourceService()
         self._normalizers = normalizers or NormalizerSelector()
         self._binder = binder or ArgumentBinder()
@@ -104,34 +105,25 @@ class DelegatePreparationService:
             return request
         caller = _resolve_context(context)
         explicit_capability_ids = _explicit_capability_ids(request)
-        providers = _required_catalogue_providers(request)
+        providers = _required_catalogue_providers(request, context)
         discovered = (
-            await self._catalogue.list_descriptors(
+            await self._retriever.retrieve(
                 context,
-                CatalogueQuery(
-                    caller=caller,
-                    providers=providers,
-                    include_internal=bool(explicit_capability_ids),
-                ),
+                providers=providers,
+                include_internal=bool(explicit_capability_ids),
             )
             if providers
             else ()
         )
         catalogue = tuple(
-            descriptor
-            for descriptor in discovered
-            if descriptor.visibility == "public" or descriptor.capability_id in explicit_capability_ids
+                descriptor
+                for descriptor in discovered
+                if descriptor.visibility == "public" or descriptor.capability_id in explicit_capability_ids
         )
-        profiles = (
-            self._profile_resolver.list_profiles(ProfileQuery(caller=caller))
-            if _requires_profiles(request)
-            else ()
-        )
+        profiles = self._profile_resolver.list_profiles(ProfileQuery(caller=caller)) if _requires_profiles(request) else ()
         items: list[WorkItem] = []
         tables: list[_TableContext] = []
-        instruction_count = sum(
-            len(source.items) for source in request.sources if isinstance(source, InstructionsSourceSpec)
-        )
+        instruction_count = sum(len(source.items) for source in request.sources if isinstance(source, InstructionsSourceSpec))
         selected_tabular_rows = 0
         has_tabular = False
         adapter_state: dict[str, object] = {}
@@ -188,6 +180,7 @@ class DelegatePreparationService:
             max_concurrency=request.max_concurrency,
             batch_metadata={"source_count": len(request.sources)},
             adapter_state=adapter_state if has_tabular else {},
+            instruction_refs=tuple(context.activated_skill_guides),
         )
 
     async def process_results(
@@ -240,11 +233,7 @@ class DelegatePreparationService:
             wanted_order = tuple(key for key, _display in wanted_pairs)
             wanted_display = {key: display for key, display in wanted_pairs}
             wanted_cases = frozenset(wanted_order)
-            row_filter = (
-                (lambda row: canonical_case_id(case_id_for_row(row)) in wanted_cases)
-                if wanted_cases
-                else None
-            )
+            row_filter = (lambda row: canonical_case_id(case_id_for_row(row)) in wanted_cases) if wanted_cases else None
             try:
                 document = await asyncio.to_thread(
                     self._sources.select,
@@ -275,13 +264,9 @@ class DelegatePreparationService:
                 normalizer = self._normalizers.select(sheet)
                 rows = normalizer.normalize(document, sheet)
                 if wanted_cases:
-                    rows = tuple(
-                        row for row in rows if row.case_id and canonical_case_id(row.case_id) in wanted_cases
-                    )
+                    rows = tuple(row for row in rows if row.case_id and canonical_case_id(row.case_id) in wanted_cases)
                     case_order = {case_id: index for index, case_id in enumerate(wanted_order)}
-                    rows = tuple(
-                        sorted(rows, key=lambda row: (case_order[canonical_case_id(row.case_id)], row.source_row))
-                    )
+                    rows = tuple(sorted(rows, key=lambda row: (case_order[canonical_case_id(row.case_id)], row.source_row)))
                     found_cases.update(canonical_case_id(row.case_id) for row in rows)
                 if not rows:
                     continue
@@ -378,7 +363,7 @@ class DelegatePreparationService:
         return plans
 
 
-async def _instruction_items(  # noqa: PLR0911 - fail-fast outcomes preserve exact preparation errors.
+async def _instruction_items(  # noqa: PLR0911, PLR0912 - fail-fast outcomes preserve precise errors.
     source: InstructionsSourceSpec,
     source_index: int,
     catalogue: tuple[CapabilityDescriptor, ...],
@@ -391,7 +376,7 @@ async def _instruction_items(  # noqa: PLR0911 - fail-fast outcomes preserve exa
     if isinstance(descriptors, Rejected):
         return descriptors
     descriptor_index = {descriptor.capability_id: descriptor for descriptor in catalogue}
-    source_capabilities = frozenset(descriptor.capability_id for descriptor in descriptors)
+    source_capabilities = frozenset(descriptor.capability_id for descriptor in descriptors) if source.capability_ids else None
     profile_index = {profile.profile_id: profile for profile in profiles}
     if source.profile_ids:
         wanted_profiles = tuple(dict.fromkeys(profile_id.strip() for profile_id in source.profile_ids if profile_id.strip()))
@@ -417,17 +402,13 @@ async def _instruction_items(  # noqa: PLR0911 - fail-fast outcomes preserve exa
         decision = None
         if spec.capability_id.strip():
             decision = DirectCapability(spec.capability_id)
-            item_capabilities = source_capabilities if source.capability_ids else frozenset((decision.capability_id,))
+            item_capabilities = source_capabilities or frozenset((decision.capability_id,))
         elif spec.profile_id.strip():
-            decision = AgentInvocation(spec.profile_id, tuple(spec.capability_grants), spec.max_model_turns)
-            item_capabilities = (
-                source_capabilities
-                if source.capability_ids
-                else frozenset(decision.capability_grants)
-            )
+            decision = AgentInvocation(spec.profile_id, spec.max_model_turns)
+            item_capabilities = source_capabilities
         else:
             item_capabilities = source_capabilities
-        unknown_item_capabilities = sorted(item_capabilities - set(descriptor_index))
+        unknown_item_capabilities = sorted(item_capabilities - set(descriptor_index)) if item_capabilities is not None else []
         if unknown_item_capabilities:
             return Rejected(
                 f"instruction item references unavailable capabilities: {unknown_item_capabilities}",
@@ -477,6 +458,7 @@ async def _instruction_items(  # noqa: PLR0911 - fail-fast outcomes preserve exa
                 title=spec.title,
                 prebound_decision=decision,
                 stage_hint=spec.stage,
+                sandbox_hint=_assigned_sandbox_hint(context),
                 allowed_capability_ids=item_capabilities,
                 allowed_profile_ids=allowed_profiles,
                 metadata=metadata,
@@ -542,9 +524,7 @@ def _source_descriptors(
             )
         return tuple(index[capability_id] for capability_id in wanted)
     return tuple(
-        descriptor
-        for descriptor in catalogue
-        if descriptor.provider_id == provider and descriptor.visibility == "public"
+        descriptor for descriptor in catalogue if descriptor.provider_id == provider and descriptor.visibility == "public"
     )
 
 
@@ -553,23 +533,16 @@ def _explicit_capability_ids(request: DelegateRequest) -> frozenset[str]:
     for source in request.sources:
         if source.capability_ids:
             explicit.update(
-                normalize_capability_id(capability_id)
-                for capability_id in source.capability_ids
-                if capability_id.strip()
+                normalize_capability_id(capability_id) for capability_id in source.capability_ids if capability_id.strip()
             )
         elif isinstance(source, InstructionsSourceSpec):
             for item in source.items:
                 if item.capability_id.strip():
                     explicit.add(normalize_capability_id(item.capability_id))
-                explicit.update(
-                    normalize_capability_id(capability_id)
-                    for capability_id in item.capability_grants
-                    if capability_id.strip()
-                )
     return frozenset(explicit)
 
 
-def _required_catalogue_providers(request: DelegateRequest) -> tuple[str, ...]:
+def _required_catalogue_providers(request: DelegateRequest, context: ToolContext) -> tuple[str, ...]:
     providers: set[str] = set()
     for source in request.sources:
         if source.capability_ids:
@@ -583,7 +556,7 @@ def _required_catalogue_providers(request: DelegateRequest) -> tuple[str, ...]:
         else:
             unresolved = False
             for item in source.items:
-                item_capabilities = [item.capability_id, *item.capability_grants]
+                item_capabilities = [item.capability_id]
                 providers.update(
                     normalize_capability_id(capability_id).partition(":")[0]
                     for capability_id in item_capabilities
@@ -591,8 +564,15 @@ def _required_catalogue_providers(request: DelegateRequest) -> tuple[str, ...]:
                 )
                 unresolved = unresolved or (not item.capability_id.strip() and not item.profile_id.strip())
             if unresolved:
+                providers.add("builtin")
                 providers.add("skill")
+                providers.update(sandbox_capability_provider_ids(context.assigned_sandbox_types))
     return tuple(sorted(providers))
+
+
+def _assigned_sandbox_hint(context: ToolContext) -> str:
+    assigned = tuple(sorted(context.assigned_sandbox_types))
+    return assigned[0] if len(assigned) == 1 else ""
 
 
 def _requires_profiles(request: DelegateRequest) -> bool:
@@ -639,7 +619,7 @@ def _bound_work_items(bound_rows, descriptor: CapabilityDescriptor, table: _Tabl
                         "source_row": row.source_row,
                         "data_row_index": row.data_row_index,
                         "bindings": dict(bound.evidence),
-                    }
+                    },
                 },
             )
         )
@@ -651,10 +631,7 @@ def _tabular_row_key(row: NormalizedRow) -> tuple[int, int]:
 
 
 def _merge_table_contexts(existing: _TableContext, current: _TableContext) -> _TableContext:
-    merged = {
-        _tabular_row_key(row): row
-        for row in (*existing.planning.rows, *current.planning.rows)
-    }
+    merged = {_tabular_row_key(row): row for row in (*existing.planning.rows, *current.planning.rows)}
     row_order = dict(existing.row_order)
     row_document_indexes = dict(existing.row_document_indexes)
     for row in current.planning.rows:
@@ -679,9 +656,7 @@ def _matching_existing_rows(tables: Sequence[_TableContext], document_spec) -> i
     for table in tables:
         existing_ref = table.planning.document.source_ref
         attachment_alias = (
-            bool(requested_name)
-            and existing_ref.startswith("attachments/")
-            and Path(existing_ref).name == requested_name
+            bool(requested_name) and existing_ref.startswith("attachments/") and Path(existing_ref).name == requested_name
         )
         if existing_ref != requested_ref and not attachment_alias:
             continue
@@ -720,7 +695,9 @@ def _selected_skill_descriptions(
     capability_ids = sorted({plan.capability_id for plan in plans.values() if plan.capability_id.startswith("skill:")})
     for capability_id in capability_ids:
         try:
-            card = loader.resolve(capability_id.partition(":")[2])
+            local_name = capability_id.partition(":")[2]
+            skill_name, _, action_name = local_name.partition(":")
+            card = loader.resolve(f"{skill_name}.{action_name}" if action_name else skill_name)
         except Exception:  # noqa: BLE001 - reporting context must not fail preparation.
             _LOGGER.warning("selected skill description resolution failed capability_id=%s", capability_id, exc_info=True)
             continue

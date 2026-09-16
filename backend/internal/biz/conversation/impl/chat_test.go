@@ -417,6 +417,6 @@ func TestStreamChatRetryReusesSubmissionID(t *testing.T) {
 	require.Equal(t, 2, chatClient.calls)
 	require.NotEmpty(t, chatClient.submissionIDs[0])
 	// A transport-level retry must keep the identity so core treats the second
-	// attempt as a replay of the same submission rather than a new one.
+	// attempt as a duplicate delivery of the same submission rather than a new one.
 	require.Equal(t, chatClient.submissionIDs[0], chatClient.submissionIDs[1])
 }

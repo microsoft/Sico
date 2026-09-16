@@ -136,6 +136,7 @@ var stores = []storeSpec{
 		outDir: "internal/store/organization/internal/dal/query",
 		tables: []tableSpec{
 			{name: "t_organization"},
+			{name: "t_organization_invitation"},
 			{name: "t_organization_llmhubs_config"},
 		},
 	},

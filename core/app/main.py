@@ -32,6 +32,7 @@ from app.memory.mem0 import init_shared_mem0
 from app.schemas import consts
 from app.storage.redis import init_shared_redis
 from app.storage.sandbox_pod import delete_tracked_sandbox_pods, run_sandbox_pod_reaper
+from app.biz.task_runtime.execution.environment import run_prepared_environment_reaper
 from app.utils.cache import Cache
 from app.utils.otel import instrument_grpclib_services, setup_otel
 from app.utils.redis_config import redis_url_from_environment
@@ -52,6 +53,7 @@ async def serve():
     task_runtime_stop = asyncio.Event()
     task_runtime_reconciler: asyncio.Task[None] | None = None
     sandbox_pod_reaper: asyncio.Task[None] | None = None
+    prepared_environment_reaper: asyncio.Task[None] | None = None
 
     # redis
     redis_url = redis_url_from_environment()
@@ -87,7 +89,6 @@ async def serve():
     ReverseTaskRuntimeService.get_instance().initialize(reverse_channel)
     ReverseAuthStateService.get_instance().initialize(reverse_channel)
     ReverseCaseReplayService.get_instance().initialize(reverse_channel)
-    _initialize_private_sandbox(reverse_channel)
 
     # connect to shared gRPC service
     shared_grpc_address = os.getenv("SHARED_GRPC_ADDRESS", "localhost:50052")
@@ -125,6 +126,7 @@ async def serve():
     try:
         task_runtime_reconciler = asyncio.create_task(run_task_runtime_startup_reconciler(task_runtime_stop))
         sandbox_pod_reaper = asyncio.create_task(run_sandbox_pod_reaper(task_runtime_stop))
+        prepared_environment_reaper = asyncio.create_task(run_prepared_environment_reaper(task_runtime_stop))
         await server.start(host, int(port))
         await _wait_for_server_shutdown(server, shutdown_event)
     except asyncio.CancelledError:
@@ -132,6 +134,7 @@ async def serve():
     finally:
         await _stop_task_runtime_reconciler(task_runtime_stop, task_runtime_reconciler)
         await _stop_sandbox_pod_reaper(sandbox_pod_reaper)
+        await _stop_prepared_environment_reaper(prepared_environment_reaper)
         server.close()
         with suppress(asyncio.CancelledError):
             await server.wait_closed()
@@ -153,16 +156,6 @@ def _resolve_mem0_config_path() -> Path:
     if packaged.exists():
         return packaged
     return application_root.parent / "deploy" / "config" / "mem0" / "mem0_config.yaml"
-
-
-def _initialize_private_sandbox(reverse_grpc_channel: grpc.Channel) -> None:
-    try:
-        from app.biz.private_sandbox.service import ReversePrivateSandboxService
-    except ModuleNotFoundError as exc:
-        if exc.name != "app.biz.private_sandbox":
-            raise
-    else:
-        ReversePrivateSandboxService.get_instance().initialize(reverse_grpc_channel)
 
 
 def _install_shutdown_handlers(shutdown_event: asyncio.Event) -> None:
@@ -220,6 +213,13 @@ async def _stop_sandbox_pod_reaper(sandbox_pod_reaper: asyncio.Task[None] | None
         deleted = await asyncio.wait_for(delete_tracked_sandbox_pods(), timeout=10)
         if deleted:
             _LOGGER.info("deleted %d in-flight sandbox pod(s) on shutdown", deleted)
+
+
+async def _stop_prepared_environment_reaper(reaper: asyncio.Task[None] | None) -> None:
+    if reaper is None:
+        return
+    with suppress(asyncio.TimeoutError):
+        await asyncio.wait_for(reaper, timeout=5)
 
 
 if __name__ == "__main__":

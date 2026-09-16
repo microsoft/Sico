@@ -14,7 +14,6 @@ Shared engineering configuration for all packages in the sico-frontend monorepo.
 | `tsconfig.base.json` | TypeScript base (no JSX) | Packages without React |
 | `tsconfig.react.json` | TypeScript + React JSX (extends base) | ui, shared, app |
 | `vitest.config.base.ts` | Vitest base config | ui, shared, app |
-| `commitlint.config.js` | Conventional commit rules | Root lefthook |
 
 ## How Packages Consume Config
 

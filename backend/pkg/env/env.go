@@ -57,6 +57,8 @@ func GetBoolOrDefault(key string, defaultValue bool) bool {
 
 // Application environment keys and values.
 const (
+	SeedAgentInstancesKey = "SEED_AGENT_INSTANCES"
+
 	// AppEnvKey is the environment variable used to signal the deployment
 	// environment ("development", "test", "production"). Defaults to
 	// production when unset so that open-source deployments are safe by
@@ -67,6 +69,11 @@ const (
 	AppEnvTest        = "test"
 	AppEnvProduction  = "production"
 )
+
+// SeedAgentInstances reports whether development tenant data and agent instances should be seeded.
+func SeedAgentInstances() bool {
+	return GetBoolOrDefault(SeedAgentInstancesKey, false)
+}
 
 // AppEnv returns the normalized application environment. Accepts common
 // aliases ("dev"→development, "prod"/"release"→production). Defaults to

@@ -28,6 +28,10 @@ type OpenAPIResolver interface {
 	OpenAPIURL(resourceID string, metadata map[string]string) string
 }
 
+type OpenAPIAuthenticator interface {
+	OpenAPIBearerToken(resourceID string, metadata map[string]string) string
+}
+
 type DisplayNameProvider interface {
 	DisplayNamePrefix() string
 }

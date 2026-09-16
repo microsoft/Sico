@@ -2,21 +2,20 @@ package impl
 
 import (
 	"context"
-
-	"sico-backend/internal/biz/rbac"
 )
 
-func canReadAllConversations(ctx context.Context) bool {
-	return rbac.Initialized() && rbac.IsPlatformAdmin(ctx)
+func (s *Service) canReadAllConversations(ctx context.Context) bool {
+	access := s.rbacAccess()
+	return access.Initialized() && access.IsPlatformAdmin(ctx)
 }
 
-func conversationReadQueryUsername(ctx context.Context, username string) string {
-	if canReadAllConversations(ctx) {
+func (s *Service) conversationReadQueryUsername(ctx context.Context, username string) string {
+	if s.canReadAllConversations(ctx) {
 		return ""
 	}
 	return username
 }
 
-func canReadConversation(ctx context.Context, username, creatorUsername string) bool {
-	return username == creatorUsername || canReadAllConversations(ctx)
+func (s *Service) canReadConversation(ctx context.Context, username, creatorUsername string) bool {
+	return username == creatorUsername || s.canReadAllConversations(ctx)
 }

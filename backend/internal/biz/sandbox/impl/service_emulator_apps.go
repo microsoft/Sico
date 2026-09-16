@@ -41,9 +41,9 @@ const (
 	emulatorAppMaxParallel             int32 = 10
 	emulatorAppInstallTaskTTL                = 30 * time.Minute
 	emulatorAppInstallTaskFinalTTL           = 5 * time.Minute
-	emulatorAppInstallTaskRunTimeout         = 10 * time.Minute
+	emulatorAppMutationRunTimeout            = 10 * time.Minute
 	emulatorAppInstallTaskStoreTimeout       = 5 * time.Second
-	emulatorAppInstallTaskDedupTTL           = emulatorAppInstallTaskRunTimeout
+	emulatorAppInstallTaskDedupTTL           = emulatorAppMutationRunTimeout
 )
 
 type emulatorAppTarget struct {
@@ -114,17 +114,6 @@ func (s *Service) ListEmulatorApps(
 	return result, nil
 }
 
-func (s *Service) InstallEmulatorApp(
-	ctx context.Context,
-	req *sandboxdto.EmulatorAppInstallRequest,
-) (*sandboxdto.EmulatorAppBatchResult, error) {
-	appURL, targets, emulator, err := s.prepareEmulatorAppInstall(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	return installEmulatorAppTargets(ctx, emulator, targets, appURL), nil
-}
-
 func (s *Service) SubmitInstallEmulatorApp(
 	ctx context.Context,
 	req *sandboxdto.EmulatorAppInstallRequest,
@@ -133,6 +122,12 @@ func (s *Service) SubmitInstallEmulatorApp(
 	if err != nil {
 		return nil, err
 	}
+
+	submitter, authenticated := middleware.GetUserFromContext(ctx)
+	if !authenticated {
+		return nil, apperr.New(errcode.CommonUnauthorized, "authentication required")
+	}
+
 	rds := s.emulatorAppTaskRedis()
 	if rds == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "emulator app task store unavailable")
@@ -181,7 +176,7 @@ func (s *Service) SubmitInstallEmulatorApp(
 	response := emulatorAppTaskStateResult(state)
 
 	safego.Go(context.Background(), func() {
-		s.runInstallEmulatorAppTask(state, reqCopy, originalTargets, dedupKey)
+		s.runInstallEmulatorAppTask(state, reqCopy, originalTargets, dedupKey, submitter)
 	})
 	return response, nil
 }
@@ -257,6 +252,7 @@ func (s *Service) runInstallEmulatorAppTask(
 	req *sandboxdto.EmulatorAppInstallRequest,
 	originalTargets map[string]struct{},
 	dedupKey string,
+	submitter middleware.UserInfo,
 ) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -272,9 +268,10 @@ func (s *Service) runInstallEmulatorAppTask(
 		logger.Warn("failed to store emulator app install task running state task_id=%s err=%v", state.TaskID, err)
 	}
 
-	runCtx, cancel := context.WithTimeout(context.Background(), emulatorAppInstallTaskRunTimeout)
+	runCtx, cancel := context.WithTimeout(context.Background(), emulatorAppMutationRunTimeout)
 	defer cancel()
-	appURL, currentTargets, emulator, err := s.prepareEmulatorAppInstall(runCtx, req)
+	runCtx = context.WithValue(runCtx, middleware.ContextUserKey, submitter)
+	appURL, err := s.resolveEmulatorAppInstallURL(runCtx, req.Url)
 	if err != nil {
 		s.finalizeEmulatorAppInstallTask(
 			state,
@@ -286,22 +283,26 @@ func (s *Service) runInstallEmulatorAppTask(
 		return
 	}
 
-	effectiveTargets, missing := filterEmulatorAppInstallTargets(originalTargets, currentTargets)
-	if len(missing) > 0 {
-		sort.Strings(missing)
-		errorMessage := "sandbox assignment changed before install started; targets no longer assigned: " +
-			strings.Join(missing, ",")
+	var result *sandboxdto.EmulatorAppBatchResult
+	err = s.withLockedEmulatorAppTargets(
+		runCtx,
+		req.SandboxIds,
+		req.InstanceId,
+		originalTargets,
+		func(emulator EmulatorAppProvider, currentTargets []*emulatorAppTarget) {
+			result = installEmulatorAppTargets(runCtx, emulator, currentTargets, appURL)
+		},
+	)
+	if err != nil {
 		s.finalizeEmulatorAppInstallTask(
 			state,
 			emulatorAppStatusError,
-			errorMessage,
+			"validation failed before install: "+err.Error(),
 			nil,
 			dedupKey,
 		)
 		return
 	}
-
-	result := installEmulatorAppTargets(runCtx, emulator, effectiveTargets, appURL)
 	status := strings.TrimSpace(result.Status)
 	if status == "" {
 		status = emulatorAppStatusError
@@ -518,7 +519,7 @@ func snapshotEmulatorAppTargets(targets []*emulatorAppTarget) map[string]struct{
 	return result
 }
 
-func filterEmulatorAppInstallTargets(
+func filterEmulatorAppTargets(
 	original map[string]struct{},
 	current []*emulatorAppTarget,
 ) (effective []*emulatorAppTarget, missing []string) {
@@ -552,7 +553,7 @@ func (s *Service) UninstallEmulatorApp(
 	if packageName == "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "package is required")
 	}
-	targets, emulator, err := s.resolveEmulatorAppTargets(ctx, req.SandboxIds, req.InstanceId, false)
+	targets, _, err := s.resolveEmulatorAppTargets(ctx, req.SandboxIds, req.InstanceId, false)
 	if err != nil {
 		return nil, err
 	}
@@ -560,20 +561,40 @@ func (s *Service) UninstallEmulatorApp(
 		return nil, apperr.New(errcode.CommonNotFound, "no emulator app targets found")
 	}
 
-	result := &sandboxdto.EmulatorAppBatchResult{
-		Package:        packageName,
-		TargetCount:    int32(len(targets)),
-		RequestedCount: int32(len(targets)),
-		Results:        []*sandboxdto.EmulatorAppDeviceResult{},
-	}
-	result.Results = runEmulatorAppBatch(
-		targets,
-		emulatorAppDeviceStatusUninstalled,
-		"uninstall app",
-		func(baseURL string, indices []int) (*EmulatorAppBatchResponse, error) {
-			return emulator.UninstallAppBatch(ctx, baseURL, indices, packageName, emulatorAppMaxParallel)
+	operationContext, cancel := context.WithTimeout(ctx, emulatorAppMutationRunTimeout)
+	defer cancel()
+	var result *sandboxdto.EmulatorAppBatchResult
+	err = s.withLockedEmulatorAppTargets(
+		operationContext,
+		req.SandboxIds,
+		req.InstanceId,
+		snapshotEmulatorAppTargets(targets),
+		func(emulator EmulatorAppProvider, currentTargets []*emulatorAppTarget) {
+			result = &sandboxdto.EmulatorAppBatchResult{
+				Package:        packageName,
+				TargetCount:    int32(len(currentTargets)),
+				RequestedCount: int32(len(currentTargets)),
+				Results:        []*sandboxdto.EmulatorAppDeviceResult{},
+			}
+			result.Results = runEmulatorAppBatch(
+				currentTargets,
+				emulatorAppDeviceStatusUninstalled,
+				"uninstall app",
+				func(baseURL string, indices []int) (*EmulatorAppBatchResponse, error) {
+					return emulator.UninstallAppBatch(
+						operationContext,
+						baseURL,
+						indices,
+						packageName,
+						emulatorAppMaxParallel,
+					)
+				},
+			)
+			result.UninstalledCount = summarizeEmulatorAppBatchResult(
+				result,
+				emulatorAppDeviceStatusUninstalled,
+			)
 		},
 	)
-	result.UninstalledCount = summarizeEmulatorAppBatchResult(result, emulatorAppDeviceStatusUninstalled)
-	return result, nil
+	return result, err
 }

@@ -18,10 +18,12 @@ import { store } from "@/store";
 
 import { clearAuthStorage } from "../_helpers/clear-auth-storage";
 import { setupMswServer } from "../_helpers/msw-server";
+import { organizationMembershipHandler } from "../_helpers/organization-context";
 
 // 401 on a protected endpoint drives `logoutAtom` + `onUnauthorized`
 // and resolves to a synthetic 401 envelope.
 setupMswServer([
+  organizationMembershipHandler(),
   http.get("/api/sico/protected", () =>
     HttpResponse.json(
       { code: 401, msg: "unauthorized", data: {} },

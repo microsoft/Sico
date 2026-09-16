@@ -12,19 +12,16 @@ import (
 )
 
 var defaultSvc Service
-var defaultImpl *impl.Service
 
 func Default() Service { return defaultSvc }
 
-// defaultImplService returns the concrete service for internal helpers that
-// need direct access to repositories (e.g. membership.go).
-func defaultImplService() *impl.Service { return defaultImpl }
-
-func InitService(components *impl.Components, cache *redis.Client) Service {
+func NewService(components *impl.Components, cache *redis.Client) *impl.Service {
 	cacheClient := sico_redis.New(cache)
 	jwtAuth := jwtx.New(jwtx.NewStoreWithCache(cacheClient))
-	svc := impl.NewService(components, jwtAuth)
-	defaultImpl = svc
+	return impl.NewService(components, jwtAuth)
+}
+
+func InitService(svc *impl.Service) Service {
 	defaultSvc = WithTracing(svc)
 	return defaultSvc
 }
@@ -35,5 +32,9 @@ var ProviderSet = wire.NewSet(
 	repository.NewCasbinRuleRepository,
 	enforcer.ProvideCasbinEnforcer,
 	wire.Struct(new(impl.Components), "*"),
+	NewService,
+	wire.Bind(new(roleAssignmentWriter), new(*impl.Service)),
+	NewAccessServices,
 	InitService,
+	ProvideAccess,
 )

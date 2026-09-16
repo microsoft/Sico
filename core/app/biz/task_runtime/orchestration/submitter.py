@@ -14,6 +14,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -23,7 +24,7 @@ from ..config import (
     _task_runtime_heartbeat_interval_seconds,
 )
 from ..context import TurnContext
-from .execution_plan import ExecutionPlanner
+from .execution_plan import BatchExecutionPlan, ExecutionPlanner
 from .materialization import (
     SubmissionMaterializer,
     _batch_id_for_submission,
@@ -31,6 +32,7 @@ from .materialization import (
     _validate_submission_fingerprint_value,
 )
 from ..domain.models import (
+    TERMINAL_BATCH_STATUSES,
     TERMINAL_STATUSES,
     BatchRecord,
     BatchResult,
@@ -42,7 +44,7 @@ from ..domain.models import (
     TaskStatus,
     PreparedTaskBatch,
 )
-from ..presentation.port import RuntimeProgressPort
+from ..presentation.port import BatchProjectionOptions, ProjectionIntegrityError, RuntimeProgressPort
 from ..presentation.rendering.batch_view import _with_result_snapshots
 from ..domain.results import aggregate, finalize_nonterminal_runs, safe_list_batch_runs, terminal_result_from_run
 from .run_coordinator import RunCoordinator
@@ -61,7 +63,27 @@ _LOGGER = logging.getLogger(__name__)
 # warning. One miss is self-healing (the next beat recovers); a sustained run
 # means queued siblings will eventually be swept, so surface the cause once.
 _HEARTBEAT_FAILURE_WARN_THRESHOLD = 3
-_REPLAY_RESULT_POLL_SECONDS = 1.0
+_EXISTING_BATCH_RESULT_POLL_SECONDS = 1.0
+_PROVISIONAL_PROJECTION_REMOVE_ATTEMPTS = 3
+_PROJECTION_RECONCILE_ATTEMPTS = 3
+_PLAN_MUTATION_RETRY_DELAY_SECONDS = 0.05
+_FAILED_BATCH_RUN_CLEANUP_ATTEMPTS = 3
+
+
+@dataclass(frozen=True, slots=True)
+class _ExistingBatchObservation:
+    batch: BatchRecord
+    results: list[TaskResult]
+    runs: list[TaskRun]
+    timed_out_run_ids: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class _MaterializedSubmission:
+    batch: BatchRecord
+    execution_plan: BatchExecutionPlan
+    created_parent_tool_call_id: int
+    owns_batch: bool
 
 
 class _HeartbeatDeathError(Exception):
@@ -109,44 +131,122 @@ class Submitter:
             raise ValueError("task runtime submission_id is required")
         self._execution_planner.normalize(prepared)
         # Fingerprint the normalized batch before any capacity planning, so fleet
-        # availability changes cannot invalidate an otherwise identical replay.
+        # availability changes cannot invalidate an otherwise identical duplicate.
         submission_fingerprint = _prepared_submission_fingerprint(prepared, ctx.submission_source)
-        # chat and runtime are peers: chat prepares the batch, the runtime owns its
-        # own execution subtree in the plan (parent umbrella node + child run nodes).
-        await self._progress.ensure_delegate_tasks_plan(ctx, prepared)
-        parent_tool_call_id = await self._progress.create_delegate_tasks_call(ctx, prepared)
-        # The lookup itself is inside the guard: a failing store read (backend
-        # down, RPC timeout) must not leave the parent step stuck in "running".
-        try:
-            existing_batch = await self._materializer.get_existing_batch(_batch_id_for_submission(ctx.submission_id))
-            if existing_batch is not None:
-                _validate_submission_fingerprint_value(existing_batch, submission_fingerprint)
-                batch = existing_batch.model_copy(update={"parent_tool_call_id": parent_tool_call_id})
-                _record_context_batch_id(ctx, batch.batch_id)
-                return await self._observe_replayed_batch(ctx, batch, parent_tool_call_id)
-        except Exception:
-            with contextlib.suppress(Exception):
-                await self._progress.mark_delegate_tasks_failed(ctx, parent_tool_call_id)
-            raise
+        existing_batch = await self._find_existing_submission_batch(ctx, submission_fingerprint)
+        if existing_batch is not None:
+            return await self._observe_existing_batch(ctx, existing_batch, prepared)
 
-        execution_plan = await self._execution_planner.plan(ctx, prepared)
-        batch = self._materializer.build_batch(
+        materialized = await self._materialize_submission(
             ctx,
             prepared,
-            parent_tool_call_id,
-            execution_plan,
             submission_fingerprint=submission_fingerprint,
-            metadata=batch_metadata,
+            batch_metadata=batch_metadata,
         )
+        if not materialized.owns_batch:
+            return await self._observe_existing_batch(
+                ctx,
+                materialized.batch,
+                prepared,
+                created_parent_tool_call_id=materialized.created_parent_tool_call_id,
+            )
+        return await self._execute_owned_batch(ctx, prepared, materialized.batch, materialized.execution_plan)
+
+    async def _find_existing_submission_batch(
+        self,
+        ctx: TurnContext,
+        submission_fingerprint: str,
+    ) -> BatchRecord | None:
+        existing = await self._materializer.get_existing_batch(_batch_id_for_submission(ctx.submission_id))
+        if existing is None:
+            return None
+        _validate_submission_fingerprint_value(existing, submission_fingerprint)
+        _record_context_batch_id(ctx, existing.batch_id)
+        return existing
+
+    async def _materialize_submission(
+        self,
+        ctx: TurnContext,
+        prepared: PreparedTaskBatch,
+        *,
+        submission_fingerprint: str,
+        batch_metadata: dict[str, Any],
+    ) -> _MaterializedSubmission:
+        batch_id = _batch_id_for_submission(ctx.submission_id)
+        parent_tool_call_id = await self._create_batch_projection(ctx, prepared)
+        candidate: BatchRecord | None = None
         try:
-            batch, is_replay = await self._materializer.materialize_batch(ctx, prepared, batch)
+            execution_plan = await self._execution_planner.plan(ctx, prepared)
+            candidate = self._materializer.build_batch(
+                ctx,
+                prepared,
+                parent_tool_call_id,
+                execution_plan,
+                submission_fingerprint=submission_fingerprint,
+                metadata=batch_metadata,
+            )
+            batch, owns_batch = await self._materializer.materialize_batch(ctx, prepared, candidate)
             _record_context_batch_id(ctx, batch.batch_id)
-            if is_replay:
-                return await self._observe_replayed_batch(ctx, batch, parent_tool_call_id)
-        except Exception:
-            with contextlib.suppress(Exception):
-                await self._progress.mark_delegate_tasks_failed(ctx, parent_tool_call_id)
+            return _MaterializedSubmission(batch, execution_plan, parent_tool_call_id, owns_batch)
+        except asyncio.CancelledError:
+            self._converge_failed_materialization(ctx, candidate, parent_tool_call_id, batch_id)
+            await self._settle_batch_projection(
+                ctx,
+                parent_tool_call_id=parent_tool_call_id,
+                batch_id=batch_id,
+                status=BatchStatus.CANCELLED,
+            )
             raise
+        except Exception:
+            self._converge_failed_materialization(ctx, candidate, parent_tool_call_id, batch_id)
+            if candidate is not None:
+                await self._settle_batch_projection(
+                    ctx,
+                    parent_tool_call_id=parent_tool_call_id,
+                    batch_id=batch_id,
+                    status=BatchStatus.CANCELLED,
+                )
+            else:
+                with contextlib.suppress(Exception):
+                    await self._progress.mark_delegate_tasks_failed(
+                        ctx,
+                        parent_tool_call_id,
+                        batch_id=batch_id,
+                    )
+            raise
+
+    def _converge_failed_materialization(
+        self,
+        ctx: TurnContext,
+        candidate: BatchRecord | None,
+        parent_tool_call_id: int,
+        batch_id: str,
+    ) -> None:
+        self._materializer.converge_failed_materialization(
+            candidate,
+            remove_foreign_owner_projection=lambda: self._remove_provisional_projection(
+                ctx,
+                parent_tool_call_id,
+                batch_id,
+            ),
+        )
+
+    async def _create_batch_projection(self, ctx: TurnContext, prepared: PreparedTaskBatch) -> int:
+        await self._progress.ensure_delegate_tasks_plan(ctx, prepared)
+        return await self._progress.create_delegate_tasks_call(
+            ctx,
+            prepared,
+            batch_id=_batch_id_for_submission(ctx.submission_id),
+        )
+
+    async def _execute_owned_batch(
+        self,
+        ctx: TurnContext,
+        prepared: PreparedTaskBatch,
+        batch: BatchRecord,
+        execution_plan: BatchExecutionPlan,
+    ) -> BatchResult:
+        parent_tool_call_id = batch.parent_tool_call_id or 0
         runs: list[TaskRun] = []
         try:
             runs = await self._materializer.create_runs(ctx, prepared, batch, parent_tool_call_id)
@@ -174,99 +274,287 @@ class Submitter:
                 self._merge_run_snapshots(runs, await self._store.list_batch_runs(batch.batch_id)),
                 results,
             )
-            await self._store.update_batch(batch)
-            await self._progress.publish_parent_batch_progress(ctx, batch, final_runs)
-            await self._progress.mark_parent_step_terminal_if_settled(ctx, batch.parent_tool_call_id or 0, batch.status)
+            batch = (await self._store.update_batch(batch)).batch
+            if batch.status != batch_result.status:
+                batch_result = batch_result.model_copy(update={"status": batch.status})
+            try:
+                await self._sync_projection(
+                    ctx,
+                    batch,
+                    final_runs,
+                    results,
+                    options=BatchProjectionOptions.owner_finalization(),
+                )
+            except ProjectionIntegrityError:
+                _LOGGER.error(
+                    "batch completed but its plan projection conflicts with another owner batch_id=%s",
+                    batch.batch_id,
+                    exc_info=True,
+                )
+            except Exception:
+                _LOGGER.warning(
+                    "batch completed but its plan projection could not be reconciled batch_id=%s",
+                    batch.batch_id,
+                    exc_info=True,
+                )
+                await self._settle_batch_projection(
+                    ctx,
+                    parent_tool_call_id=batch.parent_tool_call_id or 0,
+                    batch_id=batch.batch_id,
+                    status=batch.status,
+                )
             self._save_batch_result(batch.batch_id, batch_result)
             return batch_result
         except _HeartbeatDeathError:
-            await self._mark_batch_cancelled(
-                ctx,
-                batch,
-                parent_tool_call_id,
-                "Batch aborted: heartbeat to backend lost, batch considered stale.",
-            )
+            if batch.status not in TERMINAL_BATCH_STATUSES:
+                await self._mark_batch_cancelled(
+                    ctx,
+                    batch,
+                    parent_tool_call_id,
+                    "Batch aborted: heartbeat to backend lost, batch considered stale.",
+                )
             raise
         except asyncio.CancelledError:
-            await self._mark_batch_cancelled(
-                ctx,
-                batch,
-                parent_tool_call_id,
-                "Task runtime interrupted before completion.",
-            )
+            if batch.status in TERMINAL_BATCH_STATUSES:
+                await self._settle_batch_projection(
+                    ctx,
+                    parent_tool_call_id=batch.parent_tool_call_id or 0,
+                    batch_id=batch.batch_id,
+                    status=batch.status,
+                )
+            else:
+                await self._mark_batch_cancelled(
+                    ctx,
+                    batch,
+                    parent_tool_call_id,
+                    "Task runtime interrupted before completion.",
+                )
             raise
         except Exception:
-            await self._mark_batch_failed(ctx, batch, parent_tool_call_id)
+            if batch.status not in TERMINAL_BATCH_STATUSES:
+                await self._mark_batch_failed(ctx, batch, parent_tool_call_id)
             raise
 
-    async def _observe_replayed_batch(
+    async def _settle_batch_projection(
+        self,
+        ctx: TurnContext,
+        *,
+        parent_tool_call_id: int,
+        batch_id: str,
+        status: BatchStatus,
+    ) -> None:
+        with contextlib.suppress(Exception):
+            await self._progress.mark_delegate_tasks_terminal(
+                ctx,
+                parent_tool_call_id,
+                status,
+                batch_id=batch_id,
+            )
+        with contextlib.suppress(Exception):
+            await self._progress.mark_parent_step_terminal_if_settled(
+                ctx,
+                parent_tool_call_id,
+                status,
+                batch_id=batch_id,
+            )
+
+    async def _observe_existing_batch(
         self,
         ctx: TurnContext,
         batch: BatchRecord,
-        parent_tool_call_id: int,
+        prepared: PreparedTaskBatch,
+        *,
+        created_parent_tool_call_id: int = 0,
     ) -> BatchResult:
-        """Observe the original owner without taking liveness or persistence ownership.
+        """Observe an existing batch without taking liveness or persistence ownership.
 
-        A replay never heartbeats, claims, finalizes, cleans up, or updates the
+        A duplicate submission never heartbeats, claims, cleans up, or updates the
         shared batch. If the original process died, the normal stale reconciler
         settles queued/running runs and this observer reports those terminal
         FAILED/BLOCKED results rather than risking duplicate side effects.
         """
-        runs = await self._materializer.reuse_existing_batch_runs(ctx, batch, parent_tool_call_id)
-        await self._progress.publish_parent_batch_progress(ctx, batch, runs)
-        results = await self._wait_for_replayed_batch_results(ctx, batch, runs)
-        batch_result = aggregate(
-            batch,
-            results,
-            artifacts_root=str(self._batch_dir(batch.batch_id)),
+        provisional_parent_tool_call_id = (
+            created_parent_tool_call_id
+            if created_parent_tool_call_id != batch.parent_tool_call_id
+            else 0
         )
-        observed_batch = batch.model_copy(
-            update={
-                "status": batch_result.status,
-                "counts": BatchResultDigest.from_result(batch_result).counts,
-                "ended_at": batch.ended_at or _now_ms(),
-            }
-        )
-        final_runs = _with_result_snapshots(
-            self._merge_run_snapshots(runs, await self._store.list_batch_runs(batch.batch_id)),
-            results,
-        )
-        await self._progress.publish_parent_batch_progress(ctx, observed_batch, final_runs)
-        await self._progress.mark_parent_step_terminal_if_settled(
-            ctx,
-            parent_tool_call_id,
-            observed_batch.status,
-        )
-        return batch_result
+        try:
+            runs = await self._materializer.load_existing_batch_runs(batch)
+            await self._progress.sync_batch_projection(
+                ctx,
+                batch,
+                runs,
+                [],
+                options=BatchProjectionOptions.publish_current(),
+            )
+            if provisional_parent_tool_call_id and await self._remove_provisional_projection(
+                ctx,
+                provisional_parent_tool_call_id,
+                batch.batch_id,
+            ):
+                provisional_parent_tool_call_id = 0
+            observation = await self._wait_for_existing_batch_results(
+                batch,
+                runs,
+            )
+            batch = observation.batch
+            batch_result = aggregate(
+                batch,
+                observation.results,
+                artifacts_root=str(self._batch_dir(batch.batch_id)),
+            )
+            authoritative_batch_settled = batch.status in TERMINAL_BATCH_STATUSES
+            if authoritative_batch_settled and not observation.timed_out_run_ids:
+                batch_result = batch_result.model_copy(update={"status": batch.status})
+            else:
+                batch_result = batch_result.model_copy(update={"status": BatchStatus.BLOCKED})
+            observed_batch = batch.model_copy(
+                update={
+                    "status": batch_result.status,
+                    "counts": BatchResultDigest.from_result(batch_result).counts,
+                    "ended_at": batch.ended_at or _now_ms(),
+                }
+            )
+            repair_projection = not observation.timed_out_run_ids
+            if repair_projection:
+                await self._progress.ensure_delegate_tasks_plan(ctx, prepared)
+            should_settle_projection = authoritative_batch_settled and not observation.timed_out_run_ids
+            needs_step_resettle = should_settle_projection and bool(provisional_parent_tool_call_id)
+            projected_results = _projectable_results(observation)
+            if projected_results:
+                await self._sync_projection(
+                    ctx,
+                    observed_batch,
+                    observation.runs,
+                    projected_results,
+                    options=BatchProjectionOptions.observer(
+                        repair=repair_projection,
+                        settle_batch=should_settle_projection,
+                    ),
+                    required=repair_projection,
+                )
+            if provisional_parent_tool_call_id:
+                removed = await self._remove_provisional_projection(
+                    ctx,
+                    provisional_parent_tool_call_id,
+                    observed_batch.batch_id,
+                )
+                if removed:
+                    provisional_parent_tool_call_id = 0
+                else:
+                    with contextlib.suppress(Exception):
+                        await self._progress.mark_delegate_tasks_terminal(
+                            ctx,
+                            provisional_parent_tool_call_id,
+                            observed_batch.status,
+                            batch_id=observed_batch.batch_id,
+                        )
+            if needs_step_resettle:
+                await self._sync_projection(
+                    ctx,
+                    observed_batch,
+                    observation.runs,
+                    [],
+                    options=BatchProjectionOptions(settle_batch=True),
+                )
+            return batch_result
+        except (Exception, asyncio.CancelledError):
+            if provisional_parent_tool_call_id:
+                removed = await self._remove_provisional_projection(
+                    ctx,
+                    provisional_parent_tool_call_id,
+                    batch.batch_id,
+                )
+                if not removed:
+                    with contextlib.suppress(Exception):
+                        await self._progress.mark_delegate_tasks_failed(
+                            ctx,
+                            provisional_parent_tool_call_id,
+                            batch_id=batch.batch_id,
+                        )
+            raise
 
-    async def _wait_for_replayed_batch_results(
+    async def _sync_projection(
         self,
         ctx: TurnContext,
         batch: BatchRecord,
         runs: list[TaskRun],
-    ) -> list[TaskResult]:
-        """Poll batch state once per interval and fetch each terminal result once.
+        results: list[TaskResult],
+        *,
+        options: BatchProjectionOptions,
+        required: bool = True,
+    ) -> bool:
+        last_error: Exception | None = None
+        for attempt in range(1, _PROJECTION_RECONCILE_ATTEMPTS + 1):
+            try:
+                updated = await self._progress.sync_batch_projection(
+                    ctx,
+                    batch,
+                    runs,
+                    results,
+                    options=options,
+                )
+            except ProjectionIntegrityError:
+                raise
+            except Exception as exc:
+                last_error = exc
+            else:
+                if updated:
+                    return True
+                if not required:
+                    return False
+            if attempt < _PROJECTION_RECONCILE_ATTEMPTS:
+                await asyncio.sleep(_PLAN_MUTATION_RETRY_DELAY_SECONDS)
+        if not required:
+            return False
+        raise RuntimeError(f"failed to sync plan projection for batch {batch.batch_id}") from last_error
+
+    async def _remove_provisional_projection(
+        self,
+        ctx: TurnContext,
+        parent_tool_call_id: int,
+        batch_id: str,
+    ) -> bool:
+        for attempt in range(1, _PROVISIONAL_PROJECTION_REMOVE_ATTEMPTS + 1):
+            if await self._progress.remove_delegate_tasks_call(
+                ctx,
+                parent_tool_call_id,
+                batch_id=batch_id,
+            ):
+                return True
+            if attempt < _PROVISIONAL_PROJECTION_REMOVE_ATTEMPTS:
+                await asyncio.sleep(_PLAN_MUTATION_RETRY_DELAY_SECONDS)
+        _LOGGER.warning("failed to remove provisional duplicate-submission projection tool_call_id=%s", parent_tool_call_id)
+        return False
+
+    async def _wait_for_existing_batch_results(
+        self,
+        batch: BatchRecord,
+        runs: list[TaskRun],
+    ) -> _ExistingBatchObservation:
+        """Poll an existing batch and fetch each terminal result once.
 
         This avoids one polling loop per run (hundreds of reverse RPCs per
         second for large workbooks). Transient list/detail failures leave the
         affected runs pending until the next batch poll.
         """
         if not runs:
-            raise RuntimeError(f"replayed batch {batch.batch_id} has no materialized runs")
+            raise RuntimeError(f"existing batch {batch.batch_id} has no materialized runs")
         loop = asyncio.get_running_loop()
         observed_at = _now_ms()
         wait_timeout = max(_reuse_wait_timeout_seconds(run) for run in runs)
         deadline = loop.time() + wait_timeout
         templates = {run.run_id: run for run in runs}
         current_runs = dict(templates)
+        current_batch = batch
         pending = set(templates)
         results: dict[str, TaskResult] = {}
 
-        while pending and loop.time() < deadline:
+        while loop.time() < deadline:
             try:
                 stored_runs = await self._store.list_batch_runs(batch.batch_id)
             except Exception:
-                _LOGGER.debug("replayed batch state read failed batch_id=%s", batch.batch_id, exc_info=True)
+                _LOGGER.debug("existing batch state read failed batch_id=%s", batch.batch_id, exc_info=True)
             else:
                 for stored in stored_runs:
                     template = templates.get(stored.run_id)
@@ -285,7 +573,7 @@ class Submitter:
                         detail = await self._store.get_task_detail(stored.run_id, "summary")
                     except Exception:
                         _LOGGER.debug(
-                            "replayed run result read failed run_id=%s",
+                            "existing run result read failed run_id=%s",
                             stored.run_id,
                             exc_info=True,
                         )
@@ -293,10 +581,18 @@ class Submitter:
                     result = detail.result or terminal_result_from_run(detail.run)
                     results[stored.run_id] = result
                     pending.remove(stored.run_id)
-                    with contextlib.suppress(Exception):
-                        await self._progress.mark_run_terminal(ctx, current, result)
-            if pending:
-                await asyncio.sleep(_REPLAY_RESULT_POLL_SECONDS)
+            if not pending:
+                try:
+                    current_batch = await self._store.get_batch(batch.batch_id)
+                except Exception:
+                    _LOGGER.debug("existing batch refresh failed batch_id=%s", batch.batch_id, exc_info=True)
+                if current_batch.status in TERMINAL_BATCH_STATUSES:
+                    break
+            await asyncio.sleep(_EXISTING_BATCH_RESULT_POLL_SECONDS)
+
+        if not pending and current_batch.status not in TERMINAL_BATCH_STATUSES:
+            with contextlib.suppress(Exception):
+                current_batch = await self._store.get_batch(batch.batch_id)
 
         ended_at = _now_ms()
         for run_id in pending:
@@ -314,10 +610,13 @@ class Submitter:
                 duration_ms=ended_at - observed_at,
             )
             results[run_id] = result
-            with contextlib.suppress(Exception):
-                await self._progress.mark_run_terminal(ctx, run, result)
 
-        return [results[run.run_id] for run in runs]
+        return _ExistingBatchObservation(
+            batch=current_batch,
+            results=[results[run.run_id] for run in runs],
+            runs=[current_runs[run.run_id] for run in runs],
+            timed_out_run_ids=frozenset(pending),
+        )
 
     # -- batch-level liveness ----------------------------------------------
 
@@ -418,12 +717,61 @@ class Submitter:
     # -- abort / termination writers ---------------------------------------
 
     async def _mark_batch_failed(self, ctx: TurnContext, batch: BatchRecord, parent_tool_call_id: int) -> None:
+        reason = "Batch failed before all runs completed."
+        await self._cancel_active_runs_after_failure(batch.batch_id, reason)
+        with contextlib.suppress(Exception):
+            await self._sandbox.cleanup_batch(ctx, batch)
         transition_batch(batch, BatchStatus.FAILED)
         batch.ended_at = batch.ended_at or _now_ms()
-        with contextlib.suppress(Exception):
-            await self._store.update_batch(batch)
-        with contextlib.suppress(Exception):
-            await self._progress.mark_delegate_tasks_failed(ctx, parent_tool_call_id or 0)
+        try:
+            batch = (await self._store.update_batch(batch)).batch
+        except Exception:
+            _LOGGER.warning("failed to persist failed batch batch_id=%s", batch.batch_id, exc_info=True)
+        if batch.status == BatchStatus.FAILED:
+            with contextlib.suppress(Exception):
+                await self._progress.mark_delegate_tasks_failed(
+                    ctx,
+                    parent_tool_call_id or 0,
+                    batch_id=batch.batch_id,
+                )
+        else:
+            await self._settle_batch_projection(
+                ctx,
+                parent_tool_call_id=parent_tool_call_id or 0,
+                batch_id=batch.batch_id,
+                status=batch.status,
+            )
+
+    async def _cancel_active_runs_after_failure(self, batch_id: str, reason: str) -> None:
+        remaining_run_ids: list[str] = []
+        for attempt in range(1, _FAILED_BATCH_RUN_CLEANUP_ATTEMPTS + 1):
+            try:
+                runs = await self._store.list_batch_runs(batch_id)
+            except Exception:
+                _LOGGER.warning(
+                    "failed to list runs during batch failure cleanup batch_id=%s attempt=%d/%d",
+                    batch_id,
+                    attempt,
+                    _FAILED_BATCH_RUN_CLEANUP_ATTEMPTS,
+                    exc_info=True,
+                )
+                continue
+            active_runs = [run for run in runs if run.status in {TaskStatus.QUEUED, TaskStatus.RUNNING}]
+            if not active_runs:
+                return
+            remaining_run_ids = []
+            for run in active_runs:
+                try:
+                    await self._store.cancel_run(run.run_id, reason)
+                except Exception:
+                    remaining_run_ids.append(run.run_id)
+            if not remaining_run_ids:
+                return
+        _LOGGER.error(
+            "failed to cancel active runs during batch failure cleanup batch_id=%s run_ids=%s",
+            batch_id,
+            remaining_run_ids,
+        )
 
     async def _mark_batch_cancelled(
         self,
@@ -435,24 +783,36 @@ class Submitter:
         transition_batch(batch, BatchStatus.CANCELLED)
         batch.cancellation_reason = reason
         batch.ended_at = batch.ended_at or _now_ms()
-        with contextlib.suppress(Exception):
+        try:
             await self._store.cancel_batch(batch.batch_id, reason)
-        with contextlib.suppress(Exception):
-            await self._store.update_batch(batch)
+        except Exception:
+            _LOGGER.warning("failed to persist batch cancellation batch_id=%s", batch.batch_id, exc_info=True)
+        try:
+            batch = await self._store.get_batch(batch.batch_id)
+        except Exception:
+            _LOGGER.warning("failed to reload cancelled batch batch_id=%s", batch.batch_id, exc_info=True)
         with contextlib.suppress(Exception):
             await self._sandbox.cleanup_batch(ctx, batch)
         with contextlib.suppress(Exception):
             cancelled_runs = await safe_list_batch_runs(self._store, batch.batch_id)
             await self._progress.mark_cancelled_runs(ctx, cancelled_runs, reason)
-        with contextlib.suppress(Exception):
-            await self._progress.mark_delegate_tasks_terminal(ctx, parent_tool_call_id or 0, batch.status)
-        with contextlib.suppress(Exception):
-            await self._progress.mark_parent_step_terminal_if_settled(ctx, parent_tool_call_id or 0, batch.status)
+        await self._settle_batch_projection(
+            ctx,
+            parent_tool_call_id=parent_tool_call_id or 0,
+            batch_id=batch.batch_id,
+            status=batch.status,
+        )
 
 
 # ---------------------------------------------------------------------------
 # Module-level helpers (pure / IO-light)
 # ---------------------------------------------------------------------------
+
+
+def _projectable_results(
+    observation: _ExistingBatchObservation,
+) -> list[TaskResult]:
+    return [result for result in observation.results if result.run_id not in observation.timed_out_run_ids]
 
 
 def _record_context_batch_id(ctx: TurnContext, batch_id: str) -> None:

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+LOG_DIR=${LOG_DIR:-/var/log/gem}
+echo "$(date '+%Y-%m-%d %H:%M:%S') ARGS: $@" >>"$LOG_DIR/xdg-settings"
+
+if [[ "$1" == "check" ]]; then
+  echo "yes"
+  exit 0
+else
+  REAL_XDG_SETTINGS=$(which -a xdg-settings | grep -v "/usr/local/bin/xdg-settings" | head -n 1)
+  if [ -n "$REAL_XDG_SETTINGS" ]; then
+    exec "$REAL_XDG_SETTINGS" "$@"
+  else
+    exit 1
+  fi
+fi

@@ -203,8 +203,8 @@ describe("fetchAgents", () => {
     });
   });
 
-  it("throws when envelope has no data", async () => {
-    const client = makeClient({ code: 500, msg: "boom" });
+  it("rejects a successful envelope without data", async () => {
+    const client = makeClient({ code: 0, msg: "ok" });
     await expect(fetchAgents(client, { page: 1 })).rejects.toThrow(
       /missing data/,
     );
@@ -215,10 +215,29 @@ describe("fetchAgents", () => {
     // an empty state — the backend sends no `data`, so it throws like any other
     // non-OK envelope.
     const client = makeClient({ code: 100_004, msg: "agent not found" });
-    await expect(fetchAgents(client, { page: 1 })).rejects.toThrow(
-      /missing data/,
-    );
+    await expect(fetchAgents(client, { page: 1 })).rejects.toMatchObject({
+      name: "EnvelopeError",
+      code: 100_004,
+      msg: "agent not found",
+    });
   });
+
+  it.each([undefined, null, {}])(
+    "preserves a business failure before validating data %j",
+    async (data) => {
+      const client = makeClient({
+        code: 100001,
+        msg: "Request parameters are invalid",
+        ...(data === undefined ? {} : { data }),
+      });
+
+      await expect(fetchAgents(client)).rejects.toMatchObject({
+        name: "EnvelopeError",
+        code: 100001,
+        msg: "Request parameters are invalid",
+      });
+    },
+  );
 });
 
 describe("updateAgentInstanceStatus", () => {

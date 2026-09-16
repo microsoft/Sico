@@ -24,7 +24,6 @@ class AgentInvocation:
     """A bounded agent loop selected during preparation."""
 
     profile_id: str
-    capability_grants: tuple[str, ...] = ()
     max_model_turns: int | None = None
 
     def __post_init__(self) -> None:
@@ -33,9 +32,7 @@ class AgentInvocation:
             raise ValueError("profile_id must not be empty")
         if self.max_model_turns is not None and self.max_model_turns <= 0:
             raise ValueError("max_model_turns must be positive")
-        grants = tuple(dict.fromkeys(normalize_capability_id(item) for item in self.capability_grants if item.strip()))
         object.__setattr__(self, "profile_id", profile_id)
-        object.__setattr__(self, "capability_grants", grants)
 
 
 ExecutionDecision: TypeAlias = DirectCapability | AgentInvocation

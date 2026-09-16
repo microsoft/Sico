@@ -36,7 +36,7 @@ export const deviceSchema = z
 export type Device = z.infer<typeof deviceSchema>;
 
 // `GET /sandbox/list` returns `data` as an OBJECT keyed by device type, each
-// value an array of wire items: `{aio:[], emulator:[], physical:[], wincua:[]}`.
+// value an array of wire items: `{linux_workstation:[], emulator:[], physical:[], wincua:[]}`.
 // Each bucket is optional and nullable because the backend uses null for an
 // empty group. Malformed arrays/items still reject at the network boundary.
 const deviceGroup = z
@@ -44,7 +44,7 @@ const deviceGroup = z
   .nullable()
   .transform((devices) => devices ?? []);
 export const deviceListDataSchema = z.object({
-  aio: deviceGroup.optional(),
+  linux_workstation: deviceGroup.optional(),
   emulator: deviceGroup.optional(),
   physical: deviceGroup.optional(),
   wincua: deviceGroup.optional(),
@@ -52,7 +52,12 @@ export const deviceListDataSchema = z.object({
 export type DeviceListData = z.infer<typeof deviceListDataSchema>;
 
 // The known device-type buckets, in display order.
-export const DEVICE_TYPES = ["aio", "emulator", "physical", "wincua"] as const;
+export const DEVICE_TYPES = [
+  "linux_workstation",
+  "emulator",
+  "physical",
+  "wincua",
+] as const;
 
 // Flatten the dict-of-arrays into a single `Device[]` — each device already
 // carries its own `type`, so grouping can be re-derived downstream.
