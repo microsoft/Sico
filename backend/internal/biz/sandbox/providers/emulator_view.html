@@ -49,6 +49,11 @@
 		const MAX_RECONNECT = 8;
 
 		function connect() {
+			const accessToken = window.localStorage.getItem('sico.accessToken');
+			if (!accessToken) {
+				statusEl.textContent = 'Authentication required.';
+				return;
+			}
 			statusEl.textContent = 'Connecting...';
 
 			jmuxer = new JMuxer({
@@ -64,6 +69,7 @@
 			ws.binaryType = 'arraybuffer';
 
 			ws.onopen = () => {
+				ws.send(JSON.stringify({type: 'auth', token: accessToken}));
 				statusEl.textContent = '';
 				reconnectAttempts = 0;
 				playAttempted = false;

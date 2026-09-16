@@ -1,0 +1,8 @@
+apiVersion: v2
+name: linux-workstation-sandbox
+description: Helm chart for the Linux Workstation sandbox service.
+annotations:
+  org.opencontainers.image.licenses: MIT
+type: application
+version: 0.1.0
+appVersion: 0.1.0

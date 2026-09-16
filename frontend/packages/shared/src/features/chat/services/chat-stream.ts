@@ -3,8 +3,7 @@ import {
   fetchEventSource,
 } from "@microsoft/fetch-event-source";
 
-import { getAccessToken } from "../../../utils/auth-storage";
-import { isSameOriginRequest } from "../../../utils/is-same-origin-request";
+import { getStreamHeaders } from "./stream-headers";
 import { logger } from "../../../utils/logger";
 import { type ChatEvent, chatEventSchema } from "../schemas/chat-event";
 import { type ChatRequest } from "../schemas/chat-request";
@@ -27,6 +26,7 @@ export type OpenChatStreamOptions = {
   // path convention; the bearer token is attached only when this URL resolves
   // same-origin (see below).
   url: string;
+  getOrganizationId?: () => number | null;
   onEvent: (event: ChatEvent) => void;
   // Fires once the response headers arrive (stream open) — drives the `↻→■`
   // button flip in domain. Optional so tests/domain can omit it.
@@ -45,22 +45,17 @@ export type OpenChatStreamOptions = {
 // transport failure (§6.E5 — auto-retry off).
 export async function openChatStream(
   payload: ChatRequest,
-  { url, onEvent, onOpen, onLive, signal }: OpenChatStreamOptions,
+  options: OpenChatStreamOptions,
 ): Promise<void> {
   // Read the token per send (never cached at module load), same helper the
   // axios interceptor uses. Missing/expired → no header → backend 401 → the
   // standard onopen(res) 401 path (§6.E9). The URL is now config-injected, so
   // gate the token on a same-origin check (the same one axios uses) — a dwp
   // override pointing off-origin must not leak the bearer to a third party.
-  const token = getAccessToken();
+  const { url, onEvent, onOpen, onLive, signal } = options;
   await fetchEventSource(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token && isSameOriginRequest(url, undefined)
-        ? { Authorization: `Bearer ${token}` }
-        : {}),
-    },
+    headers: getStreamHeaders(url, options.getOrganizationId),
     body: JSON.stringify(payload),
     signal,
     openWhenHidden: true, // do not pause/retry when the tab is backgrounded

@@ -1,0 +1,168 @@
+# syntax=docker/dockerfile:1.7
+FROM ubuntu:22.04
+LABEL org.opencontainers.image.licenses="MIT"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Base OS deps
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash ca-certificates curl git tini \
+    nginx supervisor gettext netcat-openbsd tinyproxy \
+    python3-tk unzip \
+    build-essential libssl-dev zlib1g-dev libffi-dev libbz2-dev \
+    libreadline-dev libsqlite3-dev liblzma-dev tk-dev libncursesw5-dev \
+    xz-utils uuid-dev libgdbm-dev \
+    xvfb x11vnc openbox x11-xserver-utils \
+    tigervnc-standalone-server \
+    websockify \
+    libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libcairo2 \
+    libcups2 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libnspr4 libnss3 \
+    libpango-1.0-0 libwayland-client0 libx11-6 libxcb1 libxcomposite1 \
+    libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 libxv1 libgtk-3-0 \
+    fonts-liberation fonts-noto-color-emoji \
+    fonts-arphic-ukai fonts-arphic-uming \
+    fonts-wqy-zenhei xfonts-intl-chinese xfonts-wqy \
+    fonts-ipafont-mincho fonts-ipafont-gothic \
+    fonts-takao-mincho fonts-unfonts-core \
+    fonts-wqy-microhei fonts-indic \
+    procps iproute2 net-tools locales \
+  && rm -rf /var/lib/apt/lists/*
+
+# Node.js runtime + MCP server packages
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends nodejs \
+  && npm install --registry "${NPM_REGISTRY}" -g @agent-infra/mcp-server-browser @agent-infra/mcp-hub chrome-devtools-mcp \
+  && rm -rf /var/lib/apt/lists/*
+
+ARG PYTHON_VERSION=3.12.11
+RUN set -eux; \
+  curl -fsSL -o /tmp/Python.tgz "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"; \
+  tar -xzf /tmp/Python.tgz -C /tmp; \
+  cd "/tmp/Python-${PYTHON_VERSION}"; \
+  ./configure --prefix=/opt/python3.12 --enable-shared --with-ensurepip=install; \
+  make -j"$(nproc)"; \
+  make install; \
+  echo "/opt/python3.12/lib" > /etc/ld.so.conf.d/python3.12.conf; \
+  ldconfig; \
+  rm -rf /tmp/Python.tgz "/tmp/Python-${PYTHON_VERSION}"
+
+RUN locale-gen en_US.UTF-8 || true
+
+ARG NOVNC_VERSION=1.4.0
+RUN set -eux; \
+  rm -rf /opt/novnc /usr/share/novnc; \
+  curl -fsSL -o /tmp/novnc.tar.gz "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz"; \
+  tar -xzf /tmp/novnc.tar.gz -C /tmp; \
+  mv "/tmp/noVNC-${NOVNC_VERSION}" /opt/novnc; \
+  rm -f /tmp/novnc.tar.gz; \
+  ln -sf /opt/novnc /usr/share/novnc
+
+ARG CR_DOWNLOAD_URL_AMD64="https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1155/chromium-linux.zip"
+ARG CR_DOWNLOAD_URL_ARM64="https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1155/chromium-linux-arm64.zip"
+RUN set -eux; \
+  arch="$(dpkg --print-architecture)"; \
+  case "$arch" in \
+    amd64) url="$CR_DOWNLOAD_URL_AMD64" ;; \
+    arm64) url="$CR_DOWNLOAD_URL_ARM64" ;; \
+    *) echo "Unsupported architecture for chromium: $arch"; exit 1 ;; \
+  esac; \
+  curl -fsSL -o /tmp/chromium.zip "$url"; \
+  rm -rf /opt/browser; \
+  mkdir -p /opt/browser; \
+  unzip -oq /tmp/chromium.zip -d /tmp/chromium; \
+  extracted_dir="$(find /tmp/chromium -maxdepth 2 -type d -name 'chrome-linux' -o -name 'chromium-linux' | head -n 1)"; \
+  if [ -z "$extracted_dir" ]; then echo "Chromium zip structure not found"; exit 1; fi; \
+  mv "$extracted_dir"/* /opt/browser/; \
+  rm -rf /tmp/chromium /tmp/chromium.zip; \
+  chromium_bin="$(find /opt/browser -maxdepth 2 -type f \( -name 'chrome' -o -name 'chromium' \) | head -n 1)"; \
+  if [ -z "$chromium_bin" ]; then echo "Chromium binary not found"; exit 1; fi; \
+  update-alternatives --install /usr/local/bin/browser browser "$chromium_bin" 150; \
+  update-alternatives --set browser "$chromium_bin"
+
+ARG WEBSOCAT_VERSION=1.13.0
+RUN set -eux; \
+  arch="$(dpkg --print-architecture)"; \
+  case "$arch" in \
+    amd64) ws_arch="x86_64" ;; \
+    arm64) ws_arch="aarch64" ;; \
+    *) echo "Unsupported architecture for websocat: $arch"; exit 1 ;; \
+  esac; \
+  curl -fsSL -o /usr/local/bin/websocat "https://github.com/vi/websocat/releases/download/v${WEBSOCAT_VERSION}/websocat.${ws_arch}-unknown-linux-musl"; \
+  chmod +x /usr/local/bin/websocat
+
+# code-server (installs a compatible node runtime internally)
+RUN curl -fsSL https://code-server.dev/install.sh | sh
+
+# Create runtime user and shared runtime directories
+RUN useradd -m -u 1000 -s /bin/bash gem \
+  && mkdir -p /home/gem \
+  && chown -R gem:gem /home/gem
+
+# Python deps for API server
+ARG PYPI_INDEX_URL=https://pypi.org/simple
+RUN /opt/python3.12/bin/python3.12 -m pip install --no-cache-dir --index-url "${PYPI_INDEX_URL}" -U pip \
+  && /opt/python3.12/bin/python3.12 -m pip install --no-cache-dir --index-url "${PYPI_INDEX_URL}" \
+    fastapi==0.115.6 \
+    uvicorn[standard]==0.27.1 \
+    httpx==0.27.0 \
+    pydantic==2.10.4 \
+    python-multipart==0.0.9 \
+    mss==10.0.0 \
+    pillow==10.4.0 \
+    pyautogui==0.9.54 \
+    pyperclip==1.9.0
+
+# mcp-proxy isolated environment (matches standard separation)
+RUN /opt/python3.12/bin/python3.12 -m venv /opt/mcp-proxy \
+  && /opt/mcp-proxy/bin/pip install --no-cache-dir --index-url "${PYPI_INDEX_URL}" -U pip \
+  && /opt/mcp-proxy/bin/pip install --no-cache-dir --index-url "${PYPI_INDEX_URL}" mcp-proxy==0.9.0
+
+ENV DEBIAN_FRONTEND=noninteractive \
+  WORKSPACE=/home/gem \
+  DISPLAY=:99.0 \
+  DISPLAY_WIDTH=1280 \
+  DISPLAY_HEIGHT=1024 \
+  DISPLAY_DEPTH=24 \
+  PUBLIC_PORT=8080 \
+  VNC_SERVER_PORT=5900 \
+  WEBSOCKET_PROXY_PORT=6080 \
+  GEM_SERVER_PORT=8088 \
+  SANDBOX_SRV_PORT=8091 \
+  CODE_SERVER_PORT=8200 \
+  BROWSER_REMOTE_DEBUGGING_PORT=9222 \
+  BROWSER_EXECUTABLE_PATH=/usr/local/bin/browser \
+  BROWSER_NO_SANDBOX=--no-sandbox \
+  BROWSER_COMMANDLINE_ARGS="--disable-backgrounding-occluded-windows --disable-background-timer-throttling --disable-blink-features=AutomationControlled --disable-dev-shm-usage --disable-external-intent-requests --disable-features=IPH_DesktopCustomizeChrome,IsolateOrigins,site-per-process --disable-focus-on-load --disable-gpu --disable-infobars --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-site-isolation-trials --disable-web-security --disable-window-activation --mute-audio --no-default-browser-check --no-first-run --noerrdialogs --remote-allow-origins=* --remote-debugging-port=9222 --suppress-message-center-popups --start-maximized" \
+  BROWSER_EXTRA_ARGS="" \
+  LOG_DIR=/var/log/gem \
+  TZ=Asia/Singapore \
+  USER=gem \
+  USER_UID=1000 \
+  USER_GID=1000 \
+  MCP_SERVER_PORT=8089 \
+  MCP_HUB_PORT=8079 \
+  MCP_SERVER_BROWSER_PORT=8100 \
+  MCP_SERVER_CHROME_DEVTOOLS_PORT=8102 \
+  TINYPROXY_PORT=8118 \
+  MAX_SHELL_SESSIONS=50 \
+  JWT_PUBLIC_KEY="" \
+  DNS_OVER_HTTPS_TEMPLATES="" \
+  WAIT_INTERVAL=0.25 \
+  WAIT_TIMEOUT=300 \
+  WAIT_PORTS=8091 \
+  XDG_RUNTIME_DIR=/tmp/runtime-gem \
+  UV_TOOL_BIN_DIR=/usr/local/bin/ \
+  UV_TOOL_DIR=/usr/local/share/uv/tools \
+  PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/browser \
+  PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+  BROWSER_USER_AGENT="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" \
+  LANG=en_US.UTF-8 \
+  LANGUAGE=en_US:en \
+  LC_ALL=en_US.UTF-8
+
+ENV PATH="/opt/python3.12/bin:${PATH}"
+
+EXPOSE 8080

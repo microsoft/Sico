@@ -27,6 +27,7 @@ type fakeProvider struct {
 	calls        int
 	resetFn      func(context.Context, string) error
 	resetCalls   int
+	openAPIToken string
 }
 
 func (p *fakeProvider) Type() string {
@@ -88,6 +89,10 @@ func (p *fakeProvider) OpenAPIURL(_ string, metadata map[string]string) string {
 		return ""
 	}
 	return metadata["providerBaseUrl"] + enum.SandboxTypeEmulator.OpenAPIPath()
+}
+
+func (p *fakeProvider) OpenAPIBearerToken(_ string, _ map[string]string) string {
+	return p.openAPIToken
 }
 
 type blockingProvider struct {
@@ -856,7 +861,7 @@ func TestRefreshResourcesSkipsProviderCallsWhenAnotherLeaderExists(t *testing.T)
 	require.Equal(t, leaderPool.instanceID, leaderID)
 }
 
-func TestRefreshResourcesReleasesLeadershipWhenAllProvidersFail(t *testing.T) {
+func TestRefreshResourcesCreatesEmptySnapshotWhenAllProvidersFail(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -880,10 +885,17 @@ func TestRefreshResourcesReleasesLeadershipWhenAllProvidersFail(t *testing.T) {
 	leaderPool.instanceID = "leader-pod"
 	followerPool.instanceID = "follower-pod"
 
-	// Leader has no previous snapshots and all providers fail â†’ error + release.
-	err := leaderPool.refreshResources(ctx)
-	require.Error(t, err)
+	// Leader has no previous snapshots and all providers fail: publish an empty
+	// snapshot so reads remain available, then release leadership for recovery.
+	require.NoError(t, leaderPool.refreshResources(ctx))
 	require.Equal(t, 1, leaderEmulator.calls)
+
+	snapshot := loadSnapshot(t, ctx, rds, enum.SandboxTypeEmulator.String())
+	require.Empty(t, snapshot.Resources)
+
+	listResult, err := leaderPool.ListResources(ctx, "")
+	require.NoError(t, err)
+	require.Empty(t, listResult.Resources)
 
 	// Follower can now take over.
 	require.NoError(t, followerPool.refreshResources(ctx))
@@ -906,6 +918,7 @@ func TestGetSandboxOpenAPIUsesGracePeriodAvailableResource(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/openapi.json", r.URL.Path)
+		require.Equal(t, "Bearer emulator-openapi-token", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"openapi":"3.0.0"}`))
 	}))
@@ -920,6 +933,7 @@ func TestGetSandboxOpenAPIUsesGracePeriodAvailableResource(t *testing.T) {
 	provider := &fakeProvider{
 		providerType: enum.SandboxTypeEmulator.String(),
 		errs:         []error{errors.New("provider should not be called")},
+		openAPIToken: "emulator-openapi-token",
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
 
@@ -1238,6 +1252,7 @@ func TestAssignSandboxUsesFreshSnapshotWithoutProviderCall(t *testing.T) {
 		errs:         []error{errors.New("provider should not be called")},
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
+	configureAssignmentScope(t, ctx, rds, svc, testEmulatorLease().SandboxID, 123)
 
 	err := svc.AssignSandbox(ctx, "123", testEmulatorLease().SandboxID)
 	require.NoError(t, err)
@@ -1272,6 +1287,7 @@ func TestAssignSandboxRejectsReassignWhileInUse(t *testing.T) {
 		errs:         []error{errors.New("provider should not be called")},
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
+	configureAssignmentScope(t, ctx, rds, svc, lease.SandboxID, 456)
 
 	err := svc.AssignSandbox(ctx, "456", lease.SandboxID)
 	require.Error(t, err)
@@ -1313,6 +1329,7 @@ func TestAssignSandboxAllowsReassignAfterRelease(t *testing.T) {
 		errs:         []error{errors.New("provider should not be called")},
 	}
 	svc := &Service{Pool: newTestPool(rds, provider, time.Minute)}
+	configureAssignmentScope(t, ctx, rds, svc, lease.SandboxID, 456)
 
 	err := svc.AssignSandbox(ctx, "456", lease.SandboxID)
 	require.NoError(t, err)
@@ -1486,6 +1503,7 @@ func TestAssignSandboxUsesStaleSnapshotWhenProviderWouldFail(t *testing.T) {
 		errs:         []error{errors.New("emulator boom")},
 	}
 	svc := &Service{Pool: newTestPoolWithProviders(rds, time.Minute, emulatorProvider)}
+	configureAssignmentScope(t, ctx, rds, svc, testEmulatorLease().SandboxID, 123)
 
 	err := svc.AssignSandbox(ctx, "123", testEmulatorLease().SandboxID)
 	require.NoError(t, err)
@@ -2191,24 +2209,25 @@ func TestSandboxRedisKeysDefaultToLocalNamespace(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv(consts.SandboxRedisNamespace, "")
 
-	require.Equal(t, "sandbox:env:local:resource:aio:http://localhost:18080",
-		resourceKey(enum.SandboxTypeAio.String(), "http://localhost:18080"))
-	require.Equal(t, "sandbox:env:local:snapshot:resource:aio",
-		resourceSnapshotKey(enum.SandboxTypeAio.String()))
+	require.Equal(t, "sandbox:env:local:resource:linux_workstation:http://localhost:18080",
+		resourceKey(enum.SandboxTypeLinuxWorkstation.String(), "http://localhost:18080"))
+	require.Equal(t, "sandbox:env:local:snapshot:resource:linux_workstation",
+		resourceSnapshotKey(enum.SandboxTypeLinuxWorkstation.String()))
 	require.Equal(t, "sandbox:env:local:snapshot:resource:leader", resourceSnapshotLeaderLockKey())
 	require.Equal(t, "sandbox:env:local:assign:123", assignKey("123"))
 	require.Equal(t, "sandbox:env:local:instance-lock:123", instanceAssignLockKey("123"))
-	require.Equal(t, "sandbox:env:local:cooldown:aio:http://localhost:18080",
-		cooldownKey("aio:http://localhost:18080"))
+	require.Equal(t, "sandbox:env:local:cooldown:linux_workstation:http://localhost:18080",
+		cooldownKey("linux_workstation:http://localhost:18080"))
 }
 
 func TestSandboxRedisKeysKeepLegacyPrefixOutsideLocal(t *testing.T) {
 	t.Setenv("APP_ENV", "production")
 	t.Setenv(consts.SandboxRedisNamespace, "")
 
-	require.Equal(t, "sandbox:resource:aio:http://localhost:18080",
-		resourceKey(enum.SandboxTypeAio.String(), "http://localhost:18080"))
-	require.Equal(t, "sandbox:snapshot:resource:aio", resourceSnapshotKey(enum.SandboxTypeAio.String()))
+	require.Equal(t, "sandbox:resource:linux_workstation:http://localhost:18080",
+		resourceKey(enum.SandboxTypeLinuxWorkstation.String(), "http://localhost:18080"))
+	require.Equal(t, "sandbox:snapshot:resource:linux_workstation",
+		resourceSnapshotKey(enum.SandboxTypeLinuxWorkstation.String()))
 	require.Equal(t, "sandbox:snapshot:resource:leader", resourceSnapshotLeaderLockKey())
 	require.Equal(t, "sandbox:assign:123", assignKey("123"))
 }
@@ -2217,7 +2236,7 @@ func TestSandboxRedisKeysRespectExplicitNamespace(t *testing.T) {
 	t.Setenv("APP_ENV", "production")
 	t.Setenv(consts.SandboxRedisNamespace, "Jason Laptop")
 
-	require.Equal(t, "sandbox:env:jason-laptop:resource:aio:http://localhost:18080",
-		resourceKey(enum.SandboxTypeAio.String(), "http://localhost:18080"))
+	require.Equal(t, "sandbox:env:jason-laptop:resource:linux_workstation:http://localhost:18080",
+		resourceKey(enum.SandboxTypeLinuxWorkstation.String(), "http://localhost:18080"))
 	require.Equal(t, "sandbox:env:jason-laptop:assign:123", assignKey("123"))
 }

@@ -18,10 +18,12 @@ const (
 	sandboxCooldownKeySegment           = "cooldown:"
 	sandboxAssignKeySegment             = "assign:"
 	sandboxInstanceAssignLockKeySegment = "instance-lock:"
+	sandboxOperationLockKeySegment      = "operation-lock:"
 	sandboxOrgAssignKeySegment          = "org-assign:"
 	sandboxProjectAssignKeySegment      = "project-assign:"
 	sandboxOrgSandboxesKeySegment       = "org-sandboxes:"
 	sandboxProjectSandboxesKeySegment   = "project-sandboxes:"
+	sandboxInitialOrgClaimKeySegment    = "initial-org-claim"
 )
 
 func sandboxRedisNamespace() string {
@@ -78,6 +80,10 @@ func resourceLeaseKey(sandboxID string) string {
 	return sandboxResourceKeyPrefix() + sandboxID
 }
 
+func sandboxOperationLockKey(sandboxID string) string {
+	return sandboxRedisPrefix() + sandboxOperationLockKeySegment + strings.TrimSpace(sandboxID)
+}
+
 func ResourceLeaseKeyForTest(sandboxID string) string {
 	return resourceLeaseKey(sandboxID)
 }
@@ -128,4 +134,8 @@ func orgSandboxesKey(orgID int64) string {
 
 func projectSandboxesKey(projectID int64) string {
 	return sandboxRedisPrefix() + sandboxProjectSandboxesKeySegment + strconv.FormatInt(projectID, 10)
+}
+
+func initialOrgClaimKey() string {
+	return sandboxRedisPrefix() + sandboxInitialOrgClaimKeySegment
 }

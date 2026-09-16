@@ -111,10 +111,10 @@ describe("SandboxInstance — take-over", () => {
     );
   });
 
-  describe("non-emulator (aio/wincua) overlay gating", () => {
+  describe("non-emulator (Linux Workstation/WinCUA) overlay gating", () => {
     it("blocks input with an overlay until take-over, then shows the badge", async () => {
       const user = userEvent.setup();
-      renderInstance(device({ type: "aio" }));
+      renderInstance(device({ type: "linux_workstation" }));
       // View-only: the blocking overlay is present, no badge.
       expect(screen.getByTestId("sandbox-input-block")).toBeInTheDocument();
       expect(screen.queryByText("You are taking over")).not.toBeInTheDocument();
@@ -139,7 +139,7 @@ describe("SandboxInstance — take-over", () => {
     afterEach(() => vi.useRealTimers());
 
     it("auto-exits take-over after 5 minutes of no activity", () => {
-      renderInstance(device({ type: "aio" }));
+      renderInstance(device({ type: "linux_workstation" }));
       // fireEvent (not userEvent) toggles take-over with a single synthetic
       // click — userEvent's pointer-move stream would itself re-arm the idle
       // timer this test is trying to let expire.
@@ -163,7 +163,10 @@ describe("SandboxInstance — take-over", () => {
 
     it("re-arms the idle timer on an in-frame activity message", () => {
       renderInstance(
-        device({ type: "aio", vncUrl: "https://vnc.example/sb-1" }),
+        device({
+          type: "linux_workstation",
+          vncUrl: "https://vnc.example/sb-1",
+        }),
       );
       fireEvent.click(screen.getByRole("button", { name: /take over/i }));
       // Just shy of the timeout, the frame reports in-frame input (the future
@@ -185,7 +188,10 @@ describe("SandboxInstance — take-over", () => {
 
     it("ignores an activity message from a foreign origin", () => {
       renderInstance(
-        device({ type: "aio", vncUrl: "https://vnc.example/sb-1" }),
+        device({
+          type: "linux_workstation",
+          vncUrl: "https://vnc.example/sb-1",
+        }),
       );
       fireEvent.click(screen.getByRole("button", { name: /take over/i }));
       act(() => {
@@ -208,9 +214,14 @@ describe("SandboxInstance — take-over", () => {
 
 describe("SandboxInstance — header (legacy parity)", () => {
   it("omits the 'Device' title word — the dropdown names the device", () => {
-    renderInstance(device({ displayName: "AIO-Device #2", type: "aio" }));
+    renderInstance(
+      device({
+        displayName: "Linux Workstation #2",
+        type: "linux_workstation",
+      }),
+    );
     // Legacy SandboxInstance has no title; the device dropdown carries the name.
     expect(screen.queryByText("Device")).not.toBeInTheDocument();
-    expect(screen.getByText("AIO-Device #2")).toBeInTheDocument();
+    expect(screen.getByText("Linux Workstation #2")).toBeInTheDocument();
   });
 });

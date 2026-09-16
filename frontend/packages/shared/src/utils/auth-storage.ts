@@ -5,18 +5,40 @@ import {
   AUTH_TOKEN_LS,
   AUTH_USER_LS,
   getItemFromLocalStorage,
+  type LocalStorageKey,
+  ORGANIZATION_CONTEXT_LS,
   removeItemFromLocalStorage,
   safeGetItemFromLocalStorage,
   safeSetItemToLocalStorage,
+  SELECTED_ORGANIZATION_ID_LS,
   setItemToLocalStorage,
 } from "./local-storage";
 import { logger } from "./logger";
 import { type LoginResponse, type User, userSchema } from "../schemas/auth";
 
+export function clearOrganizationStorage(): void {
+  const keys: LocalStorageKey[] = [
+    ORGANIZATION_CONTEXT_LS,
+    SELECTED_ORGANIZATION_ID_LS,
+  ];
+  for (const key of keys) {
+    try {
+      removeItemFromLocalStorage(key);
+    } catch {
+      // Optional preferences must never prevent credential or user cleanup.
+      logger.warn("organization preference cleanup failed", {
+        operation: "remove",
+        key,
+      });
+    }
+  }
+}
+
 export function clearAuthStorage(): void {
   removeItemFromLocalStorage(AUTH_TOKEN_LS);
   removeItemFromLocalStorage(AUTH_USER_LS);
   removeItemFromLocalStorage(AUTH_EXPIRES_AT_LS);
+  clearOrganizationStorage();
 }
 
 // Returns `null` and clears LS on orphan / expiry / corruption.
@@ -84,6 +106,7 @@ export function getAccessToken(): string | null {
 }
 
 export function persistLoginPayload(payload: LoginResponse): void {
+  clearOrganizationStorage();
   const { tokenInfo, user } = payload;
   setItemToLocalStorage(AUTH_TOKEN_LS, tokenInfo.accessToken);
   safeSetItemToLocalStorage(AUTH_USER_LS, userSchema, user);

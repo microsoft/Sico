@@ -10,15 +10,14 @@ import { useAtomValue } from "jotai";
 
 import { userAtom } from "../../../atoms/auth-atom";
 import { useApiClient } from "../../../services/api-client-context";
+import { selectBoundOrganization } from "../../../services/bound-organization";
 import { organizationKeys } from "../query-keys";
 import {
   type OrganizationDetail,
   type OrganizationSummary,
 } from "../schemas/organization";
-import {
-  fetchOrganization,
-  fetchUserOrganizations,
-} from "../services/organization";
+import { fetchOrganization } from "../services/organization";
+import { fetchSessionOrganizations } from "../utils/fetch-session-organizations";
 
 type UserOrganizationsQueryKey = ReturnType<
   typeof organizationKeys.userOrganizations
@@ -36,7 +35,9 @@ export function userOrganizationsQueryOptions(
   return {
     queryKey: organizationKeys.userOrganizations(userId),
     queryFn: () =>
-      userId === null ? Promise.resolve([]) : fetchUserOrganizations(apiClient),
+      userId === null
+        ? Promise.resolve([])
+        : fetchSessionOrganizations(apiClient, userId),
     staleTime: 30_000,
   };
 }
@@ -44,6 +45,7 @@ export function userOrganizationsQueryOptions(
 export function boundOrganizationQueryOptions(
   apiClient: AxiosInstance,
   userId: number | null,
+  selectedOrganizationId: number | null = null,
 ): UseSuspenseQueryOptions<
   OrganizationSummary[],
   Error,
@@ -52,7 +54,8 @@ export function boundOrganizationQueryOptions(
 > {
   return {
     ...userOrganizationsQueryOptions(apiClient, userId),
-    select: (organizations) => organizations[0] ?? null,
+    select: (organizations) =>
+      selectBoundOrganization(organizations, selectedOrganizationId),
   };
 }
 

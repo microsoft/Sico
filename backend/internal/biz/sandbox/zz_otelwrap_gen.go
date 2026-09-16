@@ -73,6 +73,102 @@ func (w *otelTracedService) AssignSandboxToProject(ctx context.Context, projectI
 	return ret0
 }
 
+func (w *otelTracedService) AuthorizeInstanceOperation(ctx context.Context, instanceID string, allowOperator bool) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.AuthorizeInstanceOperation")
+	defer span.End()
+
+	ret0 := w.next.AuthorizeInstanceOperation(ctx, instanceID, allowOperator)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedService) AuthorizeOrganizationSandboxAssign(ctx context.Context) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.AuthorizeOrganizationSandboxAssign")
+	defer span.End()
+
+	ret0 := w.next.AuthorizeOrganizationSandboxAssign(ctx)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedService) AuthorizeOrganizationSandboxUnassign(ctx context.Context, organizationID int64) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.AuthorizeOrganizationSandboxUnassign")
+	defer span.End()
+
+	ret0 := w.next.AuthorizeOrganizationSandboxUnassign(ctx, organizationID)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedService) AuthorizeProjectSandboxAssignment(ctx context.Context, projectID int64) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.AuthorizeProjectSandboxAssignment")
+	defer span.End()
+
+	ret0 := w.next.AuthorizeProjectSandboxAssignment(ctx, projectID)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedService) AuthorizeSandboxAssignment(ctx context.Context, instanceID string, sandboxID string) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.AuthorizeSandboxAssignment")
+	defer span.End()
+
+	ret0 := w.next.AuthorizeSandboxAssignment(ctx, instanceID, sandboxID)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedService) AuthorizeSandboxOperation(ctx context.Context, sandboxID string, allowOperator bool) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.AuthorizeSandboxOperation")
+	defer span.End()
+
+	ret0 := w.next.AuthorizeSandboxOperation(ctx, sandboxID, allowOperator)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedService) AuthorizeSandboxTypeDocs(ctx context.Context, sandboxType string) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.AuthorizeSandboxTypeDocs")
+	defer span.End()
+
+	ret0 := w.next.AuthorizeSandboxTypeDocs(ctx, sandboxType)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedService) ClaimUnassignedSandboxesForOrg(ctx context.Context, orgID int64) (int, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ClaimUnassignedSandboxesForOrg")
+	defer span.End()
+
+	ret0, ret1 := w.next.ClaimUnassignedSandboxesForOrg(ctx, orgID)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
 func (w *otelTracedService) CleanupInstanceSandboxes(ctx context.Context, instanceID string) error {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.CleanupInstanceSandboxes")
 	defer span.End()
@@ -83,6 +179,42 @@ func (w *otelTracedService) CleanupInstanceSandboxes(ctx context.Context, instan
 		span.SetStatus(codes.Error, ret0.Error())
 	}
 	return ret0
+}
+
+func (w *otelTracedService) FilterDashboardInstanceIDs(ctx context.Context, instanceIDs []int64) (map[int64]bool, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.FilterDashboardInstanceIDs")
+	defer span.End()
+
+	ret0, ret1 := w.next.FilterDashboardInstanceIDs(ctx, instanceIDs)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedService) GetAuthorizedInstanceSandboxesWithStatus(ctx context.Context, instanceID string, osFilter string) ([]map[string]interface{}, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.GetAuthorizedInstanceSandboxesWithStatus")
+	defer span.End()
+
+	ret0, ret1 := w.next.GetAuthorizedInstanceSandboxesWithStatus(ctx, instanceID, osFilter)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedService) GetAuthorizedInstanceVNCURLs(ctx context.Context, instanceID string) ([]map[string]interface{}, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.GetAuthorizedInstanceVNCURLs")
+	defer span.End()
+
+	ret0, ret1 := w.next.GetAuthorizedInstanceVNCURLs(ctx, instanceID)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
 }
 
 func (w *otelTracedService) GetInstanceSandboxesWithStatus(ctx context.Context, instanceID string, osFilter string) ([]map[string]interface{}, error) {
@@ -181,11 +313,47 @@ func (w *otelTracedService) ListAllResourcesFiltered(ctx context.Context, filter
 	return ret0, ret1
 }
 
+func (w *otelTracedService) ListDashboardResourcesFiltered(ctx context.Context, filter *sandbox.ListSandboxResourcesFilter) (map[string]interface{}, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ListDashboardResourcesFiltered")
+	defer span.End()
+
+	ret0, ret1 := w.next.ListDashboardResourcesFiltered(ctx, filter)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedService) ReleaseAuthorizedSandbox(ctx context.Context, instanceID string, sandboxID string) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ReleaseAuthorizedSandbox")
+	defer span.End()
+
+	ret0 := w.next.ReleaseAuthorizedSandbox(ctx, instanceID, sandboxID)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
 func (w *otelTracedService) ReleaseSandbox(ctx context.Context, instanceID string, sandboxID string) error {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ReleaseSandbox")
 	defer span.End()
 
 	ret0 := w.next.ReleaseSandbox(ctx, instanceID, sandboxID)
+	if ret0 != nil {
+		span.RecordError(ret0)
+		span.SetStatus(codes.Error, ret0.Error())
+	}
+	return ret0
+}
+
+func (w *otelTracedService) ResetAuthorizedSandbox(ctx context.Context, sandboxID string) error {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ResetAuthorizedSandbox")
+	defer span.End()
+
+	ret0 := w.next.ResetAuthorizedSandbox(ctx, sandboxID)
 	if ret0 != nil {
 		span.RecordError(ret0)
 		span.SetStatus(codes.Error, ret0.Error())
@@ -222,6 +390,18 @@ func (w *otelTracedService) RpcGetInstanceSandboxes(arg0 context.Context, arg1 *
 	defer span.End()
 
 	ret0, ret1 := w.next.RpcGetInstanceSandboxes(arg0, arg1)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedService) RpcProxyLinuxWorkstationSandboxHttp(arg0 context.Context, arg1 *reverse_rpc.LinuxWorkstationSandboxHttpRequest) (*reverse_rpc.LinuxWorkstationSandboxHttpResponse, error) {
+	arg0, span := otel.Tracer("sico-backend/otelwrap").Start(arg0, "Service.RpcProxyLinuxWorkstationSandboxHttp")
+	defer span.End()
+
+	ret0, ret1 := w.next.RpcProxyLinuxWorkstationSandboxHttp(arg0, arg1)
 	if ret1 != nil {
 		span.RecordError(ret1)
 		span.SetStatus(codes.Error, ret1.Error())

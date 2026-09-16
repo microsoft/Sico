@@ -10,6 +10,7 @@ import { createProject } from "../services/projects";
 
 type CreateProjectVars = {
   name: string;
+  organizationId: number;
   description?: string;
   // Cover URL (`uri` from a prior asset upload). Forwarded to `createProject`
   // as the project's `iconUri`.

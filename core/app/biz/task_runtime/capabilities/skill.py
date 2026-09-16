@@ -24,13 +24,14 @@ from __future__ import annotations
 import os
 import shutil
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ..storage.artifact_store import ArtifactStore
 from ..domain.models import ArtifactRef, ErrorClass, SandboxLeaseRef, TaskResult, TaskRun, TaskStatus
 from ..execution.naming import sanitize_dns_label
-from ..domain.results import build_user_input_result
+from ..domain.results import build_user_input_result, failed_result
 from ..sandbox.types import (
     InfraRequirement,
     eligible_types_for_os,
@@ -46,6 +47,8 @@ from ..execution.command.contracts import (
     readonly_input_mounts,
     truncate_stream,
 )
+from ..execution.command.routing import CommandBackendResolver, SkillCommandBackendResolver
+from ..execution.environment import PREPARED_SKILL_RUNTIME_ROOT, PreparedEnvironmentError, PreparedEnvironmentManager
 from .catalogue import skill_descriptor, skill_descriptors
 from .descriptors import (
     CapabilityBinding,
@@ -85,6 +88,14 @@ _TASK_CONTEXT_PARAMETER_NAMES = frozenset(
 )
 
 
+@dataclass(frozen=True, slots=True)
+class _StepExecution:
+    backend: CommandBackend
+    image: str = ""
+    prepared_runtime: bool = False
+    steps: tuple[ResolvedActionStep, ...] | None = None
+
+
 class SkillCapabilityProvider:
     """Serves registered skill actions as capabilities."""
 
@@ -96,6 +107,8 @@ class SkillCapabilityProvider:
         *,
         artifact_store: ArtifactStore,
         command_backend: CommandBackend,
+        command_backend_resolver: CommandBackendResolver | None = None,
+        environment_manager: PreparedEnvironmentManager | None = None,
     ) -> None:
         if skill_loader is None:
             raise ValueError("skill_loader is required")
@@ -106,6 +119,8 @@ class SkillCapabilityProvider:
         self.skill_loader = skill_loader
         self.artifact_store = artifact_store
         self.command_backend = command_backend
+        self.command_backend_resolver = command_backend_resolver or SkillCommandBackendResolver(command_backend)
+        self.environment_manager = environment_manager
 
     async def list_descriptors(self, query: CatalogueQuery) -> tuple[CapabilityDescriptor, ...]:
         cards = self.skill_loader.list_cards(visibility="any" if query.include_internal else "public")
@@ -137,32 +152,84 @@ class _SkillHandler:
 
         try:
             parameters = _prepare_parameters(resolved.action, run, context.arguments)
+            command_backend = self._provider.command_backend_resolver.resolve(resolved.action.execution_requirement, run)
         except ValueError as exc:
             return build_user_input_result(run, str(exc))
 
+        if resolved.action.execution_requirement.backend == "linux_workstation":
+            # Linux Workstation executes the step directly in the leased sandbox.
+            # without preparing the environment.
+            execution = _StepExecution(
+                command_backend,
+                steps=(*resolved.action.preparation.steps, *resolved.action.steps),
+            )
+        elif resolved.action.preparation.steps:
+            if self._provider.environment_manager is None:
+                return failed_result(run, "prepared environment manager is not configured", ErrorClass.TRANSIENT)
+            try:
+                async with self._provider.environment_manager.use(resolved.action, resolved.runtime_root) as environment:
+                    return await self._execute_steps(
+                        context,
+                        resolved.action,
+                        resolved.runtime_root,
+                        parameters,
+                        _StepExecution(command_backend, image=environment.image, prepared_runtime=True),
+                    )
+            except PreparedEnvironmentError as exc:
+                return failed_result(run, str(exc), ErrorClass.TRANSIENT)
+        else:
+            execution = _StepExecution(command_backend, image=resolved.action.execution_requirement.image)
+        return await self._execute_steps(
+            context,
+            resolved.action,
+            resolved.runtime_root,
+            parameters,
+            execution,
+        )
+
+    async def _execute_steps(
+        self,
+        context: CapabilityContext,
+        action: ResolvedAction,
+        source_runtime_root: Path,
+        parameters: dict[str, Any],
+        execution: _StepExecution,
+    ) -> TaskResult:
         stdout_parts: list[str] = []
         stderr_parts: list[str] = []
         outcome = CommandResult(return_code=0)
         run_runtime_root: Path | None = None
         try:
             try:
-                run_runtime_root = _prepare_run_runtime(resolved.runtime_root, context.run_dir)
-                specs = _build_step_specs(context, resolved.action, run_runtime_root, parameters)
+                if execution.prepared_runtime:
+                    specs = _build_step_specs(
+                        context,
+                        action,
+                        source_runtime_root,
+                        parameters,
+                        command_runtime_root=PREPARED_SKILL_RUNTIME_ROOT,
+                        mount_runtime=False,
+                    )
+                else:
+                    run_runtime_root = _prepare_run_runtime(source_runtime_root, context.run_dir)
+                    specs = _build_step_specs(context, action, run_runtime_root, parameters, steps=execution.steps)
             except ValueError as exc:
-                return build_user_input_result(run, str(exc))
+                return build_user_input_result(context.run, str(exc))
 
-            session = self._provider.command_backend.open_session(
-                pod_name=_skill_pod_name(run), image=str(context.arguments.get("image") or "")
-            )
             try:
-                for spec in specs:
-                    outcome = await session.run(spec)
-                    stdout_parts.append(outcome.stdout)
-                    stderr_parts.append(outcome.stderr or outcome.system_error)
-                    if outcome.system_error or outcome.return_code != 0:
-                        break
-            finally:
-                await session.aclose()
+                session = execution.backend.open_session(pod_name=_skill_pod_name(context.run), image=execution.image)
+                try:
+                    for spec in specs:
+                        outcome = await session.run(spec)
+                        stdout_parts.append(outcome.stdout)
+                        stderr_parts.append(outcome.stderr or outcome.system_error)
+                        if outcome.system_error or outcome.return_code != 0:
+                            break
+                finally:
+                    await session.aclose()
+            except Exception as exc:  # noqa: BLE001
+                outcome = CommandResult(return_code=-1, system_error=f"command backend failed: {exc}")
+                stderr_parts.append(outcome.system_error)
         finally:
             _cleanup_run_runtime(run_runtime_root)
 
@@ -363,6 +430,10 @@ def _build_step_specs(
     action: ResolvedAction,
     runtime_root: Path,
     parameters: dict[str, Any],
+    *,
+    command_runtime_root: str = "",
+    mount_runtime: bool = True,
+    steps: tuple[ResolvedActionStep, ...] | None = None,
 ) -> list[CommandSpec]:
     from app.biz.skill.resolver import infer_optional_parameter_names
 
@@ -373,29 +444,36 @@ def _build_step_specs(
     path_placeholders = {"workspace_dir": str(workspace), "result_dir": str(result_root)}
     env = _step_env(run, workspace, result_root)
     mounts = [
-        CommandMount(
-            name=_WORKSPACE_MOUNT_NAME,
-            host_path=str(workspace),
-            mount_path=str(workspace),
-            read_only=not context.descriptor.workspace_is_writable,
-        ),
-        CommandMount(name=_RUNTIME_MOUNT_NAME, host_path=str(runtime_root), mount_path=str(runtime_root)),
         CommandMount(name=_RESULT_MOUNT_NAME, host_path=str(result_root), mount_path=str(result_root)),
         *readonly_input_mounts(context.input_paths),
     ]
+    if context.descriptor.workspace_access != "none":
+        mounts.insert(
+            0,
+            CommandMount(
+                name=_WORKSPACE_MOUNT_NAME,
+                host_path=str(workspace),
+                mount_path=str(workspace),
+                read_only=not context.descriptor.workspace_is_writable,
+            ),
+        )
+    if mount_runtime:
+        mounts.insert(1, CommandMount(name=_RUNTIME_MOUNT_NAME, host_path=str(runtime_root), mount_path=str(runtime_root)))
     timeout_seconds = run.execution_policy.timeout_seconds
     metadata = {
         "agent_instance_id": str(run.agent_instance_id),
         "user_label": sanitize_dns_label(run.username, max_len=63),
+        "workspace_access": context.descriptor.workspace_access,
+        "workspace_path": str(workspace),
     }
     specs: list[CommandSpec] = []
-    for step in action.steps:
+    for step in steps if steps is not None else action.steps:
         argv = _build_step_argv(step, parameters, path_placeholders, optional_names)
         # cwd == mount_path == the host-visible runtime path keeps the working
         # directory identical across backends: the local backend cd's to it on
         # the host, while container backends bind-mount the (host-translated)
         # runtime at the same path and cd there inside the sandbox.
-        cwd = _step_cwd(runtime_root, step.cwd)
+        cwd = _step_cwd(runtime_root, step.cwd, command_runtime_root=command_runtime_root)
         specs.append(
             CommandSpec(
                 argv=argv,
@@ -473,10 +551,13 @@ def _has_parameter_value(parameters: dict[str, Any], name: str) -> bool:
     return value is not None and (not isinstance(value, str) or bool(value.strip()))
 
 
-def _step_cwd(runtime_root: Path, cwd: str) -> Path:
+def _step_cwd(runtime_root: Path, cwd: str, *, command_runtime_root: str = "") -> Path | str:
     from app.biz.skill.resolver import validate_relative_path
 
     validate_relative_path(cwd, allow_dot=True)
+    if command_runtime_root:
+        root = command_runtime_root.rstrip("/")
+        return root if cwd in ("", ".") else f"{root}/{cwd.replace('\\', '/')}"
     return runtime_root if cwd in ("", ".") else runtime_root / cwd
 
 

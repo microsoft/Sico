@@ -193,14 +193,14 @@ func (RoleChangeAction) EnumDescriptor() ([]byte, []int) {
 
 type NotificationExtraInfoDeliverable struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
-	DeliverableId        int64                  `protobuf:"varint,1,opt,name=deliverable_id,json=deliverableId,proto3" json:"deliverableId"`                          
-	FileName             string                 `protobuf:"bytes,2,opt,name=file_name,json=fileName,proto3" json:"fileName"`                                          
-	FileUri              string                 `protobuf:"bytes,3,opt,name=file_uri,json=fileUri,proto3" json:"fileUri"`                                             
-	AgentInstanceId      int64                  `protobuf:"varint,4,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId"`                  
-	AgentInstanceName    string                 `protobuf:"bytes,5,opt,name=agent_instance_name,json=agentInstanceName,proto3" json:"agentInstanceName,omitempty"`             
-	ProjectName          string                 `protobuf:"bytes,6,opt,name=project_name,json=projectName,proto3" json:"projectName,omitempty"`                                 
-	AgentInstanceIconUri string                 `protobuf:"bytes,7,opt,name=agent_instance_icon_uri,json=agentInstanceIconUri,proto3" json:"agentInstanceIconUri"`  
-	AgentInstanceIconUrl string                 `protobuf:"bytes,8,opt,name=agent_instance_icon_url,json=agentInstanceIconUrl,proto3" json:"agentInstanceIconUrl"`  
+	DeliverableId        int64                  `protobuf:"varint,1,opt,name=deliverable_id,json=deliverableId,proto3" json:"deliverableId"`
+	FileName             string                 `protobuf:"bytes,2,opt,name=file_name,json=fileName,proto3" json:"fileName"`
+	FileUri              string                 `protobuf:"bytes,3,opt,name=file_uri,json=fileUri,proto3" json:"fileUri"`
+	AgentInstanceId      int64                  `protobuf:"varint,4,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId"`
+	AgentInstanceName    string                 `protobuf:"bytes,5,opt,name=agent_instance_name,json=agentInstanceName,proto3" json:"agentInstanceName,omitempty"`
+	ProjectName          string                 `protobuf:"bytes,6,opt,name=project_name,json=projectName,proto3" json:"projectName,omitempty"`
+	AgentInstanceIconUri string                 `protobuf:"bytes,7,opt,name=agent_instance_icon_uri,json=agentInstanceIconUri,proto3" json:"agentInstanceIconUri"`
+	AgentInstanceIconUrl string                 `protobuf:"bytes,8,opt,name=agent_instance_icon_url,json=agentInstanceIconUrl,proto3" json:"agentInstanceIconUrl"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -293,11 +293,11 @@ func (x *NotificationExtraInfoDeliverable) GetAgentInstanceIconUrl() string {
 
 type NotificationExtraInfo struct {
 	state                 protoimpl.MessageState                      `protogen:"open.v1"`
-	Deliverable           *NotificationExtraInfoDeliverable           `protobuf:"bytes,3,opt,name=deliverable,proto3,oneof" json:"deliverable,omitempty"`                                                     
-	DwAction              *NotificationExtraInfoDwAction              `protobuf:"bytes,4,opt,name=dw_action,json=dwAction,proto3,oneof" json:"dwAction,omitempty"`                                           
-	RoleChange            *NotificationExtraInfoRoleChange            `protobuf:"bytes,5,opt,name=role_change,json=roleChange,proto3,oneof" json:"roleChange,omitempty"`                                     
-	AgentEditorUpdate     *NotificationExtraInfoAgentEditorUpdate     `protobuf:"bytes,6,opt,name=agent_editor_update,json=agentEditorUpdate,proto3,oneof" json:"agentEditorUpdate,omitempty"`              
-	ScheduledTaskFinished *NotificationExtraInfoScheduledTaskFinished `protobuf:"bytes,7,opt,name=scheduled_task_finished,json=scheduledTaskFinished,proto3,oneof" json:"scheduledTaskFinished,omitempty"`  
+	Deliverable           *NotificationExtraInfoDeliverable           `protobuf:"bytes,3,opt,name=deliverable,proto3,oneof" json:"deliverable,omitempty"`
+	DwAction              *NotificationExtraInfoDwAction              `protobuf:"bytes,4,opt,name=dw_action,json=dwAction,proto3,oneof" json:"dwAction,omitempty"`
+	RoleChange            *NotificationExtraInfoRoleChange            `protobuf:"bytes,5,opt,name=role_change,json=roleChange,proto3,oneof" json:"roleChange,omitempty"`
+	AgentEditorUpdate     *NotificationExtraInfoAgentEditorUpdate     `protobuf:"bytes,6,opt,name=agent_editor_update,json=agentEditorUpdate,proto3,oneof" json:"agentEditorUpdate,omitempty"`
+	ScheduledTaskFinished *NotificationExtraInfoScheduledTaskFinished `protobuf:"bytes,7,opt,name=scheduled_task_finished,json=scheduledTaskFinished,proto3,oneof" json:"scheduledTaskFinished,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -369,13 +369,13 @@ func (x *NotificationExtraInfo) GetScheduledTaskFinished() *NotificationExtraInf
 
 type NotificationExtraInfoDwAction struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
-	AgentInstanceId      int64                  `protobuf:"varint,1,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId"`                  
-	AgentInstanceName    string                 `protobuf:"bytes,2,opt,name=agent_instance_name,json=agentInstanceName,proto3" json:"agentInstanceName"`             
-	ProjectName          string                 `protobuf:"bytes,3,opt,name=project_name,json=projectName,proto3" json:"projectName"`                                 
-	OldOperatorUsername  string                 `protobuf:"bytes,4,opt,name=old_operator_username,json=oldOperatorUsername,proto3" json:"oldOperatorUsername"`       
-	NewOperatorUsername  string                 `protobuf:"bytes,5,opt,name=new_operator_username,json=newOperatorUsername,proto3" json:"newOperatorUsername"`       
-	AgentInstanceIconUri string                 `protobuf:"bytes,6,opt,name=agent_instance_icon_uri,json=agentInstanceIconUri,proto3" json:"agentInstanceIconUri"`  
-	AgentInstanceIconUrl string                 `protobuf:"bytes,7,opt,name=agent_instance_icon_url,json=agentInstanceIconUrl,proto3" json:"agentInstanceIconUrl"`  
+	AgentInstanceId      int64                  `protobuf:"varint,1,opt,name=agent_instance_id,json=agentInstanceId,proto3" json:"agentInstanceId"`
+	AgentInstanceName    string                 `protobuf:"bytes,2,opt,name=agent_instance_name,json=agentInstanceName,proto3" json:"agentInstanceName"`
+	ProjectName          string                 `protobuf:"bytes,3,opt,name=project_name,json=projectName,proto3" json:"projectName"`
+	OldOperatorUsername  string                 `protobuf:"bytes,4,opt,name=old_operator_username,json=oldOperatorUsername,proto3" json:"oldOperatorUsername"`
+	NewOperatorUsername  string                 `protobuf:"bytes,5,opt,name=new_operator_username,json=newOperatorUsername,proto3" json:"newOperatorUsername"`
+	AgentInstanceIconUri string                 `protobuf:"bytes,6,opt,name=agent_instance_icon_uri,json=agentInstanceIconUri,proto3" json:"agentInstanceIconUri"`
+	AgentInstanceIconUrl string                 `protobuf:"bytes,7,opt,name=agent_instance_icon_url,json=agentInstanceIconUrl,proto3" json:"agentInstanceIconUrl"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -461,9 +461,9 @@ func (x *NotificationExtraInfoDwAction) GetAgentInstanceIconUrl() string {
 
 type NotificationExtraInfoRoleChange struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       *common.ProjectDigest  `protobuf:"bytes,1,opt,name=project,proto3,oneof" json:"project,omitempty"`                              
-	RoleCode      string                 `protobuf:"bytes,2,opt,name=role_code,json=roleCode,proto3" json:"roleCode"`                  
-	Action        RoleChangeAction       `protobuf:"varint,3,opt,name=action,proto3,enum=notification.RoleChangeAction" json:"action"`  
+	Project       *common.ProjectDigest  `protobuf:"bytes,1,opt,name=project,proto3,oneof" json:"project,omitempty"`
+	RoleCode      string                 `protobuf:"bytes,2,opt,name=role_code,json=roleCode,proto3" json:"roleCode"`
+	Action        RoleChangeAction       `protobuf:"varint,3,opt,name=action,proto3,enum=notification.RoleChangeAction" json:"action"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -521,8 +521,8 @@ func (x *NotificationExtraInfoRoleChange) GetAction() RoleChangeAction {
 
 type NotificationExtraInfoAgentEditorUpdate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Operator      *common.UserDigest     `protobuf:"bytes,1,opt,name=operator,proto3" json:"operator"`  
-	Agent         *common.AgentDigest    `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent"`        
+	Operator      *common.UserDigest     `protobuf:"bytes,1,opt,name=operator,proto3" json:"operator"`
+	Agent         *common.AgentDigest    `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -573,12 +573,12 @@ func (x *NotificationExtraInfoAgentEditorUpdate) GetAgent() *common.AgentDigest 
 
 type NotificationExtraInfoScheduledTaskFinished struct {
 	state              protoimpl.MessageState      `protogen:"open.v1"`
-	Task               *common.ScheduledTaskDigest `protobuf:"bytes,1,opt,name=task,proto3" json:"task"`                                                             
-	Status             conversation.PlanStatus     `protobuf:"varint,2,opt,name=status,proto3,enum=plan.PlanStatus" json:"status"`                                   
-	ScheduledTaskRunId int64                       `protobuf:"varint,3,opt,name=scheduled_task_run_id,json=scheduledTaskRunId,proto3" json:"scheduledTaskRunId"`  
-	ConversationId     int64                       `protobuf:"varint,4,opt,name=conversation_id,json=conversationId,proto3" json:"conversationId,omitempty"`                  
-	ScheduledFor       int64                       `protobuf:"varint,5,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduledFor"`                        
-	AgentInstance      *common.AgentInstanceDigest `protobuf:"bytes,6,opt,name=agent_instance,json=agentInstance,proto3" json:"agentInstance,omitempty"`                      
+	Task               *common.ScheduledTaskDigest `protobuf:"bytes,1,opt,name=task,proto3" json:"task"`
+	Status             conversation.PlanStatus     `protobuf:"varint,2,opt,name=status,proto3,enum=plan.PlanStatus" json:"status"`
+	ScheduledTaskRunId int64                       `protobuf:"varint,3,opt,name=scheduled_task_run_id,json=scheduledTaskRunId,proto3" json:"scheduledTaskRunId"`
+	ConversationId     int64                       `protobuf:"varint,4,opt,name=conversation_id,json=conversationId,proto3" json:"conversationId,omitempty"`
+	ScheduledFor       int64                       `protobuf:"varint,5,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduledFor"`
+	AgentInstance      *common.AgentInstanceDigest `protobuf:"bytes,6,opt,name=agent_instance,json=agentInstance,proto3" json:"agentInstance,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -657,16 +657,17 @@ func (x *NotificationExtraInfoScheduledTaskFinished) GetAgentInstance() *common.
 
 type Notification struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                     
-	SenderUsername   string                 `protobuf:"bytes,2,opt,name=sender_username,json=senderUsername,proto3" json:"senderUsername"`        
-	ReceiverUsername string                 `protobuf:"bytes,3,opt,name=receiver_username,json=receiverUsername,proto3" json:"receiverUsername"`  
-	Type             NotificationType       `protobuf:"varint,4,opt,name=type,proto3,enum=notification.NotificationType" json:"type"`              
-	Status           NotificationStatus     `protobuf:"varint,5,opt,name=status,proto3,enum=notification.NotificationStatus" json:"status"`        
-	Content          string                 `protobuf:"bytes,6,opt,name=content,proto3" json:"content"`                                            
-	ExtraInfo        *NotificationExtraInfo `protobuf:"bytes,7,opt,name=extra_info,json=extraInfo,proto3" json:"extraInfo"`                       
-	CreatedAt        int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                      
-	UpdatedAt        int64                  `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                      
-	ProjectId        int64                  `protobuf:"varint,10,opt,name=project_id,json=projectId,proto3" json:"projectId"`                     
+	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
+	SenderUsername   string                 `protobuf:"bytes,2,opt,name=sender_username,json=senderUsername,proto3" json:"senderUsername"`
+	ReceiverUsername string                 `protobuf:"bytes,3,opt,name=receiver_username,json=receiverUsername,proto3" json:"receiverUsername"`
+	Type             NotificationType       `protobuf:"varint,4,opt,name=type,proto3,enum=notification.NotificationType" json:"type"`
+	Status           NotificationStatus     `protobuf:"varint,5,opt,name=status,proto3,enum=notification.NotificationStatus" json:"status"`
+	Content          string                 `protobuf:"bytes,6,opt,name=content,proto3" json:"content"`
+	ExtraInfo        *NotificationExtraInfo `protobuf:"bytes,7,opt,name=extra_info,json=extraInfo,proto3" json:"extraInfo"`
+	CreatedAt        int64                  `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`
+	UpdatedAt        int64                  `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`
+	ProjectId        int64                  `protobuf:"varint,10,opt,name=project_id,json=projectId,proto3" json:"projectId"`
+	OrganizationId   int64                  `protobuf:"varint,11,opt,name=organization_id,json=organizationId,proto3" json:"organizationId"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -771,12 +772,19 @@ func (x *Notification) GetProjectId() int64 {
 	return 0
 }
 
+func (x *Notification) GetOrganizationId() int64 {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return 0
+}
+
 type CreateNotificationRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	ReceiverUsername string                 `protobuf:"bytes,2,opt,name=receiver_username,json=receiverUsername,proto3" json:"receiverUsername"`  
-	Type             NotificationType       `protobuf:"varint,3,opt,name=type,proto3,enum=notification.NotificationType" json:"type"`              
-	Content          string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content"`                                            
-	ExtraInfo        *NotificationExtraInfo `protobuf:"bytes,5,opt,name=extra_info,json=extraInfo,proto3" json:"extraInfo"`                       
+	ReceiverUsername string                 `protobuf:"bytes,2,opt,name=receiver_username,json=receiverUsername,proto3" json:"receiverUsername"`
+	Type             NotificationType       `protobuf:"varint,3,opt,name=type,proto3,enum=notification.NotificationType" json:"type"`
+	Content          string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content"`
+	ExtraInfo        *NotificationExtraInfo `protobuf:"bytes,5,opt,name=extra_info,json=extraInfo,proto3" json:"extraInfo"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -841,7 +849,7 @@ func (x *CreateNotificationRequest) GetExtraInfo() *NotificationExtraInfo {
 
 type CreateNotificationData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`  
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -885,9 +893,9 @@ func (x *CreateNotificationData) GetId() int64 {
 
 type CreateNotificationResponse struct {
 	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Data          *CreateNotificationData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
-	Code          int32                   `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                  `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Data          *CreateNotificationData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                   `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                  `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -945,8 +953,8 @@ func (x *CreateNotificationResponse) GetMsg() string {
 
 type ListNotificationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          int32                  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"required,min=1"`                          
-	PageSize      int32                  `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"required,min=1,max=100"`  
+	Page          int32                  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"required,min=1"`
+	PageSize      int32                  `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"required,min=1,max=100"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -997,9 +1005,9 @@ func (x *ListNotificationRequest) GetPageSize() int32 {
 
 type ListNotificationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          *ListNotificationData  `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Data          *ListNotificationData  `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1057,9 +1065,9 @@ func (x *ListNotificationResponse) GetMsg() string {
 
 type ListNotificationData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Total         int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total"`                     
-	HasMore       bool                   `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"hasMore"`  
-	Notifications []*Notification        `protobuf:"bytes,3,rep,name=notifications,proto3" json:"notifications"`      
+	Total         int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total"`
+	HasMore       bool                   `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"hasMore"`
+	Notifications []*Notification        `protobuf:"bytes,3,rep,name=notifications,proto3" json:"notifications"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1117,8 +1125,8 @@ func (x *ListNotificationData) GetNotifications() []*Notification {
 
 type UpdateNotificationStatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                               
-	Status        NotificationStatus     `protobuf:"varint,2,opt,name=status,proto3,enum=notification.NotificationStatus" json:"status"`  
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
+	Status        NotificationStatus     `protobuf:"varint,2,opt,name=status,proto3,enum=notification.NotificationStatus" json:"status"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1169,8 +1177,8 @@ func (x *UpdateNotificationStatusRequest) GetStatus() NotificationStatus {
 
 type UpdateNotificationStatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1221,9 +1229,9 @@ func (x *UpdateNotificationStatusResponse) GetMsg() string {
 
 type ListProjectNotificationsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     int64                  `protobuf:"varint,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty" form:"projectId" binding:"required"`  
-	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`                             
-	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`     
+	ProjectId     int64                  `protobuf:"varint,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty" form:"projectId" binding:"required"`
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1281,9 +1289,9 @@ func (x *ListProjectNotificationsRequest) GetPageSize() int32 {
 
 type ListProjectNotificationsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          *ListNotificationData  `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Data          *ListNotificationData  `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1341,7 +1349,7 @@ func (x *ListProjectNotificationsResponse) GetMsg() string {
 
 type ReadAllNotificationsData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ids           []int64                `protobuf:"varint,1,rep,packed,name=ids,proto3" json:"ids"`  
+	Ids           []int64                `protobuf:"varint,1,rep,packed,name=ids,proto3" json:"ids"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1385,9 +1393,9 @@ func (x *ReadAllNotificationsData) GetIds() []int64 {
 
 type ReadAllNotificationsResponse struct {
 	state         protoimpl.MessageState    `protogen:"open.v1"`
-	Data          *ReadAllNotificationsData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
-	Code          int32                     `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                    `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Data          *ReadAllNotificationsData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                     `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                    `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1493,7 +1501,7 @@ const file_notification_notification_proto_rawDesc = "" +
 	"\x15scheduled_task_run_id\x18\x03 \x01(\x03R\x12scheduledTaskRunId\x12'\n" +
 	"\x0fconversation_id\x18\x04 \x01(\x03R\x0econversationId\x12#\n" +
 	"\rscheduled_for\x18\x05 \x01(\x03R\fscheduledFor\x12B\n" +
-	"\x0eagent_instance\x18\x06 \x01(\v2\x1b.common.AgentInstanceDigestR\ragentInstance\"\x9d\x03\n" +
+	"\x0eagent_instance\x18\x06 \x01(\v2\x1b.common.AgentInstanceDigestR\ragentInstance\"\xc6\x03\n" +
 	"\fNotification\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
 	"\x0fsender_username\x18\x02 \x01(\tR\x0esenderUsername\x12+\n" +
@@ -1509,7 +1517,8 @@ const file_notification_notification_proto_rawDesc = "" +
 	"updated_at\x18\t \x01(\x03R\tupdatedAt\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\n" +
-	" \x01(\x03R\tprojectId\"\xda\x01\n" +
+	" \x01(\x03R\tprojectId\x12'\n" +
+	"\x0forganization_id\x18\v \x01(\x03R\x0eorganizationId\"\xda\x01\n" +
 	"\x19CreateNotificationRequest\x12+\n" +
 	"\x11receiver_username\x18\x02 \x01(\tR\x10receiverUsername\x122\n" +
 	"\x04type\x18\x03 \x01(\x0e2\x1e.notification.NotificationTypeR\x04type\x12\x18\n" +

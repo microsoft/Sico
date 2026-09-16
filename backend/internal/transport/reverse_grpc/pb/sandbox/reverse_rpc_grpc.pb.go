@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ReverseSandboxRPC_RpcApplySandbox_FullMethodName         = "/reverse_rpc.ReverseSandboxRPC/RpcApplySandbox"
-	ReverseSandboxRPC_RpcReleaseSandbox_FullMethodName       = "/reverse_rpc.ReverseSandboxRPC/RpcReleaseSandbox"
-	ReverseSandboxRPC_RpcGetInstanceSandboxes_FullMethodName = "/reverse_rpc.ReverseSandboxRPC/RpcGetInstanceSandboxes"
-	ReverseSandboxRPC_RpcResetSandbox_FullMethodName         = "/reverse_rpc.ReverseSandboxRPC/RpcResetSandbox"
+	ReverseSandboxRPC_RpcApplySandbox_FullMethodName                     = "/reverse_rpc.ReverseSandboxRPC/RpcApplySandbox"
+	ReverseSandboxRPC_RpcReleaseSandbox_FullMethodName                   = "/reverse_rpc.ReverseSandboxRPC/RpcReleaseSandbox"
+	ReverseSandboxRPC_RpcGetInstanceSandboxes_FullMethodName             = "/reverse_rpc.ReverseSandboxRPC/RpcGetInstanceSandboxes"
+	ReverseSandboxRPC_RpcResetSandbox_FullMethodName                     = "/reverse_rpc.ReverseSandboxRPC/RpcResetSandbox"
+	ReverseSandboxRPC_RpcProxyLinuxWorkstationSandboxHttp_FullMethodName = "/reverse_rpc.ReverseSandboxRPC/RpcProxyLinuxWorkstationSandboxHttp"
 )
 
 // ReverseSandboxRPCClient is the client API for ReverseSandboxRPC service.
@@ -40,6 +41,8 @@ type ReverseSandboxRPCClient interface {
 	// RpcResetSandbox soft-resets a sandbox (e.g. close apps, go home for emulator).
 	// The lease and assignment are preserved — only the sandbox environment is reset.
 	RpcResetSandbox(ctx context.Context, in *ResetSandboxRequest, opts ...grpc.CallOption) (*ResetSandboxResponse, error)
+	// RpcProxyLinuxWorkstationSandboxHttp forwards an authorized request to a Linux Workstation assigned to the instance.
+	RpcProxyLinuxWorkstationSandboxHttp(ctx context.Context, in *LinuxWorkstationSandboxHttpRequest, opts ...grpc.CallOption) (*LinuxWorkstationSandboxHttpResponse, error)
 }
 
 type reverseSandboxRPCClient struct {
@@ -90,6 +93,16 @@ func (c *reverseSandboxRPCClient) RpcResetSandbox(ctx context.Context, in *Reset
 	return out, nil
 }
 
+func (c *reverseSandboxRPCClient) RpcProxyLinuxWorkstationSandboxHttp(ctx context.Context, in *LinuxWorkstationSandboxHttpRequest, opts ...grpc.CallOption) (*LinuxWorkstationSandboxHttpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LinuxWorkstationSandboxHttpResponse)
+	err := c.cc.Invoke(ctx, ReverseSandboxRPC_RpcProxyLinuxWorkstationSandboxHttp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReverseSandboxRPCServer is the server API for ReverseSandboxRPC service.
 // All implementations must embed UnimplementedReverseSandboxRPCServer
 // for forward compatibility.
@@ -105,6 +118,8 @@ type ReverseSandboxRPCServer interface {
 	// RpcResetSandbox soft-resets a sandbox (e.g. close apps, go home for emulator).
 	// The lease and assignment are preserved — only the sandbox environment is reset.
 	RpcResetSandbox(context.Context, *ResetSandboxRequest) (*ResetSandboxResponse, error)
+	// RpcProxyLinuxWorkstationSandboxHttp forwards an authorized request to a Linux Workstation assigned to the instance.
+	RpcProxyLinuxWorkstationSandboxHttp(context.Context, *LinuxWorkstationSandboxHttpRequest) (*LinuxWorkstationSandboxHttpResponse, error)
 	mustEmbedUnimplementedReverseSandboxRPCServer()
 }
 
@@ -126,6 +141,9 @@ func (UnimplementedReverseSandboxRPCServer) RpcGetInstanceSandboxes(context.Cont
 }
 func (UnimplementedReverseSandboxRPCServer) RpcResetSandbox(context.Context, *ResetSandboxRequest) (*ResetSandboxResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RpcResetSandbox not implemented")
+}
+func (UnimplementedReverseSandboxRPCServer) RpcProxyLinuxWorkstationSandboxHttp(context.Context, *LinuxWorkstationSandboxHttpRequest) (*LinuxWorkstationSandboxHttpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RpcProxyLinuxWorkstationSandboxHttp not implemented")
 }
 func (UnimplementedReverseSandboxRPCServer) mustEmbedUnimplementedReverseSandboxRPCServer() {}
 func (UnimplementedReverseSandboxRPCServer) testEmbeddedByValue()                           {}
@@ -220,6 +238,24 @@ func _ReverseSandboxRPC_RpcResetSandbox_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReverseSandboxRPC_RpcProxyLinuxWorkstationSandboxHttp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LinuxWorkstationSandboxHttpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReverseSandboxRPCServer).RpcProxyLinuxWorkstationSandboxHttp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReverseSandboxRPC_RpcProxyLinuxWorkstationSandboxHttp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReverseSandboxRPCServer).RpcProxyLinuxWorkstationSandboxHttp(ctx, req.(*LinuxWorkstationSandboxHttpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReverseSandboxRPC_ServiceDesc is the grpc.ServiceDesc for ReverseSandboxRPC service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -242,6 +278,10 @@ var ReverseSandboxRPC_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RpcResetSandbox",
 			Handler:    _ReverseSandboxRPC_RpcResetSandbox_Handler,
+		},
+		{
+			MethodName: "RpcProxyLinuxWorkstationSandboxHttp",
+			Handler:    _ReverseSandboxRPC_RpcProxyLinuxWorkstationSandboxHttp_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

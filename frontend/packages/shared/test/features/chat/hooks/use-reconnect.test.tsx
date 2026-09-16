@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook } from "@testing-library/react";
 import { createStore, Provider as JotaiProvider } from "jotai";
 import {
@@ -26,6 +27,13 @@ import {
   type OpenReconnectStreamOptions,
   type ReconnectStreamPayload,
 } from "@/features/chat/services/reconnect-stream";
+import { selectedOrganizationIdAtom } from "@/features/organization/atoms/selected-organization-atom";
+import { organizationKeys } from "@/features/organization/query-keys";
+import { type OrganizationSummary } from "@/features/organization/schemas/organization";
+import {
+  removeItemFromLocalStorage,
+  SELECTED_ORGANIZATION_ID_LS,
+} from "@/utils/local-storage";
 
 // Mock ONLY the transport — keep the real `ChatStreamHttpError` class so the
 // hook's `instanceof` 401 branch matches against the genuine type (the same
@@ -50,20 +58,26 @@ vi.mock("@sico/ui", async (importActual) => {
 
 function wrapper(
   store: ReturnType<typeof createStore>,
+  queryClient = new QueryClient(),
 ): (props: PropsWithChildren) => ReactElement {
   return function Wrapper({ children }: PropsWithChildren): ReactElement {
-    return <JotaiProvider store={store}>{children}</JotaiProvider>;
+    return (
+      <QueryClientProvider client={queryClient}>
+        <JotaiProvider store={store}>{children}</JotaiProvider>
+      </QueryClientProvider>
+    );
   };
 }
 
 function suspenseWrapper(
   store: ReturnType<typeof createStore>,
 ): (props: PropsWithChildren) => ReactElement {
+  const Provider = wrapper(store);
   return function Wrapper({ children }: PropsWithChildren): ReactElement {
     return (
-      <JotaiProvider store={store}>
+      <Provider>
         <Suspense fallback={null}>{children}</Suspense>
-      </JotaiProvider>
+      </Provider>
     );
   };
 }
@@ -169,6 +183,7 @@ async function flush(): Promise<void> {
 }
 
 beforeEach(() => {
+  removeItemFromLocalStorage(SELECTED_ORGANIZATION_ID_LS);
   vi.useFakeTimers();
   streamCalls = [];
   vi.mocked(openReconnectStream).mockImplementation((payload, options) => {
@@ -179,11 +194,44 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  removeItemFromLocalStorage(SELECTED_ORGANIZATION_ID_LS);
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 describe("useReconnect", () => {
+  it("passes a live bound organization getter without restarting the controller", () => {
+    const store = createStore();
+    const queryClient = new QueryClient();
+    store.set(userAtom, { id: 1, email: "user@example.test", roles: [] });
+    const organizations: OrganizationSummary[] = [9, 10].map((id) => ({
+      id,
+      name: `Organization ${id}`,
+      description: "",
+      createdAt: 1,
+      updatedAt: 1,
+      creatorUsername: "owner@example.test",
+      roleCodes: [],
+      isOwner: false,
+    }));
+    queryClient.setQueryData(
+      organizationKeys.userOrganizations(1),
+      organizations,
+    );
+    const { unmount } = renderHook(() => useReconnect(7, 42), {
+      wrapper: wrapper(store, queryClient),
+    });
+    const { options } = firstStream();
+    expect(options.getOrganizationId?.()).toBe(9);
+
+    store.set(selectedOrganizationIdAtom, 10);
+
+    expect(options.getOrganizationId?.()).toBe(10);
+    expect(openReconnectStream).toHaveBeenCalledOnce();
+    unmount();
+    queryClient.clear();
+  });
+
   it("does not probe or open a stream when disabled", () => {
     const store = createStore();
     renderHook(() => useReconnect(7, 42, { enabled: false }), {

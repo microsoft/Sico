@@ -22,10 +22,11 @@ import (
 	impl10 "sico-backend/internal/biz/notification/impl"
 	"sico-backend/internal/biz/organization"
 	impl3 "sico-backend/internal/biz/organization/impl"
+	"sico-backend/internal/biz/ownership"
 	"sico-backend/internal/biz/project"
-	"sico-backend/internal/biz/project/impl"
+	impl2 "sico-backend/internal/biz/project/impl"
 	"sico-backend/internal/biz/rbac"
-	impl2 "sico-backend/internal/biz/rbac/impl"
+	"sico-backend/internal/biz/rbac/impl"
 	"sico-backend/internal/biz/sandbox"
 	impl7 "sico-backend/internal/biz/sandbox/impl"
 	"sico-backend/internal/biz/sandbox/providers"
@@ -40,12 +41,12 @@ import (
 	repository2 "sico-backend/internal/store/agent/singleagent/repository"
 	repository13 "sico-backend/internal/store/authstate/repository"
 	repository14 "sico-backend/internal/store/casereplay/repository"
-	repository6 "sico-backend/internal/store/conversation/conversation/repository"
+	repository4 "sico-backend/internal/store/conversation/conversation/repository"
 	repository7 "sico-backend/internal/store/conversation/message/repository"
-	repository5 "sico-backend/internal/store/knowledge/repository"
+	repository6 "sico-backend/internal/store/knowledge/repository"
 	repository8 "sico-backend/internal/store/llmhubs/repository"
 	repository11 "sico-backend/internal/store/notification/repository"
-	repository4 "sico-backend/internal/store/organization/repository"
+	repository5 "sico-backend/internal/store/organization/repository"
 	"sico-backend/internal/store/project/repository"
 	"sico-backend/internal/store/rbac/enforcer"
 	repository3 "sico-backend/internal/store/rbac/repository"
@@ -78,7 +79,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	clientConn, err := infra.ProvideCoreGRPCConnection()
+	v, err := infra.ProvideCoreGRPCConnection()
 	if err != nil {
 		cleanup2()
 		cleanup()
@@ -92,23 +93,16 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 	}
 	projectRepository := repository.NewProjectRepo(db)
 	singleAgentInstanceRepository := repository2.NewSingleAgentInstanceRepo(db)
-	components := &impl.Components{
-		ProjectRepo:       projectRepository,
-		IDGen:             idGenerator,
-		BlobClient:        storage,
-		AgentInstanceRepo: singleAgentInstanceRepository,
-	}
-	service := project.InitService(components)
 	userRepository := repository3.NewUserRepository(db)
 	userRoleRepository := repository3.NewUserRoleRepository(db)
-	casbinRuleRepository := repository3.NewCasbinRuleRepository(db)
 	casbinEnforcer, err := enforcer.ProvideCasbinEnforcer(db, client)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	implComponents := &impl2.Components{
+	casbinRuleRepository := repository3.NewCasbinRuleRepository(db)
+	components := &impl.Components{
 		UserRepo:     userRepository,
 		UserRoleRepo: userRoleRepository,
 		CasbinRepo:   casbinRuleRepository,
@@ -116,17 +110,37 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		Enforcer:     casbinEnforcer,
 		Redis:        client,
 	}
-	rbacService := rbac.InitService(implComponents, client)
-	organizationRepository := repository4.NewOrganizationRepository(db)
+	service := rbac.NewService(components, client)
+	accessServices := rbac.NewAccessServices(userRepository, userRoleRepository, casbinEnforcer, service)
+	access := rbac.ProvideAccess(accessServices)
+	singleAgentRepository := repository2.NewSingleAgentRepo(db)
+	conversationRepo := repository4.NewConversationRepo(db, idGenerator)
+	resolver := ownership.NewResolver(access, projectRepository, singleAgentRepository, singleAgentInstanceRepository, conversationRepo)
+	implComponents := &impl2.Components{
+		ProjectRepo:       projectRepository,
+		IDGen:             idGenerator,
+		BlobClient:        storage,
+		AgentInstanceRepo: singleAgentInstanceRepository,
+		Access:            access,
+		Ownership:         resolver,
+	}
+	projectService := project.InitService(implComponents)
+	rbacService := rbac.InitService(service)
+	organizationRepository := repository5.NewOrganizationRepository(db)
+	invitationRepository := repository5.NewInvitationRepository(db)
 	components2 := &impl3.Components{
-		OrgRepo: organizationRepository,
+		OrgRepo:        organizationRepository,
+		InvitationRepo: invitationRepository,
+		ProjectRepo:    projectRepository,
+		Access:         access,
+		Ownership:      resolver,
 	}
 	organizationService := organization.InitService(components2)
-	documentRepository := repository5.NewDocumentRepo(db)
-	knowledgeTagRepository := repository5.NewKnowledgeTagRepo(db)
-	documentTagRepository := repository5.NewDocumentTagRepo(db)
-	playbookRepository := repository5.NewPlaybookRepo(db)
-	playbookTagRepository := repository5.NewPlaybookTagRepo(db)
+	documentRepository := repository6.NewDocumentRepo(db)
+	knowledgeTagRepository := repository6.NewKnowledgeTagRepo(db)
+	documentTagRepository := repository6.NewDocumentTagRepo(db)
+	playbookRepository := repository6.NewPlaybookRepo(db)
+	playbookTagRepository := repository6.NewPlaybookTagRepo(db)
 	components3 := &impl4.Components{
 		DocumentRepo:      documentRepository,
 		KnowledgeTagRepo:  knowledgeTagRepository,
@@ -136,39 +150,43 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		ProjectRepo:       projectRepository,
 		AgentInstanceRepo: singleAgentInstanceRepository,
 		Storage:           storage,
-		CoreGRPC:          clientConn,
+		CoreGRPC:          v,
+		Access:            access,
+		Ownership:         resolver,
 	}
 	knowledgeService := knowledge.InitService(components3)
-	singleAgentRepository := repository2.NewSingleAgentRepo(db)
 	components4 := &impl5.Components{
 		SingleAgentRepo:         singleAgentRepository,
 		SingleAgentInstanceRepo: singleAgentInstanceRepository,
 		ProjectRepo:             projectRepository,
 		Storage:                 storage,
+		Access:                  access,
+		Ownership:               resolver,
 	}
 	implService := impl5.NewService(components4, db)
 	agentService := agent.InitService(implService)
-	conversationRepo := repository6.NewConversationRepo(db, idGenerator)
 	messageRepo := repository7.NewMessageRepo(db)
 	modelRegistryRepository := repository8.NewModelRegistryRepo(db)
 	modelRegistrySecretRepository := repository8.NewModelRegistrySecretRepo(db)
-	organizationLLMConfigRepository := repository4.NewOrganizationLLMConfigRepository(db)
-	llmhubsService := llmhubs.InitService(db, clientConn, modelRegistryRepository, modelRegistrySecretRepository, organizationLLMConfigRepository)
+	organizationLLMConfigRepository := repository5.NewOrganizationLLMConfigRepository(db)
+	llmhubsService := llmhubs.InitService(db, v, modelRegistryRepository, modelRegistrySecretRepository, organizationLLMConfigRepository)
 	components5 := &impl6.Components{
 		ConversationRepo: conversationRepo,
 		MessageRepo:      messageRepo,
 		AgentService:     agentService,
-		ProjectService:   service,
+		ProjectService:   projectService,
 		LLMHubService:    llmhubsService,
 		IDGenerator:      idGenerator,
 		Storage:          storage,
-		CoreGRPC:         clientConn,
+		CoreGRPC:         v,
 		Cache:            client,
 		DB:               db,
+		Access:           access,
+		Ownership:        resolver,
 	}
 	conversationService := conversation.InitService(components5)
-	v := providers.NewProviders()
-	providerRegistry, err := impl7.NewProviderRegistry(v)
+	v2 := providers.NewProviders()
+	providerRegistry, err := impl7.NewProviderRegistry(v2)
 	if err != nil {
 		cleanup2()
 		cleanup()
@@ -181,13 +199,14 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	service2 := impl7.NewServiceWithProjectAssets(pool, singleAgentInstanceRepository, cronCron, projectRepository)
+	service2 := impl7.NewServiceWithAccess(pool, singleAgentInstanceRepository, cronCron, projectRepository, access)
 	sandboxService := sandbox.InitService(service2)
 	skillRepository := repository9.NewSkillRepo(db)
 	components6 := &impl8.Components{
 		SkillRepo:   skillRepository,
 		ProjectRepo: projectRepository,
-		CoreGRPC:    clientConn,
+		CoreGRPC:    v,
+		Ownership:   resolver,
 	}
 	skillService := skill.InitService(components6)
 	taskRuntimeRepository := repository10.NewTaskRuntimeRepo(db)
@@ -197,7 +216,8 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 	components7 := &impl10.Components{
 		NotificationRepo: notificationRepo,
 		Storage:          storage,
-		CoreGRPC:         clientConn,
+		CoreGRPC:         v,
+		Ownership:        resolver,
 	}
 	notificationService := notification.InitService(components7)
 	repositoryRepository := repository12.NewRepository(db)
@@ -217,6 +237,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		DeliverableStorage:  deliverableStorage,
 		Cron:                cronCron,
 		Parser:              parser,
+		Ownership:           resolver,
 	}
 	scheduledtaskService := scheduledtask.InitService(components8)
 	authStateRepository := repository13.NewAuthStateRepo(db)
@@ -227,15 +248,15 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 	authstateService := authstate.InitService(components9)
 	caseReplayRepository := repository14.NewCaseReplayRepo(db)
 	casereplayService := casereplay.InitService(caseReplayRepository)
-	integration := providers.NewIntegration(v, service2, pool)
+	integration := providers.NewIntegration(v2, service2, pool)
 	injector := &Injector{
 		DB:                 db,
 		Cache:              client,
 		IDGen:              idGenerator,
 		Storage:            storage,
-		CoreGRPC:           clientConn,
+		CoreGRPC:           v,
 		Email:              emailClient,
-		ProjectApp:         service,
+		ProjectApp:         projectService,
 		RBACApp:            rbacService,
 		OrganizationApp:    organizationService,
 		KnowledgeApp:       knowledgeService,
@@ -250,6 +271,7 @@ func BuildInjector(ctx context.Context) (*Injector, func(), error) {
 		AuthStateApp:       authstateService,
 		CaseReplayApp:      casereplayService,
 		SandboxIntegration: integration,
+		Access:             access,
 	}
 	return injector, func() {
 		cleanup3()

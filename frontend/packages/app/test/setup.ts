@@ -27,11 +27,11 @@ if (typeof window !== "undefined") {
 
 Object.defineProperty(global, "ResizeObserver", {
   writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  })),
+  value: class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  },
 });
 
 // jsdom has no IntersectionObserver; MessageList mounts an infinite-scroll
@@ -40,11 +40,11 @@ Object.defineProperty(global, "ResizeObserver", {
 // in-place), so the observer must exist globally, not per-suite.
 Object.defineProperty(global, "IntersectionObserver", {
   writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  })),
+  value: class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  },
 });
 
 // jsdom has no canvas 2D context; `lottie-web` (pulled in eagerly by Spinner)

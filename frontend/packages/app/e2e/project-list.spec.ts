@@ -2,7 +2,11 @@ import { expect, type Page, test } from "@playwright/test";
 import { makeOkEnvelope } from "@sico/shared/schemas/api.ts";
 
 import { realLogin, skipWithoutCreds } from "./fixtures/real-auth";
-import { mockSicoApi, seedAuth } from "./fixtures/seed-auth";
+import {
+  mockBoundOrganizationAccess,
+  mockSicoApi,
+  seedAuth,
+} from "./fixtures/seed-auth";
 
 // E2E coverage for `/project` page states. The shared `mockSicoApi`
 // catch-all is installed first; per-test `page.route` calls below
@@ -50,6 +54,7 @@ test.describe("project list", () => {
   test.beforeEach(async ({ page }) => {
     await seedAuth(page);
     await mockSicoApi(page);
+    await mockBoundOrganizationAccess(page);
   });
 
   test(
@@ -211,6 +216,9 @@ test.describe("project list", () => {
           await route.fallback();
           return;
         }
+        expect(route.request().postDataJSON()).toEqual(
+          expect.objectContaining({ organizationId: 9 }),
+        );
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -233,6 +241,79 @@ test.describe("project list", () => {
       await dialog.getByLabel("Name").fill("Aurora launch");
       await dialog.getByRole("button", { name: "Save" }).click();
 
+      await expect(page.getByText("Project created.")).toBeVisible();
+      await expect(dialog).toBeHidden();
+    },
+  );
+
+  test(
+    "missing organization redirects protected projects to the organization empty state",
+    { tag: ["@key", "@project"] },
+    async ({ page }) => {
+      await mockBoundOrganizationAccess(page, { organizationIds: [] });
+      await mockProjectsRoute(page, () => ({
+        body: makeOkEnvelope({
+          projects: [makeProject(1)],
+          total: 1,
+          hasNext: false,
+        }),
+      }));
+      await page.goto("/project");
+
+      await expect(page).toHaveURL(/\/organization\/members$/);
+      await expect(page.getByText("No organization available")).toBeVisible();
+      await expect(page.getByRole("link", { name: /Project 1/ })).toHaveCount(
+        0,
+      );
+      await expect(
+        page.getByRole("button", { name: "Create Project" }),
+      ).toHaveCount(0);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    },
+  );
+
+  test(
+    "create project: saving after an organization switch uses the selected organization",
+    { tag: ["@core", "@project"] },
+    async ({ page }) => {
+      await mockBoundOrganizationAccess(page, { organizationIds: [9, 10] });
+      await mockProjectsRoute(page, () => ({
+        body: makeOkEnvelope({ projects: [], total: 0, hasNext: false }),
+      }));
+      await page.route("**/api/sico/project", async (route) => {
+        if (route.request().method() !== "POST") {
+          await route.fallback();
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(makeOkEnvelope({ id: 100 })),
+        });
+      });
+
+      await page.goto("/project");
+      await page.getByRole("button", { name: "Account options" }).click();
+      await page.getByRole("menuitem", { name: "Switch Organization" }).hover();
+      await page.getByRole("menuitemradio", { name: "SICO 2" }).click();
+      await page.keyboard.press("Escape");
+      await page
+        .locator("header")
+        .getByRole("button", { name: "Create Project" })
+        .click();
+
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Name").fill("Beta project");
+      const requestPromise = page.waitForRequest(
+        (request) =>
+          new URL(request.url()).pathname === "/api/sico/project" &&
+          request.method() === "POST",
+      );
+      await dialog.getByRole("button", { name: "Save" }).click();
+
+      expect((await requestPromise).postDataJSON()).toEqual(
+        expect.objectContaining({ name: "Beta project", organizationId: 10 }),
+      );
       await expect(page.getByText("Project created.")).toBeVisible();
       await expect(dialog).toBeHidden();
     },

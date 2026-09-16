@@ -30,7 +30,7 @@ describe("categoryForDevice", () => {
     ["emulator", "mobile"],
     ["wincua", "windows"],
     ["physical", "windows"],
-    ["aio", null],
+    ["linux_workstation", null],
     ["future", null],
   ] as const)("maps %s to %s", (type, category) => {
     expect(categoryForDevice(type)).toBe(category);
@@ -44,7 +44,7 @@ describe("device statistics", () => {
     device({ sandboxId: "w-free", type: "wincua" }),
     device({ sandboxId: "w-busy", type: "physical", projectId: 7 }),
     device({ sandboxId: "w-unhealthy", type: "physical", allocatable: false }),
-    device({ sandboxId: "linux", type: "aio" }),
+    device({ sandboxId: "linux", type: "linux_workstation" }),
   ];
 
   it("derives organization totals and available counts", () => {

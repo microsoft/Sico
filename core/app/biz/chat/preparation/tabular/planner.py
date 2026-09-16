@@ -11,7 +11,7 @@ from typing import Any, Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import app.llmhubs
-from app.biz.task_runtime.planning import CapabilityDescriptor
+from app.biz.task_runtime.planning import CapabilityDescriptor, normalize_capability_id
 from app.biz.source import NormalizedRow, TabularDocument, TabularSheet
 from app.llmhubs.request_builder import build_llm_request
 
@@ -126,14 +126,15 @@ class LlmTabularPlanner:
         for context in contexts:
             decision = by_table[context.planning_id]
             descriptors = {descriptor.capability_id: descriptor for descriptor in context.descriptors}
-            descriptor = descriptors.get(decision.capability_id) if decision.outcome == "binding" else None
+            capability_id = normalize_capability_id(decision.capability_id)
+            descriptor = descriptors.get(capability_id) if decision.outcome == "binding" else None
             if descriptor is None:
                 raise PreparationError(
                     f"tabular planner selected unavailable capability {decision.capability_id!r}",
                     code="tabular_planner_invalid_output",
                 )
             rules = _validated_binding_rules(decision, context.sheet, descriptor)
-            plans[decision.table_id] = BindingPlan(capability_id=decision.capability_id, rules=rules)
+            plans[decision.table_id] = BindingPlan(capability_id=capability_id, rules=rules)
         return plans
 
 
@@ -251,8 +252,7 @@ def _table_payload(context: TabularPlanningContext) -> dict[str, Any]:
         "headers": list(context.sheet.headers),
         "row_kind": "testcase" if context.rows and context.rows[0].normalizer_id == "testcase_v1" else "generic",
         "sample_rows": [
-            {header: value[:_MAX_SAMPLE_CELL_CHARS] for header, value in row.display_values.items()}
-            for row in context.rows[:3]
+            {header: value[:_MAX_SAMPLE_CELL_CHARS] for header, value in row.display_values.items()} for row in context.rows[:3]
         ],
         "candidate_capability_ids": [descriptor.capability_id for descriptor in context.descriptors],
         "built_in_sources": ["document_path", "sheet_name", "row_index", "source_row", "case_id", "goal", "title"],
@@ -260,11 +260,7 @@ def _table_payload(context: TabularPlanningContext) -> dict[str, Any]:
 
 
 def _planner_payload(batch_goal: str, contexts: Sequence[TabularPlanningContext]) -> dict[str, Any]:
-    descriptors = {
-        descriptor.capability_id: descriptor
-        for context in contexts
-        for descriptor in context.descriptors
-    }
+    descriptors = {descriptor.capability_id: descriptor for context in contexts for descriptor in context.descriptors}
     return {
         "batch_goal": batch_goal,
         "capabilities": [_descriptor_payload(descriptor) for descriptor in descriptors.values()],

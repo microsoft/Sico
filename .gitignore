@@ -7,6 +7,8 @@
 
 ### Local validation artifacts ###
 scripts/acceptance-*.json
+/.tmp/sico-loop/
+/.worktrees/
 
 ### Git ###
 # Created by git for backups. To disable backups in Git:

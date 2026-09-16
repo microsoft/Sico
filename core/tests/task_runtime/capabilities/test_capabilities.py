@@ -21,13 +21,17 @@ from app.biz.task_runtime.capabilities.descriptors import (
 )
 from app.biz.task_runtime.capabilities.ids import (
     builtin_tool_of,
+    expand_capability_selectors,
     normalize_capability_id,
+    normalize_capability_selector,
+    parse_capability_selector,
     skill_action_of,
     split_capability_id,
 )
 from app.biz.task_runtime.capabilities.resolver import CapabilityResolver
 from app.biz.task_runtime.capabilities.loader import CapabilityCard
 from app.biz.task_runtime.capabilities.tool_catalog import RUNTIME_TOOLS
+from app.biz.task_runtime.domain.models import SandboxLeaseRef, TaskRun
 
 
 # ---------------------------------------------------------------------------
@@ -39,8 +43,11 @@ from app.biz.task_runtime.capabilities.tool_catalog import RUNTIME_TOOLS
     ("raw", "expected"),
     [
         ("echo", "builtin:echo"),
-        ("android-tester.run", "skill:android-tester.run"),
+        ("android-tester.run", "skill:android-tester:run"),
         ("builtin:echo", "builtin:echo"),
+        ("skill:android-tester.run", "skill:android-tester:run"),
+        ("skill:android-tester:run", "skill:android-tester:run"),
+        ("linux_workstation:browser_open_url", "linux_workstation:browser:open_url"),
         ("gui.android:tap", "gui.android:tap"),
         ("", ""),
     ],
@@ -53,14 +60,102 @@ def test_split_capability_id_splits_on_the_first_separator_only() -> None:
     # A provider id may be dotted and a local name may contain dots, so only the
     # first separator can be the boundary.
     assert split_capability_id("gui.android:tap") == ("gui.android", "tap")
-    assert split_capability_id("skill:android-tester.run") == ("skill", "android-tester.run")
+    assert split_capability_id("skill:android-tester:run") == ("skill", "android-tester:run")
 
 
 def test_capability_id_decomposition_is_provider_scoped() -> None:
+    assert skill_action_of("skill:android-tester:run") == ("android-tester", "run")
     assert skill_action_of("skill:android-tester.run") == ("android-tester", "run")
     assert skill_action_of("builtin:echo") == ("", "")
     assert builtin_tool_of("builtin:echo") == "echo"
-    assert builtin_tool_of("skill:android-tester.run") == ""
+    assert builtin_tool_of("skill:android-tester:run") == ""
+
+
+def test_capability_id_rejects_selector_wildcards() -> None:
+    with pytest.raises(ValueError, match="must be exact"):
+        normalize_capability_id("linux_workstation:browser:**")
+
+
+def test_capability_selector_supports_exact_and_subtree_scopes() -> None:
+    exact = parse_capability_selector("skill:android-tester.run")
+    subtree = parse_capability_selector("linux_workstation:browser:**")
+
+    assert exact.value == "skill:android-tester:run"
+    assert exact.matches("skill:android-tester:run")
+    assert not exact.matches("skill:android-tester:inspect")
+    assert subtree.matches("linux_workstation:browser:open_url")
+    assert not subtree.matches("linux_workstation:file:read")
+    assert normalize_capability_selector("linux_workstation:browser:**") == "linux_workstation:browser:**"
+
+
+@pytest.mark.parametrize(
+    "selector",
+    ["", "**", "linux_workstation:**:click", "linux_workstation:browser:*", "linux_workstation::**"],
+)
+def test_capability_selector_rejects_ambiguous_forms(selector: str) -> None:
+    with pytest.raises(ValueError):
+        parse_capability_selector(selector)
+
+
+def test_expand_capability_selectors_returns_exact_snapshot_in_catalogue_order() -> None:
+    expanded = expand_capability_selectors(
+        ["linux_workstation:browser:**", "skill:android-tester.run"],
+        [
+            "linux_workstation:file:read",
+            "linux_workstation:browser:open_url",
+            "linux_workstation:browser:screenshot",
+            "skill:android-tester:run",
+        ],
+    )
+
+    assert expanded == (
+        "linux_workstation:browser:open_url",
+        "linux_workstation:browser:screenshot",
+        "skill:android-tester:run",
+    )
+
+
+def test_catalogue_query_filters_by_hierarchical_selector() -> None:
+    query = CatalogueQuery(selectors=("linux_workstation:browser:**",))
+    browser = CapabilityDescriptor(
+        capability_id="linux_workstation:browser:screenshot",
+        parameter_schema={},
+        required_sandbox=("linux_workstation",),
+        workspace_access="none",
+        effect="read",
+    )
+    file_read = CapabilityDescriptor(
+        capability_id="linux_workstation:file:read",
+        parameter_schema={},
+        required_sandbox=("linux_workstation",),
+        workspace_access="none",
+        effect="read",
+    )
+
+    assert query.matches(browser)
+    assert not query.matches(file_read)
+
+
+def test_catalogue_query_search_splits_namespaces_and_ranks_id_terms() -> None:
+    query = CatalogueQuery(search="workstation execute command")
+    shell = CapabilityDescriptor(
+        capability_id="linux_workstation:shell:exec",
+        description="Run one shell command.",
+        parameter_schema={},
+        required_sandbox=("linux_workstation",),
+        workspace_access="none",
+        effect="mutate",
+    )
+    browser = CapabilityDescriptor(
+        capability_id="linux_workstation:browser:screenshot",
+        description="Capture the desktop.",
+        parameter_schema={},
+        required_sandbox=("linux_workstation",),
+        workspace_access="none",
+        effect="read",
+    )
+
+    assert query.search_score(shell) > query.search_score(browser) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +297,28 @@ def test_arguments_pass_through_when_nothing_is_sensitive() -> None:
     assert secret == {}
 
 
+def test_resolve_context_projects_the_concrete_sandbox_lease() -> None:
+    lease = SandboxLeaseRef(
+        sandbox_id="linux_workstation:1",
+        type="linux_workstation",
+        os="linux",
+        endpoint="http://linux-workstation",
+        acquired_at=1,
+    )
+    task_run = TaskRun.model_construct(
+        username="alice@example.com",
+        agent_instance_id=7,
+        project_id=9,
+        run_id="run-1",
+        sandbox=lease,
+    )
+
+    context = ResolveContext.from_run(task_run)
+
+    assert context.sandbox is task_run.sandbox
+    assert context.sandbox.type == "linux_workstation"
+
+
 # ---------------------------------------------------------------------------
 # Catalogue projections
 # ---------------------------------------------------------------------------
@@ -225,7 +342,7 @@ def test_skill_catalogue_skips_prose_only_cards() -> None:
 
     descriptors = skill_descriptors([executable, prose_only])
 
-    assert [d.capability_id for d in descriptors] == ["skill:android-tester.run"]
+    assert [d.capability_id for d in descriptors] == ["skill:android-tester:run"]
 
 
 def test_undeclared_skill_effect_projects_to_mutate() -> None:
@@ -294,9 +411,20 @@ def test_skill_parameter_schema_preserves_tabular_binding_aliases() -> None:
 
     (descriptor,) = skill_descriptors([card])
 
-    assert descriptor.parameter_schema["properties"]["username"]["x-sico-binding"] == {
-        "aliases": ["User Name", "Login"]
-    }
+    assert descriptor.parameter_schema["properties"]["username"]["x-sico-binding"] == {"aliases": ["User Name", "Login"]}
+
+
+def test_skill_descriptor_projects_concrete_linux_workstation_target() -> None:
+    card = CapabilityCard(
+        name="s.a",
+        skill_name="s",
+        action_name="a",
+        target_type="linux_workstation",
+    )
+
+    (descriptor,) = skill_descriptors([card])
+
+    assert descriptor.required_sandbox == ("linux_workstation",)
 
 
 # ---------------------------------------------------------------------------

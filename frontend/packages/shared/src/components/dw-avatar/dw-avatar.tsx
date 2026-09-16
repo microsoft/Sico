@@ -12,6 +12,8 @@ import { safeIconUri } from "../../utils/safe-icon-uri";
 type DwAvatarBase = {
   agent: { iconUri?: string | null };
   size?: AvatarSize;
+  // Only for object URLs created locally by the app, never API-sourced values.
+  previewSrc?: string;
 };
 
 /**
@@ -30,12 +32,13 @@ export type DwAvatarProps =
  */
 export function DwAvatar(props: DwAvatarProps): ReactElement {
   // eslint-disable-next-line react/destructuring-assignment -- discriminated union needs narrowing on `props`
-  const { agent, size = "default" } = props;
+  const { agent, size = "default", previewSrc } = props;
   // eslint-disable-next-line react/destructuring-assignment -- discriminated union needs narrowing on `props`
   const alt = "decorative" in props && props.decorative ? "" : props.label;
-  const src = safeIconUri(agent.iconUri ?? undefined);
+  const src = previewSrc ?? safeIconUri(agent.iconUri ?? undefined);
+  // Reset the root's loaded status too, so clearing a preview restores fallback.
   return (
-    <Avatar size={size} data-testid="avatar-root">
+    <Avatar key={src} size={size} data-testid="avatar-root">
       {src ? (
         <AvatarImage
           src={src}

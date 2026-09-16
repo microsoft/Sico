@@ -96,6 +96,18 @@ func (w *otelTracedService) ListSingleAgentInstancesByFilter(ctx context.Context
 	return ret0, ret1, ret2
 }
 
+func (w *otelTracedService) ListSingleAgentInstancesForDashboard(ctx context.Context) ([]*singleagent.SingleAgentInstance, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ListSingleAgentInstancesForDashboard")
+	defer span.End()
+
+	ret0, ret1 := w.next.ListSingleAgentInstancesForDashboard(ctx)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
 func (w *otelTracedService) ReassignSingleAgentInstance(ctx context.Context, req *single_agent.ReassignSingleAgentInstanceRequest) (*single_agent.ReassignSingleAgentInstanceResponse, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ReassignSingleAgentInstance")
 	defer span.End()

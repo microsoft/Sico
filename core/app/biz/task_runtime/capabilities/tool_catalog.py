@@ -22,7 +22,9 @@ from typing import Any, Literal
 
 ECHO_TOOL_NAME = "echo"
 FILE_CONVERT_TOOL_NAME = "file_convert"
+READ_FILE_TOOL_NAME = "read_file"
 RUN_COMMAND_TOOL_NAME = "run_command"
+WRITE_ARTIFACT_TOOL_NAME = "write_artifact"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,13 +46,55 @@ class RuntimeTool:
 # Order matters only for rendering the planner-facing catalogue.
 RUNTIME_TOOLS: tuple[RuntimeTool, ...] = (
     RuntimeTool(
+        name=READ_FILE_TOOL_NAME,
+        usage=(
+            "read a bounded UTF-8 text file from the shared workspace; pass `args.file_path` as a workspace-relative "
+            "path and optionally paginate with zero-based `args.offset` and `args.lines` (maximum 200 lines)."
+        ),
+        parameter_schema={
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "Workspace-relative UTF-8 text file path."},
+                "offset": {"type": "integer", "minimum": 0, "default": 0},
+                "lines": {"type": "integer", "minimum": 1, "maximum": 200, "default": 200},
+            },
+            "required": ["file_path"],
+            "additionalProperties": False,
+        },
+        effect="read",
+        workspace_access="read_only",
+    ),
+    RuntimeTool(
+        name=WRITE_ARTIFACT_TOOL_NAME,
+        usage=(
+            "create or replace one UTF-8 text artifact under the current run's result directory; pass "
+            "`args.filepath` as a result-relative path and `args.content` as the complete file content. "
+            "The written file is returned as the primary artifact."
+        ),
+        parameter_schema={
+            "type": "object",
+            "properties": {
+                "filepath": {
+                    "type": "string",
+                    "description": "Result-relative output path, for example `product_prd.md`.",
+                },
+                "content": {"type": "string", "description": "Complete UTF-8 text to write."},
+            },
+            "required": ["filepath", "content"],
+            "additionalProperties": False,
+        },
+        effect="mutate",
+        workspace_access="read_only",
+    ),
+    RuntimeTool(
         name=RUN_COMMAND_TOOL_NAME,
         usage=(
-            "execute a shell command via the configured sandbox/command backend; pass the command line "
+            "execute one isolated shell command via the generic configured command backend; pass the command line "
             "in `args.command` (optionally `args.image`, `args.timeout`). Provide the exact command \u2014 "
             "the executor does not interpret natural-language descriptions. The command starts with cwd "
             "set to the shared workspace (`$SICO_WORKSPACE_DIR`), which is mounted read-only by "
-            "container backends; write all generated files under `$SICO_RESULT_DIR`."
+            "container backends; write generated files under the per-run `$SICO_RESULT_DIR`. Do not use this for an "
+            "assigned Linux workstation or for separate tasks that must share writable files."
         ),
         parameter_schema={
             "type": "object",
@@ -107,6 +151,7 @@ RUNTIME_TOOLS: tuple[RuntimeTool, ...] = (
 
 # Membership set used by both the provider and the adapter's allow-list checks.
 RUNTIME_TOOL_NAMES: frozenset[str] = frozenset(tool.name for tool in RUNTIME_TOOLS)
+SUB_AGENT_BASELINE_TOOL_NAMES: tuple[str, ...] = (READ_FILE_TOOL_NAME, WRITE_ARTIFACT_TOOL_NAME)
 
 
 def is_runtime_tool(name: str) -> bool:

@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { routeTree } from "../../../src/routeTree.gen";
 import { clearAuthStorage } from "../../_helpers/clear-auth-storage";
+import { seedOrganizationContext } from "../../_helpers/organization-context";
 
 const { fetchAgentsMock, fetchScheduledTasksMock } = vi.hoisted(() => ({
   fetchAgentsMock: vi.fn(),
@@ -95,6 +96,7 @@ describe("/_authed/digital-worker", () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+    seedOrganizationContext(queryClient);
     const apiClient = axios.create({ baseURL: "/api/sico" });
     const router = createRouter({
       routeTree,

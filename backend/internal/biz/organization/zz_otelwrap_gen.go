@@ -23,11 +23,47 @@ func (w *otelTracedService) Unwrap() Service {
 	return w.next
 }
 
+func (w *otelTracedService) AcceptOrganizationInvitation(ctx context.Context, req *organization.AcceptOrganizationInvitationRequest, username string) (*organization.AcceptOrganizationInvitationResponse, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.AcceptOrganizationInvitation")
+	defer span.End()
+
+	ret0, ret1 := w.next.AcceptOrganizationInvitation(ctx, req, username)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
 func (w *otelTracedService) CreateOrganization(ctx context.Context, req *organization.CreateOrganizationRequest, creator string) (*organization.CreateOrganizationResponse, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.CreateOrganization")
 	defer span.End()
 
 	ret0, ret1 := w.next.CreateOrganization(ctx, req, creator)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedService) CreateOrganizationInternal(ctx context.Context, req *organization.CreateOrganizationRequest, creator string) (*organization.CreateOrganizationResponse, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.CreateOrganizationInternal")
+	defer span.End()
+
+	ret0, ret1 := w.next.CreateOrganizationInternal(ctx, req, creator)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedService) CreateOrganizationInvitation(ctx context.Context, req *organization.CreateOrganizationInvitationRequest, creator string) (*organization.CreateOrganizationInvitationResponse, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.CreateOrganizationInvitation")
+	defer span.End()
+
+	ret0, ret1 := w.next.CreateOrganizationInvitation(ctx, req, creator)
 	if ret1 != nil {
 		span.RecordError(ret1)
 		span.SetStatus(codes.Error, ret1.Error())
@@ -59,6 +95,18 @@ func (w *otelTracedService) GetOrganization(ctx context.Context, req *organizati
 	return ret0, ret1
 }
 
+func (w *otelTracedService) GetOrganizationInvitation(ctx context.Context, req *organization.GetOrganizationInvitationRequest) (*organization.GetOrganizationInvitationResponse, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.GetOrganizationInvitation")
+	defer span.End()
+
+	ret0, ret1 := w.next.GetOrganizationInvitation(ctx, req)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
 func (w *otelTracedService) GetUserOrganizationList(ctx context.Context, req *organization.GetUserOrganizationListRequest) (*organization.GetUserOrganizationListResponse, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.GetUserOrganizationList")
 	defer span.End()
@@ -71,11 +119,47 @@ func (w *otelTracedService) GetUserOrganizationList(ctx context.Context, req *or
 	return ret0, ret1
 }
 
+func (w *otelTracedService) ListOrganizationInvitations(ctx context.Context, req *organization.ListOrganizationInvitationsRequest) (*organization.ListOrganizationInvitationsResponse, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ListOrganizationInvitations")
+	defer span.End()
+
+	ret0, ret1 := w.next.ListOrganizationInvitations(ctx, req)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
 func (w *otelTracedService) ListOrganizations(ctx context.Context, req *organization.ListOrganizationsRequest) (*organization.ListOrganizationsResponse, error) {
 	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ListOrganizations")
 	defer span.End()
 
 	ret0, ret1 := w.next.ListOrganizations(ctx, req)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedService) ListVisibleOrganizations(ctx context.Context, req *organization.ListOrganizationsRequest) (*organization.ListOrganizationsResponse, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.ListVisibleOrganizations")
+	defer span.End()
+
+	ret0, ret1 := w.next.ListVisibleOrganizations(ctx, req)
+	if ret1 != nil {
+		span.RecordError(ret1)
+		span.SetStatus(codes.Error, ret1.Error())
+	}
+	return ret0, ret1
+}
+
+func (w *otelTracedService) RevokeOrganizationInvitation(ctx context.Context, req *organization.RevokeOrganizationInvitationRequest) (*organization.RevokeOrganizationInvitationResponse, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "Service.RevokeOrganizationInvitation")
+	defer span.End()
+
+	ret0, ret1 := w.next.RevokeOrganizationInvitation(ctx, req)
 	if ret1 != nil {
 		span.RecordError(ret1)
 		span.SetStatus(codes.Error, ret1.Error())

@@ -86,7 +86,7 @@ _POD_READY_TIMEOUT_SECONDS = 60
 # independent, defence-in-depth backstops keep them from leaking:
 #   1. ``activeDeadlineSeconds`` on every pod — k8s self-terminates a pod whose
 #      lifetime exceeds the bound even if core is gone. The default (2h) is far
-#      above a single run's 600s default command timeout, so it never cuts a
+#      above a single run's 900s default command timeout, so it never cuts a
 #      healthy run short; it only reclaims a pod whose driver vanished.
 #   2. A periodic reaper (:func:`run_sandbox_pod_reaper`) that deletes terminal
 #      pods immediately and Running pods older than the ceiling. The ceiling

@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { routeTree } from "../../../src/routeTree.gen";
 import { clearAuthStorage } from "../../_helpers/clear-auth-storage";
+import { seedOrganizationContext } from "../../_helpers/organization-context";
 
 // The bare `/digital-worker/$agentId` index is now ALWAYS the DigitalWorkerHome
 // (hero + composer + suggested tasks) — fully decoupled from chat, no history
@@ -50,6 +51,7 @@ function renderAt(
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  seedOrganizationContext(queryClient);
   seed?.(queryClient);
   const apiClient = {} as AxiosInstance;
   const router = createRouter({

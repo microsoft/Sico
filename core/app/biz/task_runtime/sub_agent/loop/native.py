@@ -10,23 +10,29 @@ import time
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import replace
 
+from ...capabilities.ids import normalize_capability_id
 from .contracts import (
     AgentLoopRequest,
     AgentLoopRuntime,
     AgentLoopSnapshot,
     AgentModel,
+    AgentModelOutputDelta,
     AgentModelState,
+    AgentModelTurn,
     BoundAgentTool,
     FinalAnswer,
     InvalidAction,
     Observation,
     TokenUsage,
+    current_toolset,
+    stream_model_turn,
 )
 from .events import (
     AgentLoopEvent,
     CompletionProposedEvent,
     ContextPreparedEvent,
     LoopFinishedEvent,
+    ModelOutputDeltaEvent,
     ModelTurnCompletedEvent,
     ModelTurnStartedEvent,
     ToolCallCompletedEvent,
@@ -40,14 +46,13 @@ class NativeAgentLoopEngine:
     def __init__(self, model: AgentModel) -> None:
         self._model = model
 
-    async def run(  # noqa: PLR0911 - each terminal event immediately closes the async stream.
+    async def run(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one loop owns ordered state.
         self,
         request: AgentLoopRequest,
         *,
         tools: tuple[BoundAgentTool, ...],
         runtime: AgentLoopRuntime,
     ) -> AsyncIterator[AgentLoopEvent]:
-        bound = {tool.descriptor.tool_id: tool for tool in tools}
         history: list[Observation] = []
         usage = TokenUsage()
         tool_calls = 0
@@ -56,29 +61,48 @@ class NativeAgentLoopEngine:
 
         try:
             for turn in range(1, request.limits.max_model_turns + 1):
-                snapshot = AgentLoopSnapshot(request, turn, tuple(history), usage, tool_calls)
+                toolset = await current_toolset(runtime, tools)
+                snapshot = AgentLoopSnapshot(request, turn, tuple(history), usage, tool_calls, toolset.revision)
                 prepared = await runtime.context_controller.before_model(snapshot)
                 yield ContextPreparedEvent(turn=turn, block_count=len(prepared.blocks))
                 yield ModelTurnStartedEvent(turn=turn)
                 model_state = AgentModelState(
                     task=request.task,
-                    tools=request.tools,
+                    tools=toolset.descriptors,
                     turn=turn,
                     max_model_turns=request.limits.max_model_turns,
                     system_prompt=request.system_prompt,
                     context=prepared.blocks,
                     history=prepared.history if prepared.history is not None else tuple(history),
                     initial_messages=request.initial_messages,
+                    toolset_revision=toolset.revision,
+                    provider_tools=request.provider_tools,
                 )
                 started = time.perf_counter()
-                model_turn = await self._model.complete_turn(model_state)
+                model_turn: AgentModelTurn | None = None
+                async for item in stream_model_turn(self._model, model_state):
+                    if isinstance(item, AgentModelOutputDelta):
+                        yield ModelOutputDeltaEvent(turn=turn, content=item.content)
+                    elif model_turn is None:
+                        model_turn = item
+                    else:
+                        raise RuntimeError("agent model stream emitted more than one terminal turn")
+                if model_turn is None:
+                    raise RuntimeError("agent model stream ended without a terminal turn")
                 latency_ms = model_turn.latency_ms or int((time.perf_counter() - started) * 1000)
                 usage += model_turn.usage
                 yield ModelTurnCompletedEvent(turn, model_turn.usage, model_turn.model, latency_ms)
                 action = model_turn.action
 
                 if isinstance(action, FinalAnswer):
-                    snapshot = AgentLoopSnapshot(request, turn, tuple(history), usage, tool_calls)
+                    snapshot = AgentLoopSnapshot(
+                        request,
+                        turn,
+                        tuple(history),
+                        usage,
+                        tool_calls,
+                        toolset.revision,
+                    )
                     directive = await runtime.evaluate_completion(action, snapshot)
                     yield CompletionProposedEvent(turn, action, directive)
                     if directive.outcome == "accept":
@@ -103,7 +127,7 @@ class NativeAgentLoopEngine:
                         )
                         return
                     history.append(_failed_observation("", _call_id(turn, 1), reason, "policy_deny"))
-                    if stall.record(_signature("final_answer", {}, reason), failed=True):
+                    if stall.record(_signature("final_answer", {}, reason)):
                         yield _stalled(stall.limit, usage, turn, tool_calls)
                         return
                     continue
@@ -111,12 +135,27 @@ class NativeAgentLoopEngine:
                 if isinstance(action, InvalidAction):
                     message = f"Could not decode the requested action: {action.reason}"
                     history.append(_failed_observation(action.capability, _call_id(turn, 1), message, "internal"))
-                    if stall.record(_signature(action.capability, {}, action.reason), failed=True):
+                    if stall.record(_signature(action.capability, {}, action.reason)):
                         yield _stalled(stall.limit, usage, turn, tool_calls)
                         return
                     continue
 
-                call = replace(action, call_id=_normalized_call_id(action.call_id, turn, 1))
+                capability = _normalized_capability_id(action.capability)
+                if capability is None:
+                    yield LoopFinishedEvent(
+                        outcome="failed",
+                        summary=f"Agent requested disallowed capability {action.capability!r}.",
+                        error_kind="policy_denied",
+                        usage=usage,
+                        model_turns=turn,
+                        tool_calls=tool_calls,
+                    )
+                    return
+                call = replace(
+                    action,
+                    capability=capability,
+                    call_id=_normalized_call_id(action.call_id, turn, 1),
+                )
                 if call.call_id in used_call_ids:
                     yield LoopFinishedEvent(
                         outcome="failed",
@@ -128,6 +167,8 @@ class NativeAgentLoopEngine:
                     )
                     return
                 used_call_ids.add(call.call_id)
+                invocation_toolset = await current_toolset(runtime, tools)
+                bound = {tool.descriptor.tool_id: tool for tool in invocation_toolset.tools}
                 tool = bound.get(call.capability)
                 if tool is None:
                     yield LoopFinishedEvent(
@@ -151,14 +192,23 @@ class NativeAgentLoopEngine:
                     return
 
                 yield ToolCallRequestedEvent(turn, call)
-                snapshot = AgentLoopSnapshot(request, turn, tuple(history), usage, tool_calls)
+                snapshot = AgentLoopSnapshot(
+                    request,
+                    turn,
+                    tuple(history),
+                    usage,
+                    tool_calls,
+                    invocation_toolset.revision,
+                )
                 tool_started = time.perf_counter()
                 observation = await tool.invoke(call, snapshot)
+                observation = replace(observation, arguments=call.args)
                 duration_ms = int((time.perf_counter() - tool_started) * 1000)
                 tool_calls += 1
+                usage += observation.usage
                 history.append(observation)
                 yield ToolCallCompletedEvent(turn, call, observation, duration_ms)
-                if stall.record(_signature(call.capability, call.args, ""), failed=not observation.ok):
+                if stall.record(_signature(call.capability, call.args, "")):
                     yield _stalled(stall.limit, usage, turn, tool_calls)
                     return
 
@@ -183,11 +233,7 @@ class _StallDetector:
         self._signature = ""
         self._count = 0
 
-    def record(self, signature: str, *, failed: bool) -> bool:
-        if not failed:
-            self._signature = ""
-            self._count = 0
-            return False
+    def record(self, signature: str) -> bool:
         if signature != self._signature:
             self._signature = signature
             self._count = 1
@@ -211,6 +257,13 @@ def _normalized_call_id(value: str, turn: int, call_index: int) -> str:
         return raw
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
     return f"provider-call-{digest}"
+
+
+def _normalized_capability_id(value: str) -> str | None:
+    try:
+        return normalize_capability_id(value)
+    except ValueError:
+        return None
 
 
 def _signature(capability: str, args: Mapping[str, object], reason: str) -> str:

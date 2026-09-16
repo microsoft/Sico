@@ -32,6 +32,7 @@ import {
 import { Route } from "../../../src/routes/_authed/digital-worker.$agentId";
 import { routeTree } from "../../../src/routeTree.gen";
 import { clearAuthStorage } from "../../_helpers/clear-auth-storage";
+import { seedOrganizationContext } from "../../_helpers/organization-context";
 
 // --- Regression harness for the agent-detail error boundary ---
 // `<DwAgentLayout>` calls strict `Route.useParams()`, so it only resolves
@@ -71,6 +72,7 @@ function renderAgentRoute(initialAgentId = "7"): { router: RegisteredRouter } {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  seedOrganizationContext(queryClient);
   const apiClient = {} as AxiosInstance;
   const router = createRouter({
     routeTree,

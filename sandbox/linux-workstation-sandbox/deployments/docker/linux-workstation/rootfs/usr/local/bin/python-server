@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+HOST="0.0.0.0"
+PORT="${SANDBOX_SRV_PORT:-8091}"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --host)
+      HOST="$2"; shift 2 ;;
+    --port)
+      PORT="$2"; shift 2 ;;
+    --ws-ping-interval)
+      shift 2 ;;
+    --mcp-config)
+      shift 2 ;;
+    --filter-mcp-servers)
+      shift 2 ;;
+    --workspace)
+      export WORKSPACE="$2"; shift 2 ;;
+    *)
+      shift ;;
+  esac
+done
+
+exec /opt/python3.12/bin/python3.12 -m uvicorn linux_workstation_server.app:app --app-dir /opt/linux-workstation-server --host "$HOST" --port "$PORT"

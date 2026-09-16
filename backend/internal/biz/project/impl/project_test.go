@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	"sico-backend/internal/biz/ownership"
 	"sico-backend/internal/biz/rbac"
 	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/store/project/repository"
@@ -37,7 +38,60 @@ type mockProjectRepo struct {
 	nextAssetID                  int64
 	deliverableTotal             int64
 	nextDeliverableID            int64
+	listFilter                   *repository.ProjectFilter
+	listCalls                    int
 }
+
+type fakeAuthorizer struct {
+	*rbac.AccessServices
+	requireErr    error
+	platformAdmin bool
+}
+
+type fakeOwnership struct {
+	ownership.Resolver
+	projectOrganizationCalls int
+	selectedOrganizationID   int64
+	requireSelectedCalls     int
+}
+
+func (f *fakeOwnership) RequireSelected(context.Context) (int64, error) {
+	f.requireSelectedCalls++
+	return f.selectedOrganizationID, nil
+}
+
+func (f *fakeOwnership) ProjectOrganization(context.Context, int64) (int64, error) {
+	f.projectOrganizationCalls++
+	return 0, nil
+}
+
+func (f *fakeAuthorizer) Require(context.Context, rbac.Scope, rbac.Permission) error {
+	return f.requireErr
+}
+
+func (f *fakeAuthorizer) RequireOrOwner(context.Context, rbac.Scope, rbac.Permission, string) error {
+	return f.requireErr
+}
+
+func (f *fakeAuthorizer) RequireAgentManageOrOwner(context.Context, string, string) error {
+	return f.requireErr
+}
+
+func (f *fakeAuthorizer) RequireWorkspaceManageOrOwner(context.Context, int64, string) error {
+	return f.requireErr
+}
+
+func (f *fakeAuthorizer) ListOrganizationIDs(context.Context, rbac.Permission) ([]int64, error) {
+	return nil, nil
+}
+
+func (f *fakeAuthorizer) ListAgentIDs(context.Context, rbac.Permission) ([]string, error) {
+	return nil, nil
+}
+
+func (f *fakeAuthorizer) Initialized() bool { return true }
+
+func (f *fakeAuthorizer) IsPlatformAdmin(context.Context) bool { return f.platformAdmin }
 
 func newMockProjectRepo() *mockProjectRepo {
 	return &mockProjectRepo{
@@ -53,12 +107,100 @@ func (m *mockProjectRepo) CreateProject(_ context.Context, p *repository.Project
 	return nil
 }
 
+func (m *mockProjectRepo) ListProjects(
+	_ context.Context,
+	filter *repository.ProjectFilter,
+	_, _ int,
+) ([]*repository.ProjectModel, int64, error) {
+	m.listCalls++
+	m.listFilter = filter
+	return nil, 0, nil
+}
+
 func (m *mockProjectRepo) GetProjectByID(_ context.Context, id int64) (*repository.ProjectModel, error) {
 	p, ok := m.projects[id]
 	if !ok {
 		return nil, gorm.ErrRecordNotFound
 	}
 	return p, nil
+}
+
+func TestListProjectsOrganizationScope(t *testing.T) {
+	tests := []struct {
+		name                  string
+		platformAdmin         bool
+		selectedOrganization  int64
+		requestedOrganization *int64
+		wantOrganization      int64
+		wantRequireSelected   int
+		wantError             bool
+	}{
+		{
+			name:                 "selected organization by default",
+			selectedOrganization: 10,
+			wantOrganization:     10,
+			wantRequireSelected:  1,
+		},
+		{
+			name:                  "matching explicit organization for member",
+			selectedOrganization:  10,
+			requestedOrganization: ptrInt64(10),
+			wantOrganization:      10,
+			wantRequireSelected:   1,
+		},
+		{
+			name:                  "foreign explicit organization rejected for member",
+			selectedOrganization:  10,
+			requestedOrganization: ptrInt64(20),
+			wantRequireSelected:   1,
+			wantError:             true,
+		},
+		{
+			name:                  "platform admin explicit organization overrides selection",
+			platformAdmin:         true,
+			selectedOrganization:  10,
+			requestedOrganization: ptrInt64(20),
+			wantOrganization:      20,
+			wantRequireSelected:   0,
+		},
+		{
+			name:                 "platform admin without override uses selection",
+			platformAdmin:        true,
+			selectedOrganization: 10,
+			wantOrganization:     10,
+			wantRequireSelected:  1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repo := newMockProjectRepo()
+			ownershipResolver := &fakeOwnership{selectedOrganizationID: test.selectedOrganization}
+			service := NewService(&Components{
+				ProjectRepo: repo,
+				Access:      &fakeAuthorizer{platformAdmin: test.platformAdmin},
+				Ownership:   ownershipResolver,
+			})
+
+			_, err := service.ListProjects(context.Background(), &projectdto.ListProjectFilter{
+				Page: 1, PageSize: 10, OrganizationId: test.requestedOrganization,
+			})
+			if test.wantError {
+				require.Error(t, err)
+				assert.Equal(t, 0, repo.listCalls)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, repo.listFilter)
+				require.NotNil(t, repo.listFilter.OrganizationID)
+				assert.Equal(t, test.wantOrganization, *repo.listFilter.OrganizationID)
+			}
+			assert.Equal(t, test.wantRequireSelected, ownershipResolver.requireSelectedCalls)
+		})
+	}
+}
+
+func ptrInt64(value int64) *int64 {
+	return &value
 }
 
 func (m *mockProjectRepo) DeleteProject(_ context.Context, id int64) error {
@@ -272,6 +414,29 @@ func TestCreateProject(t *testing.T) {
 	})
 }
 
+func TestCreateProjectUsesInjectedAuthorizer(t *testing.T) {
+	repo := newMockProjectRepo()
+	denied := fmt.Errorf("injected authorization denied")
+	svc := NewService(&Components{
+		ProjectRepo: repo,
+		IDGen:       &mockIDGen{},
+		BlobClient:  &mockBlobClient{},
+		Access: &fakeAuthorizer{
+			AccessServices: rbac.NewUninitializedAccessServices(),
+			requireErr:     denied,
+		},
+	})
+
+	response, err := svc.CreateProject(context.Background(), &projectdto.CreateProjectRequest{
+		Name:           "Denied Project",
+		OrganizationId: 7,
+	}, "creator1")
+
+	require.ErrorIs(t, err, denied)
+	require.Nil(t, response)
+	require.Empty(t, repo.projects)
+}
+
 func TestProjectRolePriority(t *testing.T) {
 	assert.Greater(t, projectRolePriority(rbac.RoleProjectAdmin), projectRolePriority(rbac.RoleProjectMember))
 	assert.Greater(t, projectRolePriority(rbac.RoleProjectMember), projectRolePriority("unknown"))
@@ -344,6 +509,31 @@ func TestAddProjectAsset(t *testing.T) {
 	assert.Equal(t, "asset.txt", resp.Data.MetaInfo.FileName)
 	assert.Len(t, repo.assets, 1)
 	assert.Equal(t, "1.txt", repo.assets[1].ObjectKey)
+}
+
+func TestAddProjectAssetUsesDefaultSpaceWithoutProjectID(t *testing.T) {
+	repo := newMockProjectRepo()
+	blobClient := &mockBlobClient{}
+	ownershipResolver := &fakeOwnership{}
+	svc := NewService(&Components{
+		ProjectRepo: repo,
+		IDGen:       &mockIDGen{},
+		BlobClient:  blobClient,
+		Ownership:   ownershipResolver,
+	})
+
+	resp, err := svc.AddProjectAsset(
+		context.Background(),
+		&projectdto.AddProjectAssetRequest{},
+		"creator1",
+		strings.NewReader("hello asset"),
+		FileExtraInfo{FileName: "asset.txt", FileSize: 11, ContentType: "text/plain", FileExt: "txt", FileType: "text"},
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, storage.DefaultPathPrefix, repo.assets[resp.Data.Id].ProjectID)
+	assert.Zero(t, ownershipResolver.projectOrganizationCalls)
 }
 
 func TestCreateProjectAssetUploadURL(t *testing.T) {

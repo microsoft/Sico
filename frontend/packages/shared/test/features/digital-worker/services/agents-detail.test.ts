@@ -32,13 +32,25 @@ describe("fetchAgentDetail", () => {
     await expect(fetchAgentDetail(client, 7)).rejects.toBeInstanceOf(Error);
   });
 
-  it("throws when data is omitted from the envelope", async () => {
-    // `data` optional in `apiResponseSchema` → envelope parses, so the
-    // function's own `if (!parsed.data)` guard runs (distinct from the
-    // required-`instance` schema check above). Assert the guard message:
-    // a manually-built `ZodError` isn't `instanceof Error` in Zod 4, unlike
-    // a `.parse()`-thrown one — mirror the `fetchAgents` sibling test.
-    const { client } = makeClient({ code: 1, msg: "error" });
+  it("rejects a successful envelope without data", async () => {
+    const { client } = makeClient({ code: 0, msg: "ok" });
     await expect(fetchAgentDetail(client, 7)).rejects.toThrow(/missing data/);
   });
+
+  it.each([undefined, null, {}])(
+    "preserves a business failure before validating data %j",
+    async (data) => {
+      const { client } = makeClient({
+        code: 100001,
+        msg: "Request parameters are invalid",
+        ...(data === undefined ? {} : { data }),
+      });
+
+      await expect(fetchAgentDetail(client, 7)).rejects.toMatchObject({
+        name: "EnvelopeError",
+        code: 100001,
+        msg: "Request parameters are invalid",
+      });
+    },
+  );
 });

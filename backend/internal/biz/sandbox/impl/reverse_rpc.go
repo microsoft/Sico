@@ -20,17 +20,15 @@ func (s *Service) RpcApplySandbox(
 		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: "instanceId is required"}, nil
 	}
 
-	sandboxOS := strings.TrimSpace(req.GetType())
-	if sandboxOS == "" {
+	selector := strings.TrimSpace(req.GetType())
+	if selector == "" {
 		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: "type is required"}, nil
 	}
-	// Scheduling is OS-only: the type field carries an OS selector (e.g.
-	// "windows") and ApplySandbox resolves it to a concrete pool.
-	if !enum.IsOSSelector(sandboxOS) {
-		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: "invalid sandbox os: " + sandboxOS}, nil
+	if !enum.IsOSSelector(selector) && !isConcreteLinuxWorkstationSelector(selector) {
+		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: "invalid sandbox selector: " + selector}, nil
 	}
 
-	appliedSandbox, err := s.ApplySandbox(ctx, instanceID, sandboxOS)
+	appliedSandbox, err := s.ApplySandbox(ctx, instanceID, selector)
 	if err != nil {
 		return &sandboxRgrpc.ApplySandboxResponse{Code: 1, Msg: err.Error()}, nil
 	}
@@ -42,6 +40,10 @@ func (s *Service) RpcApplySandbox(
 	}
 	providerBaseURL, deviceID := getApplyMetadata(appliedSandbox)
 	providerType := getStr(appliedSandbox, "type")
+	resolvedOS := selector
+	if os, ok := enum.ResolveResourceOS(providerType, nil); ok {
+		resolvedOS = os.String()
+	}
 
 	return &sandboxRgrpc.ApplySandboxResponse{
 		Applied:          applied,
@@ -51,7 +53,7 @@ func (s *Service) RpcApplySandbox(
 		DeviceId:         deviceID,
 		DisplayName:      getStr(appliedSandbox, "display_name"),
 		VncUrl:           getStr(appliedSandbox, "vnc_url"),
-		Os:               sandboxOS,
+		Os:               resolvedOS,
 		ProviderType:     providerType,
 		Code:             0,
 		Msg:              msg,

@@ -16,6 +16,9 @@ type Service interface {
 		ctx context.Context, filter *entity.ListSingleAgentInstanceFilter,
 		offset, limit int,
 	) ([]*entity.SingleAgentInstance, int64, error)
+	ListSingleAgentInstancesForDashboard(
+		ctx context.Context,
+	) ([]*entity.SingleAgentInstance, error)
 	DismissSingleAgentInstance(
 		ctx context.Context, req *single_agent.DismissSingleAgentInstanceRequest,
 	) (*single_agent.DismissSingleAgentInstanceResponse, error)

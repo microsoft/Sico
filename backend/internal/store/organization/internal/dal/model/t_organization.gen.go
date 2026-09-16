@@ -15,6 +15,7 @@ type TOrganization struct {
 	ID              int64          `gorm:"column:id;primaryKey;autoIncrement:true" json:"id"`
 	Name            string         `gorm:"column:name;not null" json:"name"`
 	Description     string         `gorm:"column:description;not null" json:"description"`
+	IconURI         string         `gorm:"column:icon_uri;not null;comment:Organization icon URI" json:"icon_uri"`            // Organization icon URI
 	CreatorUsername string         `gorm:"column:creator_username;not null;comment:Creator username" json:"creator_username"` // Creator username
 	CreatedAt       int64          `gorm:"column:created_at;not null;autoCreateTime:milli" json:"created_at"`
 	UpdatedAt       int64          `gorm:"column:updated_at;not null;autoUpdateTime:milli" json:"updated_at"`

@@ -36,6 +36,7 @@ func newTNotification(db *gorm.DB, opts ...gen.DOOption) tNotification {
 	_tNotification.Status = field.NewInt32(tableName, "status")
 	_tNotification.ExtraInfo = field.NewField(tableName, "extra_info")
 	_tNotification.ProjectID = field.NewInt64(tableName, "project_id")
+	_tNotification.OrganizationID = field.NewInt64(tableName, "organization_id")
 	_tNotification.CreatedAt = field.NewInt64(tableName, "created_at")
 	_tNotification.UpdatedAt = field.NewInt64(tableName, "updated_at")
 	_tNotification.DeletedAt = field.NewField(tableName, "deleted_at")
@@ -58,6 +59,7 @@ type tNotification struct {
 	Status           field.Int32  // Notification status (unread, read)
 	ExtraInfo        field.Field  // Extra information
 	ProjectID        field.Int64  // Project ID for project-scoped notifications
+	OrganizationID   field.Int64  // Organization ID; 0 means unresolved
 	CreatedAt        field.Int64  // Create Time (Unix timestamp)
 	UpdatedAt        field.Int64  // Update Time (Unix timestamp)
 	DeletedAt        field.Field  // Delete Time
@@ -85,6 +87,7 @@ func (t *tNotification) updateTableName(table string) *tNotification {
 	t.Status = field.NewInt32(table, "status")
 	t.ExtraInfo = field.NewField(table, "extra_info")
 	t.ProjectID = field.NewInt64(table, "project_id")
+	t.OrganizationID = field.NewInt64(table, "organization_id")
 	t.CreatedAt = field.NewInt64(table, "created_at")
 	t.UpdatedAt = field.NewInt64(table, "updated_at")
 	t.DeletedAt = field.NewField(table, "deleted_at")
@@ -104,7 +107,7 @@ func (t *tNotification) GetFieldByName(fieldName string) (field.OrderExpr, bool)
 }
 
 func (t *tNotification) fillFieldMap() {
-	t.fieldMap = make(map[string]field.Expr, 11)
+	t.fieldMap = make(map[string]field.Expr, 12)
 	t.fieldMap["id"] = t.ID
 	t.fieldMap["sender_username"] = t.SenderUsername
 	t.fieldMap["receiver_username"] = t.ReceiverUsername
@@ -113,6 +116,7 @@ func (t *tNotification) fillFieldMap() {
 	t.fieldMap["status"] = t.Status
 	t.fieldMap["extra_info"] = t.ExtraInfo
 	t.fieldMap["project_id"] = t.ProjectID
+	t.fieldMap["organization_id"] = t.OrganizationID
 	t.fieldMap["created_at"] = t.CreatedAt
 	t.fieldMap["updated_at"] = t.UpdatedAt
 	t.fieldMap["deleted_at"] = t.DeletedAt

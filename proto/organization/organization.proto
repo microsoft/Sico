@@ -12,11 +12,13 @@ message Organization {
   string creator_username = 6; // @gotag: json:"creatorUsername"
   repeated string role_codes = 7; // @gotag: json:"roleCodes"
   bool is_owner = 8;        // @gotag: json:"isOwner"
+  string icon_sas_url = 9;  // @gotag: json:"iconUrl"
 }
 
 message CreateOrganizationRequest {
   string name = 1;          // @gotag: json:"name" binding:"required,min=1,max=256"
   string description = 2;   // @gotag: json:"description" binding:"max=2000"
+  string icon_uri = 3;      // @gotag: json:"iconUri" binding:"max=500"
 }
 message CreateOrganizationResponseData {
   int64 id = 1;             // @gotag: json:"id"
@@ -31,6 +33,7 @@ message UpdateOrganizationRequest {
   int64 id = 1;             // @gotag: json:"id" binding:"required"
   string name = 2;          // @gotag: json:"name" binding:"omitempty,min=1,max=256"
   string description = 3;   // @gotag: json:"description" binding:"max=2000"
+  string icon_uri = 4;      // @gotag: json:"iconUri" binding:"max=500"
 }
 message UpdateOrganizationResponse {
   int32 code = 253;         // @gotag: json:"code"
@@ -90,4 +93,76 @@ message GetUserOrganizationListResponse {
   GetUserOrganizationListResponseData data = 1; // @gotag: json:"data"
   int32 code = 253;                             // @gotag: json:"code"
   string msg = 254;                             // @gotag: json:"msg"
+}
+
+message OrganizationInvitation {
+  int64 id = 1;                         // @gotag: json:"id"
+  int64 organization_id = 2;            // @gotag: json:"organizationId"
+  string created_by_username = 3;       // @gotag: json:"createdByUsername"
+  int64 expires_at = 4;                 // @gotag: json:"expiresAt"
+  int64 revoked_at = 5;                 // @gotag: json:"revokedAt"
+  int64 created_at = 6;                 // @gotag: json:"createdAt"
+}
+
+message CreateOrganizationInvitationRequest {
+  int64 expires_in_seconds = 1;          // @gotag: json:"expiresInSeconds" binding:"omitempty,min=60,max=2592000"
+}
+message CreateOrganizationInvitationResponseData {
+  OrganizationInvitation invitation = 1; // @gotag: json:"invitation"
+  string token = 2;                       // @gotag: json:"token"
+}
+message CreateOrganizationInvitationResponse {
+  CreateOrganizationInvitationResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message GetOrganizationInvitationRequest {
+  string token = 1;                     // @gotag: form:"token" binding:"required"
+}
+message GetOrganizationInvitationResponseData {
+  int64 organization_id = 1;            // @gotag: json:"organizationId"
+  string organization_name = 2;         // @gotag: json:"organizationName"
+  string organization_icon_url = 3;     // @gotag: json:"organizationIconUrl"
+  int64 expires_at = 4;                  // @gotag: json:"expiresAt"
+}
+message GetOrganizationInvitationResponse {
+  GetOrganizationInvitationResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;                               // @gotag: json:"code"
+  string msg = 254;                               // @gotag: json:"msg"
+}
+
+message AcceptOrganizationInvitationRequest {
+  string token = 1;                     // @gotag: json:"token" binding:"required"
+}
+message AcceptOrganizationInvitationResponseData {
+  int64 organization_id = 1;            // @gotag: json:"organizationId"
+}
+message AcceptOrganizationInvitationResponse {
+  AcceptOrganizationInvitationResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;                                  // @gotag: json:"code"
+  string msg = 254;                                  // @gotag: json:"msg"
+}
+
+message ListOrganizationInvitationsRequest {
+  int32 page = 1;                       // @gotag: form:"page" binding:"min=1" default:"1"
+  int32 page_size = 2;                  // @gotag: form:"pageSize" binding:"min=1,max=100" default:"10"
+}
+message ListOrganizationInvitationsResponseData {
+  repeated OrganizationInvitation invitations = 1; // @gotag: json:"invitations"
+  int32 total = 2;                                // @gotag: json:"total"
+  bool has_next = 3;                              // @gotag: json:"hasNext"
+}
+message ListOrganizationInvitationsResponse {
+  ListOrganizationInvitationsResponseData data = 1; // @gotag: json:"data"
+  int32 code = 253;                                // @gotag: json:"code"
+  string msg = 254;                                // @gotag: json:"msg"
+}
+
+message RevokeOrganizationInvitationRequest {
+  int64 id = 1;                         // @gotag: json:"id" binding:"required"
+}
+message RevokeOrganizationInvitationResponse {
+  int32 code = 253;                     // @gotag: json:"code"
+  string msg = 254;                     // @gotag: json:"msg"
 }

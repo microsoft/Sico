@@ -439,6 +439,8 @@ definitions:
         type: array
       desc:
         type: string
+      iconUri:
+        type: string
       id:
         type: integer
       name:
@@ -2217,6 +2219,8 @@ definitions:
         $ref: '#/definitions/sico-backend_internal_transport_http_dto_notification.NotificationExtraInfo'
       id:
         type: integer
+      organizationId:
+        type: integer
       projectId:
         type: integer
       receiverUsername:
@@ -2425,10 +2429,57 @@ definitions:
       msg:
         type: string
     type: object
+  sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationRequest:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
+  sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationResponseData:
+    properties:
+      organizationId:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationRequest:
+    properties:
+      expiresInSeconds:
+        maximum: 2592000
+        minimum: 60
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationResponseData:
+    properties:
+      invitation:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.OrganizationInvitation'
+      token:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_organization.CreateOrganizationRequest:
     properties:
       description:
         maxLength: 2000
+        type: string
+      iconUri:
+        maxLength: 500
         type: string
       name:
         maxLength: 256
@@ -2456,6 +2507,26 @@ definitions:
       code:
         type: integer
       msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.GetOrganizationInvitationResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.GetOrganizationInvitationResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.GetOrganizationInvitationResponseData:
+    properties:
+      expiresAt:
+        type: integer
+      organizationIconUrl:
+        type: string
+      organizationId:
+        type: integer
+      organizationName:
         type: string
     type: object
   sico-backend_internal_transport_http_dto_organization.GetOrganizationResponse:
@@ -2492,6 +2563,26 @@ definitions:
       total:
         type: integer
     type: object
+  sico-backend_internal_transport_http_dto_organization.ListOrganizationInvitationsResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.ListOrganizationInvitationsResponseData'
+      msg:
+        type: string
+    type: object
+  sico-backend_internal_transport_http_dto_organization.ListOrganizationInvitationsResponseData:
+    properties:
+      hasNext:
+        type: boolean
+      invitations:
+        items:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.OrganizationInvitation'
+        type: array
+      total:
+        type: integer
+    type: object
   sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponse:
     properties:
       code:
@@ -2520,6 +2611,8 @@ definitions:
         type: string
       description:
         type: string
+      iconUrl:
+        type: string
       id:
         type: integer
       isOwner:
@@ -2533,10 +2626,42 @@ definitions:
       updatedAt:
         type: integer
     type: object
+  sico-backend_internal_transport_http_dto_organization.OrganizationInvitation:
+    properties:
+      createdAt:
+        type: integer
+      createdByUsername:
+        type: string
+      expiresAt:
+        type: integer
+      id:
+        type: integer
+      organizationId:
+        type: integer
+      revokedAt:
+        type: integer
+    type: object
+  sico-backend_internal_transport_http_dto_organization.RevokeOrganizationInvitationRequest:
+    properties:
+      id:
+        type: integer
+    required:
+    - id
+    type: object
+  sico-backend_internal_transport_http_dto_organization.RevokeOrganizationInvitationResponse:
+    properties:
+      code:
+        type: integer
+      msg:
+        type: string
+    type: object
   sico-backend_internal_transport_http_dto_organization.UpdateOrganizationRequest:
     properties:
       description:
         maxLength: 2000
+        type: string
+      iconUri:
+        maxLength: 500
         type: string
       id:
         type: integer
@@ -3840,11 +3965,11 @@ definitions:
     type: object
   sico-backend_internal_transport_http_dto_sandbox.SandboxResourcesByType:
     properties:
-      aio:
+      emulator:
         items:
           $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourceInfo'
         type: array
-      emulator:
+      linux_workstation:
         items:
           $ref: '#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourceInfo'
         type: array
@@ -5828,6 +5953,120 @@ paths:
       summary: Update Organization
       tags:
       - Organization
+  /api/sico/organization/invitations:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Revoke Organization Invitation
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.RevokeOrganizationInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.RevokeOrganizationInvitationResponse'
+      security:
+      - BearerAuth: []
+      summary: Revoke Organization Invitation
+      tags:
+      - Organization
+  /api/sico/organization/invitations/accept:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Accept Organization Invitation
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationResponse'
+      security:
+      - BearerAuth: []
+      summary: Accept Organization Invitation
+      tags:
+      - Organization
+  /api/sico/organization/invitations/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create Organization Invitation
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Organization Invitation
+      tags:
+      - Organization
+  /api/sico/organization/invitations/detail:
+    get:
+      parameters:
+      - in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.GetOrganizationInvitationResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Organization Invitation
+      tags:
+      - Organization
+  /api/sico/organization/invitations/list:
+    get:
+      parameters:
+      - default: 1
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        in: query
+        maximum: 100
+        minimum: 1
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sico-backend_internal_transport_http_dto_organization.ListOrganizationInvitationsResponse'
+      security:
+      - BearerAuth: []
+      summary: List Organization Invitations
+      tags:
+      - Organization
   /api/sico/organization/user_organizations:
     get:
       parameters:
@@ -7040,7 +7279,7 @@ paths:
         type: string
       - enum:
         - emulator
-        - aio
+        - linux_workstation
         - wincua
         in: query
         name: type

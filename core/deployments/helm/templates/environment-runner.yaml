@@ -1,0 +1,83 @@
+{{- if .Values.preparedEnvironment.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sico-environment-runner
+  labels:
+    app: sico-environment-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sico-environment-runner
+  template:
+    metadata:
+      labels:
+        app: sico-environment-runner
+    spec:
+      containers:
+        - name: environment-runner
+          image: "{{ .Values.preparedEnvironment.image.repository }}:{{ .Values.preparedEnvironment.image.tag }}"
+          imagePullPolicy: {{ .Values.preparedEnvironment.image.pullPolicy }}
+          env:
+            - name: DOCKER_HOST
+              value: tcp://127.0.0.1:2375
+            - name: PREPARED_ENV_PUSH
+              value: {{ .Values.preparedEnvironment.push | quote }}
+            - name: PREPARED_ENV_REPOSITORY
+              value: {{ .Values.preparedEnvironment.repository | quote }}
+            - name: PREPARED_ENV_PULL_REPOSITORY
+              value: {{ .Values.preparedEnvironment.pullRepository | quote }}
+            - name: PREPARED_ENV_REGISTRY_DELETE_URL
+              value: {{ .Values.preparedEnvironment.registryDeleteUrl | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.preparedEnvironment.service.port }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run/docker
+          resources:
+            {{- toYaml .Values.preparedEnvironment.resources | nindent 12 }}
+        {{- if .Values.preparedEnvironment.docker.enabled }}
+        - name: docker
+          image: {{ .Values.preparedEnvironment.docker.image | quote }}
+          securityContext:
+            privileged: true
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          args:
+            - --tls=false
+            {{- if .Values.preparedEnvironment.docker.insecureRegistry }}
+            - --insecure-registry={{ .Values.preparedEnvironment.docker.insecureRegistry }}
+            {{- end }}
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run/docker
+            - name: docker-data
+              mountPath: /var/lib/docker
+        {{- end }}
+      volumes:
+        - name: docker-socket
+          emptyDir: {}
+        - name: docker-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sico-environment-runner
+spec:
+  selector:
+    app: sico-environment-runner
+  ports:
+    - name: http
+      port: {{ .Values.preparedEnvironment.service.port }}
+      targetPort: http
+{{- end }}

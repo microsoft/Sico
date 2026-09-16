@@ -4,8 +4,8 @@ package reverse_rpc;
 option go_package = "sico-backend/internal/transport/reverse_grpc/pb/taskruntime/reverse_rpc";
 
 service ReverseTaskRuntimeRPC {
-    rpc RpcCreateBatch(CreateBatchRequest) returns (EmptyTaskRuntimeResponse) {}
-    rpc RpcUpdateBatch(UpdateBatchRequest) returns (EmptyTaskRuntimeResponse) {}
+    rpc RpcCreateBatch(CreateBatchRequest) returns (CreateBatchResponse) {}
+    rpc RpcUpdateBatch(UpdateBatchRequest) returns (UpdateBatchResponse) {}
     rpc RpcGetBatch(GetBatchRequest) returns (GetBatchResponse) {}
     rpc RpcCreateRun(CreateRunRequest) returns (EmptyTaskRuntimeResponse) {}
     rpc RpcUpdateRun(UpdateRunRequest) returns (EmptyTaskRuntimeResponse) {}
@@ -33,8 +33,22 @@ message CreateBatchRequest {
     string batch_json = 1; // @gotag: json:"batchJson"
 }
 
+message CreateBatchResponse {
+    string batch_json = 1; // @gotag: json:"batchJson"
+    bool created = 2; // @gotag: json:"created"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
+}
+
 message UpdateBatchRequest {
     string batch_json = 1; // @gotag: json:"batchJson"
+}
+
+message UpdateBatchResponse {
+    string batch_json = 1; // @gotag: json:"batchJson"
+    bool applied = 2; // @gotag: json:"applied"
+    int32 code = 253; // @gotag: json:"code"
+    string msg = 254; // @gotag: json:"msg"
 }
 
 message GetBatchRequest {

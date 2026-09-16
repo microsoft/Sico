@@ -9,7 +9,7 @@ embedding client, which is specific to experience deduplication.
 from __future__ import annotations
 
 from app.llmhubs.hub import LLMHub
-from app.llmhubs.structured import DEFAULT_CHAT_MODEL, HubLLMClient, LLMClient
+from app.llmhubs.structured import HubLLMClient, LLMClient
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 
@@ -72,4 +72,4 @@ class LLMHubEmbeddingClient:
         return [item.embedding for item in response.data]
 
 
-__all__ = ["LLMClient", "HubLLMClient", "LLMHubEmbeddingClient", "DEFAULT_CHAT_MODEL", "DEFAULT_EMBEDDING_MODEL"]
+__all__ = ["LLMClient", "HubLLMClient", "LLMHubEmbeddingClient", "DEFAULT_EMBEDDING_MODEL"]

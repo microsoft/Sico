@@ -10,6 +10,7 @@ import (
 
 	appresp "sico-backend/internal/biz/common/response"
 	messageentity "sico-backend/internal/entity/conversation/message"
+	telemetrymetrics "sico-backend/internal/infra/telemetry/metrics"
 	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/errcode"
 	messagerepo "sico-backend/internal/store/conversation/message/repository"
@@ -49,6 +50,16 @@ func (c *Service) ListMessagesByUserAndAgent(
 	if agentInstanceID == -1 && req.GetAgentId() == "" {
 		return nil, apperr.New(errcode.ConversationAgentRequired,
 			"agent id must be provided when querying with agent instance id -1")
+	}
+	if agentInstanceID > 0 {
+		if err := c.requireAgentInstanceOrganization(ctx, agentInstanceID); err != nil {
+			return nil, err
+		}
+	}
+	if req.GetConversationId() > 0 {
+		if err := c.requireConversationOrganization(ctx, req.GetConversationId()); err != nil {
+			return nil, err
+		}
 	}
 
 	username := middleware.MustGetUsernameFromCtx(ctx)
@@ -114,7 +125,7 @@ func (c *Service) resolveConversationIDForMessageListing(
 		if err != nil {
 			return 0, false, err
 		}
-		if conversation == nil || !canReadConversation(ctx, username, conversation.CreatorUsername) {
+		if conversation == nil || !c.canReadConversation(ctx, username, conversation.CreatorUsername) {
 			return 0, false, apperr.New(errcode.CommonNotFound, "conversation not found")
 		}
 		if conversation.AgentInstanceID != req.GetAgentInstanceId() {
@@ -131,7 +142,7 @@ func (c *Service) resolveConversationIDForMessageListing(
 
 	conversations, hasMore, err := c.conversationRepo.List(
 		ctx,
-		conversationReadQueryUsername(ctx, username),
+		c.conversationReadQueryUsername(ctx, username),
 		"",
 		req.GetAgentInstanceId(),
 		2,
@@ -216,7 +227,7 @@ func (c *Service) GetUserMessageByUserAgentTurnID(
 
 	conversation, err := c.conversationRepo.Get(
 		ctx,
-		conversationReadQueryUsername(ctx, username),
+		c.conversationReadQueryUsername(ctx, username),
 		req.GetAgentId(),
 		agentInstanceID,
 	)
@@ -573,6 +584,7 @@ func (c *Service) RpcCreateMessage(ctx context.Context, req *rgrpc.CreateMessage
 	if err != nil {
 		return c.handleCreateMessageError(ctx, message, recoveryKey, err)
 	}
+	telemetrymetrics.RecordMessageCreated(ctx, message.Role)
 	return &rgrpc.CreateMessageResponse{
 		Data: &rgrpc.CreateMessageData{Id: created.Id},
 	}, nil
@@ -701,7 +713,7 @@ func (c *Service) ListBatchSummaries(
 	if err != nil {
 		return nil, err
 	}
-	if conv == nil || !canReadConversation(ctx, username, conv.CreatorUsername) {
+	if conv == nil || !c.canReadConversation(ctx, username, conv.CreatorUsername) {
 		return nil, apperr.New(errcode.CommonNotFound, "conversation not found")
 	}
 	pageSize := int(req.GetPageSize())

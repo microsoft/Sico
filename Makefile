@@ -1,7 +1,7 @@
 # sico -- Makefile
-.PHONY: help setup setup-check setup-kind setup-kind-check lint lint-fix precommit-run precommit-update
-.PHONY: openapi otelwrap build-frontend
-.PHONY: compose-up compose-down compose-logs
+.PHONY: help setup setup-check setup-kind setup-kind-check lint lint-fix license-check precommit-run precommit-update
+.PHONY: openapi otelwrap build-frontend observability-smoke
+.PHONY: build-linux-workstation-local compose-up compose-down compose-logs
 .PHONY: kind-up kind-stop kind-down kind-restart
 .PHONY: emulator-setup emulator-start emulator-stop emulator-restart emulator-status emulator-logs
 .PHONY: emulator-bootstrap emulator-stop-devices
@@ -24,17 +24,19 @@ help::
 	@echo "===="
 	@echo ""
 	@echo "Developer setup:"
-	@echo "  make setup             Install default toolchain + git hooks (macOS/Linux/Windows)"
-	@echo "  make setup-check       Verify the default toolchain is installed"
-	@echo "  make setup-kind        Install default toolchain + Helm/kubectl/kind for Kind work"
-	@echo "  make setup-kind-check  Verify the Kind toolchain (Helm + kubectl + kind) is installed"
-	@echo "  make precommit-run     Run all pre-commit hooks against the whole tree"
-	@echo "  make precommit-update  Update pinned hook versions in .pre-commit-config.yaml"
-	@echo "  make lint              Run repository-wide lint checks"
-	@echo "  make lint-fix          Run lints with auto-fixes where supported"
-	@echo "  make openapi           Regenerate backend swagger docs (api/openapi)"
-	@echo "  make otelwrap          Regenerate backend OpenTelemetry interface wrappers"
-	@echo "  make build-frontend    Install deps and build the frontend SPA from source"
+	@echo "  make setup               Install default toolchain + git hooks (macOS/Linux/Windows)"
+	@echo "  make setup-check         Verify the default toolchain is installed"
+	@echo "  make setup-kind          Install default toolchain + Helm/kubectl/kind for Kind work"
+	@echo "  make setup-kind-check    Verify the Kind toolchain (Helm + kubectl + kind) is installed"
+	@echo "  make precommit-run       Run all pre-commit hooks against the whole tree"
+	@echo "  make precommit-update    Update pinned hook versions in .pre-commit-config.yaml"
+	@echo "  make lint                Run repository-wide lint checks"
+	@echo "  make lint-fix            Run lints with auto-fixes where supported"
+	@echo "  make license-check       Verify every source file has a MIT license header"
+	@echo "  make openapi             Regenerate backend swagger docs (api/openapi)"
+	@echo "  make otelwrap            Regenerate backend OpenTelemetry interface wrappers"
+	@echo "  make build-frontend      Install deps and build the frontend SPA from source"
+	@echo "  make observability-smoke Verify local trace, metric, and log ingestion"
 	@echo ""
 	@echo "Docker Compose (local):"
 	@echo "  make compose-up              Build and start full stack"
@@ -117,11 +119,17 @@ build-frontend:
 	/bin/bash scripts/build-frontend.sh
 	@echo "frontend/packages/app/dist ready"
 
+observability-smoke:
+	python scripts/observability-smoke.py
+
 # -- Docker Compose -----------------------------------------------------------
 
 COMPOSE := $(COMPOSE_CMD)
 
-compose-up:
+build-linux-workstation-local:
+	/bin/bash scripts/build-linux-workstation-local.sh
+
+compose-up: build-linux-workstation-local
 	$(COMPOSE) up --build -d $(SERVICE)
 	@echo ""
 	@port=$$(awk -F= '/^SICO_PORT=/{print $$2}' .env 2>/dev/null | tail -1 | tr -d '"' | tr -d "'"); \
@@ -130,7 +138,10 @@ compose-up:
 	echo "  Home:            http://localhost:$${port}/"; \
 	echo "  UI login:        http://localhost:$${port}/login"; \
 	echo "  API docs:        http://localhost:$${port}/api/sico/docs/index.html"; \
-	echo "  Health:          http://localhost:$${port}/api/sico/health"
+	echo "  Health:          http://localhost:$${port}/api/sico/health"; \
+	echo "  Grafana:         http://localhost:14005 (admin/admin)"; \
+	echo "  OTLP/gRPC:       localhost:14006"; \
+	echo "  OTLP/HTTP:       localhost:14007"
 
 compose-down:
 	$(COMPOSE) down --remove-orphans

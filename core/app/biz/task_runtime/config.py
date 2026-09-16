@@ -10,22 +10,25 @@ surfaced rather than silently swallowed. Two parsing strategies back them:
 * :func:`_resolve_positive_env` rejects non-positive values back to the default
   (concurrency ceilings).
 
-===================================================  ==========  ======  ========
-Environment variable                                 Default     Floor   Strategy
-===================================================  ==========  ======  ========
-TASK_RUNTIME_REUSE_WAIT_TIMEOUT_SECONDS              policy+30   1       clamp
-TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS  30          1       clamp
-TASK_RUNTIME_SANDBOX_RELEASE_ATTEMPTS                3           1       clamp
-TASK_RUNTIME_STALE_RUN_AFTER_MS                      180000      0       clamp
-TASK_RUNTIME_HEARTBEAT_INTERVAL_SECONDS              30          1       clamp
-TASK_RUNTIME_REVERSE_RPC_TIMEOUT_SECONDS             20          1       clamp
-TASK_RUNTIME_MAX_CONCURRENCY                         scheduler   1       reject
-TASK_RUNTIME_K8S_POD_CONCURRENCY                     10          1       reject
-TASK_RUNTIME_DOCKER_CONCURRENCY                      10          1       reject
-===================================================  ==========  ======  ========
+====================================================================  ==========  ======  ========
+Environment variable                                                  Default     Floor   Strategy
+====================================================================  ==========  ======  ========
+TASK_RUNTIME_REUSE_WAIT_TIMEOUT_SECONDS                               policy+30   1       clamp
+TASK_RUNTIME_DUPLICATE_SUBMISSION_MATERIALIZATION_TIMEOUT_SECONDS     30          1       clamp
+TASK_RUNTIME_SANDBOX_RELEASE_ATTEMPTS                                 3           1       clamp
+TASK_RUNTIME_STALE_RUN_AFTER_MS                                       180000      0       clamp
+TASK_RUNTIME_HEARTBEAT_INTERVAL_SECONDS                               30          1       clamp
+TASK_RUNTIME_REVERSE_RPC_TIMEOUT_SECONDS                              20          1       clamp
+TASK_RUNTIME_MAX_CONCURRENCY                                          scheduler   1       reject
+TASK_RUNTIME_K8S_POD_CONCURRENCY                                      10          1       reject
+TASK_RUNTIME_DOCKER_CONCURRENCY                                       10          1       reject
+====================================================================  ==========  ======  ========
 
 ``clamp`` raises sub-floor values up to ``floor``; ``reject`` reverts any value
 below 1 back to the default.
+
+``TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS`` remains accepted as a
+legacy alias for the duplicate-submission materialization timeout.
 """
 
 from __future__ import annotations
@@ -73,8 +76,11 @@ def _stale_run_after_ms() -> int:
     return _resolve_clamped_env("TASK_RUNTIME_STALE_RUN_AFTER_MS", 180000, floor=0)
 
 
-def _replay_run_materialization_timeout_seconds() -> int:
-    return _resolve_clamped_env("TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS", 30, floor=1)
+def _duplicate_submission_materialization_timeout_seconds() -> int:
+    current_name = "TASK_RUNTIME_DUPLICATE_SUBMISSION_MATERIALIZATION_TIMEOUT_SECONDS"
+    legacy_name = "TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS"
+    var_name = current_name if os.getenv(current_name, "").strip() else legacy_name
+    return _resolve_clamped_env(var_name, 30, floor=1)
 
 
 def _task_runtime_heartbeat_interval_seconds() -> int:

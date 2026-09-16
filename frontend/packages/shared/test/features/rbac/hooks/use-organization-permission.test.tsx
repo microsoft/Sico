@@ -3,17 +3,21 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { userAtom } from "@/atoms/auth-atom";
+import { selectedOrganizationIdAtom } from "@/features/organization/atoms/selected-organization-atom";
 import * as organizationService from "@/features/organization/services/organization";
 import { useOrganizationPermission } from "@/features/rbac/hooks/use-organization-permission";
 import * as rolesService from "@/features/rbac/services/user-role";
 import { ApiClientProvider } from "@/services/api-client-context";
 import { createTestApiClient } from "@/testing/create-test-api-client";
+import { persistLoginPayload } from "@/utils/auth-storage";
+
+import { makeLoginPayload } from "../../../helpers/organization-context";
 
 vi.mock("@/features/organization/services/organization");
 vi.mock("@/features/rbac/services/user-role");
@@ -43,8 +47,9 @@ function deferred<T>(): {
   return { promise, resolve: resolvePromise, reject: rejectPromise };
 }
 
-function wrapper(): (props: { children: ReactNode }) => ReactElement {
-  const store = createStore();
+function wrapper(
+  store = createStore(),
+): (props: { children: ReactNode }) => ReactElement {
   store.set(userAtom, { id: 1, email: "admin@example.com", roles: [] });
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -74,6 +79,7 @@ function expectNoActions(
 }
 
 beforeEach(() => {
+  persistLoginPayload(makeLoginPayload(1));
   vi.mocked(organizationService.fetchUserOrganizations)
     .mockReset()
     .mockResolvedValue([boundOrganization]);
@@ -223,6 +229,36 @@ describe("organization permissions", () => {
       currentUserId: 1,
       isError: false,
     });
+  });
+
+  it("removes admin capabilities when selection changes to an organization where the user is a member", async () => {
+    const memberOrganization = {
+      ...boundOrganization,
+      id: 10,
+      name: "Member organization",
+    };
+    vi.mocked(organizationService.fetchUserOrganizations).mockResolvedValue([
+      boundOrganization,
+      memberOrganization,
+    ]);
+    vi.mocked(rolesService.fetchUserRoles).mockResolvedValue([
+      { userId: 1, roleCode: "org_admin", scopeType: "org", scopeId: 9 },
+      { userId: 1, roleCode: "org_member", scopeType: "org", scopeId: 10 },
+    ]);
+    const store = createStore();
+    const { result } = renderHook(() => useOrganizationPermission(), {
+      wrapper: wrapper(store),
+    });
+    await waitFor(() => expect(result.current.canManage).toBe(true));
+    expect(result.current.canEnterStudio).toBe(true);
+
+    act(() => store.set(selectedOrganizationIdAtom, memberOrganization.id));
+
+    await waitFor(() => expect(result.current.canManage).toBe(false));
+    expect(result.current.canEnterStudio).toBe(false);
+    expectNoActions(result.current);
+    expect(organizationService.fetchUserOrganizations).toHaveBeenCalledOnce();
+    expect(rolesService.fetchUserRoles).toHaveBeenCalledOnce();
   });
 
   it.each(["developer", "org_admin"])(

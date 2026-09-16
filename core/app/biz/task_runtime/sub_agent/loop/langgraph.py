@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, replace
 from typing import Literal, TypedDict
 
@@ -17,25 +17,30 @@ from .contracts import (
     AgentLoopRuntime,
     AgentLoopSnapshot,
     AgentModel,
+    AgentModelOutputDelta,
     AgentModelState,
+    AgentModelTurn,
     BoundAgentTool,
     CapabilityCall,
     FinalAnswer,
     InvalidAction,
     Observation,
     TokenUsage,
+    current_toolset,
+    stream_model_turn,
 )
 from .events import (
     AgentLoopEvent,
     CompletionProposedEvent,
     ContextPreparedEvent,
     LoopFinishedEvent,
+    ModelOutputDeltaEvent,
     ModelTurnCompletedEvent,
     ModelTurnStartedEvent,
     ToolCallCompletedEvent,
     ToolCallRequestedEvent,
 )
-from .native import _call_id, _failed_observation, _normalized_call_id, _signature, _stalled
+from .native import _call_id, _failed_observation, _normalized_call_id, _normalized_capability_id, _signature, _stalled
 
 
 class _GraphState(TypedDict):
@@ -49,12 +54,13 @@ class _GraphState(TypedDict):
     stall_count: int
     action: AgentAction | None
     terminal: LoopFinishedEvent | None
+    toolset_revision: int
 
 
 @dataclass(frozen=True, slots=True)
 class _GraphContext:
     model: AgentModel
-    tools: Mapping[str, BoundAgentTool]
+    fallback_tools: tuple[BoundAgentTool, ...]
     runtime: AgentLoopRuntime
 
 
@@ -87,10 +93,11 @@ class LangGraphAgentLoopEngine:
             "stall_count": 0,
             "action": None,
             "terminal": None,
+            "toolset_revision": 0,
         }
         context = _GraphContext(
             model=self._model,
-            tools={tool.descriptor.tool_id: tool for tool in tools},
+            fallback_tools=tools,
             runtime=runtime,
         )
         config = {"recursion_limit": max(10, request.limits.max_model_turns * 3 + 3)}
@@ -125,26 +132,38 @@ async def _model_node(
     runtime: Runtime[_GraphContext],
     writer: StreamWriter,
 ) -> dict[str, object]:
-    snapshot = _snapshot(state)
+    toolset = await current_toolset(runtime.context.runtime, runtime.context.fallback_tools)
+    snapshot = _snapshot(state, toolset.revision)
     prepared = await runtime.context.runtime.context_controller.before_model(snapshot)
     writer(ContextPreparedEvent(turn=state["turn"], block_count=len(prepared.blocks)))
     writer(ModelTurnStartedEvent(turn=state["turn"]))
     model_state = AgentModelState(
         task=state["request"].task,
-        tools=state["request"].tools,
+        tools=toolset.descriptors,
         turn=state["turn"],
         max_model_turns=state["request"].limits.max_model_turns,
         system_prompt=state["request"].system_prompt,
         context=prepared.blocks,
         history=prepared.history if prepared.history is not None else state["history"],
         initial_messages=state["request"].initial_messages,
+        toolset_revision=toolset.revision,
+        provider_tools=state["request"].provider_tools,
     )
     started = time.perf_counter()
-    model_turn = await runtime.context.model.complete_turn(model_state)
+    model_turn: AgentModelTurn | None = None
+    async for item in stream_model_turn(runtime.context.model, model_state):
+        if isinstance(item, AgentModelOutputDelta):
+            writer(ModelOutputDeltaEvent(turn=state["turn"], content=item.content))
+        elif model_turn is None:
+            model_turn = item
+        else:
+            raise RuntimeError("agent model stream emitted more than one terminal turn")
+    if model_turn is None:
+        raise RuntimeError("agent model stream ended without a terminal turn")
     latency_ms = model_turn.latency_ms or int((time.perf_counter() - started) * 1000)
     usage = state["usage"] + model_turn.usage
     writer(ModelTurnCompletedEvent(state["turn"], model_turn.usage, model_turn.model, latency_ms))
-    return {"action": model_turn.action, "usage": usage}
+    return {"action": model_turn.action, "usage": usage, "toolset_revision": toolset.revision}
 
 
 async def _completion_node(
@@ -181,7 +200,7 @@ async def _completion_node(
             )
         }
     history = (*state["history"], _failed_observation("", _call_id(state["turn"], 1), reason, "policy_deny"))
-    return _continue_or_stop(state, history, _signature("final_answer", {}, reason), failed=True)
+    return _continue_or_stop(state, history, _signature("final_answer", {}, reason))
 
 
 async def _tool_node(
@@ -192,7 +211,20 @@ async def _tool_node(
     action = state["action"]
     if not isinstance(action, CapabilityCall):
         raise TypeError("tool node requires a CapabilityCall")
-    call = replace(action, call_id=_normalized_call_id(action.call_id, state["turn"], 1))
+    capability = _normalized_capability_id(action.capability)
+    if capability is None:
+        return {
+            "terminal": _failed_terminal(
+                state,
+                f"Agent requested disallowed capability {action.capability!r}.",
+                "policy_denied",
+            )
+        }
+    call = replace(
+        action,
+        capability=capability,
+        call_id=_normalized_call_id(action.call_id, state["turn"], 1),
+    )
     if call.call_id in state["used_call_ids"]:
         return {
             "terminal": _failed_terminal(
@@ -202,7 +234,9 @@ async def _tool_node(
             )
         }
     used_call_ids = state["used_call_ids"] | {call.call_id}
-    tool = runtime.context.tools.get(call.capability)
+    toolset = await current_toolset(runtime.context.runtime, runtime.context.fallback_tools)
+    tools = {tool.descriptor.tool_id: tool for tool in toolset.tools}
+    tool = tools.get(call.capability)
     if tool is None:
         return {
             "used_call_ids": used_call_ids,
@@ -221,7 +255,8 @@ async def _tool_node(
 
     writer(ToolCallRequestedEvent(state["turn"], call))
     started = time.perf_counter()
-    observation = await tool.invoke(call, _snapshot(state))
+    observation = await tool.invoke(call, _snapshot(state, toolset.revision))
+    observation = replace(observation, arguments=call.args)
     duration_ms = int((time.perf_counter() - started) * 1000)
     tool_calls = state["tool_calls"] + 1
     history = (*state["history"], observation)
@@ -230,10 +265,10 @@ async def _tool_node(
         state,
         history,
         _signature(call.capability, call.args, ""),
-        failed=not observation.ok,
         tool_calls=tool_calls,
     )
     updates["used_call_ids"] = used_call_ids
+    updates["usage"] = state["usage"] + observation.usage
     return updates
 
 
@@ -246,7 +281,7 @@ async def _invalid_node(state: _GraphState) -> dict[str, object]:
         *state["history"],
         _failed_observation(action.capability, _call_id(state["turn"], 1), message, "internal"),
     )
-    return _continue_or_stop(state, history, _signature(action.capability, {}, action.reason), failed=True)
+    return _continue_or_stop(state, history, _signature(action.capability, {}, action.reason))
 
 
 async def _finish_node(state: _GraphState, writer: StreamWriter) -> dict[str, object]:
@@ -274,11 +309,10 @@ def _continue_or_stop(
     history: tuple[Observation, ...],
     signature: str,
     *,
-    failed: bool,
     tool_calls: int | None = None,
 ) -> dict[str, object]:
     next_tool_calls = state["tool_calls"] if tool_calls is None else tool_calls
-    stall_signature, stall_count = _next_stall(state, signature, failed=failed)
+    stall_signature, stall_count = _next_stall(state, signature)
     updates: dict[str, object] = {
         "history": history,
         "tool_calls": next_tool_calls,
@@ -296,21 +330,20 @@ def _continue_or_stop(
     return updates
 
 
-def _next_stall(state: _GraphState, signature: str, *, failed: bool) -> tuple[str, int]:
-    if not failed:
-        return "", 0
+def _next_stall(state: _GraphState, signature: str) -> tuple[str, int]:
     if signature != state["stall_signature"]:
         return signature, 1
     return signature, state["stall_count"] + 1
 
 
-def _snapshot(state: _GraphState) -> AgentLoopSnapshot:
+def _snapshot(state: _GraphState, toolset_revision: int | None = None) -> AgentLoopSnapshot:
     return AgentLoopSnapshot(
         state["request"],
         state["turn"],
         state["history"],
         state["usage"],
         state["tool_calls"],
+        state["toolset_revision"] if toolset_revision is None else toolset_revision,
     )
 
 

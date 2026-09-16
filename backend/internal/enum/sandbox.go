@@ -7,7 +7,7 @@ type SandboxType int
 const (
 	SandboxTypeUnknown SandboxType = iota
 	SandboxTypeEmulator
-	SandboxTypeAio
+	SandboxTypeLinuxWorkstation
 	SandboxTypeWinCUA
 	SandboxTypePhysical
 )
@@ -16,8 +16,8 @@ func (s SandboxType) String() string {
 	switch s {
 	case SandboxTypeEmulator:
 		return "emulator"
-	case SandboxTypeAio:
-		return "aio"
+	case SandboxTypeLinuxWorkstation:
+		return "linux_workstation"
 	case SandboxTypeWinCUA:
 		return "wincua"
 	case SandboxTypePhysical:
@@ -32,20 +32,24 @@ func (s SandboxType) String() string {
 func AllSandboxTypes() []string {
 	return []string{
 		SandboxTypeEmulator.String(),
-		SandboxTypeAio.String(),
+		SandboxTypeLinuxWorkstation.String(),
 		SandboxTypeWinCUA.String(),
 		SandboxTypePhysical.String(),
 	}
 }
 
 func IsValidSandboxType(s string) bool {
-	s = strings.TrimSpace(s)
+	s = NormalizeSandboxType(s)
 	switch s {
-	case "emulator", "aio", "wincua", "physical":
+	case "emulator", "linux_workstation", "wincua", "physical":
 		return true
 	default:
 		return false
 	}
+}
+
+func NormalizeSandboxType(s string) string {
+	return strings.TrimSpace(s)
 }
 
 // OpenAPIPath returns the OpenAPI endpoint path for each sandbox type
@@ -53,7 +57,7 @@ func (s SandboxType) OpenAPIPath() string {
 	switch s {
 	case SandboxTypeEmulator:
 		return "/openapi.json"
-	case SandboxTypeAio:
+	case SandboxTypeLinuxWorkstation:
 		return "/v1/openapi.json"
 	case SandboxTypeWinCUA, SandboxTypePhysical:
 		return "/openapi.json"
@@ -64,11 +68,11 @@ func (s SandboxType) OpenAPIPath() string {
 
 // GetOpenAPIPath returns the OpenAPI endpoint path for a sandbox type string
 func GetOpenAPIPath(sandboxType string) string {
-	switch sandboxType {
+	switch NormalizeSandboxType(sandboxType) {
 	case SandboxTypeEmulator.String():
 		return SandboxTypeEmulator.OpenAPIPath()
-	case SandboxTypeAio.String():
-		return SandboxTypeAio.OpenAPIPath()
+	case SandboxTypeLinuxWorkstation.String():
+		return SandboxTypeLinuxWorkstation.OpenAPIPath()
 	case SandboxTypeWinCUA.String():
 		return SandboxTypeWinCUA.OpenAPIPath()
 	case SandboxTypePhysical.String():

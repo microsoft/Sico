@@ -4,9 +4,9 @@ import "testing"
 
 func TestResolveResourceOS_FixedTypes(t *testing.T) {
 	cases := map[string]SandboxOS{
-		SandboxTypeEmulator.String(): SandboxOSAndroid,
-		SandboxTypeAio.String():      SandboxOSLinux,
-		SandboxTypeWinCUA.String():   SandboxOSWindows,
+		SandboxTypeEmulator.String():         SandboxOSAndroid,
+		SandboxTypeLinuxWorkstation.String(): SandboxOSLinux,
+		SandboxTypeWinCUA.String():           SandboxOSWindows,
 	}
 	for sandboxType, wantOS := range cases {
 		os, ok := ResolveResourceOS(sandboxType, nil)
@@ -35,7 +35,7 @@ func TestResolveResourceOS_UnknownTypeReturnsFalse(t *testing.T) {
 func TestEligibleTypesForOS(t *testing.T) {
 	tests := map[SandboxOS][]string{
 		SandboxOSAndroid: {SandboxTypeEmulator.String(), SandboxTypePhysical.String()},
-		SandboxOSLinux:   {SandboxTypeAio.String(), SandboxTypePhysical.String()},
+		SandboxOSLinux:   {SandboxTypeLinuxWorkstation.String(), SandboxTypePhysical.String()},
 		SandboxOSWindows: {SandboxTypeWinCUA.String(), SandboxTypePhysical.String()},
 		SandboxOSMacOS:   {SandboxTypePhysical.String()},
 		SandboxOSIOS:     {SandboxTypePhysical.String()},

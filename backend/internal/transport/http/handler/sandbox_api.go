@@ -10,11 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 
 	singleAgentSVC "sico-backend/internal/biz/agent"
-	"sico-backend/internal/biz/rbac"
+	orgbiz "sico-backend/internal/biz/organization"
 	sandboxbiz "sico-backend/internal/biz/sandbox"
-	saEntity "sico-backend/internal/entity/agent/singleagent"
 	"sico-backend/internal/enum"
 	commondto "sico-backend/internal/transport/http/dto/common"
+	organizationdto "sico-backend/internal/transport/http/dto/organization"
 	sandboxdto "sico-backend/internal/transport/http/dto/sandbox"
 	"sico-backend/internal/transport/http/middleware"
 )
@@ -142,13 +142,16 @@ func SandboxListAll(c *gin.Context) {
 	svc := sandboxbiz.Default()
 
 	var filter sandboxdto.ListSandboxResourcesFilter
-	_ = c.ShouldBindQuery(&filter)
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		invalidParamRequestResponse(c, "invalid query params: "+err.Error())
+		return
+	}
 	var filterPtr *sandboxdto.ListSandboxResourcesFilter
 	if filter.OrganizationId != nil || filter.ProjectId != nil || filter.InstanceId != nil {
 		filterPtr = &filter
 	}
 
-	result, err := svc.ListAllResourcesFiltered(reqctx(c), filterPtr)
+	result, err := svc.ListDashboardResourcesFiltered(reqctx(c), filterPtr)
 	if err != nil {
 		internalServerErrorResponse(c, err)
 		return
@@ -182,7 +185,7 @@ func SandboxReset(c *gin.Context) {
 	}
 
 	svc := sandboxbiz.Default()
-	err := svc.ResetSandbox(reqctx(c), "", req.SandboxId)
+	err := svc.ResetAuthorizedSandbox(reqctx(c), req.SandboxId)
 	if err != nil {
 		internalServerErrorResponse(c, err)
 		return
@@ -216,7 +219,7 @@ func SandboxAdminRelease(c *gin.Context) {
 	}
 
 	svc := sandboxbiz.Default()
-	if err := svc.ReleaseSandbox(reqctx(c), req.InstanceId, req.SandboxId); err != nil {
+	if err := svc.ReleaseAuthorizedSandbox(reqctx(c), req.InstanceId, req.SandboxId); err != nil {
 		internalServerErrorResponse(c, err)
 		return
 	}
@@ -251,7 +254,7 @@ func GetInstanceVNC(c *gin.Context) {
 	}
 
 	svc := sandboxbiz.Default()
-	result, err := svc.GetInstanceVNCURLs(reqctx(c), instanceID)
+	result, err := svc.GetAuthorizedInstanceVNCURLs(reqctx(c), instanceID)
 	if err != nil {
 		internalServerErrorResponse(c, err)
 		return
@@ -299,7 +302,7 @@ func SandboxGetInstanceSandboxes(c *gin.Context) {
 	}
 
 	svc := sandboxbiz.Default()
-	result, err := svc.GetInstanceSandboxesWithStatus(reqctx(c), instanceID, typeFilter)
+	result, err := svc.GetAuthorizedInstanceSandboxesWithStatus(reqctx(c), instanceID, typeFilter)
 	if err != nil {
 		internalServerErrorResponse(c, err)
 		return
@@ -350,6 +353,10 @@ func GetSandboxVNC(c *gin.Context) {
 	}
 
 	svc := sandboxbiz.Default()
+	if err := svc.AuthorizeSandboxOperation(reqctx(c), sandboxID, true); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
 	result, err := svc.GetSandboxVNCURL(reqctx(c), sandboxID)
 	if err != nil {
 		internalServerErrorResponse(c, err)
@@ -388,8 +395,12 @@ func SandboxTypeDocs(c *gin.Context) {
 		))
 		return
 	}
-
 	svc := sandboxbiz.Default()
+	if err := svc.AuthorizeSandboxTypeDocs(reqctx(c), sandboxType); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+
 	data, err := svc.GetSandboxOpenAPI(reqctx(c), sandboxType)
 	if err != nil {
 		internalServerErrorResponse(c, err)
@@ -420,6 +431,10 @@ func SandboxAssign(c *gin.Context) {
 	}
 
 	svc := sandboxbiz.Default()
+	if err := svc.AuthorizeSandboxAssignment(reqctx(c), req.InstanceId, req.SandboxId); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
 	err := svc.AssignSandbox(reqctx(c), req.InstanceId, req.SandboxId)
 	if err != nil {
 		internalServerErrorResponse(c, err)
@@ -455,6 +470,10 @@ func SandboxUnassign(c *gin.Context) {
 	}
 
 	svc := sandboxbiz.Default()
+	if err := svc.AuthorizeSandboxOperation(reqctx(c), req.SandboxId, false); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
 	err := svc.UnassignSandbox(reqctx(c), req.InstanceId, req.SandboxId)
 	if err != nil {
 		internalServerErrorResponse(c, err)
@@ -581,8 +600,18 @@ func SandboxListInstances(c *gin.Context) {
 		return
 	}
 
-	// List all instances (non-deleted) for the dropdown
-	instances, _, err := agentSvc.ListSingleAgentInstancesByFilter(reqctx(c), &saEntity.ListSingleAgentInstanceFilter{}, 0, 0)
+	instances, err := agentSvc.ListSingleAgentInstancesForDashboard(reqctx(c))
+	if err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+	instanceIDs := make([]int64, 0, len(instances))
+	for _, instance := range instances {
+		if instance != nil {
+			instanceIDs = append(instanceIDs, instance.Id)
+		}
+	}
+	allowedInstanceIDs, err := sandboxbiz.Default().FilterDashboardInstanceIDs(reqctx(c), instanceIDs)
 	if err != nil {
 		internalServerErrorResponse(c, err)
 		return
@@ -591,7 +620,7 @@ func SandboxListInstances(c *gin.Context) {
 	// Build simplified list using proto types
 	var list []*sandboxdto.SandboxInstanceInfo
 	for _, inst := range instances {
-		if inst == nil {
+		if inst == nil || !allowedInstanceIDs[inst.Id] {
 			continue
 		}
 		instanceID := strconv.FormatInt(inst.Id, 10)
@@ -629,14 +658,28 @@ func SandboxOrgAssign(c *gin.Context) {
 		return
 	}
 
-	if err := rbac.CheckCtxAccessOrPlatformAdmin(
-		reqctx(c), rbac.ScopeOrg, req.OrganizationId, "organization", "manage",
+	svc := sandboxbiz.Default()
+	if err := svc.AuthorizeOrganizationSandboxAssign(reqctx(c)); err != nil {
+		internalServerErrorResponse(c, err)
+		return
+	}
+	if req.OrganizationId <= 0 {
+		invalidParamRequestResponse(c, "organizationId must be positive")
+		return
+	}
+	organizationService := orgbiz.Default()
+	if organizationService == nil {
+		internalServerErrorResponse(c, fmt.Errorf("organization service not available"))
+		return
+	}
+	if _, err := organizationService.GetOrganization(
+		reqctx(c),
+		&organizationdto.GetOrganizationRequest{Id: req.OrganizationId},
 	); err != nil {
 		internalServerErrorResponse(c, err)
 		return
 	}
 
-	svc := sandboxbiz.Default()
 	if err := svc.AssignSandboxToOrg(reqctx(c), req.OrganizationId, req.SandboxIds); err != nil {
 		internalServerErrorResponse(c, err)
 		return
@@ -661,14 +704,12 @@ func SandboxOrgUnassign(c *gin.Context) {
 		return
 	}
 
-	if err := rbac.CheckCtxAccessOrPlatformAdmin(
-		reqctx(c), rbac.ScopeOrg, req.OrganizationId, "organization", "manage",
-	); err != nil {
+	svc := sandboxbiz.Default()
+	if err := svc.AuthorizeOrganizationSandboxUnassign(reqctx(c), req.OrganizationId); err != nil {
 		internalServerErrorResponse(c, err)
 		return
 	}
 
-	svc := sandboxbiz.Default()
 	if err := svc.UnassignSandboxFromOrg(reqctx(c), req.OrganizationId, req.SandboxIds); err != nil {
 		internalServerErrorResponse(c, err)
 		return
@@ -693,19 +734,17 @@ func SandboxProjectAssign(c *gin.Context) {
 		return
 	}
 
-	if err := rbac.CheckCtxAccessOrPlatformAdmin(
-		reqctx(c), rbac.ScopeProject, req.ProjectId, "project", "manage",
-	); err != nil {
+	svc := sandboxbiz.Default()
+	if err := svc.AuthorizeProjectSandboxAssignment(reqctx(c), req.ProjectId); err != nil {
 		internalServerErrorResponse(c, err)
 		return
 	}
 
-	svc := sandboxbiz.Default()
 	// Look up org from the first sandbox to enforce org-project relationship.
 	orgID := int64(0)
 	if len(req.SandboxIds) > 0 {
 		var err error
-		orgID, err = svc.GetSandboxOrgID(reqctx(c), req.SandboxIds[0])
+		orgID, err = svc.GetSandboxOrgID(reqctx(c), strings.TrimSpace(req.SandboxIds[0]))
 		if err != nil {
 			internalServerErrorResponse(c, err)
 			return
@@ -736,14 +775,12 @@ func SandboxProjectUnassign(c *gin.Context) {
 		return
 	}
 
-	if err := rbac.CheckCtxAccessOrPlatformAdmin(
-		reqctx(c), rbac.ScopeProject, req.ProjectId, "project", "manage",
-	); err != nil {
+	svc := sandboxbiz.Default()
+	if err := svc.AuthorizeProjectSandboxAssignment(reqctx(c), req.ProjectId); err != nil {
 		internalServerErrorResponse(c, err)
 		return
 	}
 
-	svc := sandboxbiz.Default()
 	if err := svc.UnassignSandboxFromProject(reqctx(c), req.ProjectId, req.SandboxIds); err != nil {
 		internalServerErrorResponse(c, err)
 		return

@@ -9,6 +9,29 @@ import (
 	"sico-backend/internal/transport/http/dto/agent/single_agent"
 )
 
+func WithTracingOrganizationScopedSingleAgentInstanceRepository(next OrganizationScopedSingleAgentInstanceRepository) OrganizationScopedSingleAgentInstanceRepository {
+	if next == nil {
+		return nil
+	}
+	return &otelTracedOrganizationScopedSingleAgentInstanceRepository{next: next}
+}
+
+type otelTracedOrganizationScopedSingleAgentInstanceRepository struct {
+	next OrganizationScopedSingleAgentInstanceRepository
+}
+
+func (w *otelTracedOrganizationScopedSingleAgentInstanceRepository) ListByFilterInProjects(ctx context.Context, filter *singleagent.ListSingleAgentInstanceFilter, projectIDs []int64, offset int, limit int) ([]*singleagent.SingleAgentInstance, int64, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "OrganizationScopedSingleAgentInstanceRepository.ListByFilterInProjects")
+	defer span.End()
+
+	ret0, ret1, ret2 := w.next.ListByFilterInProjects(ctx, filter, projectIDs, offset, limit)
+	if ret2 != nil {
+		span.RecordError(ret2)
+		span.SetStatus(codes.Error, ret2.Error())
+	}
+	return ret0, ret1, ret2
+}
+
 func WithTracingSingleAgentInstanceRepository(next SingleAgentInstanceRepository) SingleAgentInstanceRepository {
 	if next == nil {
 		return nil

@@ -16,6 +16,7 @@ import (
 
 	redislock "sico-backend/internal/infra/cache/redis"
 	"sico-backend/internal/shared/apperr"
+	"sico-backend/internal/shared/enum"
 	"sico-backend/internal/shared/errcode"
 	sandboxdto "sico-backend/internal/transport/http/dto/sandbox"
 	"sico-backend/pkg/logger"
@@ -48,7 +49,7 @@ func (p *Pool) GetProvider(sandboxType string) (Provider, bool) {
 	if p == nil || p.providers == nil {
 		return nil, false
 	}
-	prov, ok := p.providers[sandboxType]
+	prov, ok := p.providers[enum.NormalizeSandboxType(sandboxType)]
 	return prov, ok
 }
 
@@ -492,20 +493,28 @@ func (p *Pool) refreshResources(ctx context.Context) (returnErr error) {
 		return persistErr
 	}
 
-	deleted, reconcileErr := p.reconcileLeaseProviderState(ctx, loop.observedResourceStatusByType, now)
-	if reconcileErr != nil {
-		logger.CtxWarn(ctx, "refreshResources: failed to reconcile missing lease state: %v", reconcileErr)
-	} else if deleted > 0 {
-		logger.CtxInfo(ctx, "refreshResources: removed %d expired missing sandbox lease(s)", deleted)
-	}
+	p.reconcileLeaseProviderStateAfterRefresh(ctx, loop.observedResourceStatusByType, now)
 
 	if loop.refreshedProviders > 0 {
 		logger.CtxInfo(ctx, "sandbox resource snapshot refreshed in redis: providers=%d", loop.refreshedProviders)
 	}
 
-	release, finalErr := finalizeRefreshOutcome(loop, hadSnapshot)
+	release, finalErr := finalizeRefreshOutcome(loop, hadSnapshot || len(loop.nextSnapshots) > 0)
 	releaseLeadership = release
 	return finalErr
+}
+
+func (p *Pool) reconcileLeaseProviderStateAfterRefresh(
+	ctx context.Context,
+	observedResourceStatusByType map[string]map[string]ResourceStatus,
+	now time.Time,
+) {
+	deleted, err := p.reconcileLeaseProviderState(ctx, observedResourceStatusByType, now)
+	if err != nil {
+		logger.CtxWarn(ctx, "refreshResources: failed to reconcile missing lease state: %v", err)
+	} else if deleted > 0 {
+		logger.CtxInfo(ctx, "refreshResources: removed %d expired missing sandbox lease(s)", deleted)
+	}
 }
 
 type providerLoopResult struct {
@@ -539,6 +548,11 @@ func (p *Pool) runProviderRefreshLoop(
 			if result.firstRefreshErr == nil {
 				result.firstRefreshErr = outcome.providerErr
 			}
+			if previousSnapshots[snapshotType] == nil {
+				result.nextSnapshots = append(result.nextSnapshots, &ResourceSnapshot{
+					Type: snapshotType, RefreshedAt: now, Resources: []*Resource{},
+				})
+			}
 			continue
 		}
 
@@ -557,8 +571,8 @@ func (p *Pool) runProviderRefreshLoop(
 
 // finalizeRefreshOutcome determines whether the leader lease should be released
 // and what error (if any) refreshResources should surface. Returns (releaseLeadership, err).
-func finalizeRefreshOutcome(loop *providerLoopResult, hadSnapshot bool) (bool, error) {
-	if loop.successfulProviders == 0 && !hadSnapshot {
+func finalizeRefreshOutcome(loop *providerLoopResult, snapshotAvailable bool) (bool, error) {
+	if loop.successfulProviders == 0 && !snapshotAvailable {
 		if loop.firstRefreshErr != nil {
 			return true, fmt.Errorf("no sandbox resource snapshots available: %w", loop.firstRefreshErr)
 		}
@@ -1714,7 +1728,7 @@ func (p *Pool) GetAssignedLease(ctx context.Context, instanceID, sandboxType str
 	}
 
 	for sandboxID, sType := range assignments {
-		if sType != sandboxType {
+		if enum.NormalizeSandboxType(sType) != enum.NormalizeSandboxType(sandboxType) {
 			continue
 		}
 		lease, leaseErr := p.getLease(ctx, sandboxID)

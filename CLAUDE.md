@@ -112,7 +112,7 @@ Key patterns:
 
 ### Sandbox System
 
-The sandbox subsystem manages isolated environments (Android emulators, AIO containers) for agent tool execution. Sandboxes are pooled and leased to agent instances. The `sandbox/emulator/` directory contains the Android emulator sandbox implementation (Python).
+The sandbox subsystem manages isolated environments (Android emulators and Linux Workstations) for agent tool execution. Sandboxes are pooled and leased to agent instances. The `sandbox/emulator/` directory contains the Android emulator sandbox implementation (Python).
 
 ### Proto Domains
 

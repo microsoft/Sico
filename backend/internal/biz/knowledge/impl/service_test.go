@@ -4,12 +4,15 @@ import (
 	"context"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"gorm.io/gorm"
 
 	"sico-backend/internal/store/knowledge/repository"
+	knowledgegrpc "sico-backend/internal/transport/grpc/pb/knowledge"
 	"sico-backend/internal/transport/http/dto/knowledge"
 	"sico-backend/internal/transport/http/middleware"
 	"sico-backend/pkg/jwtx"
@@ -21,8 +24,9 @@ import (
 
 type mockDocumentRepo struct {
 	repository.DocumentRepository
-	docs   map[int64]*repository.KnowledgeDocumentV2Model
-	nextID int64
+	docs    map[int64]*repository.KnowledgeDocumentV2Model
+	nextID  int64
+	updated chan *repository.KnowledgeDocumentV2Model
 }
 
 func newMockDocumentRepo() *mockDocumentRepo {
@@ -49,6 +53,9 @@ func (m *mockDocumentRepo) Update(_ context.Context, doc *repository.KnowledgeDo
 		return gorm.ErrRecordNotFound
 	}
 	m.docs[doc.ID] = doc
+	if m.updated != nil {
+		m.updated <- doc
+	}
 	return nil
 }
 
@@ -137,6 +144,38 @@ func (m *mockDocumentTagRepo) DeleteDocumentTags(_ context.Context, docID int64)
 }
 
 func (m *mockDocumentTagRepo) GetTagsByDocumentID(_ context.Context, _ int64) ([]*repository.KnowledgeTagModel, error) {
+	return nil, nil
+}
+
+type mockKnowledgeGRPCClient struct {
+	extractDocument    func(context.Context, *knowledge.KnowledgeDocument) (*knowledgegrpc.ExtractDocumentResponse, error)
+	getDocumentDetails func(
+		context.Context,
+		*knowledgegrpc.GetDocumentDetailsRequest,
+	) (*knowledgegrpc.GetDocumentDetailsResponse, error)
+}
+
+func (m *mockKnowledgeGRPCClient) ExtractDocument(
+	ctx context.Context,
+	req *knowledge.KnowledgeDocument,
+	_ ...grpc.CallOption,
+) (*knowledgegrpc.ExtractDocumentResponse, error) {
+	return m.extractDocument(ctx, req)
+}
+
+func (m *mockKnowledgeGRPCClient) GetDocumentDetails(
+	ctx context.Context,
+	req *knowledgegrpc.GetDocumentDetailsRequest,
+	_ ...grpc.CallOption,
+) (*knowledgegrpc.GetDocumentDetailsResponse, error) {
+	return m.getDocumentDetails(ctx, req)
+}
+
+func (m *mockKnowledgeGRPCClient) GetPlaybookDetails(
+	context.Context,
+	*knowledgegrpc.GetKnowledgePlaybookDetailsGrpcRequest,
+	...grpc.CallOption,
+) (*knowledgegrpc.GetKnowledgePlaybookDetailsGrpcResponse, error) {
 	return nil, nil
 }
 
@@ -292,6 +331,7 @@ func TestCreateDocument(t *testing.T) {
 		require.NoError(t, err)
 		doc := docRepo.docs[resp.Data.Id]
 		assert.Equal(t, "https://example.com/doc", doc.LinkURL)
+		assert.Equal(t, docStatusToDB(knowledge.KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_UPLOADED), doc.Status)
 	})
 
 	t.Run("missing project and agent", func(t *testing.T) {
@@ -328,6 +368,124 @@ func TestCreateDocument(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "linkUrl")
 	})
+}
+
+func TestCreateLinkDocumentExtractionLifecycle(t *testing.T) {
+	tests := []struct {
+		name            string
+		requestName     string
+		extractResponse *knowledgegrpc.ExtractDocumentResponse
+		expectedStatus  int32
+		expectedReason  string
+		expectedName    string
+	}{
+		{
+			name: "ingested with canonical title",
+			extractResponse: &knowledgegrpc.ExtractDocumentResponse{
+				Title: "Function calling | OpenAI API",
+			},
+			expectedStatus: docStatusToDB(knowledge.KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED),
+			expectedName:   "Function calling | OpenAI API",
+		},
+		{
+			name:            "ingested without title keeps fallback",
+			extractResponse: &knowledgegrpc.ExtractDocumentResponse{},
+			expectedStatus:  docStatusToDB(knowledge.KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED),
+			expectedName:    "Untitled link",
+		},
+		{
+			name: "failed",
+			extractResponse: &knowledgegrpc.ExtractDocumentResponse{
+				Code:    1,
+				Message: "fetch failed",
+				Title:   "Untrusted partial title",
+			},
+			expectedStatus: docStatusToDB(knowledge.KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_FAILED),
+			expectedReason: "fetch failed",
+			expectedName:   "Untitled link",
+		},
+		{
+			name:        "explicit name is preserved",
+			requestName: "API reference",
+			extractResponse: &knowledgegrpc.ExtractDocumentResponse{
+				Title: "Function calling | OpenAI API",
+			},
+			expectedStatus: docStatusToDB(knowledge.KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED),
+			expectedName:   "API reference",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			docRepo := newMockDocumentRepo()
+			docRepo.updated = make(chan *repository.KnowledgeDocumentV2Model, 1)
+			requests := make(chan *knowledge.KnowledgeDocument, 1)
+			svc := newKnowledgeTestService(docRepo, nil, newMockDocumentTagRepo())
+			svc.grpcClient = &mockKnowledgeGRPCClient{
+				extractDocument: func(
+					_ context.Context, req *knowledge.KnowledgeDocument,
+				) (*knowledgegrpc.ExtractDocumentResponse, error) {
+					requests <- req
+					return tt.extractResponse, nil
+				},
+			}
+
+			resp, err := svc.CreateDocument(ctxWithUser("bob"), &knowledge.CreateKnowledgeDocumentRequest{
+				ProjectId:    1,
+				Name:         tt.requestName,
+				LinkUrl:      "https://example.com/article",
+				DocumentType: knowledge.KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+
+			select {
+			case req := <-requests:
+				assert.Equal(t, resp.Data.Id, req.Id)
+				assert.Equal(t, "https://example.com/article", req.LinkUrl)
+				assert.Equal(t, knowledge.KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK, req.DocumentType)
+				assert.Nil(t, req.Attachment)
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for link extraction request")
+			}
+
+			select {
+			case updated := <-docRepo.updated:
+				assert.Equal(t, tt.expectedStatus, updated.Status)
+				assert.Equal(t, tt.expectedReason, updated.FailReason)
+				assert.Equal(t, tt.expectedName, updated.Name)
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for extraction status update")
+			}
+		})
+	}
+}
+
+func TestGetLinkDocumentDetailsForwardsDocumentType(t *testing.T) {
+	docRepo := newMockDocumentRepo()
+	docRepo.docs[1] = &repository.KnowledgeDocumentV2Model{
+		ID:           1,
+		ProjectID:    10,
+		DocumentType: docTypeToDB(knowledge.KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK),
+		Status:       docStatusToDB(knowledge.KnowledgeDocumentStatus_KNOWLEDGE_DOCUMENT_STATUS_INGESTED),
+	}
+	svc := newKnowledgeTestService(docRepo, nil, nil)
+	svc.grpcClient = &mockKnowledgeGRPCClient{
+		getDocumentDetails: func(
+			_ context.Context, req *knowledgegrpc.GetDocumentDetailsRequest,
+		) (*knowledgegrpc.GetDocumentDetailsResponse, error) {
+			assert.Equal(t, int64(1), req.DocumentId)
+			assert.Equal(t, int64(10), req.ProjectId)
+			assert.Equal(t, knowledge.KnowledgeDocumentType_KNOWLEDGE_DOCUMENT_TYPE_LINK, req.DocumentType)
+			return &knowledgegrpc.GetDocumentDetailsResponse{Summary: "summary", FullText: "full text"}, nil
+		},
+	}
+
+	resp, err := svc.GetDocumentDetails(ctxWithUser("bob"), &knowledge.GetKnowledgeDocumentDetailsRequest{Id: 1})
+
+	require.NoError(t, err)
+	assert.Equal(t, "summary", resp.Data.Summary)
+	assert.Equal(t, "full text", resp.Data.FullText)
 }
 
 func TestDeleteDocument(t *testing.T) {

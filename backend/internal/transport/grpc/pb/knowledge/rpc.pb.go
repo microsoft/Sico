@@ -25,6 +25,7 @@ const (
 type ExtractDocumentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message"`  
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title"`      
 	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`     
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -67,6 +68,13 @@ func (x *ExtractDocumentResponse) GetMessage() string {
 	return ""
 }
 
+func (x *ExtractDocumentResponse) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
 func (x *ExtractDocumentResponse) GetCode() int32 {
 	if x != nil {
 		return x.Code
@@ -75,10 +83,11 @@ func (x *ExtractDocumentResponse) GetCode() int32 {
 }
 
 type GetDocumentDetailsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId    int64                  `protobuf:"varint,1,opt,name=document_id,json=documentId,proto3" json:"documentId"`  
-	ProjectId     int64                  `protobuf:"varint,2,opt,name=project_id,json=projectId,proto3" json:"projectId"`     
-	AgentId       string                 `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agentId"`            
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	DocumentId    int64                           `protobuf:"varint,1,opt,name=document_id,json=documentId,proto3" json:"documentId"`                                             
+	ProjectId     int64                           `protobuf:"varint,2,opt,name=project_id,json=projectId,proto3" json:"projectId"`                                                
+	AgentId       string                          `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agentId"`                                                       
+	DocumentType  knowledge.KnowledgeDocumentType `protobuf:"varint,4,opt,name=document_type,json=documentType,proto3,enum=knowledge.KnowledgeDocumentType" json:"documentType"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -132,6 +141,13 @@ func (x *GetDocumentDetailsRequest) GetAgentId() string {
 		return x.AgentId
 	}
 	return ""
+}
+
+func (x *GetDocumentDetailsRequest) GetDocumentType() knowledge.KnowledgeDocumentType {
+	if x != nil {
+		return x.DocumentType
+	}
+	return knowledge.KnowledgeDocumentType(0)
 }
 
 type GetDocumentDetailsResponse struct {
@@ -326,16 +342,18 @@ var File_knowledge_rpc_proto protoreflect.FileDescriptor
 
 const file_knowledge_rpc_proto_rawDesc = "" +
 	"\n" +
-	"\x13knowledge/rpc.proto\x12\tknowledge\x1a\x19knowledge/knowledge.proto\"H\n" +
+	"\x13knowledge/rpc.proto\x12\tknowledge\x1a\x19knowledge/knowledge.proto\"^\n" +
 	"\x17ExtractDocumentResponse\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage\x12\x13\n" +
-	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\"v\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\"\xbd\x01\n" +
 	"\x19GetDocumentDetailsRequest\x12\x1f\n" +
 	"\vdocument_id\x18\x01 \x01(\x03R\n" +
 	"documentId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x02 \x01(\x03R\tprojectId\x12\x19\n" +
-	"\bagent_id\x18\x03 \x01(\tR\aagentId\"{\n" +
+	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12E\n" +
+	"\rdocument_type\x18\x04 \x01(\x0e2 .knowledge.KnowledgeDocumentTypeR\fdocumentType\"{\n" +
 	"\x1aGetDocumentDetailsResponse\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12\x1b\n" +
 	"\tfull_text\x18\x02 \x01(\tR\bfullText\x12\x13\n" +
@@ -375,20 +393,22 @@ var file_knowledge_rpc_proto_goTypes = []any{
 	(*GetDocumentDetailsResponse)(nil),              // 2: knowledge.GetDocumentDetailsResponse
 	(*GetKnowledgePlaybookDetailsGrpcRequest)(nil),  // 3: knowledge.GetKnowledgePlaybookDetailsGrpcRequest
 	(*GetKnowledgePlaybookDetailsGrpcResponse)(nil), // 4: knowledge.GetKnowledgePlaybookDetailsGrpcResponse
-	(*knowledge.KnowledgeDocument)(nil),             // 5: knowledge.KnowledgeDocument
+	(knowledge.KnowledgeDocumentType)(0),            // 5: knowledge.KnowledgeDocumentType
+	(*knowledge.KnowledgeDocument)(nil),             // 6: knowledge.KnowledgeDocument
 }
 var file_knowledge_rpc_proto_depIdxs = []int32{
-	5, // 0: knowledge.KnowledgeService.ExtractDocument:input_type -> knowledge.KnowledgeDocument
-	1, // 1: knowledge.KnowledgeService.GetDocumentDetails:input_type -> knowledge.GetDocumentDetailsRequest
-	3, // 2: knowledge.KnowledgeService.GetPlaybookDetails:input_type -> knowledge.GetKnowledgePlaybookDetailsGrpcRequest
-	0, // 3: knowledge.KnowledgeService.ExtractDocument:output_type -> knowledge.ExtractDocumentResponse
-	2, // 4: knowledge.KnowledgeService.GetDocumentDetails:output_type -> knowledge.GetDocumentDetailsResponse
-	4, // 5: knowledge.KnowledgeService.GetPlaybookDetails:output_type -> knowledge.GetKnowledgePlaybookDetailsGrpcResponse
-	3, // [3:6] is the sub-list for method output_type
-	0, // [0:3] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	5, // 0: knowledge.GetDocumentDetailsRequest.document_type:type_name -> knowledge.KnowledgeDocumentType
+	6, // 1: knowledge.KnowledgeService.ExtractDocument:input_type -> knowledge.KnowledgeDocument
+	1, // 2: knowledge.KnowledgeService.GetDocumentDetails:input_type -> knowledge.GetDocumentDetailsRequest
+	3, // 3: knowledge.KnowledgeService.GetPlaybookDetails:input_type -> knowledge.GetKnowledgePlaybookDetailsGrpcRequest
+	0, // 4: knowledge.KnowledgeService.ExtractDocument:output_type -> knowledge.ExtractDocumentResponse
+	2, // 5: knowledge.KnowledgeService.GetDocumentDetails:output_type -> knowledge.GetDocumentDetailsResponse
+	4, // 6: knowledge.KnowledgeService.GetPlaybookDetails:output_type -> knowledge.GetKnowledgePlaybookDetailsGrpcResponse
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_knowledge_rpc_proto_init() }

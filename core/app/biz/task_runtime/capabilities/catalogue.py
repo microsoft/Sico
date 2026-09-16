@@ -81,10 +81,8 @@ def skill_descriptor(card: "CapabilityCard") -> CapabilityDescriptor:
     return CapabilityDescriptor(
         capability_id=skill_capability_id(card.skill_name, card.action_name),
         parameter_schema=_skill_parameter_schema(card),
-        required_sandbox=tuple(card.sandbox_options),  # type: ignore[arg-type]
-        # Skill actions read and write the shared workspace; their durable
-        # deliverables additionally land in the per-run result directory.
-        workspace_access="read_write",
+        required_sandbox=tuple(card.sandbox_options),
+        workspace_access=card.workspace_access,
         # Fail closed: a skill that never declared its effect is assumed to
         # change external state. The default belongs here, in the projection,
         # and never on the descriptor itself.

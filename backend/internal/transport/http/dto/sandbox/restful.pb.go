@@ -177,7 +177,7 @@ func (x *SandboxLease) GetMetadata() map[string]string {
 
 type ListSandboxResourcesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" form:"type" binding:"omitempty,oneof=emulator aio"`  
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" form:"type" binding:"omitempty,oneof=emulator linux_workstation"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -325,7 +325,7 @@ func (x *ListSandboxResourcesResponseData) GetResources() []*SandboxResource {
 
 type ListSandboxLeasesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" form:"type" binding:"omitempty,oneof=emulator aio"`  
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty" form:"type" binding:"omitempty,oneof=emulator linux_workstation"`  
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -473,7 +473,7 @@ func (x *ListSandboxLeasesResponseData) GetLeases() []*SandboxLease {
 
 type CreateSandboxLeaseRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type" binding:"required,oneof=emulator aio"`  
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type" binding:"required,oneof=emulator linux_workstation"`  
 	// Transport sets this from auth context.
 	RequesterUsername string `protobuf:"bytes,10,opt,name=requester_username,json=requesterUsername,proto3" json:"-"`  
 	unknownFields     protoimpl.UnknownFields
@@ -1013,12 +1013,12 @@ func (x *SandboxResourceInfo) GetProjectId() int64 {
 }
 
 type SandboxResourcesByType struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Emulator      []*SandboxResourceInfo `protobuf:"bytes,1,rep,name=emulator,proto3" json:"emulator"`  
-	Aio           []*SandboxResourceInfo `protobuf:"bytes,2,rep,name=aio,proto3" json:"aio"`            
-	Wincua        []*SandboxResourceInfo `protobuf:"bytes,3,rep,name=wincua,proto3" json:"wincua"`      
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Emulator         []*SandboxResourceInfo `protobuf:"bytes,1,rep,name=emulator,proto3" json:"emulator"`                                          
+	LinuxWorkstation []*SandboxResourceInfo `protobuf:"bytes,2,rep,name=linux_workstation,json=linuxWorkstation,proto3" json:"linux_workstation"`  
+	Wincua           []*SandboxResourceInfo `protobuf:"bytes,3,rep,name=wincua,proto3" json:"wincua"`                                              
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SandboxResourcesByType) Reset() {
@@ -1058,9 +1058,9 @@ func (x *SandboxResourcesByType) GetEmulator() []*SandboxResourceInfo {
 	return nil
 }
 
-func (x *SandboxResourcesByType) GetAio() []*SandboxResourceInfo {
+func (x *SandboxResourcesByType) GetLinuxWorkstation() []*SandboxResourceInfo {
 	if x != nil {
-		return x.Aio
+		return x.LinuxWorkstation
 	}
 	return nil
 }
@@ -1135,7 +1135,7 @@ func (x *SandboxVNCInfo) GetVncUrl() string {
 type GetInstanceSandboxesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty" form:"instanceId" binding:"required"`  
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty" form:"type" binding:"omitempty,oneof=emulator aio wincua"`                                
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty" form:"type" binding:"omitempty,oneof=emulator linux_workstation wincua"`                                
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2503,10 +2503,10 @@ const file_sandbox_restful_proto_rawDesc = "" +
 	"expires_at\x18\f \x01(\x03R\texpiresAt\x12'\n" +
 	"\x0forganization_id\x18\r \x01(\x03R\x0eorganizationId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x0e \x01(\x03R\tprojectId\"\xb8\x01\n" +
+	"project_id\x18\x0e \x01(\x03R\tprojectId\"\xd3\x01\n" +
 	"\x16SandboxResourcesByType\x128\n" +
-	"\bemulator\x18\x01 \x03(\v2\x1c.sandbox.SandboxResourceInfoR\bemulator\x12.\n" +
-	"\x03aio\x18\x02 \x03(\v2\x1c.sandbox.SandboxResourceInfoR\x03aio\x124\n" +
+	"\bemulator\x18\x01 \x03(\v2\x1c.sandbox.SandboxResourceInfoR\bemulator\x12I\n" +
+	"\x11linux_workstation\x18\x02 \x03(\v2\x1c.sandbox.SandboxResourceInfoR\x10linuxWorkstation\x124\n" +
 	"\x06wincua\x18\x03 \x03(\v2\x1c.sandbox.SandboxResourceInfoR\x06wincua\"\\\n" +
 	"\x0eSandboxVNCInfo\x12\x1d\n" +
 	"\n" +
@@ -2704,7 +2704,7 @@ var file_sandbox_restful_proto_depIdxs = []int32{
 	10, // 6: sandbox.CreateSandboxLeaseResponse.data:type_name -> sandbox.CreateSandboxLeaseResponseData
 	1,  // 7: sandbox.CreateSandboxLeaseResponseData.lease:type_name -> sandbox.SandboxLease
 	16, // 8: sandbox.SandboxResourcesByType.emulator:type_name -> sandbox.SandboxResourceInfo
-	16, // 9: sandbox.SandboxResourcesByType.aio:type_name -> sandbox.SandboxResourceInfo
+	16, // 9: sandbox.SandboxResourcesByType.linux_workstation:type_name -> sandbox.SandboxResourceInfo
 	16, // 10: sandbox.SandboxResourcesByType.wincua:type_name -> sandbox.SandboxResourceInfo
 	20, // 11: sandbox.GetInstanceSandboxesData.items:type_name -> sandbox.InstanceSandboxStatusInfo
 	21, // 12: sandbox.GetInstanceSandboxesResponse.data:type_name -> sandbox.GetInstanceSandboxesData

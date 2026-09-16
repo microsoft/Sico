@@ -8,6 +8,29 @@ import (
 	"sico-backend/internal/entity/scheduledtask"
 )
 
+func WithTracingOrganizationScopedRepository(next OrganizationScopedRepository) OrganizationScopedRepository {
+	if next == nil {
+		return nil
+	}
+	return &otelTracedOrganizationScopedRepository{next: next}
+}
+
+type otelTracedOrganizationScopedRepository struct {
+	next OrganizationScopedRepository
+}
+
+func (w *otelTracedOrganizationScopedRepository) ListForCreatorInOrganization(ctx context.Context, creator string, organizationID int64, offset int, limit int) ([]*scheduledtask.ScheduledTask, int64, error) {
+	ctx, span := otel.Tracer("sico-backend/otelwrap").Start(ctx, "OrganizationScopedRepository.ListForCreatorInOrganization")
+	defer span.End()
+
+	ret0, ret1, ret2 := w.next.ListForCreatorInOrganization(ctx, creator, organizationID, offset, limit)
+	if ret2 != nil {
+		span.RecordError(ret2)
+		span.SetStatus(codes.Error, ret2.Error())
+	}
+	return ret0, ret1, ret2
+}
+
 func WithTracingRepository(next Repository) Repository {
 	if next == nil {
 		return nil

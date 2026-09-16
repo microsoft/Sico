@@ -23,14 +23,15 @@ const (
 
 type Organization struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`                                                  
-	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name"`                                               
-	Description     string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description"`                                 
-	CreatedAt       int64                  `protobuf:"varint,4,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`                   
-	UpdatedAt       int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`                   
-	CreatorUsername string                 `protobuf:"bytes,6,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`  
-	RoleCodes       []string               `protobuf:"bytes,7,rep,name=role_codes,json=roleCodes,proto3" json:"roleCodes"`                    
-	IsOwner         bool                   `protobuf:"varint,8,opt,name=is_owner,json=isOwner,proto3" json:"isOwner"`                         
+	Id              int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
+	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name"`
+	Description     string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description"`
+	CreatedAt       int64                  `protobuf:"varint,4,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`
+	UpdatedAt       int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updatedAt"`
+	CreatorUsername string                 `protobuf:"bytes,6,opt,name=creator_username,json=creatorUsername,proto3" json:"creatorUsername"`
+	RoleCodes       []string               `protobuf:"bytes,7,rep,name=role_codes,json=roleCodes,proto3" json:"roleCodes"`
+	IsOwner         bool                   `protobuf:"varint,8,opt,name=is_owner,json=isOwner,proto3" json:"isOwner"`
+	IconSasUrl      string                 `protobuf:"bytes,9,opt,name=icon_sas_url,json=iconSasUrl,proto3" json:"iconUrl"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -121,10 +122,18 @@ func (x *Organization) GetIsOwner() bool {
 	return false
 }
 
+func (x *Organization) GetIconSasUrl() string {
+	if x != nil {
+		return x.IconSasUrl
+	}
+	return ""
+}
+
 type CreateOrganizationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name" binding:"required,min=1,max=256"`                
-	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description" binding:"max=2000"`  
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name" binding:"required,min=1,max=256"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description" binding:"max=2000"`
+	IconUri       string                 `protobuf:"bytes,3,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" binding:"max=500"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -173,9 +182,16 @@ func (x *CreateOrganizationRequest) GetDescription() string {
 	return ""
 }
 
+func (x *CreateOrganizationRequest) GetIconUri() string {
+	if x != nil {
+		return x.IconUri
+	}
+	return ""
+}
+
 type CreateOrganizationResponseData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`  
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -219,9 +235,9 @@ func (x *CreateOrganizationResponseData) GetId() int64 {
 
 type CreateOrganizationResponse struct {
 	state         protoimpl.MessageState          `protogen:"open.v1"`
-	Data          *CreateOrganizationResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
-	Code          int32                           `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                          `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Data          *CreateOrganizationResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                           `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                          `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -279,9 +295,10 @@ func (x *CreateOrganizationResponse) GetMsg() string {
 
 type UpdateOrganizationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id" binding:"required"`                   
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name" binding:"omitempty,min=1,max=256"`                
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description" binding:"max=2000"`  
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id" binding:"required"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name" binding:"omitempty,min=1,max=256"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description" binding:"max=2000"`
+	IconUri       string                 `protobuf:"bytes,4,opt,name=icon_uri,json=iconUri,proto3" json:"iconUri" binding:"max=500"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -337,10 +354,17 @@ func (x *UpdateOrganizationRequest) GetDescription() string {
 	return ""
 }
 
+func (x *UpdateOrganizationRequest) GetIconUri() string {
+	if x != nil {
+		return x.IconUri
+	}
+	return ""
+}
+
 type UpdateOrganizationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -391,7 +415,7 @@ func (x *UpdateOrganizationResponse) GetMsg() string {
 
 type DeleteOrganizationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty" form:"id" binding:"required"`  
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty" form:"id" binding:"required"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -435,8 +459,8 @@ func (x *DeleteOrganizationRequest) GetId() int64 {
 
 type DeleteOrganizationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -487,7 +511,7 @@ func (x *DeleteOrganizationResponse) GetMsg() string {
 
 type GetOrganizationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty" form:"id" binding:"required"`  
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty" form:"id" binding:"required"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -531,7 +555,7 @@ func (x *GetOrganizationRequest) GetId() int64 {
 
 type GetOrganizationResponseData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Organization  *Organization          `protobuf:"bytes,1,opt,name=organization,proto3" json:"organization"`  
+	Organization  *Organization          `protobuf:"bytes,1,opt,name=organization,proto3" json:"organization"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -575,9 +599,9 @@ func (x *GetOrganizationResponseData) GetOrganization() *Organization {
 
 type GetOrganizationResponse struct {
 	state         protoimpl.MessageState       `protogen:"open.v1"`
-	Data          *GetOrganizationResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
-	Code          int32                        `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                       `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Data          *GetOrganizationResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                        `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                       `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -635,9 +659,9 @@ func (x *GetOrganizationResponse) GetMsg() string {
 
 type ListOrganizationsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty" form:"name" binding:"max=256"`                           
-	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`                          
-	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`  
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty" form:"name" binding:"max=256"`
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -695,9 +719,9 @@ func (x *ListOrganizationsRequest) GetPageSize() int32 {
 
 type ListOrganizationsResponseData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Organizations []*Organization        `protobuf:"bytes,1,rep,name=organizations,proto3" json:"organizations"`      
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`                     
-	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`  
+	Organizations []*Organization        `protobuf:"bytes,1,rep,name=organizations,proto3" json:"organizations"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`
+	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -755,9 +779,9 @@ func (x *ListOrganizationsResponseData) GetHasNext() bool {
 
 type ListOrganizationsResponse struct {
 	state         protoimpl.MessageState         `protogen:"open.v1"`
-	Data          *ListOrganizationsResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
-	Code          int32                          `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                         `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Data          *ListOrganizationsResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                          `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                         `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -815,10 +839,10 @@ func (x *ListOrganizationsResponse) GetMsg() string {
 
 type GetUserOrganizationListRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"-" form:"username"`                   
-	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`                          
-	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`  
-	RoleCode      string                 `protobuf:"bytes,4,opt,name=role_code,json=roleCode,proto3" json:"role_code,omitempty" form:"roleCode" binding:"omitempty,max=64"`   
+	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"-" form:"username"`
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`
+	RoleCode      string                 `protobuf:"bytes,4,opt,name=role_code,json=roleCode,proto3" json:"role_code,omitempty" form:"roleCode" binding:"omitempty,max=64"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -883,9 +907,9 @@ func (x *GetUserOrganizationListRequest) GetRoleCode() string {
 
 type GetUserOrganizationListResponseData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Organizations []*Organization        `protobuf:"bytes,1,rep,name=organizations,proto3" json:"organizations"`      
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`                     
-	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`  
+	Organizations []*Organization        `protobuf:"bytes,1,rep,name=organizations,proto3" json:"organizations"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total"`
+	HasNext       bool                   `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -943,9 +967,9 @@ func (x *GetUserOrganizationListResponseData) GetHasNext() bool {
 
 type GetUserOrganizationListResponse struct {
 	state         protoimpl.MessageState               `protogen:"open.v1"`
-	Data          *GetUserOrganizationListResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`     
-	Code          int32                                `protobuf:"varint,253,opt,name=code,proto3" json:"code"`  
-	Msg           string                               `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`     
+	Data          *GetUserOrganizationListResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                                `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                               `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1001,11 +1025,839 @@ func (x *GetUserOrganizationListResponse) GetMsg() string {
 	return ""
 }
 
+type OrganizationInvitation struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id"`
+	OrganizationId    int64                  `protobuf:"varint,2,opt,name=organization_id,json=organizationId,proto3" json:"organizationId"`
+	CreatedByUsername string                 `protobuf:"bytes,3,opt,name=created_by_username,json=createdByUsername,proto3" json:"createdByUsername"`
+	ExpiresAt         int64                  `protobuf:"varint,4,opt,name=expires_at,json=expiresAt,proto3" json:"expiresAt"`
+	RevokedAt         int64                  `protobuf:"varint,5,opt,name=revoked_at,json=revokedAt,proto3" json:"revokedAt"`
+	CreatedAt         int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"createdAt"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *OrganizationInvitation) Reset() {
+	*x = OrganizationInvitation{}
+	mi := &file_organization_organization_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrganizationInvitation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrganizationInvitation) ProtoMessage() {}
+
+func (x *OrganizationInvitation) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrganizationInvitation.ProtoReflect.Descriptor instead.
+func (*OrganizationInvitation) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *OrganizationInvitation) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *OrganizationInvitation) GetOrganizationId() int64 {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return 0
+}
+
+func (x *OrganizationInvitation) GetCreatedByUsername() string {
+	if x != nil {
+		return x.CreatedByUsername
+	}
+	return ""
+}
+
+func (x *OrganizationInvitation) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *OrganizationInvitation) GetRevokedAt() int64 {
+	if x != nil {
+		return x.RevokedAt
+	}
+	return 0
+}
+
+func (x *OrganizationInvitation) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+type CreateOrganizationInvitationRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ExpiresInSeconds int64                  `protobuf:"varint,1,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expiresInSeconds" binding:"omitempty,min=60,max=2592000"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CreateOrganizationInvitationRequest) Reset() {
+	*x = CreateOrganizationInvitationRequest{}
+	mi := &file_organization_organization_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOrganizationInvitationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOrganizationInvitationRequest) ProtoMessage() {}
+
+func (x *CreateOrganizationInvitationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOrganizationInvitationRequest.ProtoReflect.Descriptor instead.
+func (*CreateOrganizationInvitationRequest) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *CreateOrganizationInvitationRequest) GetExpiresInSeconds() int64 {
+	if x != nil {
+		return x.ExpiresInSeconds
+	}
+	return 0
+}
+
+type CreateOrganizationInvitationResponseData struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Invitation    *OrganizationInvitation `protobuf:"bytes,1,opt,name=invitation,proto3" json:"invitation"`
+	Token         string                  `protobuf:"bytes,2,opt,name=token,proto3" json:"token"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateOrganizationInvitationResponseData) Reset() {
+	*x = CreateOrganizationInvitationResponseData{}
+	mi := &file_organization_organization_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOrganizationInvitationResponseData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOrganizationInvitationResponseData) ProtoMessage() {}
+
+func (x *CreateOrganizationInvitationResponseData) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOrganizationInvitationResponseData.ProtoReflect.Descriptor instead.
+func (*CreateOrganizationInvitationResponseData) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *CreateOrganizationInvitationResponseData) GetInvitation() *OrganizationInvitation {
+	if x != nil {
+		return x.Invitation
+	}
+	return nil
+}
+
+func (x *CreateOrganizationInvitationResponseData) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+type CreateOrganizationInvitationResponse struct {
+	state         protoimpl.MessageState                    `protogen:"open.v1"`
+	Data          *CreateOrganizationInvitationResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                                     `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                                    `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateOrganizationInvitationResponse) Reset() {
+	*x = CreateOrganizationInvitationResponse{}
+	mi := &file_organization_organization_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateOrganizationInvitationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateOrganizationInvitationResponse) ProtoMessage() {}
+
+func (x *CreateOrganizationInvitationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateOrganizationInvitationResponse.ProtoReflect.Descriptor instead.
+func (*CreateOrganizationInvitationResponse) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *CreateOrganizationInvitationResponse) GetData() *CreateOrganizationInvitationResponseData {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *CreateOrganizationInvitationResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *CreateOrganizationInvitationResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+type GetOrganizationInvitationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty" form:"token" binding:"required"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOrganizationInvitationRequest) Reset() {
+	*x = GetOrganizationInvitationRequest{}
+	mi := &file_organization_organization_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationInvitationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationInvitationRequest) ProtoMessage() {}
+
+func (x *GetOrganizationInvitationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationInvitationRequest.ProtoReflect.Descriptor instead.
+func (*GetOrganizationInvitationRequest) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GetOrganizationInvitationRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+type GetOrganizationInvitationResponseData struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId      int64                  `protobuf:"varint,1,opt,name=organization_id,json=organizationId,proto3" json:"organizationId"`
+	OrganizationName    string                 `protobuf:"bytes,2,opt,name=organization_name,json=organizationName,proto3" json:"organizationName"`
+	OrganizationIconUrl string                 `protobuf:"bytes,3,opt,name=organization_icon_url,json=organizationIconUrl,proto3" json:"organizationIconUrl"`
+	ExpiresAt           int64                  `protobuf:"varint,4,opt,name=expires_at,json=expiresAt,proto3" json:"expiresAt"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *GetOrganizationInvitationResponseData) Reset() {
+	*x = GetOrganizationInvitationResponseData{}
+	mi := &file_organization_organization_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationInvitationResponseData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationInvitationResponseData) ProtoMessage() {}
+
+func (x *GetOrganizationInvitationResponseData) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationInvitationResponseData.ProtoReflect.Descriptor instead.
+func (*GetOrganizationInvitationResponseData) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetOrganizationInvitationResponseData) GetOrganizationId() int64 {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return 0
+}
+
+func (x *GetOrganizationInvitationResponseData) GetOrganizationName() string {
+	if x != nil {
+		return x.OrganizationName
+	}
+	return ""
+}
+
+func (x *GetOrganizationInvitationResponseData) GetOrganizationIconUrl() string {
+	if x != nil {
+		return x.OrganizationIconUrl
+	}
+	return ""
+}
+
+func (x *GetOrganizationInvitationResponseData) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+type GetOrganizationInvitationResponse struct {
+	state         protoimpl.MessageState                 `protogen:"open.v1"`
+	Data          *GetOrganizationInvitationResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOrganizationInvitationResponse) Reset() {
+	*x = GetOrganizationInvitationResponse{}
+	mi := &file_organization_organization_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationInvitationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationInvitationResponse) ProtoMessage() {}
+
+func (x *GetOrganizationInvitationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationInvitationResponse.ProtoReflect.Descriptor instead.
+func (*GetOrganizationInvitationResponse) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetOrganizationInvitationResponse) GetData() *GetOrganizationInvitationResponseData {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *GetOrganizationInvitationResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *GetOrganizationInvitationResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+type AcceptOrganizationInvitationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token" binding:"required"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcceptOrganizationInvitationRequest) Reset() {
+	*x = AcceptOrganizationInvitationRequest{}
+	mi := &file_organization_organization_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcceptOrganizationInvitationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcceptOrganizationInvitationRequest) ProtoMessage() {}
+
+func (x *AcceptOrganizationInvitationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcceptOrganizationInvitationRequest.ProtoReflect.Descriptor instead.
+func (*AcceptOrganizationInvitationRequest) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *AcceptOrganizationInvitationRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+type AcceptOrganizationInvitationResponseData struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId int64                  `protobuf:"varint,1,opt,name=organization_id,json=organizationId,proto3" json:"organizationId"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AcceptOrganizationInvitationResponseData) Reset() {
+	*x = AcceptOrganizationInvitationResponseData{}
+	mi := &file_organization_organization_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcceptOrganizationInvitationResponseData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcceptOrganizationInvitationResponseData) ProtoMessage() {}
+
+func (x *AcceptOrganizationInvitationResponseData) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcceptOrganizationInvitationResponseData.ProtoReflect.Descriptor instead.
+func (*AcceptOrganizationInvitationResponseData) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AcceptOrganizationInvitationResponseData) GetOrganizationId() int64 {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return 0
+}
+
+type AcceptOrganizationInvitationResponse struct {
+	state         protoimpl.MessageState                    `protogen:"open.v1"`
+	Data          *AcceptOrganizationInvitationResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                                     `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                                    `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcceptOrganizationInvitationResponse) Reset() {
+	*x = AcceptOrganizationInvitationResponse{}
+	mi := &file_organization_organization_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcceptOrganizationInvitationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcceptOrganizationInvitationResponse) ProtoMessage() {}
+
+func (x *AcceptOrganizationInvitationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcceptOrganizationInvitationResponse.ProtoReflect.Descriptor instead.
+func (*AcceptOrganizationInvitationResponse) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *AcceptOrganizationInvitationResponse) GetData() *AcceptOrganizationInvitationResponseData {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *AcceptOrganizationInvitationResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *AcceptOrganizationInvitationResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+type ListOrganizationInvitationsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty" form:"page" binding:"min=1" default:"1"`
+	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty" form:"pageSize" binding:"min=1,max=100" default:"10"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrganizationInvitationsRequest) Reset() {
+	*x = ListOrganizationInvitationsRequest{}
+	mi := &file_organization_organization_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrganizationInvitationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrganizationInvitationsRequest) ProtoMessage() {}
+
+func (x *ListOrganizationInvitationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrganizationInvitationsRequest.ProtoReflect.Descriptor instead.
+func (*ListOrganizationInvitationsRequest) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ListOrganizationInvitationsRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListOrganizationInvitationsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+type ListOrganizationInvitationsResponseData struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Invitations   []*OrganizationInvitation `protobuf:"bytes,1,rep,name=invitations,proto3" json:"invitations"`
+	Total         int32                     `protobuf:"varint,2,opt,name=total,proto3" json:"total"`
+	HasNext       bool                      `protobuf:"varint,3,opt,name=has_next,json=hasNext,proto3" json:"hasNext"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrganizationInvitationsResponseData) Reset() {
+	*x = ListOrganizationInvitationsResponseData{}
+	mi := &file_organization_organization_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrganizationInvitationsResponseData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrganizationInvitationsResponseData) ProtoMessage() {}
+
+func (x *ListOrganizationInvitationsResponseData) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrganizationInvitationsResponseData.ProtoReflect.Descriptor instead.
+func (*ListOrganizationInvitationsResponseData) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ListOrganizationInvitationsResponseData) GetInvitations() []*OrganizationInvitation {
+	if x != nil {
+		return x.Invitations
+	}
+	return nil
+}
+
+func (x *ListOrganizationInvitationsResponseData) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *ListOrganizationInvitationsResponseData) GetHasNext() bool {
+	if x != nil {
+		return x.HasNext
+	}
+	return false
+}
+
+type ListOrganizationInvitationsResponse struct {
+	state         protoimpl.MessageState                   `protogen:"open.v1"`
+	Data          *ListOrganizationInvitationsResponseData `protobuf:"bytes,1,opt,name=data,proto3" json:"data"`
+	Code          int32                                    `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                                   `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrganizationInvitationsResponse) Reset() {
+	*x = ListOrganizationInvitationsResponse{}
+	mi := &file_organization_organization_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrganizationInvitationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrganizationInvitationsResponse) ProtoMessage() {}
+
+func (x *ListOrganizationInvitationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrganizationInvitationsResponse.ProtoReflect.Descriptor instead.
+func (*ListOrganizationInvitationsResponse) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *ListOrganizationInvitationsResponse) GetData() *ListOrganizationInvitationsResponseData {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ListOrganizationInvitationsResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ListOrganizationInvitationsResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+type RevokeOrganizationInvitationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id" binding:"required"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeOrganizationInvitationRequest) Reset() {
+	*x = RevokeOrganizationInvitationRequest{}
+	mi := &file_organization_organization_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeOrganizationInvitationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeOrganizationInvitationRequest) ProtoMessage() {}
+
+func (x *RevokeOrganizationInvitationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeOrganizationInvitationRequest.ProtoReflect.Descriptor instead.
+func (*RevokeOrganizationInvitationRequest) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *RevokeOrganizationInvitationRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type RevokeOrganizationInvitationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,253,opt,name=code,proto3" json:"code"`
+	Msg           string                 `protobuf:"bytes,254,opt,name=msg,proto3" json:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeOrganizationInvitationResponse) Reset() {
+	*x = RevokeOrganizationInvitationResponse{}
+	mi := &file_organization_organization_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeOrganizationInvitationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeOrganizationInvitationResponse) ProtoMessage() {}
+
+func (x *RevokeOrganizationInvitationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_organization_organization_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeOrganizationInvitationResponse.ProtoReflect.Descriptor instead.
+func (*RevokeOrganizationInvitationResponse) Descriptor() ([]byte, []int) {
+	return file_organization_organization_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *RevokeOrganizationInvitationResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *RevokeOrganizationInvitationResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
 var File_organization_organization_proto protoreflect.FileDescriptor
 
 const file_organization_organization_proto_rawDesc = "" +
 	"\n" +
-	"\x1forganization/organization.proto\x12\forganization\"\xf7\x01\n" +
+	"\x1forganization/organization.proto\x12\forganization\"\x99\x02\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -1017,20 +1869,24 @@ const file_organization_organization_proto_rawDesc = "" +
 	"\x10creator_username\x18\x06 \x01(\tR\x0fcreatorUsername\x12\x1d\n" +
 	"\n" +
 	"role_codes\x18\a \x03(\tR\troleCodes\x12\x19\n" +
-	"\bis_owner\x18\b \x01(\bR\aisOwner\"Q\n" +
+	"\bis_owner\x18\b \x01(\bR\aisOwner\x12 \n" +
+	"\ficon_sas_url\x18\t \x01(\tR\n" +
+	"iconSasUrl\"l\n" +
 	"\x19CreateOrganizationRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x02 \x01(\tR\vdescription\"0\n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x19\n" +
+	"\bicon_uri\x18\x03 \x01(\tR\aiconUri\"0\n" +
 	"\x1eCreateOrganizationResponseData\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x86\x01\n" +
 	"\x1aCreateOrganizationResponse\x12@\n" +
 	"\x04data\x18\x01 \x01(\v2,.organization.CreateOrganizationResponseDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
-	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"a\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"|\n" +
 	"\x19UpdateOrganizationRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"D\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x19\n" +
+	"\bicon_uri\x18\x04 \x01(\tR\aiconUri\"D\n" +
 	"\x1aUpdateOrganizationResponse\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"+\n" +
@@ -1071,6 +1927,63 @@ const file_organization_organization_proto_rawDesc = "" +
 	"\x1fGetUserOrganizationListResponse\x12E\n" +
 	"\x04data\x18\x01 \x01(\v21.organization.GetUserOrganizationListResponseDataR\x04data\x12\x13\n" +
 	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"\xde\x01\n" +
+	"\x16OrganizationInvitation\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\x03R\x0eorganizationId\x12.\n" +
+	"\x13created_by_username\x18\x03 \x01(\tR\x11createdByUsername\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x04 \x01(\x03R\texpiresAt\x12\x1d\n" +
+	"\n" +
+	"revoked_at\x18\x05 \x01(\x03R\trevokedAt\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\x03R\tcreatedAt\"S\n" +
+	"#CreateOrganizationInvitationRequest\x12,\n" +
+	"\x12expires_in_seconds\x18\x01 \x01(\x03R\x10expiresInSeconds\"\x86\x01\n" +
+	"(CreateOrganizationInvitationResponseData\x12D\n" +
+	"\n" +
+	"invitation\x18\x01 \x01(\v2$.organization.OrganizationInvitationR\n" +
+	"invitation\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\"\x9a\x01\n" +
+	"$CreateOrganizationInvitationResponse\x12J\n" +
+	"\x04data\x18\x01 \x01(\v26.organization.CreateOrganizationInvitationResponseDataR\x04data\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"8\n" +
+	" GetOrganizationInvitationRequest\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"\xd0\x01\n" +
+	"%GetOrganizationInvitationResponseData\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\x03R\x0eorganizationId\x12+\n" +
+	"\x11organization_name\x18\x02 \x01(\tR\x10organizationName\x122\n" +
+	"\x15organization_icon_url\x18\x03 \x01(\tR\x13organizationIconUrl\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x04 \x01(\x03R\texpiresAt\"\x94\x01\n" +
+	"!GetOrganizationInvitationResponse\x12G\n" +
+	"\x04data\x18\x01 \x01(\v23.organization.GetOrganizationInvitationResponseDataR\x04data\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\";\n" +
+	"#AcceptOrganizationInvitationRequest\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"S\n" +
+	"(AcceptOrganizationInvitationResponseData\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\x03R\x0eorganizationId\"\x9a\x01\n" +
+	"$AcceptOrganizationInvitationResponse\x12J\n" +
+	"\x04data\x18\x01 \x01(\v26.organization.AcceptOrganizationInvitationResponseDataR\x04data\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"U\n" +
+	"\"ListOrganizationInvitationsRequest\x12\x12\n" +
+	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
+	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"\xa2\x01\n" +
+	"'ListOrganizationInvitationsResponseData\x12F\n" +
+	"\vinvitations\x18\x01 \x03(\v2$.organization.OrganizationInvitationR\vinvitations\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x19\n" +
+	"\bhas_next\x18\x03 \x01(\bR\ahasNext\"\x98\x01\n" +
+	"#ListOrganizationInvitationsResponse\x12I\n" +
+	"\x04data\x18\x01 \x01(\v25.organization.ListOrganizationInvitationsResponseDataR\x04data\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
+	"\x03msg\x18\xfe\x01 \x01(\tR\x03msg\"5\n" +
+	"#RevokeOrganizationInvitationRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"N\n" +
+	"$RevokeOrganizationInvitationResponse\x12\x13\n" +
+	"\x04code\x18\xfd\x01 \x01(\x05R\x04code\x12\x11\n" +
 	"\x03msg\x18\xfe\x01 \x01(\tR\x03msgB7Z5sico-backend/internal/transport/http/dto/organizationb\x06proto3"
 
 var (
@@ -1085,25 +1998,40 @@ func file_organization_organization_proto_rawDescGZIP() []byte {
 	return file_organization_organization_proto_rawDescData
 }
 
-var file_organization_organization_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_organization_organization_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_organization_organization_proto_goTypes = []any{
-	(*Organization)(nil),                        // 0: organization.Organization
-	(*CreateOrganizationRequest)(nil),           // 1: organization.CreateOrganizationRequest
-	(*CreateOrganizationResponseData)(nil),      // 2: organization.CreateOrganizationResponseData
-	(*CreateOrganizationResponse)(nil),          // 3: organization.CreateOrganizationResponse
-	(*UpdateOrganizationRequest)(nil),           // 4: organization.UpdateOrganizationRequest
-	(*UpdateOrganizationResponse)(nil),          // 5: organization.UpdateOrganizationResponse
-	(*DeleteOrganizationRequest)(nil),           // 6: organization.DeleteOrganizationRequest
-	(*DeleteOrganizationResponse)(nil),          // 7: organization.DeleteOrganizationResponse
-	(*GetOrganizationRequest)(nil),              // 8: organization.GetOrganizationRequest
-	(*GetOrganizationResponseData)(nil),         // 9: organization.GetOrganizationResponseData
-	(*GetOrganizationResponse)(nil),             // 10: organization.GetOrganizationResponse
-	(*ListOrganizationsRequest)(nil),            // 11: organization.ListOrganizationsRequest
-	(*ListOrganizationsResponseData)(nil),       // 12: organization.ListOrganizationsResponseData
-	(*ListOrganizationsResponse)(nil),           // 13: organization.ListOrganizationsResponse
-	(*GetUserOrganizationListRequest)(nil),      // 14: organization.GetUserOrganizationListRequest
-	(*GetUserOrganizationListResponseData)(nil), // 15: organization.GetUserOrganizationListResponseData
-	(*GetUserOrganizationListResponse)(nil),     // 16: organization.GetUserOrganizationListResponse
+	(*Organization)(nil),                             // 0: organization.Organization
+	(*CreateOrganizationRequest)(nil),                // 1: organization.CreateOrganizationRequest
+	(*CreateOrganizationResponseData)(nil),           // 2: organization.CreateOrganizationResponseData
+	(*CreateOrganizationResponse)(nil),               // 3: organization.CreateOrganizationResponse
+	(*UpdateOrganizationRequest)(nil),                // 4: organization.UpdateOrganizationRequest
+	(*UpdateOrganizationResponse)(nil),               // 5: organization.UpdateOrganizationResponse
+	(*DeleteOrganizationRequest)(nil),                // 6: organization.DeleteOrganizationRequest
+	(*DeleteOrganizationResponse)(nil),               // 7: organization.DeleteOrganizationResponse
+	(*GetOrganizationRequest)(nil),                   // 8: organization.GetOrganizationRequest
+	(*GetOrganizationResponseData)(nil),              // 9: organization.GetOrganizationResponseData
+	(*GetOrganizationResponse)(nil),                  // 10: organization.GetOrganizationResponse
+	(*ListOrganizationsRequest)(nil),                 // 11: organization.ListOrganizationsRequest
+	(*ListOrganizationsResponseData)(nil),            // 12: organization.ListOrganizationsResponseData
+	(*ListOrganizationsResponse)(nil),                // 13: organization.ListOrganizationsResponse
+	(*GetUserOrganizationListRequest)(nil),           // 14: organization.GetUserOrganizationListRequest
+	(*GetUserOrganizationListResponseData)(nil),      // 15: organization.GetUserOrganizationListResponseData
+	(*GetUserOrganizationListResponse)(nil),          // 16: organization.GetUserOrganizationListResponse
+	(*OrganizationInvitation)(nil),                   // 17: organization.OrganizationInvitation
+	(*CreateOrganizationInvitationRequest)(nil),      // 18: organization.CreateOrganizationInvitationRequest
+	(*CreateOrganizationInvitationResponseData)(nil), // 19: organization.CreateOrganizationInvitationResponseData
+	(*CreateOrganizationInvitationResponse)(nil),     // 20: organization.CreateOrganizationInvitationResponse
+	(*GetOrganizationInvitationRequest)(nil),         // 21: organization.GetOrganizationInvitationRequest
+	(*GetOrganizationInvitationResponseData)(nil),    // 22: organization.GetOrganizationInvitationResponseData
+	(*GetOrganizationInvitationResponse)(nil),        // 23: organization.GetOrganizationInvitationResponse
+	(*AcceptOrganizationInvitationRequest)(nil),      // 24: organization.AcceptOrganizationInvitationRequest
+	(*AcceptOrganizationInvitationResponseData)(nil), // 25: organization.AcceptOrganizationInvitationResponseData
+	(*AcceptOrganizationInvitationResponse)(nil),     // 26: organization.AcceptOrganizationInvitationResponse
+	(*ListOrganizationInvitationsRequest)(nil),       // 27: organization.ListOrganizationInvitationsRequest
+	(*ListOrganizationInvitationsResponseData)(nil),  // 28: organization.ListOrganizationInvitationsResponseData
+	(*ListOrganizationInvitationsResponse)(nil),      // 29: organization.ListOrganizationInvitationsResponse
+	(*RevokeOrganizationInvitationRequest)(nil),      // 30: organization.RevokeOrganizationInvitationRequest
+	(*RevokeOrganizationInvitationResponse)(nil),     // 31: organization.RevokeOrganizationInvitationResponse
 }
 var file_organization_organization_proto_depIdxs = []int32{
 	2,  // 0: organization.CreateOrganizationResponse.data:type_name -> organization.CreateOrganizationResponseData
@@ -1113,11 +2041,17 @@ var file_organization_organization_proto_depIdxs = []int32{
 	12, // 4: organization.ListOrganizationsResponse.data:type_name -> organization.ListOrganizationsResponseData
 	0,  // 5: organization.GetUserOrganizationListResponseData.organizations:type_name -> organization.Organization
 	15, // 6: organization.GetUserOrganizationListResponse.data:type_name -> organization.GetUserOrganizationListResponseData
-	7,  // [7:7] is the sub-list for method output_type
-	7,  // [7:7] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	17, // 7: organization.CreateOrganizationInvitationResponseData.invitation:type_name -> organization.OrganizationInvitation
+	19, // 8: organization.CreateOrganizationInvitationResponse.data:type_name -> organization.CreateOrganizationInvitationResponseData
+	22, // 9: organization.GetOrganizationInvitationResponse.data:type_name -> organization.GetOrganizationInvitationResponseData
+	25, // 10: organization.AcceptOrganizationInvitationResponse.data:type_name -> organization.AcceptOrganizationInvitationResponseData
+	17, // 11: organization.ListOrganizationInvitationsResponseData.invitations:type_name -> organization.OrganizationInvitation
+	28, // 12: organization.ListOrganizationInvitationsResponse.data:type_name -> organization.ListOrganizationInvitationsResponseData
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_organization_organization_proto_init() }
@@ -1131,7 +2065,7 @@ func file_organization_organization_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_organization_organization_proto_rawDesc), len(file_organization_organization_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

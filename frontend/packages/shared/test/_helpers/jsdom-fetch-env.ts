@@ -1,5 +1,5 @@
-import { builtinEnvironments } from "vitest/environments";
-import type { Environment } from "vitest/environments";
+import { builtinEnvironments } from "vitest/runtime";
+import type { Environment } from "vitest/runtime";
 
 // Captured in the Node realm at module-eval time — BEFORE jsdom's setup
 // overwrites the globals — so these are Node's native, undici-compatible
@@ -12,7 +12,7 @@ const NativeAbortSignal = globalThis.AbortSignal;
 
 const env: Environment = {
   name: "jsdom-fetch",
-  transformMode: "web",
+  viteEnvironment: "client",
   async setup(global, options) {
     const jsdom = await builtinEnvironments.jsdom.setup(global, options);
     Object.assign(global, {

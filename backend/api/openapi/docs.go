@@ -2594,6 +2594,193 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/sico/organization/invitations": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Revoke Organization Invitation",
+                "parameters": [
+                    {
+                        "description": "Revoke Organization Invitation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.RevokeOrganizationInvitationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.RevokeOrganizationInvitationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/organization/invitations/accept": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Accept Organization Invitation",
+                "parameters": [
+                    {
+                        "description": "Accept Organization Invitation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/organization/invitations/create": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Create Organization Invitation",
+                "parameters": [
+                    {
+                        "description": "Create Organization Invitation",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/organization/invitations/detail": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "Get Organization Invitation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.GetOrganizationInvitationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/sico/organization/invitations/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Organization"
+                ],
+                "summary": "List Organization Invitations",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 10,
+                        "name": "pageSize",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.ListOrganizationInvitationsResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/sico/organization/user_organizations": {
             "get": {
                 "security": [
@@ -4513,7 +4700,7 @@ const docTemplate = `{
                     {
                         "enum": [
                             "emulator",
-                            "aio",
+                            "linux_workstation",
                             "wincua"
                         ],
                         "type": "string",
@@ -6025,6 +6212,9 @@ const docTemplate = `{
                     }
                 },
                 "desc": {
+                    "type": "string"
+                },
+                "iconUri": {
                     "type": "string"
                 },
                 "id": {
@@ -8658,6 +8848,9 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "organizationId": {
+                    "type": "integer"
+                },
                 "projectId": {
                     "type": "integer"
                 },
@@ -8948,6 +9141,74 @@ const docTemplate = `{
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationRequest": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationResponseData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.AcceptOrganizationInvitationResponseData": {
+            "type": "object",
+            "properties": {
+                "organizationId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationRequest": {
+            "type": "object",
+            "properties": {
+                "expiresInSeconds": {
+                    "type": "integer",
+                    "maximum": 2592000,
+                    "minimum": 60
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationResponseData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.CreateOrganizationInvitationResponseData": {
+            "type": "object",
+            "properties": {
+                "invitation": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.OrganizationInvitation"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_organization.CreateOrganizationRequest": {
             "type": "object",
             "required": [
@@ -8957,6 +9218,10 @@ const docTemplate = `{
                 "description": {
                     "type": "string",
                     "maxLength": 2000
+                },
+                "iconUri": {
+                    "type": "string",
+                    "maxLength": 500
                 },
                 "name": {
                     "type": "string",
@@ -8994,6 +9259,37 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.GetOrganizationInvitationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.GetOrganizationInvitationResponseData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.GetOrganizationInvitationResponseData": {
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "type": "integer"
+                },
+                "organizationIconUrl": {
+                    "type": "string"
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "organizationName": {
                     "type": "string"
                 }
             }
@@ -9051,6 +9347,37 @@ const docTemplate = `{
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_organization.ListOrganizationInvitationsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.ListOrganizationInvitationsResponseData"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.ListOrganizationInvitationsResponseData": {
+            "type": "object",
+            "properties": {
+                "hasNext": {
+                    "type": "boolean"
+                },
+                "invitations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sico-backend_internal_transport_http_dto_organization.OrganizationInvitation"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_organization.ListOrganizationsResponse": {
             "type": "object",
             "properties": {
@@ -9094,6 +9421,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "iconUrl": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -9114,6 +9444,51 @@ const docTemplate = `{
                 }
             }
         },
+        "sico-backend_internal_transport_http_dto_organization.OrganizationInvitation": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "integer"
+                },
+                "createdByUsername": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "organizationId": {
+                    "type": "integer"
+                },
+                "revokedAt": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.RevokeOrganizationInvitationRequest": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sico-backend_internal_transport_http_dto_organization.RevokeOrganizationInvitationResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "msg": {
+                    "type": "string"
+                }
+            }
+        },
         "sico-backend_internal_transport_http_dto_organization.UpdateOrganizationRequest": {
             "type": "object",
             "required": [
@@ -9123,6 +9498,10 @@ const docTemplate = `{
                 "description": {
                     "type": "string",
                     "maxLength": 2000
+                },
+                "iconUri": {
+                    "type": "string",
+                    "maxLength": 500
                 },
                 "id": {
                     "type": "integer"
@@ -11074,13 +11453,13 @@ const docTemplate = `{
         "sico-backend_internal_transport_http_dto_sandbox.SandboxResourcesByType": {
             "type": "object",
             "properties": {
-                "aio": {
+                "emulator": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourceInfo"
                     }
                 },
-                "emulator": {
+                "linux_workstation": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/sico-backend_internal_transport_http_dto_sandbox.SandboxResourceInfo"

@@ -3,9 +3,11 @@
 // initial value.
 import { type Atom, atom, type PrimitiveAtom, type WritableAtom } from "jotai";
 
+import { resetSelectedOrganizationIdAtom } from "../features/organization/atoms/selected-organization-atom";
 import { loginResponseSchema, type User } from "../schemas/auth";
 import {
   clearAuthStorage,
+  clearOrganizationStorage,
   loadFromLS,
   persistLoginPayload,
 } from "../utils/auth-storage";
@@ -23,7 +25,11 @@ export const userAtom: WritableAtom<User | null, [User | null], void> = atom(
     const value = get(internalUserAtom);
     return value === UNSET ? loadFromLS() : value;
   },
-  (_get, set, next: User | null) => {
+  (get, set, next: User | null) => {
+    if (get(userAtom)?.id !== next?.id) {
+      set(resetSelectedOrganizationIdAtom);
+      clearOrganizationStorage();
+    }
     set(internalUserAtom, next);
   },
 );
@@ -36,6 +42,7 @@ export const loginAtom: WritableAtom<null, [unknown], void> = atom(
       logger.error("loginAtom: invalid login response payload", result.error);
       return;
     }
+    set(resetSelectedOrganizationIdAtom);
     persistLoginPayload(result.data);
     set(internalUserAtom, result.data.user);
   },
@@ -44,6 +51,7 @@ export const loginAtom: WritableAtom<null, [unknown], void> = atom(
 export const logoutAtom: WritableAtom<null, [], void> = atom(
   null,
   (_get, set) => {
+    set(resetSelectedOrganizationIdAtom);
     clearAuthStorage();
     set(internalUserAtom, null);
   },

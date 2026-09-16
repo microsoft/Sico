@@ -53,11 +53,17 @@ describe("flattenDeviceGroups", () => {
       wincua: [wireDevice({ sandbox_id: "win", type: "wincua" })],
       physical: [wireDevice({ sandbox_id: "physical", type: "physical" })],
       emulator: [wireDevice({ sandbox_id: "emulator" })],
-      aio: [wireDevice({ sandbox_id: "aio", type: "aio" })],
+      linux_workstation: [
+        wireDevice({
+          sandbox_id: "linux-workstation",
+          type: "linux_workstation",
+        }),
+      ],
     });
 
     expect(flattenDeviceGroups(data).map(({ sandboxId }) => sandboxId)).toEqual(
-      ["aio", "emulator", "physical", "win"],
+      ["linux-workstation", "emulator", "physical", "win"],
     );
+    expect(flattenDeviceGroups(data)[0]?.type).toBe("linux_workstation");
   });
 });

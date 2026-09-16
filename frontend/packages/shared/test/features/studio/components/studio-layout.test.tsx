@@ -10,6 +10,10 @@ import { act, render, screen } from "@testing-library/react";
 import { type JSX } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/hooks/use-bound-organization", () => ({
+  useBoundOrganizationQuery: () => ({ data: { id: 7 } }),
+}));
+
 const mockUseOrganizationPermissionSuspense = vi.fn();
 vi.mock("@/features/rbac/hooks/use-organization-permission", () => ({
   useOrganizationPermissionSuspense: () =>

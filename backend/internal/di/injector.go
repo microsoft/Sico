@@ -48,4 +48,5 @@ type Injector struct {
 	AuthStateApp       authstate.Service
 	CaseReplayApp      casereplay.Service
 	SandboxIntegration sandboxproviders.Integration
+	Access             rbac.Access
 }

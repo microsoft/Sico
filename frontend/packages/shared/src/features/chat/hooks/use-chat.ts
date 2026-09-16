@@ -5,15 +5,13 @@ import { useCallback } from "react";
 
 import { invalidateHistory } from "./use-history";
 import { CHAT_STREAM_ENDPOINTS } from "../../../constants/endpoints";
+import { useOrganizationIdGetter } from "../../../hooks/use-organization-id-getter";
 import { type CommonAttachment } from "../../../schemas/common-attachment";
 import { useApiClient } from "../../../services/api-client-context";
 import { uploadAttachment } from "../../../services/upload-attachment";
 import { createFirstConversationIdsAtom } from "../atoms/chat-atom";
 import { sendMessage, stopTurn } from "../services/chat";
-import {
-  openChatStream,
-  type OpenChatStreamOptions,
-} from "../services/chat-stream";
+import { openChatStream } from "../services/chat-stream";
 import { cancelPlan } from "../services/plan";
 import { refreshConversationStatus } from "../utils/refresh-conversation-status";
 
@@ -62,16 +60,6 @@ function onSendTerminal(
   clearCreateFirstMarker(store, conversationId);
 }
 
-function openLiveChatStream(
-  payload: Parameters<typeof openChatStream>[0],
-  options: Omit<OpenChatStreamOptions, "url">,
-): Promise<void> {
-  return openChatStream(payload, {
-    ...options,
-    url: CHAT_STREAM_ENDPOINTS.chat,
-  });
-}
-
 // The only React-aware layer: binds the live store + axios into the plain
 // domain fns. Components consume `send`/`stop`/`upload`, never the store or
 // transport directly.
@@ -85,20 +73,26 @@ export function useChat(
   const store = useStore();
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
+  const getOrganizationId = useOrganizationIdGetter();
 
   const send = useCallback(
     (text: string, attachments: CommonAttachment[], conversationId?: number) =>
       sendMessage(store, text, attachments, {
         agentInstanceId,
         conversationId,
-        openChatStream: openLiveChatStream,
+        openChatStream: (payload, options) =>
+          openChatStream(payload, {
+            ...options,
+            url: CHAT_STREAM_ENDPOINTS.chat,
+            getOrganizationId,
+          }),
         toastError: (message) => toast.error(message),
         onOpen: () => refreshConversationStatus(queryClient, agentInstanceId),
         onTerminal: () =>
           onSendTerminal(store, queryClient, agentInstanceId, conversationId),
         onSettle: () => refreshConversationStatus(queryClient, agentInstanceId),
       }),
-    [store, agentInstanceId, queryClient],
+    [store, agentInstanceId, queryClient, getOrganizationId],
   );
 
   const stop = useCallback(

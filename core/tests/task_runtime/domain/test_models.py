@@ -18,6 +18,7 @@ from app.biz.task_runtime.domain.models import (
     TaskStatus,
     compute_idempotency_key,
 )
+from app.biz.task_runtime.guides import SkillGuideRef
 from app.biz.task_runtime.workspace.rerun_sources import compact_rerun_source_payload, delegate_request_from_rerun_source
 from app.tools.common import ToolContext
 from app.tools.plan import PlanEditor
@@ -51,6 +52,18 @@ def test_task_spec_required_sandbox_normalizes_to_options() -> None:
     multi.set_selected_sandbox("macos")
     assert multi.selected_sandbox == "macos"
     assert multi.metadata["_task_runtime"]["selected_sandbox"] == "macos"
+
+
+def test_sandbox_lease_persists_concrete_type() -> None:
+    lease = SandboxLeaseRef(
+        sandbox_id="linux_workstation:1",
+        type="linux_workstation",
+        os="linux",
+        endpoint="http://linux-workstation",
+        acquired_at=1,
+    )
+
+    assert SandboxLeaseRef.model_validate(lease.model_dump()).type == "linux_workstation"
 
 
 def test_idempotency_key_changes_with_submission_id() -> None:
@@ -158,7 +171,7 @@ def test_tool_context_assigns_stable_delegate_submission_ids_by_request_order() 
         "request-1:delegate:2",
     )
 
-    replay = ToolContext(
+    duplicate_delivery = ToolContext(
         username="alice@example.com",
         agent_id="agent",
         agent_instance_id=1,
@@ -169,8 +182,8 @@ def test_tool_context_assigns_stable_delegate_submission_ids_by_request_order() 
         plan_editor=FakePlanEditor(),
         submission_id="request-1",
     )
-    assert replay.next_task_submission_id() == first
-    assert replay.next_task_submission_id() == second
+    assert duplicate_delivery.next_task_submission_id() == first
+    assert duplicate_delivery.next_task_submission_id() == second
 
 
 def test_task_spec_dispatch_accessors_expose_dispatch_payload() -> None:
@@ -187,7 +200,7 @@ def test_task_spec_dispatch_accessors_expose_dispatch_payload() -> None:
     assert tool_task.skill_name is None
 
     assert skill_task.kind == "capability"
-    assert skill_task.capability_id == "skill:android-test.run"
+    assert skill_task.capability_id == "skill:android-test:run"
     assert skill_task.tool_name is None
     assert skill_task.skill_name == "android-test"
 
@@ -211,7 +224,28 @@ def test_sub_agent_grants_are_namespaced_and_deduplicated_on_load() -> None:
         }
     )
 
-    assert spec.dispatch.capability_grants == ["builtin:echo", "skill:android-test.run", "builtin:run_command"]
+    assert spec.dispatch.effective_capability_ids == ["builtin:echo", "skill:android-test:run", "builtin:run_command"]
+    assert spec.dispatch.capability_grants == spec.dispatch.effective_capability_ids
+
+
+def test_sub_agent_dispatch_persists_requested_selectors_and_effective_ids() -> None:
+    dispatch = SubAgentDispatch(
+        requested_capability_selectors=["linux_workstation:browser:**", "skill:reviewed.inspect"],
+        effective_capability_ids=["linux_workstation:browser:screenshot", "skill:reviewed.inspect"],
+    )
+
+    assert dispatch.requested_capability_selectors == ["linux_workstation:browser:**", "skill:reviewed:inspect"]
+    assert dispatch.effective_capability_ids == ["linux_workstation:browser:screenshot", "skill:reviewed:inspect"]
+    assert "capability_grants" not in dispatch.model_dump()
+
+
+def test_sub_agent_instruction_refs_are_optional_and_deduplicated() -> None:
+    legacy = SubAgentDispatch.model_validate({"profile_id": "default"})
+    ref = SkillGuideRef(skill_id=7, version="v1", content_hash="1" * 64)
+    dispatch = SubAgentDispatch(instruction_refs=[ref, ref])
+
+    assert legacy.instruction_refs == []
+    assert dispatch.instruction_refs == [ref]
 
 
 def test_sub_agent_dispatch_legacy_fields_do_not_mutate_input() -> None:
@@ -409,7 +443,9 @@ def test_task_run_persisted_json_contract() -> None:
                 "type": "sub_agent",
                 "profile_id": "default",
                 "max_model_turns": 6,
-                "capability_grants": ["builtin:echo"],
+                "requested_capability_selectors": [],
+                "effective_capability_ids": ["builtin:echo"],
+                "instruction_refs": [],
             },
             "display": {"plan_title": "", "batch_step_title": "", "single_step_title": ""},
             "args": {"case_id": "TC-1"},

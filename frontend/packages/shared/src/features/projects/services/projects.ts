@@ -184,16 +184,18 @@ export async function deleteProject(
 // multi-select + emoji cover have no create-endpoint field and are omitted.
 type CreateProjectBody = {
   name: string;
+  organizationId: number;
   description?: string;
   iconUri?: string;
 };
 
 export async function createProject(
   apiClient: AxiosInstance,
-  { name, description = "", iconUri = "" }: CreateProjectBody,
+  { name, organizationId, description = "", iconUri = "" }: CreateProjectBody,
 ): Promise<number> {
   const response = await apiClient.post<unknown>(PROJECT_ENDPOINTS.root, {
     name,
+    organizationId,
     description,
     iconUri,
     operatorAdmins: [],

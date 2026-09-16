@@ -5,7 +5,7 @@ import {
   fetchFirstOrganization,
   fetchOrganization,
   fetchUserOrganizations,
-  renameOrganization,
+  updateOrganization,
 } from "../../../../src/features/organization/services/organization";
 import { makeOkEnvelope } from "../../../../src/schemas/api";
 
@@ -132,13 +132,13 @@ describe("fetchOrganization", () => {
   });
 });
 
-describe("renameOrganization", () => {
+describe("updateOrganization", () => {
   it("updates the organization name", async () => {
     const { client, put } = makeClient();
     put.mockResolvedValue({ data: makeOkEnvelope({}) });
 
     await expect(
-      renameOrganization(client, 9, "New name"),
+      updateOrganization(client, 9, { name: "New name" }),
     ).resolves.toBeUndefined();
     expect(put).toHaveBeenCalledWith("/organization", {
       id: 9,
@@ -146,12 +146,28 @@ describe("renameOrganization", () => {
     });
   });
 
+  it("sends a supplied organization icon URI", async () => {
+    const { client, put } = makeClient();
+    put.mockResolvedValue({ data: makeOkEnvelope({}) });
+
+    await updateOrganization(client, 9, {
+      name: "New name",
+      iconUri: "organization/9/avatar.png",
+    });
+
+    expect(put).toHaveBeenCalledWith("/organization", {
+      id: 9,
+      name: "New name",
+      iconUri: "organization/9/avatar.png",
+    });
+  });
+
   it("rejects a non-OK business envelope", async () => {
     const { client, put } = makeClient();
     put.mockResolvedValue({ data: { code: 100003, msg: "forbidden" } });
 
-    await expect(renameOrganization(client, 9, "New name")).rejects.toThrow(
-      /rejected \(code 100003\)/,
-    );
+    await expect(
+      updateOrganization(client, 9, { name: "New name" }),
+    ).rejects.toThrow(/rejected \(code 100003\)/);
   });
 });

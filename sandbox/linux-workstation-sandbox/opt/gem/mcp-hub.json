@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "sandbox": {
+      "type": "streamable-http",
+      "prefix": "sandbox",
+      "url": "http://127.0.0.1:8091/mcp"
+    },
+    "browser": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:8100/mcp"
+    },
+    "chrome_devtools": {
+      "type": "sse",
+      "prefix": "chrome_devtools",
+      "url": "http://127.0.0.1:8102/sse"
+    }
+  }
+}

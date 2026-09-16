@@ -8,6 +8,7 @@ import axios, {
 import { type createStore } from "jotai";
 import { z } from "zod";
 
+import { getOrganizationHeaders } from "./organization-header";
 import { synthesizeNetworkError } from "./synthesize-error";
 import { isAuthenticatedAtom, logoutAtom } from "../atoms/auth-atom";
 import { HTTP_UNAUTHORIZED } from "../constants/http";
@@ -33,6 +34,7 @@ export type CreateApiClientOptions = {
   onUnauthorized?: (event: UnauthorizedEvent) => void;
   store?: Store;
   baseURL?: string;
+  getOrganizationId?: () => number | null;
 };
 
 const envelopeSchema = apiResponseSchema(z.unknown());
@@ -96,6 +98,16 @@ function attachAuthHeader(
   if (token) {
     // eslint-disable-next-line no-param-reassign -- axios request interceptors must mutate config to attach headers
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}
+
+function attachOrganizationHeader(
+  config: InternalAxiosRequestConfig,
+  getOrganizationId: CreateApiClientOptions["getOrganizationId"],
+): InternalAxiosRequestConfig {
+  if (isSameOriginRequest(config.url, config.baseURL)) {
+    config.headers.set(getOrganizationHeaders(getOrganizationId));
   }
   return config;
 }
@@ -175,7 +187,10 @@ export function createApiClient(
     string | null
   >();
   instance.interceptors.request.use((config) =>
-    attachAuthHeader(config, requestTokens),
+    attachOrganizationHeader(
+      attachAuthHeader(config, requestTokens),
+      options.getOrganizationId,
+    ),
   );
   instance.interceptors.response.use(parseResponseEnvelope, (error: unknown) =>
     handleResponseError(error, options, requestTokens),

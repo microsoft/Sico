@@ -18,6 +18,7 @@ import { Ellipsis, LogOut } from "lucide-react";
 import { type JSX } from "react";
 
 import { ManageOrganizationMenuItem } from "./manage-organization-menu-item";
+import { OrganizationAccountMenuSection } from "./organization-account-menu-section";
 import { SwitchToSicoDevMenuItem } from "./switch-to-sico-dev-menu-item";
 import {
   type LocalePreference,
@@ -61,12 +62,14 @@ export function SidebarAccountMenu(): JSX.Element {
         <Ellipsis aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-49">
-        <ManageOrganizationMenuItem
-          visible={permission.canManage}
-          onSelect={() => {
-            void navigate({ to: "/organization" });
-          }}
-        />
+        <OrganizationAccountMenuSection>
+          <ManageOrganizationMenuItem
+            visible={permission.canManage}
+            onSelect={() => {
+              void navigate({ to: "/organization" });
+            }}
+          />
+        </OrganizationAccountMenuSection>
         {userMode === "operator" ? (
           <SwitchToSicoDevMenuItem
             visible={permission.canEnterStudio}

@@ -2,9 +2,9 @@ from types import SimpleNamespace
 
 from app.biz.task_runtime.config import (
     DEFAULT_BACKEND_POD_CONCURRENCY,
+    _duplicate_submission_materialization_timeout_seconds,
     _resolve_clamped_env,
     _resolve_positive_env,
-    _replay_run_materialization_timeout_seconds,
     _reuse_wait_timeout_seconds,
     _sandbox_release_attempts,
     _stale_run_after_ms,
@@ -127,16 +127,38 @@ def test_stale_run_after_ms_allows_zero_floor(monkeypatch) -> None:
     assert _stale_run_after_ms() == 0
 
 
-def test_replay_materialization_timeout_default(monkeypatch) -> None:
+def test_duplicate_submission_materialization_timeout_default(monkeypatch) -> None:
+    monkeypatch.delenv("TASK_RUNTIME_DUPLICATE_SUBMISSION_MATERIALIZATION_TIMEOUT_SECONDS", raising=False)
     monkeypatch.delenv("TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS", raising=False)
 
-    assert _replay_run_materialization_timeout_seconds() == 30
+    assert _duplicate_submission_materialization_timeout_seconds() == 30
 
 
-def test_replay_materialization_timeout_clamps_to_floor(monkeypatch) -> None:
-    monkeypatch.setenv("TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS", "0")
+def test_duplicate_submission_materialization_timeout_clamps_to_floor(monkeypatch) -> None:
+    monkeypatch.setenv("TASK_RUNTIME_DUPLICATE_SUBMISSION_MATERIALIZATION_TIMEOUT_SECONDS", "0")
 
-    assert _replay_run_materialization_timeout_seconds() == 1
+    assert _duplicate_submission_materialization_timeout_seconds() == 1
+
+
+def test_duplicate_submission_materialization_timeout_accepts_legacy_alias(monkeypatch) -> None:
+    monkeypatch.delenv("TASK_RUNTIME_DUPLICATE_SUBMISSION_MATERIALIZATION_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setenv("TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS", "45")
+
+    assert _duplicate_submission_materialization_timeout_seconds() == 45
+
+
+def test_duplicate_submission_materialization_timeout_uses_legacy_alias_when_current_is_blank(monkeypatch) -> None:
+    monkeypatch.setenv("TASK_RUNTIME_DUPLICATE_SUBMISSION_MATERIALIZATION_TIMEOUT_SECONDS", "   ")
+    monkeypatch.setenv("TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS", "45")
+
+    assert _duplicate_submission_materialization_timeout_seconds() == 45
+
+
+def test_duplicate_submission_materialization_timeout_prefers_current_value(monkeypatch) -> None:
+    monkeypatch.setenv("TASK_RUNTIME_DUPLICATE_SUBMISSION_MATERIALIZATION_TIMEOUT_SECONDS", "60")
+    monkeypatch.setenv("TASK_RUNTIME_REPLAY_MATERIALIZATION_TIMEOUT_SECONDS", "45")
+
+    assert _duplicate_submission_materialization_timeout_seconds() == 60
 
 
 def test_heartbeat_interval_clamps_to_floor(monkeypatch) -> None:

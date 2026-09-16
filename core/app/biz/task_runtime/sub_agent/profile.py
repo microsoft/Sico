@@ -19,6 +19,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias
 
 from ..capabilities.descriptors import ResolveContext
+from ..capabilities.ids import normalize_capability_selector, parse_capability_selector
 
 if TYPE_CHECKING:
     from ..capabilities.descriptors import CapabilityDescriptor
@@ -31,8 +32,14 @@ CapabilityCeiling: TypeAlias = frozenset[str] | Literal["*"]
 
 
 def ceiling_allows(ceiling: CapabilityCeiling, capability_id: str) -> bool:
-    """Whether a profile ceiling contains one explicitly requested capability."""
-    return ceiling == ALL_CAPABILITIES or capability_id in ceiling
+    """Whether an exact capability ID is inside a profile's selector ceiling."""
+    return ceiling == ALL_CAPABILITIES or any(parse_capability_selector(selector).matches(capability_id) for selector in ceiling)
+
+
+def normalize_capability_ceiling(ceiling: CapabilityCeiling) -> CapabilityCeiling:
+    if ceiling == ALL_CAPABILITIES:
+        return ceiling
+    return frozenset(normalize_capability_selector(selector) for selector in ceiling)
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +127,9 @@ class ProfileDescriptor:
     when_to_use: str
     capability_ceiling: CapabilityCeiling
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "capability_ceiling", normalize_capability_ceiling(self.capability_ceiling))
+
 
 def profile_descriptor_payload(descriptor: ProfileDescriptor) -> dict[str, object]:
     """Project one descriptor into the exact metadata exposed to planners."""
@@ -144,6 +154,7 @@ class AgentProfile:
     def __post_init__(self) -> None:
         if not self.profile_id.strip():
             raise ValueError("profile_id must not be empty")
+        object.__setattr__(self, "capability_ceiling", normalize_capability_ceiling(self.capability_ceiling))
         for policy in (*self.invocation_policies, self.completion_policy):
             _validate_declarative_policy(policy)
 

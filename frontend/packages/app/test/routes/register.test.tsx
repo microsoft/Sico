@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { routeTree } from "../../src/routeTree.gen";
 import { clearAuthStorage } from "../_helpers/clear-auth-storage";
+import { seedOrganizationContext } from "../_helpers/organization-context";
 
 type MockRegisterFormProps = {
   onLogin: (mode: "operator" | "developer") => void;
@@ -58,11 +59,13 @@ vi.mock("@sico/ui", async (importActual) => {
 
 function renderAt(initialPath: string): { router: RegisteredRouter } {
   const history = createMemoryHistory({ initialEntries: [initialPath] });
+  const queryClient = new QueryClient();
+  seedOrganizationContext(queryClient);
   const router = createRouter({
     routeTree,
     history,
     context: {
-      queryClient: new QueryClient(),
+      queryClient,
       apiClient: axios.create(),
       store: createStore(),
     },

@@ -47,6 +47,14 @@ def record_tool_call_for_status_tracking(tool_call_id: int, status: ToolCallStat
         tracked_tool_call_ids.append(tool_call_id)
 
 
+def discard_tool_calls_from_status_tracking(tool_call_ids: tuple[int, ...]) -> None:
+    tracked_tool_call_ids = _TRACKED_TOOL_CALL_IDS.get()
+    if tracked_tool_call_ids is None or not tool_call_ids:
+        return
+    removed = set(tool_call_ids)
+    tracked_tool_call_ids[:] = [tool_call_id for tool_call_id in tracked_tool_call_ids if tool_call_id not in removed]
+
+
 class PlanItemWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -171,6 +179,23 @@ def _iter_tool_calls(plan: Plan):
             yield from _iter_tool_call_tree(tool_call)
 
 
+def _tool_call_ids(tool_call: ToolCall) -> tuple[int, ...]:
+    return (tool_call.tool_call_id, *(nested_id for child in tool_call.sub_calls for nested_id in _tool_call_ids(child)))
+
+
+def _remove_tool_call(tool_calls: list[ToolCall], tool_call_id: int, *, updated_at: int) -> tuple[int, ...]:
+    for index, tool_call in enumerate(tool_calls):
+        if tool_call.tool_call_id == tool_call_id:
+            removed_ids = _tool_call_ids(tool_call)
+            tool_calls.pop(index)
+            return removed_ids
+        removed_ids = _remove_tool_call(tool_call.sub_calls, tool_call_id, updated_at=updated_at)
+        if removed_ids:
+            tool_call.updated_at = updated_at
+            return removed_ids
+    return ()
+
+
 def _mark_failed_analyzing_tool_calls_as_analyzed(plan: Plan) -> None:
     for existing_tool_call in _iter_tool_calls(plan):
         if existing_tool_call.tool_call_status == ToolCallStatus.FAILED_ANALYZING:
@@ -199,6 +224,26 @@ def _propagate_updated_at(plan: Plan, tool_call_id: int, now_ms: int) -> None:
             if _find_and_mark(tc, tool_call_id):
                 step.updated_at = now_ms
                 return
+
+
+def _append_top_level_tool_call(plan: Plan, tool_call: ToolCall, now_ms: int) -> None:
+    for step in plan.steps:
+        if step.status not in (PlanStepStatus.COMPLETED, PlanStepStatus.FAILED):
+            step.tool_calls.append(tool_call)
+            step.updated_at = now_ms
+            return
+    if plan.steps:
+        plan.steps[-1].tool_calls.append(tool_call)
+        plan.steps[-1].updated_at = now_ms
+        return
+    plan.steps.append(
+        PlanStep(
+            title="Initial Step",
+            status=PlanStepStatus.PENDING,
+            tool_calls=[tool_call],
+            updated_at=now_ms,
+        )
+    )
 
 
 async def read_plan(agent_instance_id: int, username: str, turn_id: int, conversation_id: int = 0) -> Plan | None:
@@ -351,10 +396,10 @@ async def _plan_write_func(invocation_ctx: FunctionInvocationContext, **kwargs: 
 class PlanEditor:
     """Editor for the plan associated with a single (agent_instance, user, turn).
 
-    All persistence happens under the Redis-backed plan write lock. Async methods
-    offload their entire critical section to a worker thread via ``asyncio.to_thread``;
-    user-facing notifications run on the event loop *after* the lock is released so a
-    slow subscriber cannot extend the critical section past ``PLAN_LOCK_TTL_SECONDS``.
+    All persistence happens under the Redis-backed plan write lock. Plan file reads
+    and writes are synchronous while that async lock is held. User-facing notifications
+    run after the lock is released, so a slow subscriber cannot extend the critical
+    section past ``PLAN_LOCK_TTL_SECONDS``.
     """
 
     def __init__(
@@ -439,25 +484,7 @@ class PlanEditor:
                 _mark_failed_analyzing_tool_calls_as_analyzed(plan)
 
             if parent_tool_call_id is None:
-                # Attach to the first step that is not "completed" nor "failed".
-                for step in plan.steps:
-                    if step.status not in (PlanStepStatus.COMPLETED, PlanStepStatus.FAILED):
-                        step.tool_calls.append(tool_call)
-                        step.updated_at = now_ms
-                        break
-                else:
-                    if plan.steps:
-                        plan.steps[-1].tool_calls.append(tool_call)
-                        plan.steps[-1].updated_at = now_ms
-                    else:
-                        plan.steps.append(
-                            PlanStep(
-                                title="Initial Step",
-                                status=PlanStepStatus.PENDING,
-                                tool_calls=[tool_call],
-                                updated_at=now_ms,
-                            )
-                        )
+                _append_top_level_tool_call(plan, tool_call, now_ms)
             else:
                 parent = plan.get_tool_call(parent_tool_call_id)
                 if parent is None:
@@ -488,6 +515,114 @@ class PlanEditor:
             scoped_plan = self._ensure_plan_scope(plan)
             _write_plan_unlocked(scoped_plan)
             return scoped_plan, tool_call
+
+    async def _repair_tool_call_tree_locked(
+        self,
+        root: ToolCall,
+        updater: Callable[[Plan, ToolCall, ToolCall, int], None],
+    ) -> tuple[Plan | None, bool]:
+        desired_ids = _tool_call_ids(root)
+        if any(tool_call_id <= 0 for tool_call_id in desired_ids) or len(desired_ids) != len(set(desired_ids)):
+            raise ValueError("repaired tool-call tree requires unique positive ids")
+        async with _plan_lock(self.agent_instance_id, self.username, self.turn_id, self.conversation_id):
+            plan = _read_plan_unlocked(self.agent_instance_id, self.username, self.turn_id, self.conversation_id)
+            if plan is None:
+                return None, False
+            repaired = root.model_copy(deep=True)
+            now_ms = int(time.time() * 1000)
+            for tool_call in _iter_tool_call_tree(repaired):
+                tool_call.updated_at = now_ms
+
+            location: tuple[PlanStep, int] | None = None
+            for step in plan.steps:
+                for index, tool_call in enumerate(step.tool_calls):
+                    if tool_call.tool_call_id == repaired.tool_call_id:
+                        location = (step, index)
+                        break
+                if location is not None:
+                    break
+
+            desired_id_set = set(desired_ids)
+            if location is None:
+                conflicts = desired_id_set.intersection(tool_call.tool_call_id for tool_call in _iter_tool_calls(plan))
+                if conflicts:
+                    raise RuntimeError(f"tool-call id conflict while repairing tree: {sorted(conflicts)}")
+                _append_top_level_tool_call(plan, repaired, now_ms)
+                current = repaired
+            else:
+                owning_step, root_index = location
+                current = owning_step.tool_calls[root_index]
+                outside_ids = {
+                    tool_call.tool_call_id
+                    for step in plan.steps
+                    for top_level in step.tool_calls
+                    if top_level is not current
+                    for tool_call in _iter_tool_call_tree(top_level)
+                }
+                conflicts = desired_id_set.intersection(outside_ids)
+                if conflicts:
+                    raise RuntimeError(f"tool-call id conflict while repairing tree: {sorted(conflicts)}")
+                current.updated_at = now_ms
+                owning_step.updated_at = now_ms
+
+            updater(plan, current, repaired, now_ms)
+
+            repaired_id_counts = {tool_call_id: 0 for tool_call_id in desired_ids}
+            for tool_call in _iter_tool_calls(plan):
+                if tool_call.tool_call_id in repaired_id_counts:
+                    repaired_id_counts[tool_call.tool_call_id] += 1
+            duplicate_ids = sorted(tool_call_id for tool_call_id, count in repaired_id_counts.items() if count != 1)
+            if duplicate_ids:
+                raise RuntimeError(f"invalid tool-call ids after repairing tree: {duplicate_ids}")
+            scoped_plan = self._ensure_plan_scope(plan)
+            _write_plan_unlocked(scoped_plan)
+            return scoped_plan, True
+
+    async def _update_tool_call_tree_locked(
+        self,
+        tool_call_id: int,
+        updater: Callable[[Plan, ToolCall, int], None],
+    ) -> tuple[Plan | None, bool]:
+        async with _plan_lock(self.agent_instance_id, self.username, self.turn_id, self.conversation_id):
+            plan = _read_plan_unlocked(self.agent_instance_id, self.username, self.turn_id, self.conversation_id)
+            if plan is None:
+                return None, False
+            tool_call = plan.get_tool_call(tool_call_id)
+            if tool_call is None:
+                return plan, False
+            now_ms = int(time.time() * 1000)
+            updater(plan, tool_call, now_ms)
+            tool_call.updated_at = now_ms
+            _propagate_updated_at(plan, tool_call_id, now_ms)
+            scoped_plan = self._ensure_plan_scope(plan)
+            _write_plan_unlocked(scoped_plan)
+            return scoped_plan, True
+
+    async def _remove_tool_call_locked(
+        self,
+        tool_call_id: int,
+        predicate: Callable[[Plan, ToolCall], bool] | None = None,
+    ) -> tuple[Plan | None, tuple[int, ...]]:
+        async with _plan_lock(self.agent_instance_id, self.username, self.turn_id, self.conversation_id):
+            plan = _read_plan_unlocked(self.agent_instance_id, self.username, self.turn_id, self.conversation_id)
+            if plan is None:
+                return None, ()
+            if predicate is not None:
+                tool_call = plan.get_tool_call(tool_call_id)
+                if tool_call is None or not predicate(plan, tool_call):
+                    return plan, ()
+            updated_at = int(time.time() * 1000)
+            removed_ids: tuple[int, ...] = ()
+            for step in plan.steps:
+                removed_ids = _remove_tool_call(step.tool_calls, tool_call_id, updated_at=updated_at)
+                if removed_ids:
+                    step.updated_at = updated_at
+                    break
+            if not removed_ids:
+                return plan, ()
+            scoped_plan = self._ensure_plan_scope(plan)
+            _write_plan_unlocked(scoped_plan)
+            return scoped_plan, removed_ids
 
     # ---- async API ---------------------------------------------------------- #
 
@@ -530,6 +665,25 @@ class PlanEditor:
             await self.notify_plan_updated(plan)
         return new_id
 
+    async def repair_tool_call_tree(
+        self,
+        root: ToolCall,
+        updater: Callable[[Plan, ToolCall, ToolCall, int], None],
+    ) -> bool:
+        """Create or transform one fixed-id top-level subtree in a single plan write."""
+        plan, repaired = await self._repair_tool_call_tree_locked(root, updater)
+        if plan is None or not repaired:
+            return False
+        try:
+            await self.notify_plan_updated(plan)
+        except Exception:
+            _LOGGER.warning(
+                "tool-call subtree repaired but plan notification failed tool_call_id=%s",
+                root.tool_call_id,
+                exc_info=True,
+            )
+        return True
+
     async def update_tool_call(
         self,
         tool_call_id: int,
@@ -537,8 +691,8 @@ class PlanEditor:
     ) -> ToolCall | None:
         """Apply ``updater`` to the targeted tool call in place and persist.
 
-        ``updater`` must be a synchronous callable; it runs inside the worker thread
-        that holds the plan write lock.
+        ``updater`` must be a synchronous callable; it runs while the plan write lock
+        is held.
         """
         if tool_call_id == 0:
             return None
@@ -546,6 +700,45 @@ class PlanEditor:
         if plan is not None and tool_call is not None:
             await self.notify_plan_updated(plan)
         return tool_call
+
+    async def update_tool_call_tree(
+        self,
+        tool_call_id: int,
+        updater: Callable[[Plan, ToolCall, int], None],
+    ) -> bool:
+        """Update one tool-call subtree and its owning plan atomically."""
+        if tool_call_id == 0:
+            return False
+        plan, updated = await self._update_tool_call_tree_locked(tool_call_id, updater)
+        if plan is None or not updated:
+            return False
+        try:
+            await self.notify_plan_updated(plan)
+        except Exception:
+            _LOGGER.warning("tool-call subtree updated but plan notification failed tool_call_id=%s", tool_call_id, exc_info=True)
+        return True
+
+    async def remove_tool_call(
+        self,
+        tool_call_id: int,
+        *,
+        predicate: Callable[[Plan, ToolCall], bool] | None = None,
+    ) -> bool:
+        """Remove one tool-call subtree atomically when its locked predicate permits."""
+        if tool_call_id == 0:
+            return False
+        if predicate is None:
+            plan, removed_ids = await self._remove_tool_call_locked(tool_call_id)
+        else:
+            plan, removed_ids = await self._remove_tool_call_locked(tool_call_id, predicate)
+        if plan is None or not removed_ids:
+            return False
+        discard_tool_calls_from_status_tracking(removed_ids)
+        try:
+            await self.notify_plan_updated(plan)
+        except Exception:
+            _LOGGER.warning("tool-call subtree removed but plan notification failed tool_call_id=%s", tool_call_id, exc_info=True)
+        return True
 
     async def update_tool_call_message(self, tool_call_id: int, message: str) -> ToolCall | None:
         def updater(tool_call: ToolCall) -> None:
@@ -665,8 +858,9 @@ Use this tool proactively in these scenarios:
 2. User explicitly requests plan list - When the user directly asks you to use the plan list
 3. User provides multiple tasks - When users provide a list of things to be done
    (numbered or comma-separated)
-4. After receiving new instructions - Immediately capture user requirements as plan items.
-    - Feel free to edit the pending items on plan list based on new information.
+4. After receiving new user instructions that materially change the current task - Capture the new requirements as plan items.
+        - Edit pending items when the requirements changed. After a successful plan write, continue execution instead of
+            rewriting an unchanged plan.
     - Keep the completed steps as is.
 5. After completing a task - Mark it complete and add any new follow-up tasks
 6. When you start working on a new task, mark the plan item as in_progress (if it

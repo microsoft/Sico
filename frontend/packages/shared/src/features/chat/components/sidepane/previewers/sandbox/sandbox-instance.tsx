@@ -107,7 +107,7 @@ export type SandboxInstanceProps = {
  * (device-type icon + device dropdown + status badge in the title slot, a
  * labelled Take-over button on the right). Take-over grants control of the
  * device — for an emulator it is signalled to the iframe via `postMessage`; for
- * aio/wincua an input-blocking overlay lifts and a "taking over" badge + accent
+ * Linux Workstation/WinCUA an input-blocking overlay lifts and a "taking over" badge + accent
  * border appear. Activity resets a 5-min idle timer; switching device exits
  * take-over.
  */

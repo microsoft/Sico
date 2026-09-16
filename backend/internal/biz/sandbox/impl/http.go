@@ -100,10 +100,14 @@ func (h *httpClient) delete(ctx context.Context, url string) error {
 	return nil
 }
 
-func (h *httpClient) getBytes(ctx context.Context, url string) ([]byte, error) {
+func (h *httpClient) getBytes(ctx context.Context, url, bearerToken string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if token := strings.TrimSpace(bearerToken); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	resp, err := h.c.Do(req)

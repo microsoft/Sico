@@ -4,7 +4,6 @@ import pytest
 from agent_framework import FunctionTool
 from agent_framework._middleware import FunctionInvocationContext
 
-from app.biz.chat.chat import _Mem0MemoryTask, _store_memories
 from app.memory.mem0 import (
     _redact_config_for_log,
     build_memory_filters,
@@ -160,27 +159,3 @@ def test_mem0_config_logging_redacts_sensitive_values():
     }
     assert redacted["headers"][0] == {"Authorization": "[REDACTED]", "x-feature": "enabled"}
     assert config["embedder"]["config"]["azure_kwargs"]["api_key"] == "secret-key"
-
-
-@pytest.mark.asyncio
-async def test_store_memories_sanitizes_mem0_entity_ids(monkeypatch):
-    fake_memory = _FakeMemory()
-    monkeypatch.setattr("app.biz.chat.chat.get_shared_mem0", lambda: fake_memory)
-
-    await _store_memories(
-        _Mem0MemoryTask(
-            username=" Alice Smith ",
-            agent_instance_id=" agent 123 ",
-            conversation_id=" conversation 42 ",
-            messages=[{"role": "user", "content": "remember this"}],
-        )
-    )
-
-    assert fake_memory.add_calls == [
-        {
-            "messages": [{"role": "user", "content": "remember this"}],
-            "user_id": "Alice_Smith",
-            "agent_id": "agent_123",
-            "run_id": "conversation_42",
-        }
-    ]

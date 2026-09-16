@@ -47,7 +47,7 @@ function renderWorkerOptions(agents: Agent[]): JSX.Element {
       alignItemWithTrigger={false}
       sideOffset={8}
       data-testid="scheduled-task-worker-options"
-      className="max-h-60"
+      className="max-h-60 !w-56"
     >
       {agents.map((agent) => (
         <SelectItem

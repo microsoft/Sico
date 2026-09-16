@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+load_env_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${load_env_script_dir}/../sandbox/emulator/setup/token-env.sh"
+
 load_env_file() {
   local env_file="$1"
   local line key value

@@ -12,15 +12,21 @@ import requests
 from app.biz.skill.resolver import (
     ORIGINAL_DIR,
     RESOLVED_ACTIONS_FILE,
+    RESOLVED_ACTIONS_PROPOSAL_FILE,
+    RESOLVED_ACTIONS_STATUS_FILE,
     RESOLVED_CORTEX_DIR,
     RESOLVED_DIR,
     RESOLVED_STATUS_FILE,
+    ActionReadiness,
+    ActionsAdmissionDiagnostics,
     ResolvedActionsManifest,
+    ResolvedSkillOutput,
     SkillResolver,
     SkillResolverDiagnostics,
     build_actions_manifest,
     build_fallback_resolved_skill,
     build_update_context,
+    load_actions_manifest,
     validate_resolved_skill,
 )
 from app.pb.skill.skill import (
@@ -516,6 +522,14 @@ class SkillService(SkillServiceBase):
         if actions:
             manifest = ResolvedActionsManifest.from_pb(actions)
             self._write_json(version_base / RESOLVED_ACTIONS_FILE, manifest.model_dump())
+            self._write_actions_status(
+                version_base,
+                ActionsAdmissionDiagnostics(
+                    status="accepted",
+                    source_provenance="author",
+                    actions=[ActionReadiness(action_name=action.name, status="ready") for action in manifest.actions],
+                ),
+            )
         if not (version_base / ORIGINAL_DIR / "SKILL.md").exists():
             raise ValueError("SKILL.md is required")
         return version_base
@@ -564,6 +578,86 @@ class SkillService(SkillServiceBase):
         previous_actions_file: Path | None = None,
     ) -> None:
         original_root = skill_root / ORIGINAL_DIR
+        author_manifest_file = original_root / "actions.json"
+        if author_manifest_file.is_file():
+            fallback = build_fallback_resolved_skill(original_root)
+            try:
+                manifest = load_actions_manifest(author_manifest_file, legacy_provenance="author")
+                manifest = manifest.model_copy(update={"source_provenance": "author"})
+                resolved = ResolvedSkillOutput(cortex=fallback.cortex, actions=list(manifest.actions))
+                validate_resolved_skill(resolved, original_root)
+                if manifest.review_status == "accepted":
+                    self._write_resolved(skill_root, resolved, accepted_manifest=manifest)
+                    action_diagnostics = ActionsAdmissionDiagnostics(
+                        status="accepted",
+                        source_provenance="author",
+                        actions=[ActionReadiness(action_name=action.name, status="ready") for action in manifest.actions],
+                    )
+                else:
+                    self._write_resolved(skill_root, resolved, proposal=manifest)
+                    action_diagnostics = ActionsAdmissionDiagnostics(
+                        status="proposed",
+                        source_provenance="author",
+                        message="Action manifest requires acceptance before registration.",
+                        actions=[ActionReadiness(action_name=action.name, status="proposed") for action in manifest.actions],
+                    )
+                diagnostics = SkillResolverDiagnostics(
+                    status="resolved",
+                    message="Author action manifest loaded without inference.",
+                )
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.warning(
+                    "skill_author_actions_rejected skill_root=%s error_type=%s error=%s",
+                    skill_root,
+                    type(exc).__name__,
+                    exc,
+                    exc_info=True,
+                )
+                validate_resolved_skill(fallback, original_root)
+                self._write_resolved(skill_root, fallback)
+                diagnostics = SkillResolverDiagnostics(
+                    status="resolved",
+                    message="Guide available; author action manifest is invalid.",
+                )
+                action_diagnostics = ActionsAdmissionDiagnostics(
+                    status="invalid",
+                    source_provenance="author",
+                    message=str(exc),
+                    actions=[ActionReadiness(status="invalid", message=str(exc))],
+                )
+            self._write_json(skill_root / RESOLVED_STATUS_FILE, diagnostics.model_dump())
+            self._write_actions_status(skill_root, action_diagnostics)
+            return
+
+        if previous_actions_file is not None and previous_actions_file.is_file():
+            previous_manifest = load_actions_manifest(previous_actions_file)
+            if previous_manifest.review_status == "accepted":
+                resolved = ResolvedSkillOutput(
+                    cortex=build_fallback_resolved_skill(original_root).cortex,
+                    actions=list(previous_manifest.actions),
+                )
+                validate_resolved_skill(resolved, original_root)
+                self._write_resolved(skill_root, resolved, accepted_manifest=previous_manifest)
+                self._write_json(
+                    skill_root / RESOLVED_STATUS_FILE,
+                    SkillResolverDiagnostics(
+                        status="resolved",
+                        message="Accepted action manifest preserved without inference.",
+                    ).model_dump(),
+                )
+                self._write_actions_status(
+                    skill_root,
+                    ActionsAdmissionDiagnostics(
+                        status="accepted",
+                        source_provenance=previous_manifest.source_provenance,
+                        actions=[
+                            ActionReadiness(action_name=action.name, status="ready")
+                            for action in previous_manifest.actions
+                        ],
+                    ),
+                )
+                return
+
         resolved = None
         try:
             resolved = await SkillResolver().resolve(
@@ -572,19 +666,38 @@ class SkillService(SkillServiceBase):
                 previous_actions_file=previous_actions_file,
             )
             validate_resolved_skill(resolved, original_root)
-            self._write_resolved(skill_root, resolved)
+            accepted_manifest = build_actions_manifest(
+                resolved.actions,
+                review_status="accepted",
+                source_provenance="resolver",
+            )
+            self._write_resolved(skill_root, resolved, accepted_manifest=accepted_manifest)
             diagnostics = SkillResolverDiagnostics(status="resolved")
+            action_diagnostics = ActionsAdmissionDiagnostics(
+                status="accepted",
+                source_provenance="resolver",
+                message="Resolved actions accepted after validation.",
+                actions=[ActionReadiness(action_name=action.name, status="ready") for action in resolved.actions],
+            )
         except Exception as exc:  # noqa: BLE001
-            model_return = resolved.model_dump_json(indent=2) if resolved is not None else "<no model return>"
             _LOGGER.warning(
-                "SkillResolver failed for %s, falling back to original: %s\nModel return:\n%s",
+                "skill_resolver_actions_rejected skill_root=%s action_count=%s error_type=%s error=%s "
+                "fallback_to_original=true",
                 skill_root,
+                len(resolved.actions) if resolved is not None else "unknown",
+                type(exc).__name__,
                 exc,
-                model_return,
+                exc_info=True,
             )
             resolved = build_fallback_resolved_skill(original_root)
             validate_resolved_skill(resolved, original_root)
             self._write_resolved(skill_root, resolved)
+            action_diagnostics = ActionsAdmissionDiagnostics(
+                status="unavailable",
+                source_provenance="resolver",
+                message=str(exc),
+                actions=[ActionReadiness(status="unavailable", message=str(exc))],
+            )
             if self._is_markdown_only_skill(original_root):
                 diagnostics = SkillResolverDiagnostics(
                     status="resolved",
@@ -597,13 +710,21 @@ class SkillService(SkillServiceBase):
                     fallback_to_original=True,
                 )
         self._write_json(skill_root / RESOLVED_STATUS_FILE, diagnostics.model_dump())
+        self._write_actions_status(skill_root, action_diagnostics)
 
     @staticmethod
     def _is_markdown_only_skill(original_root: Path) -> bool:
         files = [path for path in original_root.rglob("*") if path.is_file()]
         return bool(files) and all(path.suffix.lower() == ".md" for path in files)
 
-    def _write_resolved(self, skill_root: Path, resolved) -> None:
+    def _write_resolved(
+        self,
+        skill_root: Path,
+        resolved,
+        *,
+        accepted_manifest: ResolvedActionsManifest | None = None,
+        proposal: ResolvedActionsManifest | None = None,
+    ) -> None:
         resolved_root = skill_root / "resolved"
         if resolved_root.exists():
             shutil.rmtree(resolved_root)
@@ -614,10 +735,13 @@ class SkillService(SkillServiceBase):
             target = cortex_root / cortex_file.name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(original_root / cortex_file.name, target)
-        self._write_json(
-            skill_root / RESOLVED_ACTIONS_FILE,
-            build_actions_manifest(resolved.actions).model_dump(),
-        )
+        if accepted_manifest is not None:
+            self._write_json(skill_root / RESOLVED_ACTIONS_FILE, accepted_manifest.model_dump())
+        if proposal is not None:
+            self._write_json(skill_root / RESOLVED_ACTIONS_PROPOSAL_FILE, proposal.model_dump())
+
+    def _write_actions_status(self, skill_root: Path, diagnostics: ActionsAdmissionDiagnostics) -> None:
+        self._write_json(skill_root / RESOLVED_ACTIONS_STATUS_FILE, diagnostics.model_dump())
 
     @staticmethod
     def _write_json(path: Path, data) -> None:

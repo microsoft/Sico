@@ -9,14 +9,15 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 
+	"sico-backend/internal/biz/rbac"
+	agententity "sico-backend/internal/entity/agent/singleagent"
+	redislock "sico-backend/internal/infra/cache/redis"
 	cronContract "sico-backend/internal/infra/cron"
 	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/enum"
@@ -32,10 +33,31 @@ type Service struct {
 	sandboxRgrpc.UnimplementedReverseSandboxRPCServer
 	Pool          *Pool
 	InstanceRepo  agentrepo.SingleAgentInstanceRepository
+	ProjectRepo   projectrepo.ProjectRepository
 	ProjectAssets emulatorAppProjectAssetLookup
+	Access        rbac.Access
 }
 
 var errSandboxUnassignLeaseInUse = errors.New("sandbox lease is still in use")
+
+const (
+	sandboxOperationLockTTL            = 90 * time.Second
+	emulatorAppOperationLockTTL        = 12 * time.Minute
+	sandboxOperationLockAcquireTimeout = 2 * time.Second
+	sandboxOperationLockRetryInterval  = 100 * time.Millisecond
+	maxSandboxOperationLockBatch       = 100
+)
+
+type sandboxOperationLockTestHookKey struct{}
+
+type heldSandboxOperationLock struct {
+	key   string
+	value string
+}
+
+const (
+	sandboxOperationLockStageContended = "contended"
+)
 
 func NewService(
 	pool *Pool,
@@ -48,20 +70,41 @@ func NewService(
 func NewServiceWithProjectAssets(
 	pool *Pool,
 	instanceRepo agentrepo.SingleAgentInstanceRepository,
+	cron cronContract.Cron,
+	projectRepo projectrepo.ProjectRepository,
+) *Service {
+	return NewServiceWithAccess(
+		pool, instanceRepo, cron, projectRepo, rbac.NewUninitializedAccessServices(),
+	)
+}
+
+func NewServiceWithAccess(
+	pool *Pool,
+	instanceRepo agentrepo.SingleAgentInstanceRepository,
 	_ cronContract.Cron,
-	projectAssets projectrepo.ProjectRepository,
+	projectRepo projectrepo.ProjectRepository,
+	access rbac.Access,
 ) *Service {
 	var projectAssetLookup emulatorAppProjectAssetLookup
-	if projectAssets != nil {
-		projectAssetLookup = projectAssets
+	if projectRepo != nil {
+		projectAssetLookup = projectRepo
 	}
 	svc := &Service{
 		Pool:          pool,
 		InstanceRepo:  instanceRepo,
+		ProjectRepo:   projectRepo,
 		ProjectAssets: projectAssetLookup,
+		Access:        access,
 	}
 
 	return svc
+}
+
+func (s *Service) access() rbac.Access {
+	if s != nil && s.Access != nil {
+		return s.Access
+	}
+	return rbac.NewUninitializedAccessServices()
 }
 
 func (s *Service) Start(ctx context.Context) error {
@@ -70,42 +113,46 @@ func (s *Service) Start(ctx context.Context) error {
 
 // ==================== New Simplified APIs ====================
 
-// ApplySandbox picks an available (InUse=false) sandbox supplying the requested
-// OS from the pool pre-assigned to this instance, marks it InUse=true, and
-// returns it.
+// ApplySandbox picks an available sandbox matching an OS selector or the
+// concrete Linux Workstation selector from the pool pre-assigned to this instance.
 // If all assigned sandboxes are in use or none are assigned, returns an informational response.
-func (s *Service) ApplySandbox(ctx context.Context, instanceID, sandboxOS string) (map[string]interface{}, error) {
-	if instanceID == "" || sandboxOS == "" {
-		return nil, apperr.New(errcode.CommonInvalidParam, "instanceID and sandbox os are required")
+func (s *Service) ApplySandbox(ctx context.Context, instanceID, selector string) (map[string]interface{}, error) {
+	if instanceID == "" || selector == "" {
+		return nil, apperr.New(errcode.CommonInvalidParam, "instanceID and sandbox selector are required")
 	}
+	selector = enum.NormalizeSandboxType(selector)
 
-	os, err := resolveSandboxOS(sandboxOS)
-	if err != nil {
-		return nil, err
+	var candidateIDs []string
+	var resourcesByID map[string]*Resource
+	var snapshotAge time.Duration
+	var err error
+	if isConcreteLinuxWorkstationSelector(selector) {
+		candidateIDs, resourcesByID, snapshotAge, err = s.appliableResourcesForType(ctx, selector)
+	} else {
+		var os enum.SandboxOS
+		os, err = resolveSandboxOS(selector)
+		if err == nil {
+			candidateIDs, resourcesByID, snapshotAge, err = s.appliableResourcesForOS(ctx, os)
+		}
 	}
-
-	// Selection is OS-only: gather every available resource that can supply the
-	// OS, across all enabled providers, in scheduling-priority order (managed
-	// pools before a person's physical machine).
-	candidateIDs, resourcesByID, snapshotAge, err := s.appliableResourcesForOS(ctx, os)
 	if err != nil {
 		return nil, err
 	}
 	if len(candidateIDs) == 0 {
-		logger.CtxInfo(ctx, "No available sandbox for os %s and instance %s (all in use or none assigned)",
-			os, instanceID)
+		logger.CtxInfo(ctx, "No available sandbox for selector %s and instance %s (all in use or none assigned)",
+			selector, instanceID)
 		return nil, nil
 	}
-	logger.CtxInfo(ctx, "ApplySandbox: os=%s candidates=%d age=%s",
-		os, len(candidateIDs), snapshotAge.Round(time.Millisecond))
+	logger.CtxInfo(ctx, "ApplySandbox: selector=%s candidates=%d age=%s",
+		selector, len(candidateIDs), snapshotAge.Round(time.Millisecond))
 
 	lease, err := s.Pool.AcquireAssignedLease(ctx, instanceID, candidateIDs)
 	if err != nil {
 		return nil, err
 	}
 	if lease == nil {
-		logger.CtxInfo(ctx, "No available sandbox for os %s and instance %s (all in use or none assigned)",
-			os, instanceID)
+		logger.CtxInfo(ctx, "No available sandbox for selector %s and instance %s (all in use or none assigned)",
+			selector, instanceID)
 		return nil, nil
 	}
 	if strings.TrimSpace(lease.User) != instanceID {
@@ -178,6 +225,22 @@ func (s *Service) ReleaseSandbox(ctx context.Context, instanceID, sandboxID stri
 
 	logger.CtxInfo(ctx, "Sandbox released: sandbox_id=%s, instance=%s, type=%s", lease.SandboxID, instanceID, lease.Type)
 	return nil
+}
+
+func (s *Service) ReleaseAuthorizedSandbox(ctx context.Context, instanceID, sandboxID string) error {
+	if strings.TrimSpace(instanceID) == "" || strings.TrimSpace(sandboxID) == "" {
+		return apperr.New(errcode.CommonInvalidParam, "instanceID and sandboxID are required")
+	}
+
+	if err := s.AuthorizeSandboxOperation(ctx, sandboxID, false); err != nil {
+		return err
+	}
+	return s.withSandboxOperationLocks(ctx, []string{sandboxID}, func() error {
+		if err := s.AuthorizeSandboxOperation(ctx, sandboxID, false); err != nil {
+			return err
+		}
+		return s.ReleaseSandbox(ctx, instanceID, sandboxID)
+	})
 }
 
 // refreshLeaseMetadata replaces each lease's metadata with the latest values from the
@@ -414,7 +477,7 @@ func (s *Service) getSandboxEndpoints(lease *Lease) (endpoint, docsURL, vncURL, 
 
 // ResetSandbox soft-resets a sandbox environment without releasing the lease.
 // For emulator: closes all user apps and returns to home screen.
-// For aio: clears shell sessions and workspace.
+// For Linux Workstation: clears shell sessions and workspace.
 func (s *Service) ResetSandbox(ctx context.Context, instanceID, sandboxID string) error {
 	if sandboxID == "" {
 		return apperr.New(errcode.CommonInvalidParam, "sandboxID is required")
@@ -446,6 +509,22 @@ func (s *Service) ResetSandbox(ctx context.Context, instanceID, sandboxID string
 
 	logger.CtxInfo(ctx, "Sandbox %s reset successfully", sandboxID)
 	return nil
+}
+
+func (s *Service) ResetAuthorizedSandbox(ctx context.Context, sandboxID string) error {
+	if strings.TrimSpace(sandboxID) == "" {
+		return apperr.New(errcode.CommonInvalidParam, "sandboxID is required")
+	}
+
+	if err := s.AuthorizeSandboxOperation(ctx, sandboxID, true); err != nil {
+		return err
+	}
+	return s.withSandboxOperationLocks(ctx, []string{sandboxID}, func() error {
+		if err := s.AuthorizeSandboxOperation(ctx, sandboxID, true); err != nil {
+			return err
+		}
+		return s.ResetSandbox(ctx, "", sandboxID)
+	})
 }
 
 // ListAllResources lists all sandbox resources grouped by type
@@ -651,6 +730,7 @@ func (s *Service) GetSandboxOpenAPI(ctx context.Context, sandboxType string) ([]
 	if !enum.IsValidSandboxType(sandboxType) {
 		return nil, apperr.New(errcode.CommonInvalidParam, "invalid sandbox type: "+sandboxType)
 	}
+	sandboxType = enum.NormalizeSandboxType(sandboxType)
 
 	resources, _, err := s.listSnapshotResources(ctx, sandboxType)
 	if err != nil {
@@ -680,12 +760,16 @@ func (s *Service) GetSandboxOpenAPI(ctx context.Context, sandboxType string) ([]
 	}
 
 	var openAPIURL string
+	var openAPIBearerToken string
 	for _, r := range availableResources {
 		if r == nil {
 			continue
 		}
 		openAPIURL = resolver.OpenAPIURL(r.ResourceID, r.Metadata)
 		if openAPIURL != "" {
+			if authenticator, ok := provider.(OpenAPIAuthenticator); ok {
+				openAPIBearerToken = authenticator.OpenAPIBearerToken(r.ResourceID, r.Metadata)
+			}
 			break
 		}
 	}
@@ -697,7 +781,7 @@ func (s *Service) GetSandboxOpenAPI(ctx context.Context, sandboxType string) ([]
 
 	// Fetch OpenAPI spec
 	httpCli := newHTTPClient(10 * time.Second)
-	data, err := httpCli.getBytes(ctx, openAPIURL)
+	data, err := httpCli.getBytes(ctx, openAPIURL, openAPIBearerToken)
 	if err != nil {
 		logger.CtxError(ctx, "Failed to fetch OpenAPI from %s: %v", openAPIURL, err)
 		return nil, apperr.New(errcode.CommonInternalError, "failed to fetch OpenAPI: "+err.Error())
@@ -766,6 +850,127 @@ func (s *Service) WithInstanceAssignmentLock(ctx context.Context, instanceID str
 	}
 
 	return apperr.New(errcode.CommonConflict, "instance sandbox operation is busy")
+}
+
+func (s *Service) withSandboxOperationLocks(
+	ctx context.Context,
+	sandboxIDs []string,
+	fn func() error,
+) error {
+	return s.withSandboxOperationLocksFor(ctx, sandboxIDs, sandboxOperationLockTTL, fn)
+}
+
+func (s *Service) withSandboxOperationLocksFor(
+	ctx context.Context,
+	sandboxIDs []string,
+	lockTTL time.Duration,
+	fn func() error,
+) error {
+	if fn == nil {
+		return nil
+	}
+
+	lockIDs, err := validateSandboxOperationBatch(sandboxIDs)
+	if err != nil {
+		return err
+	}
+	if lockTTL < time.Second {
+		return apperr.New(errcode.CommonInvalidParam, "sandbox operation lock TTL must be at least one second")
+	}
+
+	if s == nil || s.Pool == nil || s.Pool.GetRedis() == nil {
+		return fn()
+	}
+	sort.Strings(lockIDs)
+	rds := s.Pool.GetRedis()
+	acquireCtx, cancelAcquire := context.WithTimeout(ctx, sandboxOperationLockAcquireTimeout)
+	defer cancelAcquire()
+	held, err := acquireSandboxOperationLocks(ctx, acquireCtx, rds, lockIDs, lockTTL)
+	defer releaseSandboxOperationLocks(ctx, rds, held)
+	if err != nil {
+		return err
+	}
+	return fn()
+}
+
+func acquireSandboxOperationLocks(
+	ctx, acquireCtx context.Context,
+	rds *redis.Client,
+	sandboxIDs []string,
+	lockTTL time.Duration,
+) ([]heldSandboxOperationLock, error) {
+	held := make([]heldSandboxOperationLock, 0, len(sandboxIDs))
+	for _, sandboxID := range sandboxIDs {
+		lock, err := acquireSandboxOperationLock(ctx, acquireCtx, rds, sandboxID, lockTTL)
+		if err != nil {
+			return held, err
+		}
+		held = append(held, lock)
+	}
+	return held, nil
+}
+
+func acquireSandboxOperationLock(
+	ctx, acquireCtx context.Context,
+	rds *redis.Client,
+	sandboxID string,
+	lockTTL time.Duration,
+) (heldSandboxOperationLock, error) {
+	lockKey := sandboxOperationLockKey(sandboxID)
+	for {
+		ok, value, err := redislock.AcquireLockNonblocking(
+			acquireCtx,
+			rds,
+			lockKey,
+			int(lockTTL/time.Second),
+		)
+		if err != nil {
+			return heldSandboxOperationLock{}, sandboxOperationLockError(ctx, acquireCtx)
+		}
+		if ok {
+			return heldSandboxOperationLock{key: lockKey, value: value}, nil
+		}
+		runSandboxOperationLockTestHook(ctx, sandboxOperationLockStageContended, sandboxID)
+		select {
+		case <-acquireCtx.Done():
+			return heldSandboxOperationLock{}, sandboxOperationLockError(ctx, acquireCtx)
+		case <-time.After(sandboxOperationLockRetryInterval):
+		}
+	}
+}
+
+func sandboxOperationLockError(ctx, acquireCtx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if acquireCtx.Err() != nil {
+		return apperr.New(errcode.CommonConflict, "sandbox operation is busy")
+	}
+	return apperr.New(errcode.SandboxProviderUnavailable, "failed to acquire sandbox operation lock")
+}
+
+func releaseSandboxOperationLocks(
+	ctx context.Context,
+	rds *redis.Client,
+	held []heldSandboxOperationLock,
+) {
+	for index := len(held) - 1; index >= 0; index-- {
+		err := redislock.ReleaseLock(context.Background(), rds, held[index].key, held[index].value)
+		if err != nil {
+			logger.CtxWarn(ctx, "failed to release sandbox operation lock %s: %v", held[index].key, err)
+		}
+	}
+}
+
+func runSandboxOperationLockTestHook(ctx context.Context, stage, sandboxID string) {
+	if ctx == nil {
+		return
+	}
+
+	hook, ok := ctx.Value(sandboxOperationLockTestHookKey{}).(func(string, string))
+	if ok && hook != nil {
+		hook(stage, sandboxID)
+	}
 }
 
 func (s *Service) loadAssignedLeases(ctx context.Context, instanceID string, failOnLeaseError bool) ([]*Lease, error) {
@@ -846,41 +1051,22 @@ func (s *Service) HasAssignedSandboxesStrict(ctx context.Context, instanceID str
 	return len(leases) > 0, len(leases), nil
 }
 
-func (s *Service) ensureInstanceExists(ctx context.Context, instanceID string) error {
-	instanceID = strings.TrimSpace(instanceID)
-	if instanceID == "" {
-		return apperr.New(errcode.CommonInvalidParam, "instanceID is required")
-	}
-	if s == nil || s.InstanceRepo == nil {
-		return nil
-	}
-
-	parsedID, err := strconv.ParseInt(instanceID, 10, 64)
-	if err != nil {
-		return apperr.New(errcode.CommonInvalidParam, "invalid instanceID")
-	}
-
-	inst, getErr := s.InstanceRepo.Get(ctx, parsedID)
-	if getErr != nil {
-		if errors.Is(getErr, gorm.ErrRecordNotFound) {
-			return apperr.New(errcode.CommonNotFound, "instance not found")
-		}
-		return getErr
-	}
-	if inst == nil {
-		return apperr.New(errcode.CommonNotFound, "instance not found")
-	}
-
-	return nil
-}
-
-func assignSandboxAtomically(ctx context.Context, rds *redis.Client, instanceID string, lease *Lease) error {
+func assignSandboxAtomically(
+	ctx context.Context,
+	rds *redis.Client,
+	instanceID string,
+	lease *Lease,
+	expectedProjectID, expectedOrganizationID int64,
+	allowUnbound bool,
+) error {
 	if rds == nil || lease == nil {
 		return apperr.New(errcode.CommonInvalidParam, "lease is required")
 	}
 
 	resKey := resourceLeaseKey(lease.SandboxID)
 	aKey := assignKey(instanceID)
+	projectKey := projectAssignKey(lease.SandboxID)
+	orgKey := orgAssignKey(lease.SandboxID)
 	lease.CreatedAt = time.Now()
 	payload, marshalErr := json.Marshal(lease)
 	if marshalErr != nil {
@@ -889,8 +1075,21 @@ func assignSandboxAtomically(ctx context.Context, rds *redis.Client, instanceID 
 
 	for range 3 {
 		err := rds.Watch(ctx, func(tx *redis.Tx) error {
-			return runAssignSandboxTx(ctx, tx, instanceID, lease, resKey, aKey, payload)
-		}, resKey)
+			return runAssignSandboxTx(
+				ctx,
+				tx,
+				instanceID,
+				lease,
+				resKey,
+				aKey,
+				projectKey,
+				orgKey,
+				payload,
+				expectedProjectID,
+				expectedOrganizationID,
+				allowUnbound,
+			)
+		}, resKey, aKey, projectKey, orgKey)
 		if err == nil {
 			return nil
 		}
@@ -903,35 +1102,35 @@ func assignSandboxAtomically(ctx context.Context, rds *redis.Client, instanceID 
 	return apperr.New(errcode.CommonConflict, "sandbox was updated by another process")
 }
 
-// runAssignSandboxTx executes the WATCH/MULTI body for a single
-// assignSandboxAtomically attempt. Split out to keep the retry loop simple.
 func runAssignSandboxTx(
 	ctx context.Context,
 	tx *redis.Tx,
 	instanceID string,
 	lease *Lease,
-	resKey, aKey string,
+	resKey, aKey, projectKey, orgKey string,
 	payload []byte,
+	expectedProjectID, expectedOrganizationID int64,
+	allowUnbound bool,
 ) error {
-	val, getErr := tx.Get(ctx, resKey).Result()
-	if getErr != nil && !errors.Is(getErr, redis.Nil) {
-		return apperr.New(errcode.SandboxProviderUnavailable, "storage error")
+	if err := requireRedisKeyType(ctx, tx, aKey, "hash"); err != nil {
+		return err
+	}
+	if err := validateAssignmentScopeValues(
+		ctx,
+		tx,
+		projectKey,
+		orgKey,
+		expectedProjectID,
+		expectedOrganizationID,
+		allowUnbound,
+	); err != nil {
+		return err
 	}
 
-	oldInstanceID := ""
-	if getErr == nil && val != "" {
-		var existingLease Lease
-		if jsonErr := json.Unmarshal([]byte(val), &existingLease); jsonErr != nil {
-			return apperr.New(errcode.CommonInternalError, "failed to parse existing lease")
-		}
-		oldInstanceID = strings.TrimSpace(existingLease.User)
-		if existingLease.InUse && oldInstanceID != "" && oldInstanceID != instanceID {
-			return apperr.New(
-				errcode.CommonConflict,
-				"sandbox is still in use by another instance; "+
-					"release or unassign before reassigning",
-			)
-		}
+	val, getErr := tx.Get(ctx, resKey).Result()
+	oldInstanceID, err := loadExistingAssignmentOwner(ctx, tx, val, getErr, instanceID)
+	if err != nil {
+		return err
 	}
 
 	_, txErr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -951,13 +1150,76 @@ func runAssignSandboxTx(
 	return txErr
 }
 
+func validateAssignmentScopeValues(
+	ctx context.Context,
+	tx *redis.Tx,
+	projectKey, orgKey string,
+	expectedProjectID, expectedOrganizationID int64,
+	allowUnbound bool,
+) error {
+	projectValue, projectErr := tx.Get(ctx, projectKey).Result()
+	orgValue, orgErr := tx.Get(ctx, orgKey).Result()
+	if (projectErr != nil && !errors.Is(projectErr, redis.Nil)) ||
+		(orgErr != nil && !errors.Is(orgErr, redis.Nil)) {
+		return apperr.New(errcode.SandboxProviderUnavailable, "storage error")
+	}
+	if allowUnbound {
+		if projectValue == "" && orgValue == "" {
+			return nil
+		}
+		return apperr.New(errcode.CommonForbidden, "sandbox assignment scopes changed")
+	}
+	if projectValue != fmt.Sprintf("%d", expectedProjectID) ||
+		orgValue != fmt.Sprintf("%d", expectedOrganizationID) {
+		return apperr.New(errcode.CommonForbidden, "sandbox assignment scopes changed")
+	}
+	return nil
+}
+
+func loadExistingAssignmentOwner(
+	ctx context.Context,
+	tx *redis.Tx,
+	value string,
+	getErr error,
+	newInstanceID string,
+) (string, error) {
+	if getErr != nil {
+		if errors.Is(getErr, redis.Nil) {
+			return "", nil
+		}
+		return "", apperr.New(errcode.SandboxProviderUnavailable, "storage error")
+	}
+	if value == "" {
+		return "", nil
+	}
+
+	var existingLease Lease
+	if err := json.Unmarshal([]byte(value), &existingLease); err != nil {
+		return "", apperr.New(errcode.CommonInternalError, "failed to parse existing lease")
+	}
+	oldInstanceID := strings.TrimSpace(existingLease.User)
+	if oldInstanceID == "" || oldInstanceID == newInstanceID {
+		return oldInstanceID, nil
+	}
+	if err := requireRedisKeyType(ctx, tx, assignKey(oldInstanceID), "hash"); err != nil {
+		return "", err
+	}
+	if existingLease.InUse {
+		return "", apperr.New(
+			errcode.CommonConflict,
+			"sandbox is still in use by another instance; release or unassign before reassigning",
+		)
+	}
+	return oldInstanceID, nil
+}
+
 func (s *Service) buildLeaseForAssignment(ctx context.Context, instanceID string, sandboxID string) (*Lease, error) {
 	parts := strings.SplitN(sandboxID, ":", 2)
 	if len(parts) != 2 {
 		return nil, apperr.New(errcode.CommonInvalidParam, "invalid sandboxID format, expected type:resourceID")
 	}
 
-	sandboxType := parts[0]
+	sandboxType := enum.NormalizeSandboxType(parts[0])
 	resourceID := parts[1]
 	prov, ok := s.Pool.GetProvider(sandboxType)
 	if !ok || prov == nil {
@@ -1002,22 +1264,66 @@ func (s *Service) AssignSandbox(ctx context.Context, instanceID string, sandboxI
 	}
 
 	return s.WithInstanceAssignmentLock(ctx, instanceID, func() error {
-		if err := s.ensureInstanceExists(ctx, instanceID); err != nil {
-			return err
-		}
+		return s.withSandboxOperationLocks(ctx, []string{sandboxID}, func() error {
+			instance, err := s.getInstanceByStringID(ctx, instanceID)
+			if err != nil {
+				return err
+			}
+			projectID, organizationID, allowUnbound, err := s.validateAssignmentScope(ctx, sandboxID, instance)
+			if err != nil {
+				return err
+			}
 
-		rds := s.Pool.GetRedis()
-		if rds == nil {
-			return apperr.New(errcode.SandboxProviderUnavailable, "storage unavailable")
-		}
+			rds := s.Pool.GetRedis()
+			if rds == nil {
+				return apperr.New(errcode.SandboxProviderUnavailable, "storage unavailable")
+			}
 
-		if err := assignSandboxAtomically(ctx, rds, instanceID, lease); err != nil {
-			return err
-		}
+			if err := assignSandboxAtomically(
+				ctx,
+				rds,
+				instanceID,
+				lease,
+				projectID,
+				organizationID,
+				allowUnbound,
+			); err != nil {
+				return err
+			}
 
-		logger.CtxInfo(ctx, "Sandbox %s assigned to instance %s", sandboxID, instanceID)
-		return nil
+			logger.CtxInfo(ctx, "Sandbox %s assigned to instance %s", sandboxID, instanceID)
+			return nil
+		})
 	})
+}
+
+func (s *Service) validateAssignmentScope(
+	ctx context.Context,
+	sandboxID string,
+	instance *agententity.SingleAgentInstance,
+) (int64, int64, bool, error) {
+	orgBindings, projectBindings, err := s.loadScopeBindingsStrict(ctx, []string{sandboxID})
+	if err != nil {
+		return 0, 0, false, err
+	}
+
+	projectBinding := projectBindings[sandboxID]
+	orgBinding := orgBindings[sandboxID]
+	if projectBinding == 0 && orgBinding == 0 {
+		return 0, 0, true, nil
+	}
+	project, err := s.getProject(ctx, instance.ProjectId)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if projectBinding != instance.ProjectId ||
+		orgBinding != project.OrganizationID {
+		return 0, 0, false, apperr.New(
+			errcode.CommonForbidden,
+			"sandbox and target instance scopes do not match",
+		)
+	}
+	return instance.ProjectId, project.OrganizationID, false, nil
 }
 
 // UnassignSandbox removes a sandbox assignment from an instance.
@@ -1036,7 +1342,12 @@ func (s *Service) unassignSandbox(ctx context.Context, instanceID string, sandbo
 	if instanceID == "" || sandboxID == "" {
 		return apperr.New(errcode.CommonInvalidParam, "instanceID and sandboxID are required")
 	}
+	return s.withSandboxOperationLocks(ctx, []string{sandboxID}, func() error {
+		return s.unassignSandboxLocked(ctx, instanceID, sandboxID)
+	})
+}
 
+func (s *Service) unassignSandboxLocked(ctx context.Context, instanceID string, sandboxID string) error {
 	rds := s.Pool.GetRedis()
 	if rds == nil {
 		return apperr.New(errcode.SandboxProviderUnavailable, "storage unavailable")
@@ -1054,10 +1365,8 @@ func (s *Service) unassignSandbox(ctx context.Context, instanceID string, sandbo
 	return apperr.New(errcode.CommonConflict, "sandbox was updated by another process")
 }
 
-// unassignSandboxOnce performs one attempt of the unassign workflow. The
-// returned retry flag tells the caller whether to retry the outer loop;
-// when retry=false, the caller returns the accompanying error (nil on
-// success). Mirrors the original loop behavior exactly.
+// unassignSandboxOnce returns retry=true when a concurrent lease update
+// requires the caller to repeat the operation.
 func (s *Service) unassignSandboxOnce(
 	ctx context.Context,
 	rds *redis.Client,
@@ -1079,13 +1388,16 @@ func (s *Service) unassignSandboxOnce(
 	if lease.User != instanceID {
 		return false, apperr.New(errcode.CommonConflict, "sandbox assignment owner changed")
 	}
+	if err := requireRedisKeyType(ctx, rds, aKey, "hash"); err != nil {
+		return false, err
+	}
 	if lease.InUse {
 		return s.unassignReleaseInUseLease(ctx, rds, instanceID, sandboxID, aKey)
 	}
 
 	watchErr := rds.Watch(ctx, func(tx *redis.Tx) error {
 		return runUnassignDeleteTx(ctx, tx, instanceID, sandboxID, aKey, resKey)
-	}, resKey)
+	}, resKey, aKey)
 	if watchErr == nil {
 		logger.CtxInfo(ctx, "Sandbox %s unassigned from instance %s", sandboxID, instanceID)
 		return false, nil
@@ -1121,8 +1433,7 @@ func clearMissingLeaseAssignment(
 }
 
 // unassignReleaseInUseLease releases an in-use lease before unassignment can
-// proceed. Returns retry=true so the outer loop re-reads the lease after
-// release. Mirrors the original `if lease.InUse { ... }` branch.
+// proceed. The caller must re-read the lease before deleting it.
 func (s *Service) unassignReleaseInUseLease(
 	ctx context.Context, rds *redis.Client, instanceID, sandboxID, aKey string,
 ) (retry bool, err error) {
@@ -1163,6 +1474,9 @@ func runUnassignDeleteTx(
 	tx *redis.Tx,
 	instanceID, sandboxID, aKey, resKey string,
 ) error {
+	if err := requireRedisKeyType(ctx, tx, aKey, "hash"); err != nil {
+		return err
+	}
 	currentVal, currentErr := tx.Get(ctx, resKey).Result()
 	if currentErr != nil {
 		if errors.Is(currentErr, redis.Nil) {
@@ -1211,29 +1525,29 @@ func (s *Service) unassignRetryAfterRaceRelease(
 }
 
 // GetInstanceSandboxesWithStatus returns all sandboxes for an instance with type, status, and endpoints.
-// osFilter, when non-empty, is an OS selector (e.g. "windows"): only leases whose
-// resolved OS matches are returned. Selection is OS-only — concrete sandbox types
-// are an internal detail and never a filter here.
+// selector, when non-empty, is an OS selector or the concrete Linux Workstation type.
 func (s *Service) GetInstanceSandboxesWithStatus(
-	ctx context.Context, instanceID, osFilter string,
+	ctx context.Context, instanceID, selector string,
 ) ([]map[string]interface{}, error) {
 	instanceID = strings.TrimSpace(instanceID)
 	if instanceID == "" {
 		return nil, apperr.New(errcode.CommonInvalidParam, "instanceID is required")
 	}
 
-	osFilter = strings.TrimSpace(osFilter)
-	var os enum.SandboxOS
-	hasFilter := false
-	if osFilter != "" {
-		parsed, err := resolveSandboxOS(osFilter)
-		if err != nil {
-			return nil, err
-		}
-		os, hasFilter = parsed, true
-	}
-
 	allLeases, err := s.loadAssignedLeasesStrict(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+	return s.buildInstanceSandboxesWithStatus(ctx, instanceID, selector, allLeases)
+}
+
+func (s *Service) buildInstanceSandboxesWithStatus(
+	ctx context.Context,
+	instanceID, selector string,
+	allLeases []*Lease,
+) ([]map[string]interface{}, error) {
+	selector = strings.TrimSpace(selector)
+	os, hasOSFilter, err := resolveInstanceSandboxSelector(selector)
 	if err != nil {
 		return nil, err
 	}
@@ -1242,13 +1556,13 @@ func (s *Service) GetInstanceSandboxesWithStatus(
 	// from the live snapshot before filtering — otherwise a lease whose stored
 	// metadata is stale could be wrongly excluded, diverging from what
 	// ApplySandbox (which always reads the fresh snapshot) would select.
-	if hasFilter {
+	if hasOSFilter {
 		s.refreshLeaseMetadata(ctx, allLeases...)
 	}
 
 	filteredLeases := make([]*Lease, 0, len(allLeases))
 	for _, lease := range allLeases {
-		if hasFilter && !leaseMatchesOS(lease, os) {
+		if !leaseMatchesSelector(lease, selector, os, hasOSFilter) {
 			continue
 		}
 		filteredLeases = append(filteredLeases, lease)
@@ -1259,7 +1573,7 @@ func (s *Service) GetInstanceSandboxesWithStatus(
 
 	// With a filter we already refreshed every lease above; otherwise refresh the
 	// surviving subset here.
-	if !hasFilter {
+	if !hasOSFilter {
 		s.refreshLeaseMetadata(ctx, filteredLeases...)
 	}
 

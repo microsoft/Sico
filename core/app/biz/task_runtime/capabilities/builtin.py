@@ -25,7 +25,9 @@ from ..domain.time import now_ms as _now_ms
 from .tool_catalog import (
     ECHO_TOOL_NAME,
     FILE_CONVERT_TOOL_NAME,
+    READ_FILE_TOOL_NAME,
     RUN_COMMAND_TOOL_NAME,
+    WRITE_ARTIFACT_TOOL_NAME,
 )
 from ..execution.command.contracts import (
     CommandBackend,
@@ -51,6 +53,8 @@ _COMMAND_SUMMARY_HEAD = 80
 _COMMAND_STDOUT_HEAD = 1000
 _COMMAND_STDERR_HEAD = 500
 _EXCEL_EXTENSIONS = {".xlsx", ".xlsm"}
+_READ_FILE_MAX_LINES = 200
+_READ_FILE_MAX_BYTES = 20 * 1024
 _WORKSPACE_SPREADSHEET_RE = re.compile(r"(?:attachments|download)/[^\n\r\"'`]+?\.(?:xlsx|xlsm)", re.IGNORECASE)
 
 
@@ -88,10 +92,14 @@ class _BuiltinHandler:
     async def execute(self, context: CapabilityContext) -> TaskResult:
         if self._tool_name == ECHO_TOOL_NAME:
             return _run_echo(context)
+        if self._tool_name == READ_FILE_TOOL_NAME:
+            return _read_file(context)
         if self._tool_name == FILE_CONVERT_TOOL_NAME:
             return _run_file_convert(context, self._provider.artifact_store)
+        if self._tool_name == WRITE_ARTIFACT_TOOL_NAME:
+            return _write_artifact(context, self._provider.artifact_store)
         if self._tool_name == RUN_COMMAND_TOOL_NAME:
-            return await _run_command(context, self._provider.command_backend)
+            return await _run_command(context, self._provider.command_backend, self._provider.artifact_store)
         return build_user_input_result(context.run, f"Unsupported builtin capability payload: {self._tool_name}")
 
 
@@ -118,11 +126,112 @@ def _run_echo(context: CapabilityContext) -> TaskResult:
 
 
 # ---------------------------------------------------------------------------
+# read_file
+# ---------------------------------------------------------------------------
+
+
+def _read_file(context: CapabilityContext) -> TaskResult:
+    run = context.run
+    file_path = str(context.arguments.get("file_path") or "").strip()
+    if not file_path:
+        return build_user_input_result(run, "read_file requires a non-empty args.file_path")
+    try:
+        offset = max(0, int(context.arguments.get("offset") or 0))
+        lines = min(_READ_FILE_MAX_LINES, max(1, int(context.arguments.get("lines") or _READ_FILE_MAX_LINES)))
+        source = _readable_workspace_file(context.workspace, file_path)
+        if source.stat().st_size > 5 * 1024 * 1024:
+            raise ValueError("read_file input exceeds 5MiB; narrow the file or use grep")
+        all_lines = source.read_text(encoding="utf-8").splitlines(keepends=True)
+        selected = all_lines[offset : offset + lines]
+        content = "".join(selected)
+        truncated = False
+        if len(content.encode("utf-8")) > _READ_FILE_MAX_BYTES:
+            content = content.encode("utf-8")[:_READ_FILE_MAX_BYTES].decode("utf-8", errors="ignore")
+            truncated = True
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        return build_user_input_result(run, str(exc))
+    finished_at = _now_ms()
+    return TaskResult(
+        run_id=run.run_id,
+        task_id=run.spec.task_id,
+        status=TaskStatus.COMPLETED,
+        title=run.spec.title,
+        summary=f"Read {file_path} from line {offset} ({len(selected)} line(s)).",
+        output=json.dumps(
+            {
+                "file_path": file_path.replace("\\", "/"),
+                "content": content,
+                "total_lines": len(all_lines),
+                "offset": offset,
+                "lines_returned": len(selected),
+                "truncated": truncated,
+            },
+            ensure_ascii=False,
+        ),
+        started_at=context.started_at,
+        ended_at=finished_at,
+        duration_ms=max(0, finished_at - context.started_at),
+    )
+
+
+def _readable_workspace_file(workspace: Path, relative_path: str) -> Path:
+    root = workspace.resolve()
+    target = (root / relative_path).resolve()
+    if not target.is_relative_to(root):
+        raise ValueError("read_file path must stay within the delegated workspace")
+    if not target.is_file():
+        raise ValueError(f"read_file input not found: {relative_path}")
+    return target
+
+
+# ---------------------------------------------------------------------------
+# write_artifact
+# ---------------------------------------------------------------------------
+
+
+def _write_artifact(context: CapabilityContext, artifact_store: ArtifactStore) -> TaskResult:
+    run = context.run
+    filepath = str(context.arguments.get("filepath") or "").strip()
+    if not filepath:
+        return build_user_input_result(run, "write_artifact requires a non-empty args.filepath")
+    content = context.arguments.get("content")
+    if not isinstance(content, str):
+        return build_user_input_result(run, "write_artifact requires string args.content")
+    try:
+        result_root = context.result_dir.resolve()
+        target = (result_root / filepath).resolve()
+        if not target.is_relative_to(result_root) or target == result_root:
+            raise ValueError("write_artifact filepath must stay within the run result directory")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        artifact = _put_artifact(artifact_store, run.run_id, target, context.workspace)
+    except (OSError, ValueError) as exc:
+        return build_user_input_result(run, str(exc))
+    finished_at = _now_ms()
+    return TaskResult(
+        run_id=run.run_id,
+        task_id=run.spec.task_id,
+        status=TaskStatus.COMPLETED,
+        title=run.spec.title,
+        summary=f"Created artifact {filepath}",
+        output=json.dumps(
+            {"filepath": artifact.filepath, "artifact_uri": artifact.uri, "size_bytes": artifact.size_bytes},
+            ensure_ascii=False,
+        ),
+        primary_artifact=artifact,
+        artifacts=[artifact],
+        started_at=context.started_at,
+        ended_at=finished_at,
+        duration_ms=max(0, finished_at - context.started_at),
+    )
+
+
+# ---------------------------------------------------------------------------
 # run_command
 # ---------------------------------------------------------------------------
 
 
-async def _run_command(context: CapabilityContext, backend: CommandBackend) -> TaskResult:
+async def _run_command(context: CapabilityContext, backend: CommandBackend, artifact_store: ArtifactStore) -> TaskResult:
     """Run a shell command via the selected :class:`CommandBackend`.
 
     This is the single ``run_command`` implementation: the handler builds a
@@ -144,7 +253,7 @@ async def _run_command(context: CapabilityContext, backend: CommandBackend) -> T
         outcome = await session.run(spec)
     finally:
         await session.aclose()
-    return _command_result_to_task_result(context, command, outcome)
+    return _command_result_to_task_result(context, command, outcome, artifact_store)
 
 
 def _command_spec(context: CapabilityContext, command: str) -> CommandSpec:
@@ -230,7 +339,12 @@ def _command_summary(command: str, outcome: CommandResult, status: TaskStatus) -
     return "\n".join(lines)
 
 
-def _command_result_to_task_result(context: CapabilityContext, command: str, outcome: CommandResult) -> TaskResult:
+def _command_result_to_task_result(
+    context: CapabilityContext,
+    command: str,
+    outcome: CommandResult,
+    artifact_store: ArtifactStore,
+) -> TaskResult:
     run = context.run
     finished_at = _now_ms()
     timed_out = outcome.return_code == -1 and "timed out" in outcome.system_error.lower()
@@ -248,6 +362,10 @@ def _command_result_to_task_result(context: CapabilityContext, command: str, out
     elif status == TaskStatus.FAILED:
         error_class = ErrorClass.TRANSIENT if outcome.system_error else ErrorClass.SKILL_RUNTIME
         error_message = outcome.system_error or outcome.stderr or f"command exited with {outcome.return_code}"
+    artifacts = [
+        _put_artifact(artifact_store, run.run_id, path, context.workspace)
+        for path in sorted(path for path in context.result_dir.rglob("*") if path.is_file())
+    ]
     return TaskResult(
         run_id=run.run_id,
         task_id=run.spec.task_id,
@@ -255,6 +373,8 @@ def _command_result_to_task_result(context: CapabilityContext, command: str, out
         title=run.spec.title,
         summary=_command_summary(command, outcome, status),
         output=outcome.stdout,
+        primary_artifact=artifacts[0] if artifacts else None,
+        artifacts=artifacts,
         error_class=error_class,
         error_message=error_message,
         sandbox=run.sandbox,

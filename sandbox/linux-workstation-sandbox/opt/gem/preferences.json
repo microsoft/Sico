@@ -1,0 +1,35 @@
+{
+  "browser": {
+    "custom_chrome_frame": false,
+    "show_home_button": true,
+    "window_placement": {
+      "maximized": true
+    }
+  },
+  "bookmark_bar": {
+    "show_on_all_tabs": false
+  },
+  "sync_promo": {
+    "show_on_first_run_allowed": false
+  },
+  "profile": {
+    "avatar_index": 19,
+    "default_content_setting_values": {
+      "clipboard": 2,
+      "cookies": 4,
+      "geolocation": 2,
+      "media_stream_camera": 2,
+      "media_stream_mic": 2,
+      "midi_sysex": 2,
+      "payment_handler": 2,
+      "usb_guard": 2
+    },
+    "name": "gem",
+    "using_default_avatar": false,
+    "using_default_name": false,
+    "using_gaia_avatar": false
+  },
+  "signin": {
+    "allowed": false
+  }
+}

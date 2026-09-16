@@ -12,7 +12,7 @@ func TestSandboxType_String(t *testing.T) {
 		want string
 	}{
 		{SandboxTypeEmulator, "emulator"},
-		{SandboxTypeAio, "aio"},
+		{SandboxTypeLinuxWorkstation, "linux_workstation"},
 		{SandboxTypeWinCUA, "wincua"},
 		{SandboxTypePhysical, "physical"},
 		{SandboxTypeUnknown, "Unknown"},
@@ -26,7 +26,7 @@ func TestSandboxType_String(t *testing.T) {
 func TestAllSandboxTypes(t *testing.T) {
 	types := AllSandboxTypes()
 	assert.Contains(t, types, "emulator")
-	assert.Contains(t, types, "aio")
+	assert.Contains(t, types, "linux_workstation")
 	assert.Contains(t, types, "wincua")
 	assert.Contains(t, types, "physical")
 	assert.Len(t, types, 4)
@@ -35,7 +35,7 @@ func TestAllSandboxTypes(t *testing.T) {
 func TestIsValidSandboxType(t *testing.T) {
 	assert.True(t, IsValidSandboxType("emulator"))
 	assert.True(t, IsValidSandboxType("  emulator  "))
-	assert.True(t, IsValidSandboxType("aio"))
+	assert.True(t, IsValidSandboxType("linux_workstation"))
 	assert.True(t, IsValidSandboxType("wincua"))
 	assert.True(t, IsValidSandboxType("physical"))
 	assert.False(t, IsValidSandboxType(""))
@@ -44,7 +44,7 @@ func TestIsValidSandboxType(t *testing.T) {
 
 func TestOpenAPIPath(t *testing.T) {
 	assert.Equal(t, "/openapi.json", SandboxTypeEmulator.OpenAPIPath())
-	assert.Equal(t, "/v1/openapi.json", SandboxTypeAio.OpenAPIPath())
+	assert.Equal(t, "/v1/openapi.json", SandboxTypeLinuxWorkstation.OpenAPIPath())
 	assert.Equal(t, "/openapi.json", SandboxTypeWinCUA.OpenAPIPath())
 	assert.Equal(t, "/openapi.json", SandboxTypePhysical.OpenAPIPath())
 	assert.Equal(t, "", SandboxTypeUnknown.OpenAPIPath())
@@ -52,7 +52,7 @@ func TestOpenAPIPath(t *testing.T) {
 
 func TestGetOpenAPIPath(t *testing.T) {
 	assert.Equal(t, "/openapi.json", GetOpenAPIPath("emulator"))
-	assert.Equal(t, "/v1/openapi.json", GetOpenAPIPath("aio"))
+	assert.Equal(t, "/v1/openapi.json", GetOpenAPIPath("linux_workstation"))
 	assert.Equal(t, "/openapi.json", GetOpenAPIPath("wincua"))
 	assert.Equal(t, "/openapi.json", GetOpenAPIPath("physical"))
 	assert.Equal(t, "", GetOpenAPIPath("invalid"))

@@ -1,4 +1,6 @@
+import json
 from dataclasses import dataclass
+from typing import Any
 
 import grpc
 
@@ -52,6 +54,23 @@ class ApplySandboxResult:
     os: str
     provider_type: str
     message: str
+
+
+@dataclass
+class LinuxWorkstationSandboxHttpFormField:
+    name: str
+    text_value: str = ""
+    bytes_value: bytes = b""
+    file_name: str = ""
+    content_type: str = ""
+
+
+@dataclass
+class LinuxWorkstationSandboxHttpResult:
+    status_code: int
+    content_type: str
+    body_text: str
+    body_bytes: bytes
 
 
 class ReverseSandboxService:
@@ -177,3 +196,45 @@ class ReverseSandboxService:
         )
         self._raise_on_error("get_instance_sandboxes", resp)
         return [SandboxInfo.from_pb(sb) for sb in resp.sandboxes]
+
+    def proxy_linux_workstation_http(
+        self,
+        *,
+        agent_instance_id: str,
+        proxy_base_path: str,
+        method: str,
+        path: str,
+        query: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+        form_fields: list[LinuxWorkstationSandboxHttpFormField] | None = None,
+    ) -> LinuxWorkstationSandboxHttpResult:
+        if not hasattr(self, "stub"):
+            raise RuntimeError("ReverseSandboxService is not initialized")
+
+        response = self.stub.rpc_proxy_linux_workstation_sandbox_http(
+            pb.LinuxWorkstationSandboxHttpRequest(
+                agent_instance_id=agent_instance_id,
+                proxy_base_path=proxy_base_path,
+                method=method,
+                path=path,
+                query_json=json.dumps(query or {}, ensure_ascii=True),
+                json_body_json=json.dumps(json_body, ensure_ascii=True) if json_body is not None else "",
+                form_fields=[
+                    pb.LinuxWorkstationSandboxHttpFormField(
+                        name=field.name,
+                        text_value=field.text_value,
+                        bytes_value=field.bytes_value,
+                        file_name=field.file_name,
+                        content_type=field.content_type,
+                    )
+                    for field in (form_fields or [])
+                ],
+            )
+        )
+        self._raise_on_error("proxy_linux_workstation_http", response)
+        return LinuxWorkstationSandboxHttpResult(
+            status_code=response.status_code,
+            content_type=response.content_type,
+            body_text=response.body_text,
+            body_bytes=response.body_bytes,
+        )

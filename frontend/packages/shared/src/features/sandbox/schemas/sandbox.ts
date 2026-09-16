@@ -9,8 +9,8 @@ import { z } from "zod";
 export const sandboxSchema = z.object({
   sandboxId: z.string(),
   displayName: z.string().catch(""),
-  // emulator | aio | wincua | unknown (AgentSandboxType). Drives the device
-  // icon and the take-over interaction (emulator uses postMessage; aio/wincua
+  // emulator | linux_workstation | wincua | unknown (AgentSandboxType). Drives the device
+  // icon and the take-over interaction (emulator uses postMessage; Linux Workstation/WinCUA
   // use an input overlay).
   type: z.string().catch("unknown"),
   // available | assigned | in_use | … — only the first three are surfaced.
@@ -28,7 +28,7 @@ export const sandboxInstanceDataSchema = z.object({
 });
 
 // The only device-type value the code branches on: `emulator` takes the
-// postMessage take-over path, everything else the aio/wincua input-overlay path.
+// postMessage take-over path, everything else the Linux Workstation/WinCUA input-overlay path.
 // Compared against the resilient `type` string above.
 export const SandboxType = {
   emulator: "emulator",

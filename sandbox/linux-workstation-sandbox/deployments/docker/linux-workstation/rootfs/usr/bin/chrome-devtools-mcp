@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+NODE_BIN="/usr/bin/node"
+NODE_ENTRY="/usr/lib/node_modules/chrome-devtools-mcp/build/src/index.js"
+
+if [ -x "$NODE_BIN" ] && [ -f "$NODE_ENTRY" ]; then
+  exec "$NODE_BIN" "$NODE_ENTRY" "$@"
+fi
+
+HOST="0.0.0.0"
+PORT="${MCP_PROXY_PORT:-8102}"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --browserUrl)
+      shift 2 ;;
+    --host)
+      HOST="$2"; shift 2 ;;
+    --port)
+      PORT="$2"; shift 2 ;;
+    *)
+      shift ;;
+  esac
+done
+
+exec /opt/python3.12/bin/python3.12 -m uvicorn linux_workstation_server.app:app --host "$HOST" --port "$PORT"

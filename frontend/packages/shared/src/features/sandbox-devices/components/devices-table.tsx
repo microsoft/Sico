@@ -46,8 +46,10 @@ function useDevicesTableCopy(): DevicesTableCopy {
   return {
     headers,
     typeLabels: {
-      // AIO / WinCUA are product brand names — left untranslated by design.
-      aio: "AIO",
+      linux_workstation: t({
+        id: "sandboxDevices.type.linuxWorkstation",
+        message: "Linux Workstation",
+      }),
       emulator: t({ id: "sandboxDevices.type.emulator", message: "Emulator" }),
       physical: t({ id: "sandboxDevices.type.physical", message: "Physical" }),
       wincua: "WinCUA",

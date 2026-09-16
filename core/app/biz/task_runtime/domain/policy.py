@@ -16,7 +16,7 @@ from ..execution.resources import spec_uses_command_backend
 
 
 def _resolve_policy(task: TaskSpec) -> TaskExecutionPolicy:
-    timeout_seconds = int(task.args.get("timeout_seconds") or 600)
+    timeout_seconds = int(task.args.get("timeout_seconds") or 900)
     # Anything lowered to a CommandSpec runs outside this process and is worth a
     # second attempt on a transient/timeout failure. This is a coarse
     # pre-resolution guess: the authoritative environment declaration is the

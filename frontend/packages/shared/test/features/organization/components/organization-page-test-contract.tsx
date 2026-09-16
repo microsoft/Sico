@@ -6,10 +6,12 @@ import { createStore, Provider } from "jotai";
 import type { ComponentType, ReactNode } from "react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { userAtom } from "@/atoms/auth-atom";
+import { loginAtom } from "@/atoms/auth-atom";
 import { type OrganizationSummary } from "@/features/organization/schemas/organization";
 import * as organizationService from "@/features/organization/services/organization";
 import { ApiClientProvider } from "@/services/api-client-context";
+
+import { makeLoginPayload } from "../../../helpers/organization-context";
 
 const { membersContentSpy, projectsContentSpy } = vi.hoisted(() => ({
   membersContentSpy: vi.fn(),
@@ -69,7 +71,7 @@ function renderPage(Page: ComponentType): void {
   });
   const apiClient = axios.create();
   const store = createStore();
-  store.set(userAtom, { id: 7, email: "user@example.com", roles: [] });
+  store.set(loginAtom, makeLoginPayload());
 
   function Wrapper({ children }: { children: ReactNode }): React.JSX.Element {
     return (

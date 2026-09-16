@@ -1,0 +1,21 @@
+# Local
+.DS_Store
+*.local
+*.log*
+
+# Dist
+node_modules
+dist/
+doc_build/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+.history
+
+CLAUDE.md
+.buildx-cache/
+.buildx-cache-new/
+.buildx-cache-base/
+.buildx-cache-base-new/

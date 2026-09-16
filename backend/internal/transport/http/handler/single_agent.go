@@ -143,11 +143,6 @@ func DeleteSingleAgent(ctx *gin.Context) {
 		return
 	}
 
-	if err := singleAgentSVC.DefaultFull().CheckAgentOwner(reqctx(ctx), req.AgentId); err != nil {
-		internalServerErrorResponse(ctx, err)
-		return
-	}
-
 	resp, err := singleAgentSVC.DefaultFull().DeleteSingleAgent(reqctx(ctx), &req)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
@@ -596,11 +591,6 @@ func PublishSingleAgent(ctx *gin.Context) {
 	var req single_agent.PublishSingleAgentRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		invalidParamRequestResponse(ctx, err.Error())
-		return
-	}
-
-	if err := singleAgentSVC.DefaultFull().CheckAgentManageAccess(reqctx(ctx), req.AgentId); err != nil {
-		internalServerErrorResponse(ctx, err)
 		return
 	}
 

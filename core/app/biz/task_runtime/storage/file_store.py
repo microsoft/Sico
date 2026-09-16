@@ -5,14 +5,29 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from ..domain.models import BatchRecord, BatchStatus, FencingToken, StaleRun, TaskDetail, TaskResult, TaskRun, TaskStatus
+from ..domain.models import (
+    TERMINAL_BATCH_STATUSES,
+    TERMINAL_STATUSES,
+    BatchRecord,
+    BatchStatus,
+    FencingToken,
+    StaleRun,
+    TaskDetail,
+    TaskResult,
+    TaskRun,
+    TaskStatus,
+)
 from ..domain.state_machine import transition_batch, transition_run
 from ..domain.time import now_ms as _now_ms
 from .run_store import (
     IdempotencyCollisionError,
     StaleWorkerError,
+    BatchCreateResult,
+    BatchUpdateResult,
     TaskDetailView,
     _validate_reopen_payload,
+    _hydrate_result_output,
+    _persisted_result_payload,
     _write_json_atomic,
 )
 
@@ -30,26 +45,38 @@ class FileRunStore:
     def run_dir(self, batch_id: str, run_id: str) -> Path:
         return self.batch_dir(batch_id) / run_id
 
-    async def create_batch(self, batch: BatchRecord) -> None:
+    async def create_batch(self, batch: BatchRecord) -> BatchCreateResult:
         batch_path = self.batch_dir(batch.batch_id)
         if (batch_path / "batch.json").exists():
-            return
+            return BatchCreateResult(batch=await self.get_batch(batch.batch_id), created=False)
         batch_path.mkdir(parents=True, exist_ok=True)
-        _write_json_atomic(batch_path / "batch.json", batch.model_dump(mode="json"))
+        stored_batch = batch.model_copy(deep=True)
+        _write_json_atomic(batch_path / "batch.json", stored_batch.model_dump(mode="json"))
+        return BatchCreateResult(batch=stored_batch, created=True)
 
     async def create_run(self, run: TaskRun) -> None:
+        metadata_path = self.run_dir(run.batch_id, run.run_id) / "metadata.json"
+        if metadata_path.exists():
+            existing = TaskRun.model_validate_json(metadata_path.read_text(encoding="utf-8"))
+            if _same_run_creation_identity(existing, run):
+                return
+            raise IdempotencyCollisionError(f"run {run.run_id} already exists with different identity")
         if run.idempotency_key:
             existing = await self.lookup_idempotent(run.idempotency_key)
-            if existing is not None and existing.run_id != run.run_id:
+            if existing is not None:
                 raise IdempotencyCollisionError(
                     f"run {existing.run_id} already exists with idempotency_key={run.idempotency_key}"
                 )
         run_path = self.run_dir(run.batch_id, run.run_id)
         run_path.mkdir(parents=True, exist_ok=True)
-        _write_json_atomic(run_path / "metadata.json", run.model_dump(mode="json"))
+        _write_json_atomic(metadata_path, run.model_dump(mode="json"))
 
     async def update_run(self, run: TaskRun) -> None:
-        _write_json_atomic(self.run_dir(run.batch_id, run.run_id) / "metadata.json", run.model_dump(mode="json"))
+        existing, metadata_path = self._read_run_by_id(run.run_id)
+        if existing.status in TERMINAL_STATUSES and existing.status != run.status:
+            return
+        stored_run = run.model_copy(deep=True)
+        _write_json_atomic(metadata_path, stored_run.model_dump(mode="json"))
 
     async def reopen_run_for_retry(self, run: TaskRun, *, expected_attempt: int) -> None:
         existing, metadata_path = self._read_run_by_id(run.run_id)
@@ -102,8 +129,12 @@ class FileRunStore:
         run.ended_at = result.ended_at or _now_ms()
         run.last_error_class = result.error_class
         run.last_error = result.error_message
+        run.fencing_token = ""
+        _write_json_atomic(
+            self.run_dir(run.batch_id, run.run_id) / "result.json",
+            _persisted_result_payload(self.root, run, result),
+        )
         _write_json_atomic(metadata_path, run.model_dump(mode="json"))
-        _write_json_atomic(self.run_dir(run.batch_id, run.run_id) / "result.json", result.model_dump(mode="json"))
 
     async def fail_stale_run(self, run_id: str, result: TaskResult, worker_id: str) -> None:
         run, metadata_path = self._read_run_by_id(run_id)
@@ -114,19 +145,24 @@ class FileRunStore:
         run.ended_at = result.ended_at or _now_ms()
         run.last_error_class = result.error_class
         run.last_error = result.error_message
+        _write_json_atomic(
+            self.run_dir(run.batch_id, run.run_id) / "result.json",
+            _persisted_result_payload(self.root, run, result),
+        )
         _write_json_atomic(metadata_path, run.model_dump(mode="json"))
-        _write_json_atomic(self.run_dir(run.batch_id, run.run_id) / "result.json", result.model_dump(mode="json"))
 
     async def cancel_batch(self, batch_id: str, reason: str) -> None:
         batch = await self.get_batch(batch_id)
         if batch.status not in {BatchStatus.QUEUED, BatchStatus.RUNNING}:
             return
-        transition_batch(batch, BatchStatus.CANCELLED)
-        batch.cancellation_reason = reason
-        await self.update_batch(batch)
         for run in await self.list_batch_runs(batch_id):
             if run.status in {TaskStatus.QUEUED, TaskStatus.RUNNING}:
                 await self.cancel_run(run.run_id, reason)
+        runs = await self.list_batch_runs(batch_id)
+        transition_batch(batch, BatchStatus.CANCELLED)
+        batch.cancellation_reason = reason
+        batch.counts = _run_status_counts(runs)
+        await self.update_batch(batch)
 
     async def cancel_run(self, run_id: str, reason: str) -> None:
         run, metadata_path = self._read_run_by_id(run_id)
@@ -146,15 +182,15 @@ class FileRunStore:
 
     async def get_task_detail(self, run_id: str, view: TaskDetailView) -> TaskDetail:
         run, _ = self._read_run_by_id(run_id)
-        result = self._read_result(run)
-        if run.status not in {
+        result = None
+        if run.status in {
             TaskStatus.COMPLETED,
             TaskStatus.FAILED,
             TaskStatus.CANCELLED,
             TaskStatus.TIMED_OUT,
             TaskStatus.BLOCKED,
         }:
-            result = None
+            result = self._read_result(run)
         content = result.summary if view == "summary" and result is not None else ""
         return TaskDetail(
             run=run,
@@ -208,11 +244,16 @@ class FileRunStore:
             )
         return stale_runs
 
-    async def update_batch(self, batch: BatchRecord) -> None:
-        batch.updated_at = _now_ms()
-        if batch.status.value in {"completed", "partial", "failed", "cancelled", "timed_out", "blocked"}:
-            batch.ended_at = batch.ended_at or batch.updated_at
-        _write_json_atomic(self.batch_dir(batch.batch_id) / "batch.json", batch.model_dump(mode="json"))
+    async def update_batch(self, batch: BatchRecord) -> BatchUpdateResult:
+        existing = await self.get_batch(batch.batch_id)
+        if existing.status in TERMINAL_BATCH_STATUSES:
+            return BatchUpdateResult(batch=existing, applied=False)
+        stored_batch = batch.model_copy(deep=True)
+        stored_batch.updated_at = _now_ms()
+        if stored_batch.status in TERMINAL_BATCH_STATUSES:
+            stored_batch.ended_at = stored_batch.ended_at or stored_batch.updated_at
+        _write_json_atomic(self.batch_dir(batch.batch_id) / "batch.json", stored_batch.model_dump(mode="json"))
+        return BatchUpdateResult(batch=stored_batch, applied=True)
 
     async def get_batch(self, batch_id: str) -> BatchRecord:
         path = self.batch_dir(batch_id) / "batch.json"
@@ -222,7 +263,8 @@ class FileRunStore:
         path = self.run_dir(run.batch_id, run.run_id) / "result.json"
         if not path.exists():
             return None
-        return TaskResult.model_validate_json(path.read_text(encoding="utf-8"))
+        result = TaskResult.model_validate_json(path.read_text(encoding="utf-8"))
+        return _hydrate_result_output(self.root, run, result)
 
     def _read_run_by_id(self, run_id: str) -> tuple[TaskRun, Path]:
         matches = list(self.root.glob(f"*/{run_id}/metadata.json"))
@@ -233,5 +275,18 @@ class FileRunStore:
 
     @staticmethod
     def _ensure_current_token(run: TaskRun, token: FencingToken) -> None:
-        if run.fencing_token != token.token:
+        if run.status != TaskStatus.RUNNING or run.fencing_token != token.token:
             raise StaleWorkerError(f"stale worker token for run {run.run_id}")
+
+
+def _same_run_creation_identity(existing: TaskRun, incoming: TaskRun) -> bool:
+    return (
+        existing.run_id == incoming.run_id
+        and existing.batch_id == incoming.batch_id
+        and bool(existing.idempotency_key.strip())
+        and existing.idempotency_key.strip() == incoming.idempotency_key.strip()
+    )
+
+
+def _run_status_counts(runs: list[TaskRun]) -> dict[str, int]:
+    return {status.value: sum(run.status == status for run in runs) for status in TERMINAL_STATUSES}

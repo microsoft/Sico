@@ -41,11 +41,18 @@ func ensureToken(row *runRow, tokenPayload string) error {
 	if err != nil {
 		return err
 	}
-	if row.FencingToken == "" || row.FencingToken != tokenJSON.Token {
+	if row.Status != statusRunning || row.FencingToken == "" || row.FencingToken != tokenJSON.Token {
 		return fmt.Errorf("%w: run %s", ErrStaleToken, row.RunID)
 	}
 
 	return nil
+}
+
+func ensureTerminalResultStatus(status string) error {
+	if containsStatus(terminalRunStatuses(), status) {
+		return nil
+	}
+	return fmt.Errorf("result status must be terminal, got %q", status)
 }
 
 func ensureClaimable(row *runRow) error {

@@ -124,7 +124,7 @@ On top of this runtime, Sico organizes work into **three loops** that together f
 - **Multi-service platform**: Go backend, Python core, React frontend, communicating over gRPC and a bidirectional *reverse gRPC* pattern.
 - **LLM Hub**: unified model runtime with adapters for OpenAI, Azure OpenAI, Anthropic, Gemini, OpenRouter, OpenAI-compatible providers, and generic HTTP JSON / binary endpoints. See [LLM Hub docs](backend/docs/llmhub.md).
 - **Agent toolkit**: file I/O, grep, shell/command execution, web search & fetch, document parsing, long-term memory retrieval, agent-side plan inspection / cancellation, reporting, and sandbox tools out of the box.
-- **Sandbox system**: pooled, leased Android emulator sandboxes with H264 live view, VNC, and full operation traces.
+- **Sandbox system**: pooled Android emulator and Linux workstation sandboxes for GUI and command execution, with live views and operation traces.
 - **Memory & knowledge**: short-term turn context, long-term facts via Mem0 + Qdrant, durable knowledge bases, and project-scoped memory, backed by SeaweedFS, Redis and MySQL.
 - **Skills**: register, version, and execute reusable Digital Worker skills as first-class platform objects, composed from the Cortex, Action, and Memory layers above.
 - **Experience Learning**: a Reflector then Curator pipeline distills successful strategies and recurring failure patterns from completed tasks into a per-(project, agent) **Playbook**, automatically injected into the next run, so Digital Workers improve from real work without retraining the model.
@@ -148,6 +148,8 @@ git clone https://github.com/microsoft/Sico.git
 cd Sico
 cp .env.example .env            # edit values as needed
 ```
+
+The example enables `SEED_AGENT_INSTANCES=true`, which creates the default organization, project, and ready-to-use agent instances for local evaluation. Set it to `false` for a clean or production deployment.
 
 Before starting the stack, configure at least one LLM model. Create a YAML file under
 `deploy/config/llmhubs/<your-model>.yaml` (use [`deploy/config/llmhubs/model-template.yaml`](deploy/config/llmhubs/model-template.yaml)
@@ -186,7 +188,7 @@ Then pick **one** of the run modes below.
 ### Run mode A: Docker Compose (recommended for local dev)
 
 ```bash
-make compose-up                 # builds and starts nginx, frontend, backend, core, mysql, redis, kafka, seaweedfs, qdrant
+make compose-up                 # builds and starts the application, infrastructure, and local observability stack
 ```
 
 Then verify the stack:
@@ -194,8 +196,9 @@ Then verify the stack:
 - UI login: [http://localhost:8080/login](http://localhost:8080/login)
 - API docs: [http://localhost:8080/api/sico/docs/index.html](http://localhost:8080/api/sico/docs/index.html)
 - Health: `curl http://localhost:8080/api/sico/health`
+- Grafana: [http://localhost:14005](http://localhost:14005) (`admin` / `admin` for local development)
 
-Sign in with the seeded default account (local development only — rotate or remove before exposing the stack outside your machine):
+With `SEED_AGENT_INSTANCES=true`, sign in with the seeded default account (local development only — rotate or remove before exposing the stack outside your machine):
 
 - **Username**: `operator@sico.local`
 - **Password**: `operator`

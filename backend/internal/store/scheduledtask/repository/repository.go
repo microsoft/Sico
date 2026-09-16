@@ -41,6 +41,15 @@ type Repository interface {
 	MarkNotificationSent(ctx context.Context, runID, notificationID, sentAt int64) error
 }
 
+type OrganizationScopedRepository interface {
+	ListForCreatorInOrganization(
+		ctx context.Context,
+		creator string,
+		organizationID int64,
+		offset, limit int,
+	) ([]*entity.ScheduledTask, int64, error)
+}
+
 type repository struct{ db *gorm.DB }
 
 func NewRepository(db *gorm.DB) Repository { return &repository{db: db} }
@@ -128,6 +137,34 @@ func (r *repository) ListForCreator(
 	}
 	var tasks []*entity.ScheduledTask
 	err := query.Order("created_at DESC").Offset(offset).Limit(limit).Find(&tasks).Error
+	return tasks, total, err
+}
+
+func (r *repository) ListForCreatorInOrganization(
+	ctx context.Context,
+	creator string,
+	organizationID int64,
+	offset, limit int,
+) ([]*entity.ScheduledTask, int64, error) {
+	query := r.db.WithContext(ctx).
+		Table("t_scheduled_task AS task").
+		Joins(
+			"JOIN t_single_agent_instance AS instance "+
+				"ON instance.id = task.agent_instance_id AND instance.deleted_at IS NULL",
+		).
+		Joins(
+			"JOIN t_project AS project ON project.id = instance.project_id AND project.deleted_at IS NULL",
+		).
+		Where(
+			"task.creator_username = ? AND project.organization_id = ? AND task.deleted_at IS NULL",
+			creator, organizationID,
+		)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var tasks []*entity.ScheduledTask
+	err := query.Select("task.*").Order("task.created_at DESC").Offset(offset).Limit(limit).Find(&tasks).Error
 	return tasks, total, err
 }
 

@@ -10,6 +10,11 @@ service:
   ports:
     grpc: 50053
 
+taskRuntime:
+  # Empty makes task-runner pods reuse the configured Core image reference.
+  pythonRunnerImage: ""
+  defaultRunnerCommands: "adb,bash,curl,python,rg,sh,uv"
+
 env:
   GRPC_SERVER_ADDRESS: "0.0.0.0:50053"
   REDIS_HOST: sico-redis
@@ -51,3 +56,32 @@ resources:
 
 # Secret name containing REDIS_PASSWORD
 secretName: sico-credentials
+
+preparedEnvironment:
+  enabled: true
+  stateRoot: /mnt/storage/prepared-environments
+  builderVersion: prepared-environment-v1
+  architecture: amd64
+  image:
+    repository: localhost:5000/sico/sico-environment-runner
+    tag: local
+    pullPolicy: IfNotPresent
+  service:
+    port: 8080
+  repository: localhost:5000/sico/prepared-environment
+  pullRepository: localhost:5000/sico/prepared-environment
+  push: true
+  registryDeleteUrl: ""
+  docker:
+    enabled: true
+    image: docker:28-dind
+    insecureRegistry: ""
+  gc:
+    quotaBytes: 10737418240
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m

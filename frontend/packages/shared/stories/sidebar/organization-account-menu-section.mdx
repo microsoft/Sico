@@ -1,0 +1,96 @@
+import {
+  Canvas,
+  ColorItem,
+  ColorPalette,
+  Controls,
+  Description,
+  Meta,
+} from "@storybook/addon-docs/blocks";
+
+import * as OrganizationMenuStories from "./organization-account-menu-section.stories";
+
+<Meta of={OrganizationMenuStories} />
+
+# OrganizationAccountMenuSection
+
+The organization group in the account menu reads the current organization and
+its saved avatar from the organization query. It composes SICO's Base UI-backed
+menu and avatar primitives. Optional management actions belong inside the group,
+before its closing divider.
+
+## Examples
+
+### Current organization and saved avatars
+
+<Description of={OrganizationMenuStories.MultipleOrganizations} />
+<Canvas of={OrganizationMenuStories.MultipleOrganizations} />
+
+<Description of={OrganizationMenuStories.SavedAvatars} />
+<Canvas of={OrganizationMenuStories.SavedAvatars} />
+
+<Description of={OrganizationMenuStories.WithManagement} />
+<Canvas of={OrganizationMenuStories.WithManagement} />
+
+### Selection
+
+<Description of={OrganizationMenuStories.SingleOrganization} />
+<Canvas of={OrganizationMenuStories.SingleOrganization} />
+
+<Description of={OrganizationMenuStories.SelectedOrganization} />
+<Canvas of={OrganizationMenuStories.SelectedOrganization} />
+
+### Unavailable states
+
+<Description of={OrganizationMenuStories.NoOrganizations} />
+<Canvas of={OrganizationMenuStories.NoOrganizations} />
+
+<Description of={OrganizationMenuStories.Loading} />
+<Canvas of={OrganizationMenuStories.Loading} />
+
+<Description of={OrganizationMenuStories.ErrorState} />
+<Canvas of={OrganizationMenuStories.ErrorState} />
+
+## API
+
+The component accepts optional `children` for organization management actions.
+Visibility and navigation stay with the parent. An empty organization list does
+not render the group or its divider. Saved `iconUrl` values render as images;
+missing or unsafe values retain the organization's initial.
+
+The controls below configure the story's mock API and selected organization,
+not additional runtime component props. Story uploads are not live backend
+integration tests.
+
+<Controls of={OrganizationMenuStories.MultipleOrganizations} />
+
+---
+
+## Token Audit
+
+The section owns text hierarchy and grouping. Menu surfaces, focus states,
+avatar shape, and the divider are inherited from the corresponding UI primitives.
+
+### Color tokens
+
+<ColorPalette>
+  <ColorItem
+    title="Organization name"
+    subtitle="Primary foreground"
+    colors={{ Name: "var(--color-foreground-primary)" }}
+  />
+  <ColorItem
+    title="Current organization description"
+    subtitle="Tertiary foreground"
+    colors={{ Description: "var(--color-foreground-tertiary)" }}
+  />
+</ColorPalette>
+
+### Sizing & shape
+
+| Element              | Class / prop              | Role                                              |
+| -------------------- | ------------------------- | ------------------------------------------------- |
+| Current organization | `gap-2`                   | Space between the saved avatar and name           |
+| Name and description | `text-sm` / `text-xs`     | Primary and secondary text hierarchy              |
+| Organization avatar  | `size="xs"`, `rounded-md` | Compact image with initial fallback               |
+| Switcher submenu     | `min-w-49`                | Minimum width shared with the account menu recipe |
+| Closing divider      | `DropdownMenuSeparator`   | Follows optional management actions               |

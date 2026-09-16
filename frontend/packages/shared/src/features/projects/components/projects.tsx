@@ -12,6 +12,7 @@ import { CreateProjectDialog } from "./create-project-dialog";
 import { ProjectsGrid } from "./projects-grid";
 import { ProjectsGridSkeleton } from "./projects-grid-skeleton";
 import { ErrorView } from "../../../components/error-view";
+import { useBoundOrganizationQuery } from "../../../hooks/use-bound-organization";
 import { createProjectDialogOpenAtom } from "../atoms/create-project-dialog-atom";
 
 /**
@@ -31,6 +32,8 @@ export function Projects(): React.JSX.Element {
   const { reset } = useQueryErrorResetBoundary();
   const scrollRef: RefObject<HTMLDivElement | null> = useRef(null);
   const [createOpen, setCreateOpen] = useAtom(createProjectDialogOpenAtom);
+  const { data: organization } = useBoundOrganizationQuery();
+  const canCreate = Boolean(organization);
 
   return (
     <div className="flex h-full w-full flex-col gap-6 pt-10 pb-2">
@@ -38,7 +41,7 @@ export function Projects(): React.JSX.Element {
         <div
           className={cn(
             "flex flex-col gap-1 transition-[filter] duration-100",
-            createOpen && "blur-xs",
+            createOpen && canCreate && "blur-xs",
           )}
         >
           <h1
@@ -53,10 +56,12 @@ export function Projects(): React.JSX.Element {
             </Trans>
           </p>
         </div>
-        <Button variant="primary" onClick={() => setCreateOpen(true)}>
-          <Plus aria-hidden="true" />
-          <Trans id="projects.page.createButton">Create Project</Trans>
-        </Button>
+        {canCreate ? (
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+            <Plus aria-hidden="true" />
+            <Trans id="projects.page.createButton">Create Project</Trans>
+          </Button>
+        ) : null}
       </header>
       <div
         ref={scrollRef}
@@ -66,14 +71,18 @@ export function Projects(): React.JSX.Element {
           <Suspense fallback={<ProjectsGridSkeleton />}>
             <ProjectsGrid
               rootRef={scrollRef}
-              onCreate={() => setCreateOpen(true)}
+              onCreate={canCreate ? () => setCreateOpen(true) : undefined}
             />
           </Suspense>
         </ErrorBoundary>
       </div>
-      {createOpen && (
-        <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
-      )}
+      {createOpen && organization ? (
+        <CreateProjectDialog
+          organizationId={organization.id}
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+        />
+      ) : null}
     </div>
   );
 }

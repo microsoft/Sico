@@ -12,6 +12,7 @@ from app.biz.task_runtime.planning import (
     SubAgentDispatch,
     TaskBatchInput,
     TaskSpec,
+    SkillGuideRef,
 )
 
 from .models import AgentInvocation, PlannedWorkItem
@@ -25,9 +26,10 @@ def assemble_batch(
     max_concurrency: int | None = None,
     batch_metadata: Mapping[str, Any] | None = None,
     adapter_state: Mapping[str, Any] | None = None,
+    instruction_refs: Sequence[SkillGuideRef] = (),
 ) -> PreparedTaskBatch:
     """Create the sole preparation/runtime handoff without source-specific logic."""
-    tasks = tuple(_task_spec(item) for item in items)
+    tasks = tuple(_task_spec(item, instruction_refs) for item in items)
     description = batch_goal.strip() or f"Run {len(tasks)} prepared task(s)"
     return PreparedTaskBatch(
         batch=TaskBatchInput(
@@ -41,13 +43,13 @@ def assemble_batch(
     )
 
 
-def _task_spec(item: PlannedWorkItem) -> TaskSpec:
+def _task_spec(item: PlannedWorkItem, instruction_refs: Sequence[SkillGuideRef]) -> TaskSpec:
     source = item.source
     if isinstance(item.decision, AgentInvocation):
         dispatch = SubAgentDispatch(
             profile_id=item.decision.profile_id,
-            capability_grants=list(item.decision.capability_grants),
             max_model_turns=item.decision.max_model_turns,
+            instruction_refs=list(instruction_refs),
         )
     else:
         dispatch = CapabilityDispatch(capability_id=item.decision.capability_id)

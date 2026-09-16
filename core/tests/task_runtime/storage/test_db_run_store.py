@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,18 +20,68 @@ from app.biz.task_runtime.domain.models import (
     TaskSpec,
     TaskStatus,
 )
-from app.biz.task_runtime.storage.run_store import IdempotencyCollisionError, StaleWorkerError
+from app.biz.task_runtime.storage.run_store import IdempotencyCollisionError, StaleWorkerError, _hydrate_result_output
 from app.biz.reverse_grpc.taskruntime import (
     ReverseTaskRuntimeAlreadyExistsError,
-    ReverseTaskRuntimeServiceError,
     ReverseTaskRuntimeStaleError,
 )
 
 
 @pytest.mark.asyncio
-async def test_db_run_store_round_trips_run_and_result(tmp_path: Path) -> None:
+async def test_db_run_store_returns_authoritative_batch_mutations() -> None:
     service = FakeTaskRuntimeService()
     store = DBRunStore(service)
+    batch = _batch()
+
+    created = await store.create_batch(batch)
+    duplicate = await store.create_batch(batch.model_copy(update={"reason": "duplicate payload"}))
+
+    assert created.created
+    assert created.batch == batch
+    assert not duplicate.created
+    assert duplicate.batch == batch
+
+    cancelled = batch.model_copy(update={"status": BatchStatus.CANCELLED, "cancellation_reason": "user cancelled"})
+    service.batch_json = cancelled.model_dump_json()
+    service.update_batch_applied = False
+    update = await store.update_batch(batch.model_copy(update={"status": BatchStatus.COMPLETED}))
+
+    assert not update.applied
+    assert update.batch == cancelled
+
+
+@pytest.mark.asyncio
+async def test_db_run_store_supports_legacy_empty_batch_mutation_responses() -> None:
+    service = FakeTaskRuntimeService()
+    service.legacy_batch_responses = True
+    store = DBRunStore(service)
+    batch = _batch().model_copy(
+        update={"metadata": {"_task_runtime": {"materialization_token": "owner-token"}}}
+    )
+
+    created = await store.create_batch(batch)
+    duplicate = await store.create_batch(
+        batch.model_copy(
+            update={
+                "reason": "duplicate payload",
+                "metadata": {"_task_runtime": {"materialization_token": "duplicate-token"}},
+            }
+        )
+    )
+    service.batch_json = batch.model_copy(update={"status": BatchStatus.CANCELLED}).model_dump_json()
+    service.update_batch_applied = False
+    updated = await store.update_batch(batch.model_copy(update={"status": BatchStatus.COMPLETED}))
+
+    assert created.created
+    assert not duplicate.created
+    assert not updated.applied
+    assert updated.batch.status == BatchStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_db_run_store_round_trips_run_and_result(tmp_path: Path) -> None:
+    service = FakeTaskRuntimeService()
+    store = DBRunStore(service, results_root=tmp_path)
     batch = _batch()
     run = _run(tmp_path)
     result = TaskResult(
@@ -38,6 +90,7 @@ async def test_db_run_store_round_trips_run_and_result(tmp_path: Path) -> None:
         status=TaskStatus.COMPLETED,
         title=run.spec.title,
         summary="done",
+        output="command output\n",
         artifacts=[ArtifactRef(name="report", type="report", uri="file://report.md")],
     )
 
@@ -52,8 +105,80 @@ async def test_db_run_store_round_trips_run_and_result(tmp_path: Path) -> None:
     assert lookup is not None
     assert lookup.run_id == run.run_id
     assert detail.run.status == TaskStatus.COMPLETED
-    assert detail.result == result
+    assert detail.result is not None
+    assert detail.result.model_dump(exclude={"output_ref"}) == result.model_dump(exclude={"output_ref"})
     assert detail.artifacts == result.artifacts
+    persisted_result = json.loads(service.result_json)
+    assert "output" not in persisted_result
+    output_bytes = result.output.encode("utf-8")
+    content_digest = hashlib.sha256(output_bytes).hexdigest()
+    assert persisted_result["output_ref"] == {
+        "path": f"results/batch-1/run-1/attempt-1/output-{content_digest}.txt",
+        "size": len(output_bytes),
+    }
+    assert detail.result.output_ref is not None
+    assert detail.result.output_ref.model_dump() == persisted_result["output_ref"]
+    output_path = tmp_path / Path(persisted_result["output_ref"]["path"]).relative_to("results")
+    assert output_path.read_text(encoding="utf-8") == result.output
+
+
+@pytest.mark.asyncio
+async def test_db_run_store_rejected_write_does_not_overwrite_committed_output(tmp_path: Path) -> None:
+    service = FakeTaskRuntimeService()
+    store = DBRunStore(service, results_root=tmp_path)
+    run = _run(tmp_path)
+    await store.create_batch(_batch())
+    await store.create_run(run)
+    token = await store.claim_run(run.run_id, "worker-1")
+    committed = TaskResult(
+        run_id=run.run_id,
+        task_id=run.spec.task_id,
+        status=TaskStatus.COMPLETED,
+        title=run.spec.title,
+        summary="committed",
+        output="committed output",
+    )
+    await store.write_result(run.run_id, committed, token)
+
+    service.write_result_error = ReverseTaskRuntimeStaleError("token superseded")
+    rejected = committed.model_copy(update={"summary": "rejected", "output": "rejected output"})
+    with pytest.raises(StaleWorkerError):
+        await store.write_result(run.run_id, rejected, token)
+
+    detail = await store.get_task_detail(run.run_id, "summary")
+    assert detail.result is not None
+    assert detail.result.summary == "committed"
+    assert detail.result.output == "committed output"
+
+
+@pytest.mark.asyncio
+async def test_db_run_store_rejects_second_result_with_consumed_token(tmp_path: Path) -> None:
+    service = FakeTaskRuntimeService()
+    store = DBRunStore(service, results_root=tmp_path)
+    run = _run(tmp_path)
+    await store.create_run(run)
+    token = await store.claim_run(run.run_id, "worker-1")
+    committed = TaskResult(
+        run_id=run.run_id,
+        task_id=run.spec.task_id,
+        status=TaskStatus.COMPLETED,
+        title=run.spec.title,
+        summary="committed",
+        output="committed output",
+    )
+    await store.write_result(run.run_id, committed, token)
+
+    with pytest.raises(StaleWorkerError):
+        await store.write_result(
+            run.run_id,
+            committed.model_copy(update={"summary": "replacement", "output": "replacement output"}),
+            token,
+        )
+
+    detail = await store.get_task_detail(run.run_id, "summary")
+    assert detail.result is not None
+    assert detail.result.summary == "committed"
+    assert detail.result.output == "committed output"
 
 
 @pytest.mark.asyncio
@@ -140,6 +265,41 @@ async def test_db_run_store_reopen_forwards_payload_and_expected_attempt(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_db_run_store_reopen_retains_prior_attempt_sidecar(tmp_path: Path) -> None:
+    service = FakeTaskRuntimeService()
+    store = DBRunStore(service, results_root=tmp_path)
+    run = _run(tmp_path)
+    await store.create_run(run)
+    token = await store.claim_run(run.run_id, "worker-1")
+    failed_result = TaskResult(
+        run_id=run.run_id,
+        task_id=run.spec.task_id,
+        status=TaskStatus.FAILED,
+        title=run.spec.title,
+        summary="failed",
+        output="prior attempt output",
+    )
+    await store.write_result(run.run_id, failed_result, token)
+    prior_run = await store.get_run(run.run_id)
+    prior_result = TaskResult.model_validate_json(service.result_json)
+
+    next_run = prior_run.model_copy(
+        update={
+            "attempt": 2,
+            "status": TaskStatus.QUEUED,
+            "worker_id": None,
+            "fencing_token": "",
+            "started_at": None,
+            "ended_at": None,
+        }
+    )
+    await store.reopen_run_for_retry(next_run, expected_attempt=1)
+
+    assert service.result_json == ""
+    assert _hydrate_result_output(tmp_path, prior_run, prior_result).output == failed_result.output
+
+
+@pytest.mark.asyncio
 async def test_db_run_store_maps_reopen_failed_precondition_to_stale(tmp_path: Path) -> None:
     service = FakeTaskRuntimeService()
     service.reopen_error = ReverseTaskRuntimeStaleError("not reopenable")
@@ -148,6 +308,51 @@ async def test_db_run_store_maps_reopen_failed_precondition_to_stale(tmp_path: P
 
     with pytest.raises(StaleWorkerError):
         await store.reopen_run_for_retry(run, expected_attempt=1)
+
+
+def test_hydrate_result_accepts_legacy_sidecar_from_prior_attempt(tmp_path: Path) -> None:
+    run = _run(tmp_path).model_copy(update={"attempt": 1})
+    output = "legacy output"
+    digest = hashlib.sha256(output.encode()).hexdigest()
+    path = tmp_path / run.batch_id / run.run_id / "attempt-0" / f"output-{digest}.txt"
+    path.parent.mkdir(parents=True)
+    path.write_text(output, encoding="utf-8")
+    result = TaskResult(
+        run_id=run.run_id,
+        task_id=run.spec.task_id,
+        status=TaskStatus.COMPLETED,
+        title=run.spec.title,
+        summary="done",
+        output_ref={
+            "path": f"results/{run.batch_id}/{run.run_id}/attempt-0/{path.name}",
+            "size": len(output.encode()),
+        },
+    )
+
+    assert _hydrate_result_output(tmp_path, run, result).output == output
+
+
+@pytest.mark.parametrize(
+    "reference_path",
+    (
+        "results/batch-1/other-run/attempt-0/output-" + "0" * 64 + ".txt",
+        "results/batch-1/run-1/attempt-old/output-" + "0" * 64 + ".txt",
+        "results/batch-1/run-1/attempt-../output-" + "0" * 64 + ".txt",
+    ),
+)
+def test_hydrate_result_rejects_output_ref_outside_run_attempts(tmp_path: Path, reference_path: str) -> None:
+    run = _run(tmp_path)
+    result = TaskResult(
+        run_id=run.run_id,
+        task_id=run.spec.task_id,
+        status=TaskStatus.COMPLETED,
+        title=run.spec.title,
+        summary="done",
+        output_ref={"path": reference_path, "size": 0},
+    )
+
+    with pytest.raises(ValueError, match="invalid output_ref path"):
+        _hydrate_result_output(tmp_path, run, result)
 
 
 class FakeTaskRuntimeService:
@@ -163,9 +368,29 @@ class FakeTaskRuntimeService:
         self.reopen_call: tuple[str, int] | None = None
         self.progress: tuple[str, str, int] | None = None
         self.heartbeat_batch_id: str | None = None
+        self.update_batch_applied = True
+        self.legacy_batch_responses = False
 
-    def create_batch(self, batch_json: str) -> None:
-        self.batch_json = batch_json
+    def create_batch(self, batch_json: str) -> SimpleNamespace:
+        created = not self.batch_json
+        if created:
+            self.batch_json = batch_json
+        if self.legacy_batch_responses:
+            return SimpleNamespace(batch_json="", created=False)
+        return SimpleNamespace(batch_json=self.batch_json, created=created)
+
+    def update_batch(self, batch_json: str) -> SimpleNamespace:
+        if self.update_batch_applied:
+            self.batch_json = batch_json
+        if self.legacy_batch_responses:
+            return SimpleNamespace(batch_json="", applied=False)
+        return SimpleNamespace(batch_json=self.batch_json, applied=self.update_batch_applied)
+
+    def get_batch(self, batch_id: str) -> SimpleNamespace:
+        if not self.batch_json:
+            return SimpleNamespace(found=False, batch_json="")
+        batch = BatchRecord.model_validate_json(self.batch_json)
+        return SimpleNamespace(found=batch.batch_id == batch_id, batch_json=self.batch_json)
 
     def create_run(self, run_json: str) -> None:
         if self.create_run_error is not None:
@@ -199,12 +424,13 @@ class FakeTaskRuntimeService:
         if self.write_result_error is not None:
             raise self.write_result_error
         token = FencingToken.model_validate_json(token_json)
-        if token.token != "new":
-            raise ReverseTaskRuntimeServiceError("stale worker token for run run-1")
-        self.result_json = result_json
         run = TaskRun.model_validate_json(self.runs[run_id])
+        if run.status != TaskStatus.RUNNING or run.fencing_token != token.token:
+            raise ReverseTaskRuntimeStaleError("stale worker token for run run-1")
+        self.result_json = result_json
         result = TaskResult.model_validate_json(result_json)
         run.status = result.status
+        run.fencing_token = ""
         run.ended_at = result.ended_at or 3
         run.last_error_class = result.error_class
         run.last_error = result.error_message

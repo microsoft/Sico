@@ -18,7 +18,7 @@ from yaml.constructor import ConstructorError
 from yaml.nodes import MappingNode
 from yaml.resolver import BaseResolver
 
-from ..capabilities.ids import split_capability_id
+from ..capabilities.ids import normalize_capability_selector
 from .profile import (
     ALL_CAPABILITIES,
     AcceptModelCompletionPolicy,
@@ -144,15 +144,12 @@ class AgentProfileDefinition(BaseModel):
             return value
         normalized: list[str] = []
         seen: set[str] = set()
-        for capability_id in value:
-            capability_id = capability_id.strip()
-            provider, local_name = split_capability_id(capability_id)
-            if not provider or not local_name:
-                raise ValueError(f"capability ceiling entry must be namespaced: {capability_id!r}")
-            if capability_id in seen:
-                raise ValueError(f"duplicate capability ceiling entry: {capability_id!r}")
-            normalized.append(capability_id)
-            seen.add(capability_id)
+        for raw_selector in value:
+            selector = normalize_capability_selector(raw_selector)
+            if selector in seen:
+                raise ValueError(f"duplicate capability ceiling entry: {selector!r}")
+            normalized.append(selector)
+            seen.add(selector)
         return normalized
 
 
@@ -189,9 +186,7 @@ def _accept_model_policy(parameters: Mapping[str, Any]) -> CompletionPolicy:
     return AcceptModelCompletionPolicy()
 
 
-_COMPLETION_POLICY_BUILDERS: Mapping[str, CompletionPolicyBuilder] = MappingProxyType(
-    {"accept_model": _accept_model_policy}
-)
+_COMPLETION_POLICY_BUILDERS: Mapping[str, CompletionPolicyBuilder] = MappingProxyType({"accept_model": _accept_model_policy})
 _INVOCATION_POLICY_BUILDERS: Mapping[str, InvocationPolicyBuilder] = MappingProxyType({})
 
 
@@ -209,9 +204,7 @@ class AgentProfileConfigLoader:
         if not sources:
             raise AgentProfileConfigError(f"no profile definitions found under {root}")
         if len(sources) > _MAX_PROFILE_COUNT:
-            raise AgentProfileConfigError(
-                f"profile catalog exceeds {_MAX_PROFILE_COUNT} profiles under {root}"
-            )
+            raise AgentProfileConfigError(f"profile catalog exceeds {_MAX_PROFILE_COUNT} profiles under {root}")
 
         profiles: dict[str, AgentProfile] = {}
         descriptors: dict[str, ProfileDescriptor] = {}
@@ -220,9 +213,7 @@ class AgentProfileConfigLoader:
             definition, system_prompt, source_bytes = self._load_definition(root, source)
             catalog_bytes += source_bytes
             if catalog_bytes > _MAX_PROFILE_CATALOG_BYTES:
-                raise AgentProfileConfigError(
-                    f"profile catalog exceeds {_MAX_PROFILE_CATALOG_BYTES} bytes under {root}"
-                )
+                raise AgentProfileConfigError(f"profile catalog exceeds {_MAX_PROFILE_CATALOG_BYTES} bytes under {root}")
             if definition.profile_id in profiles:
                 raise AgentProfileConfigError(f"duplicate profile_id {definition.profile_id!r} in {source}")
             ceiling = (
@@ -235,9 +226,7 @@ class AgentProfileConfigLoader:
                     profile_id=definition.profile_id,
                     system_prompt=system_prompt,
                     capability_ceiling=ceiling,
-                    invocation_policies=tuple(
-                        _compile_invocation_policy(policy) for policy in definition.invocation_policies
-                    ),
+                    invocation_policies=tuple(_compile_invocation_policy(policy) for policy in definition.invocation_policies),
                     completion_policy=_compile_completion_policy(definition.completion_policy),
                 )
             except (TypeError, ValueError) as exc:
@@ -256,8 +245,7 @@ class AgentProfileConfigLoader:
         )
         if len(planner_metadata_json) > _MAX_PLANNER_METADATA_JSON_CHARS:
             raise AgentProfileConfigError(
-                f"profile catalog serialized planner metadata exceeds "
-                f"{_MAX_PLANNER_METADATA_JSON_CHARS} characters under {root}"
+                f"profile catalog serialized planner metadata exceeds {_MAX_PLANNER_METADATA_JSON_CHARS} characters under {root}"
             )
         if _DEFAULT_PROFILE_ID not in profiles:
             raise AgentProfileConfigError(f"profile catalog must define {_DEFAULT_PROFILE_ID!r}")
@@ -289,9 +277,7 @@ class AgentProfileConfigLoader:
         except (OSError, UnicodeError, yaml.YAMLError, ValidationError, ValueError) as exc:
             raise AgentProfileConfigError(f"invalid profile definition {source}: {exc}") from exc
         if source.stem != definition.profile_id:
-            raise AgentProfileConfigError(
-                f"profile filename {source.name!r} must match profile_id {definition.profile_id!r}"
-            )
+            raise AgentProfileConfigError(f"profile filename {source.name!r} must match profile_id {definition.profile_id!r}")
         return definition, system_prompt.strip(), source_bytes
 
 

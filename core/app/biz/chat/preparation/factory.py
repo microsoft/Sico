@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .catalogue import CapabilityCatalogue, WorkspaceCapabilityCatalogue
+from .catalogue import CapabilityCatalogue, CapabilityRetriever, WorkspaceCapabilityCatalogue
 from .planner import LlmTaskPlanner
 from .service import DelegatePreparationService
 
@@ -15,9 +15,12 @@ if TYPE_CHECKING:
 def build_default_preparation_service(
     profile_resolver: "AgentProfileResolver",
     capability_catalogue: CapabilityCatalogue | None = None,
+    capability_retriever: CapabilityRetriever | None = None,
 ) -> DelegatePreparationService:
+    catalogue = capability_catalogue or WorkspaceCapabilityCatalogue()
     return DelegatePreparationService(
         LlmTaskPlanner(),
         profile_resolver,
-        capability_catalogue or WorkspaceCapabilityCatalogue(),
+        catalogue,
+        capability_retriever=capability_retriever,
     )

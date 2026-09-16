@@ -3,7 +3,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "env": ["VITE_LOGIN_PREFILL_CREDENTIALS"]
     },
     "dev": {
       "persistent": true,

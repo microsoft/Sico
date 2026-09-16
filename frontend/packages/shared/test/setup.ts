@@ -48,12 +48,10 @@ if (typeof globalThis.requestAnimationFrame !== "function") {
     clearTimeout(id)) as typeof cancelAnimationFrame;
 }
 
-// jsdom lacks object-URL APIs; back them so image-preview components can
-// createObjectURL/revokeObjectURL without throwing in tests.
-if (typeof URL.createObjectURL !== "function") {
-  URL.createObjectURL = vi.fn(() => "blob:mock");
-  URL.revokeObjectURL = vi.fn();
-}
+// Vitest 4 exposes Node's native object-URL APIs in jsdom. Stub them so image
+// previews and URL cleanup assertions remain deterministic.
+URL.createObjectURL = vi.fn(() => "blob:mock");
+URL.revokeObjectURL = vi.fn();
 
 // jsdom doesn't implement Element.scrollTo; components that auto-scroll a
 // container (the message list via use-stick-to-bottom) call it on mount.

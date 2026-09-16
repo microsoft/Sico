@@ -1,0 +1,39 @@
+{
+  "schema_version": 3,
+  "review_status": "accepted",
+  "source_provenance": "author",
+  "actions": [
+    {
+      "name": "run_android_test",
+      "description": "Run an Android test from a prepared controller.",
+      "infra_requirements": ["sandbox.android"],
+      "parameters": [
+        {
+          "name": "instructions",
+          "description": "Test instructions."
+        }
+      ],
+      "execution_requirement": {
+        "backend": "kubernetes"
+      },
+      "preparation": {
+        "steps": [
+          {
+            "argv": ["sh", "scripts/install-adb.sh"]
+          },
+          {
+            "argv": ["uv", "sync", "--frozen"]
+          }
+        ]
+      },
+      "target_requirements": {
+        "os": "android"
+      },
+      "steps": [
+        {
+          "argv": ["uv", "run", "python", "-m", "android_tester", "--device", "{_sandbox}", "--instructions", "{instructions}"]
+        }
+      ]
+    }
+  ]
+}

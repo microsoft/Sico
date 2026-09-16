@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	appresp "sico-backend/internal/biz/common/response"
+	"sico-backend/internal/biz/ownership"
 	entity "sico-backend/internal/entity/notification"
 	"sico-backend/internal/infra/coregrpc"
 	"sico-backend/internal/infra/storage"
@@ -23,6 +24,7 @@ type Components struct {
 	NotificationRepo repository.NotificationRepo
 	Storage          storage.Storage
 	CoreGRPC         coregrpc.Connection
+	Ownership        ownership.Resolver
 }
 
 type Service struct {
@@ -32,6 +34,36 @@ type Service struct {
 
 func NewService(components *Components) *Service {
 	return &Service{Components: components}
+}
+
+func (s *Service) scopedRepo(
+	ctx context.Context,
+) (repository.OrganizationScopedNotificationRepo, int64, error) {
+	if s.Ownership == nil {
+		return nil, 0, nil
+	}
+	organizationID, err := s.Ownership.RequireSelected(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	scoped, ok := s.NotificationRepo.(repository.OrganizationScopedNotificationRepo)
+	if !ok {
+		return nil, 0, apperr.New(
+			errcode.CommonUnavailable, "notification repository does not support organization scoping",
+		)
+	}
+	return scoped, organizationID, nil
+}
+
+func (s *Service) requireProjectOrganization(ctx context.Context, projectID int64) error {
+	if s.Ownership == nil {
+		return nil
+	}
+	organizationID, err := s.Ownership.ProjectOrganization(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	return s.Ownership.RequireOrganization(ctx, organizationID, false)
 }
 
 func (s *Service) Create(ctx context.Context, notification *entity.Notification) (int64, error) {
@@ -47,6 +79,13 @@ func (s *Service) Create(ctx context.Context, notification *entity.Notification)
 
 	if notification.Status == pb.NotificationStatus_NOTIFICATION_STATUS_UNKNOWN {
 		notification.Status = pb.NotificationStatus_NOTIFICATION_STATUS_UNREAD
+	}
+	if s.Ownership != nil {
+		organizationID, err := s.resolveNotificationOrganization(ctx, notification)
+		if err != nil {
+			return 0, err
+		}
+		notification.OrganizationId = organizationID
 	}
 
 	id, err := s.NotificationRepo.Create(ctx, notification)
@@ -66,14 +105,25 @@ func (s *Service) CreateNotification(
 ) (*pb.CreateNotificationResponse, error) {
 	sender := middleware.MustGetUsernameFromCtx(ctx)
 
-	notificationID, err := s.Create(ctx, &entity.Notification{
+	notification := &entity.Notification{
 		Type:             req.Type,
 		SenderUsername:   sender,
 		ReceiverUsername: req.ReceiverUsername,
 		Content:          req.Content,
 		ExtraInfo:        req.ExtraInfo,
 		Status:           pb.NotificationStatus_NOTIFICATION_STATUS_UNREAD,
-	})
+	}
+	if s.Ownership != nil {
+		organizationID, err := s.resolveNotificationOrganization(ctx, notification)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.Ownership.RequireOrganization(ctx, organizationID, false); err != nil {
+			return nil, err
+		}
+	}
+
+	notificationID, err := s.Create(ctx, notification)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +140,19 @@ func (s *Service) UpdateNotificationStatus(
 	if s.NotificationRepo == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "notification repository not initialized")
 	}
-	if err := s.NotificationRepo.SetStatus(ctx, req.Id, req.Status); err != nil {
+	var err error
+	if s.Ownership != nil {
+		scoped, organizationID, scopeErr := s.scopedRepo(ctx)
+		if scopeErr != nil {
+			return nil, scopeErr
+		}
+		if err = s.authorizeNotificationStatusUpdate(ctx, scoped, organizationID, req.Id); err == nil {
+			err = scoped.SetStatusByOrganization(ctx, req.Id, organizationID, req.Status)
+		}
+	} else {
+		err = s.NotificationRepo.SetStatus(ctx, req.Id, req.Status)
+	}
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.New(errcode.CommonNotFound, "resource not found")
 		}
@@ -98,6 +160,22 @@ func (s *Service) UpdateNotificationStatus(
 	}
 
 	return appresp.Success(&pb.UpdateNotificationStatusResponse{}), nil
+}
+
+func (s *Service) authorizeNotificationStatusUpdate(
+	ctx context.Context,
+	scoped repository.OrganizationScopedNotificationRepo,
+	organizationID, notificationID int64,
+) error {
+	notification, err := scoped.GetByOrganization(ctx, notificationID, organizationID)
+	if err != nil {
+		return apperr.New(errcode.CommonNotFound, "resource not found")
+	}
+	if notification.ReceiverUsername != "" &&
+		notification.ReceiverUsername != middleware.MustGetUsernameFromCtx(ctx) {
+		return apperr.New(errcode.CommonNotFound, "resource not found")
+	}
+	return nil
 }
 
 func (s *Service) ListNotification(
@@ -125,7 +203,20 @@ func (s *Service) ListNotification(
 	offset := int((page - 1) * pageSize)
 	limit := int(pageSize)
 
-	notifications, total, err := s.NotificationRepo.ListByReceiverUsername(ctx, userInfo.Name, offset, limit)
+	var notifications []*entity.Notification
+	var total int64
+	var err error
+	if s.Ownership != nil {
+		scoped, organizationID, scopeErr := s.scopedRepo(ctx)
+		if scopeErr != nil {
+			return nil, scopeErr
+		}
+		notifications, total, err = scoped.ListByReceiverUsernameInOrganization(
+			ctx, userInfo.Name, organizationID, offset, limit,
+		)
+	} else {
+		notifications, total, err = s.NotificationRepo.ListByReceiverUsername(ctx, userInfo.Name, offset, limit)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +255,13 @@ func (s *Service) ListProjectNotifications(
 	if s.NotificationRepo == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "notification repository not initialized")
 	}
+	organizationID, err := s.Ownership.ProjectOrganization(ctx, req.ProjectId)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.Ownership.RequireOrganization(ctx, organizationID, false); err != nil {
+		return nil, err
+	}
 
 	page := req.GetPage()
 	if page <= 0 {
@@ -177,7 +275,13 @@ func (s *Service) ListProjectNotifications(
 	offset := int((page - 1) * pageSize)
 	limit := int(pageSize)
 
-	notifications, total, err := s.NotificationRepo.ListByProjectID(ctx, req.ProjectId, offset, limit)
+	scoped, ok := s.NotificationRepo.(repository.OrganizationScopedNotificationRepo)
+	if !ok {
+		return nil, apperr.New(errcode.CommonUnavailable, "notification repository does not support organization scoping")
+	}
+	notifications, total, err := scoped.ListByProjectIDInOrganization(
+		ctx, req.ProjectId, organizationID, offset, limit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +342,17 @@ func (s *Service) ReadAllNotifications(ctx context.Context) (*pb.ReadAllNotifica
 		return nil, apperr.New(errcode.CommonUnavailable, "notification repository not initialized")
 	}
 
-	ids, err := s.NotificationRepo.MarkAllAsReadByReceiverUsername(ctx, userInfo.Name)
+	var ids []int64
+	var err error
+	if s.Ownership != nil {
+		scoped, organizationID, scopeErr := s.scopedRepo(ctx)
+		if scopeErr != nil {
+			return nil, scopeErr
+		}
+		ids, err = scoped.MarkAllAsReadByReceiverUsernameInOrganization(ctx, userInfo.Name, organizationID)
+	} else {
+		ids, err = s.NotificationRepo.MarkAllAsReadByReceiverUsername(ctx, userInfo.Name)
+	}
 	if err != nil {
 		return nil, err
 	}

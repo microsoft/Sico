@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CHART_DIRS = [
     REPO_ROOT / "backend" / "deployments" / "helm",
     REPO_ROOT / "core" / "deployments" / "helm",
+    REPO_ROOT / "internal" / "deployments" / "charts" / "frontend",
 ]
 
 

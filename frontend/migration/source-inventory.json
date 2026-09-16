@@ -1,0 +1,473 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "shuyumao_microsoft/sico-frontend",
+    "commit": "92dd6bbac6be571f6ef0cdfb44c26c65e881465b"
+  },
+  "target": {
+    "repository": "gim-home/sico",
+    "baseCommit": "c7b06d78bddd39dd628270523e7411ab45f39f33",
+    "directory": "frontend"
+  },
+  "sourceOnlyInventory": {
+    "total": 1094,
+    "categories": [
+      {
+        "path": ".agents/**",
+        "count": 176,
+        "decision": "adapted-pr2",
+        "reason": "Migrated tracked skill content into the canonical frontend workspace; SICO-owned paths and integration bases are adapted for frontend launch, locked vendor content is preserved except the existing agent-browser/shadcn runtime adaptations, and obsolete sico-migrate tooling is retired.",
+        "target": "frontend/.agents/**"
+      },
+      {
+        "path": ".claude/**",
+        "count": 39,
+        "decision": "adapted-pr2",
+        "reason": "Merged agents, frontend-scoped rules, settings, and active Git symlinks into frontend-local Claude tooling; rule globs are subtree-relative and the obsolete sico-migrate link is retired.",
+        "target": "frontend/.claude/**"
+      },
+      {
+        "path": ".github/workflows/{i18n,e2e-real}.yml",
+        "count": 2,
+        "decision": "migrated-pr1",
+        "targets": [
+          ".github/workflows/frontend-i18n.yml",
+          ".github/workflows/frontend-e2e-real.yml"
+        ]
+      },
+      {
+        "path": "scripts/i18n/**",
+        "count": 5,
+        "decision": "migrated-pr1",
+        "target": "frontend/scripts/i18n/**"
+      },
+      {
+        "path": "scripts/infra/local-backend.sh",
+        "count": 1,
+        "decision": "retired-pr1",
+        "reason": "The canonical monorepo owns frontend, backend, core, Compose, and Kind in one checkout."
+      },
+      {
+        "path": "scripts/migrate-to-sico.sh",
+        "count": 1,
+        "decision": "retired-pr1",
+        "reason": "The target monorepo is now canonical; no source-to-target synchronization remains."
+      },
+      {
+        "path": "{.mcp.json,skills-lock.json,CLAUDE.md,README.md}",
+        "count": 4,
+        "decision": "migrated-adapted-pr2",
+        "reason": "MCP configuration, locked skills, and standalone source guidance are colocated under frontend/ for the supported frontend launch; locked vendor bytes are preserved except the existing frontend-cwd shadcn adaptation.",
+        "targets": [
+          "frontend/.mcp.json",
+          "frontend/skills-lock.json",
+          "frontend/CLAUDE.md",
+          "frontend/README.md"
+        ]
+      },
+      {
+        "path": "docs/**",
+        "count": 866,
+        "decision": "partially-migrated-pr2-pending-pr3",
+        "reason": "Architecture and the two linked design-system references are migrated now; the remaining 863 documents and evidence files require PR3 case-by-case disposition."
+      }
+    ]
+  },
+  "pr1RequiredFiles": [
+    "frontend/scripts/i18n/apply-translations.mjs",
+    "frontend/scripts/i18n/check-locale-sync.mjs",
+    "frontend/scripts/i18n/extract-untranslated.mjs",
+    "frontend/scripts/i18n/glossary.md",
+    "frontend/scripts/i18n/translate.mjs",
+    ".github/workflows/frontend-i18n.yml",
+    ".github/workflows/frontend-e2e-real.yml"
+  ],
+  "retiredPackageScripts": [
+    "backend:up",
+    "backend:down",
+    "backend:reset",
+    "backend:status",
+    "backend:url",
+    "sync:sico"
+  ],
+  "retiredFrontendTooling": {
+    "files": [
+      "frontend/lefthook.yml",
+      "frontend/commitlint.config.js",
+      "frontend/packages/config/commitlint.config.js",
+      "scripts/verify_frontend_canonical.py"
+    ],
+    "devDependencies": [
+      "@commitlint/cli",
+      "@commitlint/config-conventional",
+      "lefthook"
+    ],
+    "onlyBuiltDependencies": ["lefthook"]
+  },
+  "targetOwnedFiles": [
+    {
+      "path": "frontend/.dockerignore",
+      "blob": "52b1c03e3ee2e35a0cf81f08fca6625046185619"
+    },
+    {
+      "path": "frontend/deployments/docker/Dockerfile",
+      "blob": "8d4922600bff50017e92c2c24b1fa03debe21b5f"
+    },
+    {
+      "path": "frontend/deployments/docker/nginx.conf",
+      "blob": "e641125f05b9feae1b98e0d3a3048fbd48241a9d"
+    },
+    {
+      "path": "frontend/deployments/helm/.helmignore",
+      "blob": "e67db6579b7af66bfda19b528f1f2e21a1dbc26c"
+    },
+    {
+      "path": "frontend/deployments/helm/Chart.yaml",
+      "blob": "61602c41ad86e4873bd4517a133036a590af5785"
+    },
+    {
+      "path": "frontend/deployments/helm/values.yaml",
+      "blob": "03e862350abb7e74aac37d613d26cf198c2b7302"
+    },
+    {
+      "path": "frontend/deployments/helm/templates/deployment.yaml",
+      "blob": "d4f020527df5fdc7fd8ec16eac99e9a30a90a053"
+    },
+    {
+      "path": "frontend/deployments/helm/templates/service.yaml",
+      "blob": "8ddcec9eb6a0a0822f529c2ac4e452ef48c748d1"
+    },
+    {
+      "path": "CLAUDE.md",
+      "blob": "07881edfc2d9700de5f228e310e2cfcb992a7a06"
+    },
+    {
+      "path": "README.md",
+      "blob": "563b75101b2fbcaae52e17d2e80db2d6cccca007"
+    },
+    {
+      "path": "frontend/package.json",
+      "blob": "1a68bb86e3148eb22d22bd3cc1c7c6904a51605b"
+    },
+    {
+      "path": "frontend/pnpm-lock.yaml",
+      "blob": "ef32e490d52662d008098a57589096f9a1862e09"
+    }
+  ],
+  "pr2ExpectedCounts": {
+    "agentsFiles": 171,
+    "claudeRegularFiles": 21,
+    "claudeAgents": 11,
+    "claudeRules": 9,
+    "claudeSkillLinks": 17
+  },
+  "pr2SkillNames": [
+    "agent-browser",
+    "figma-code-connect-components",
+    "figma-create-design-system-rules",
+    "figma-generate-design",
+    "figma-implement-design",
+    "figma-use",
+    "shadcn",
+    "sico-add-shadcn-components",
+    "sico-add-shadcn-tests",
+    "sico-add-stories",
+    "sico-add-tokens",
+    "sico-audit-shadcn",
+    "sico-figma-audit",
+    "sico-kickoff",
+    "sico-loop",
+    "sico-review",
+    "vercel-react-best-practices"
+  ],
+  "pr2ClaudePluginPolicy": {
+    "marketplace": "superpowers-marketplace",
+    "plugin": "superpowers",
+    "autoRegister": false,
+    "autoEnable": false
+  },
+  "pr2RetiredSkills": ["sico-migrate"],
+  "pr2AdaptedLockedSkills": ["agent-browser", "shadcn"],
+  "pr2LockedSkillNames": [
+    "agent-browser",
+    "figma-code-connect-components",
+    "figma-create-design-system-rules",
+    "figma-generate-design",
+    "figma-implement-design",
+    "figma-use",
+    "shadcn",
+    "vercel-react-best-practices"
+  ],
+  "pr2RequiredFiles": [
+    ".gitattributes",
+    ".gitignore",
+    ".pre-commit-config.yaml",
+    ".github/copilot-instructions.md",
+    "frontend/.mcp.json",
+    "frontend/skills-lock.json",
+    "frontend/CLAUDE.md",
+    "frontend/README.md",
+    "frontend/docs/infra/architecture.md",
+    "frontend/docs/design-system/sico-design-guideline.md",
+    "frontend/docs/design-system/color-token-naming.md",
+    "frontend/.claude/settings.json",
+    "frontend/.claude/agents/code-quality-reviewer.md",
+    "frontend/.claude/agents/figma-pixel-auditor.md",
+    "frontend/.claude/agents/react-reviewer.md",
+    "frontend/.claude/agents/security-reviewer.md",
+    "frontend/.claude/agents/shadcn-component-auditor.md",
+    "frontend/.claude/agents/shadcn-stories-auditor.md",
+    "frontend/.claude/agents/shadcn-tests-auditor.md",
+    "frontend/.claude/agents/sico-loop-coder.md",
+    "frontend/.claude/agents/sico-loop-validator.md",
+    "frontend/.claude/agents/style-reviewer.md",
+    "frontend/.claude/agents/typescript-reviewer.md",
+    "frontend/.claude/rules/README.md",
+    "frontend/.claude/rules/code-quality.md",
+    "frontend/.claude/rules/i18n.md",
+    "frontend/.claude/rules/react.md",
+    "frontend/.claude/rules/schemas.md",
+    "frontend/.claude/rules/security.md",
+    "frontend/.claude/rules/stories.md",
+    "frontend/.claude/rules/styling.md",
+    "frontend/.claude/rules/testing.md"
+  ],
+  "pr2ForbiddenToolingStrings": [
+    "pnpm backend:",
+    "sync:sico",
+    "scripts/infra/local-backend.sh",
+    "@latest",
+    "npx shadcn",
+    "pnpm dlx shadcn",
+    "kill -9",
+    "xargs kill",
+    "npx agent-browser",
+    "agent-browser@latest"
+  ],
+  "pr2PathDependentTooling": {
+    "frontendCwd": [
+      {
+        "name": "shadcn",
+        "files": [
+          "frontend/.agents/skills/shadcn/SKILL.md",
+          "frontend/.agents/skills/shadcn/cli.md",
+          "frontend/.agents/skills/shadcn/customization.md",
+          "frontend/.agents/skills/shadcn/mcp.md",
+          "frontend/.agents/skills/shadcn/rules/base-vs-radix.md"
+        ],
+        "commands": ["pnpm --dir packages/ui exec shadcn"]
+      },
+      {
+        "name": "sico-add-shadcn-components",
+        "files": [
+          "frontend/.agents/skills/sico-add-shadcn-components/SKILL.md",
+          "frontend/.agents/skills/sico-add-shadcn-components/template/PR_TEMPLATE.md"
+        ],
+        "commands": ["pnpm --dir packages/ui exec shadcn"],
+        "paths": ["packages/ui/src/components/ui/"],
+        "pathsByFile": {
+          "frontend/.agents/skills/sico-add-shadcn-components/SKILL.md": [
+            "packages/ui/src/components/ui/",
+            "packages/ui/src/styles/globals.css",
+            "packages/ui/stories/",
+            "packages/ui/test/components/"
+          ]
+        }
+      },
+      {
+        "name": "sico-add-shadcn-tests",
+        "files": ["frontend/.agents/skills/sico-add-shadcn-tests/SKILL.md"],
+        "commands": ["pnpm test"],
+        "paths": ["packages/ui/test/components/"],
+        "pathsByFile": {
+          "frontend/.agents/skills/sico-add-shadcn-tests/SKILL.md": [
+            "packages/ui/test/components/button.test.tsx",
+            "packages/ui/test/components/{name}.test.tsx",
+            "packages/ui/test/lib/utils.test.ts"
+          ]
+        }
+      },
+      {
+        "name": "sico-add-stories",
+        "files": [
+          "frontend/.agents/skills/sico-add-stories/SKILL.md",
+          "frontend/.agents/skills/sico-add-stories/templates/mdx-bespoke.mdx",
+          "frontend/.agents/skills/sico-add-stories/templates/mdx-shadcn-restyle.mdx"
+        ],
+        "commands": ["pnpm --dir packages/ui exec shadcn"],
+        "paths": ["packages/ui/stories/", "packages/ui/src/styles/globals.css"],
+        "pathsByFile": {
+          "frontend/.agents/skills/sico-add-stories/SKILL.md": [
+            "packages/ui/stories/",
+            "packages/ui/src/styles/globals.css"
+          ]
+        }
+      },
+      {
+        "name": "sico-audit-shadcn",
+        "files": ["frontend/.agents/skills/sico-audit-shadcn/SKILL.md"],
+        "commands": ["pnpm --dir packages/ui exec shadcn"],
+        "paths": [
+          "packages/ui/src/components/ui/",
+          "packages/ui/stories/",
+          "packages/ui/test/components/"
+        ],
+        "pathsByFile": {
+          "frontend/.agents/skills/sico-audit-shadcn/SKILL.md": [
+            "packages/ui/src/components/ui/",
+            "packages/ui/stories/",
+            "packages/ui/test/components/"
+          ]
+        }
+      },
+      {
+        "name": "sico-figma-audit",
+        "files": ["frontend/.agents/skills/sico-figma-audit/SKILL.md"],
+        "paths": ["docs/features/"]
+      },
+      {
+        "name": "sico-kickoff",
+        "files": [
+          "frontend/.agents/skills/sico-kickoff/SKILL.md",
+          "frontend/.agents/skills/sico-kickoff/prompts/brainstorm-design.md",
+          "frontend/.agents/skills/sico-kickoff/prompts/qa-prompt.md"
+        ],
+        "paths": ["docs/features/", "packages/"]
+      },
+      {
+        "name": "sico-review",
+        "files": ["frontend/.agents/skills/sico-review/SKILL.md"],
+        "paths": ["docs/features/"]
+      },
+      {
+        "name": "lint-reviewer-agents",
+        "files": [
+          "frontend/.claude/agents/code-quality-reviewer.md",
+          "frontend/.claude/agents/react-reviewer.md",
+          "frontend/.claude/agents/security-reviewer.md",
+          "frontend/.claude/agents/style-reviewer.md",
+          "frontend/.claude/agents/typescript-reviewer.md"
+        ],
+        "commands": ["pnpm lint", "git diff"],
+        "paths": ["packages/"]
+      },
+      {
+        "name": "shadcn-component-auditor",
+        "files": ["frontend/.claude/agents/shadcn-component-auditor.md"],
+        "commands": ["git diff"],
+        "paths": [
+          "packages/ui/src/components/ui/",
+          "packages/ui/stories/",
+          "packages/ui/src/styles/globals.css"
+        ],
+        "pathsByFile": {
+          "frontend/.claude/agents/shadcn-component-auditor.md": [
+            "packages/ui/src/components/ui/",
+            "packages/ui/stories/",
+            "packages/ui/src/styles/globals.css"
+          ]
+        }
+      },
+      {
+        "name": "shadcn-stories-auditor",
+        "files": ["frontend/.claude/agents/shadcn-stories-auditor.md"],
+        "commands": ["git diff"],
+        "paths": ["packages/ui/stories/", "packages/ui/src/components/ui/"],
+        "pathsByFile": {
+          "frontend/.claude/agents/shadcn-stories-auditor.md": [
+            "packages/ui/stories/",
+            "packages/ui/src/components/ui/"
+          ]
+        }
+      },
+      {
+        "name": "shadcn-tests-auditor",
+        "files": ["frontend/.claude/agents/shadcn-tests-auditor.md"],
+        "commands": ["git diff"],
+        "paths": [
+          "packages/ui/test/components/",
+          "packages/ui/test/lib/utils.test.ts",
+          "packages/ui/src/components/ui/"
+        ],
+        "pathsByFile": {
+          "frontend/.claude/agents/shadcn-tests-auditor.md": [
+            "packages/ui/test/components/",
+            "packages/ui/test/lib/utils.test.ts",
+            "packages/ui/src/components/ui/"
+          ]
+        }
+      }
+    ],
+    "monorepoRoot": [
+      {
+        "name": "frontend-guidance-compose",
+        "files": ["frontend/CLAUDE.md", "frontend/README.md"],
+        "commands": ["make -C .. compose-up"]
+      },
+      {
+        "name": "frontend-readme-kind",
+        "files": ["frontend/README.md"],
+        "commands": ["make -C .. kind-up"]
+      },
+      {
+        "name": "sico-loop-worktree-setup",
+        "files": ["frontend/.agents/skills/sico-loop/SKILL.md"],
+        "commands": ["pnpm --dir {worktree}/frontend"]
+      },
+      {
+        "name": "sico-loop-absolute-worktrees",
+        "files": [
+          "frontend/.agents/skills/sico-loop/prompts/coder-task.md",
+          "frontend/.agents/skills/sico-loop/prompts/validator-task.md",
+          "frontend/.agents/skills/sico-loop/templates/coder-task.md"
+        ],
+        "commands": [
+          "git -C {absolute_worktree_path}",
+          "pnpm --dir {absolute_worktree_path}/frontend"
+        ]
+      }
+    ],
+    "ruleFrontmatter": [
+      {
+        "name": "code-quality",
+        "file": "frontend/.claude/rules/code-quality.md",
+        "globs": ["**/*.ts", "**/*.tsx"]
+      },
+      {
+        "name": "i18n",
+        "file": "frontend/.claude/rules/i18n.md",
+        "globs": ["**/*.tsx", "**/*.ts"]
+      },
+      {
+        "name": "react",
+        "file": "frontend/.claude/rules/react.md",
+        "globs": ["**/*.tsx"]
+      },
+      {
+        "name": "schemas",
+        "file": "frontend/.claude/rules/schemas.md",
+        "globs": ["**/schemas/**/*.ts"]
+      },
+      {
+        "name": "security",
+        "file": "frontend/.claude/rules/security.md",
+        "globs": ["**/*.ts", "**/*.tsx"]
+      },
+      {
+        "name": "stories",
+        "file": "frontend/.claude/rules/stories.md",
+        "globs": ["**/*.stories.tsx"]
+      },
+      {
+        "name": "styling",
+        "file": "frontend/.claude/rules/styling.md",
+        "globs": ["**/*.tsx"]
+      },
+      {
+        "name": "testing",
+        "file": "frontend/.claude/rules/testing.md",
+        "globs": ["**/*.test.ts", "**/*.test.tsx"]
+      }
+    ]
+  }
+}

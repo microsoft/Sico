@@ -149,6 +149,43 @@ def test_tool_payload_excludes_artifact_metadata_but_keeps_urls() -> None:
     assert payload["report_url"] == "http://localhost:8080/storage/task-runtime/run-1/report.html"
 
 
+def test_tool_payload_aggregates_usage_from_every_result() -> None:
+    results = [
+        TaskResult(
+            run_id=f"run-{index}",
+            task_id=f"task-{index}",
+            title="Work",
+            status=TaskStatus.COMPLETED,
+            summary="done",
+            metrics={"input_tokens": index + 1, "output_tokens": 2, "total_tokens": index + 3},
+        )
+        for index in range(2)
+    ]
+
+    payload = result_to_tool_payload(
+        BatchResult(
+            batch_id="batch-1",
+            status=BatchStatus.COMPLETED,
+            total_count=2,
+            completed_count=2,
+            failed_count=0,
+            cancelled_count=0,
+            timed_out_count=0,
+            blocked_count=0,
+            results=results,
+            artifacts_root="",
+        )
+    )
+
+    assert payload["usage"] == {
+        "input_tokens": 3,
+        "output_tokens": 4,
+        "total_tokens": 7,
+        "cached_input_tokens": 0,
+        "reasoning_tokens": 0,
+    }
+
+
 def test_compact_batch_payload_aggregates_urls_from_omitted_results() -> None:
     results = [
         TaskResult(

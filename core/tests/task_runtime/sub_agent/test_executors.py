@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -17,6 +18,7 @@ import pytest
 from app.biz.task_runtime.capabilities.descriptors import (
     CapabilityBinding,
     CapabilityDescriptor,
+    CatalogueQuery,
     ResolveContext,
 )
 from app.biz.task_runtime.capabilities.ids import normalize_capability_id
@@ -29,14 +31,13 @@ from app.biz.task_runtime.sub_agent.profile import (
     ProfileDescriptor,
     ProfileQuery,
     StaticAgentProfileResolver,
+    ceiling_allows,
 )
 from app.biz.task_runtime.sub_agent.profile_loader import AgentProfileConfigLoader
 from app.biz.task_runtime.execution.router import DispatchRouter
 from app.biz.task_runtime.capabilities.executor import CapabilityExecutor
-from app.biz.task_runtime.sub_agent.executor import (
-    AgentExecutorOptions,
-    SubAgentExecutor,
-)
+from app.biz.task_runtime.sub_agent.executor import AgentExecutorOptions, SubAgentExecutor
+from app.biz.task_runtime.sub_agent.tool_controller import CAPABILITY_DISCOVER_TOOL_ID
 from app.biz.task_runtime.sub_agent.executor import DEFAULT_STALL_LIMIT
 from app.biz.task_runtime.sub_agent.invoker import AgentInvocationContext
 from app.biz.task_runtime.sub_agent.loop import (
@@ -51,9 +52,13 @@ from app.biz.task_runtime.sub_agent.loop import (
     Observation,
 )
 from app.biz.task_runtime.domain.models import (
+    ArtifactRef,
+    BatchResult,
+    BatchStatus,
     CapabilityDispatch,
     ErrorClass,
     FencingToken,
+    SandboxLeaseRef,
     SubAgentDispatch,
     TaskDetail,
     TaskExecutionPolicy,
@@ -62,8 +67,12 @@ from app.biz.task_runtime.domain.models import (
     TaskSpec,
     TaskStatus,
 )
+from app.biz.task_runtime.sub_agent.invoker import _observation_from_result
+from app.biz.task_runtime.presentation.rendering.tool_payload import result_to_tool_payload
 from app.biz.task_runtime.storage.run_store import IdempotencyCollisionError
 from app.biz.task_runtime.workspace.layout import reset_workspace_layout, set_workspace_layout
+from app.biz.task_runtime.guides import SkillGuideRef, SkillGuideRegistry
+from tests.task_runtime.baseline import RuntimeTraceSnapshot
 
 
 class _FakeWorkspaceLayout:
@@ -172,9 +181,9 @@ class _ScriptedLLM:
 class _RecordingInvoker:
     def __init__(self, *, unknown: tuple[str, ...] = ()) -> None:
         self.calls: list[CapabilityCall] = []
-        self._unknown = frozenset(unknown)
+        self._unknown = frozenset(normalize_capability_id(capability_id) for capability_id in unknown)
 
-    async def available_descriptors(self, run: TaskRun, capability_ids: tuple[str, ...]) -> tuple[CapabilityDescriptor, ...]:
+    async def list_descriptors(self, run: TaskRun, query: CatalogueQuery) -> tuple[CapabilityDescriptor, ...]:
         return tuple(
             CapabilityDescriptor(
                 capability_id=capability_id,
@@ -184,8 +193,23 @@ class _RecordingInvoker:
                 workspace_access="none",
                 effect="mutate",
             )
-            for capability_id in capability_ids
+            for capability_id in (
+                "builtin:echo",
+                "skill:run_testcase:execute",
+                "skill:testcase_rewrite:rewrite",
+                "skill:missing:run",
+                "skill:outside:run",
+            )
             if capability_id not in self._unknown
+            and query.matches(
+                CapabilityDescriptor(
+                    capability_id=capability_id,
+                    parameter_schema={"type": "object"},
+                    required_sandbox=(),
+                    workspace_access="none",
+                    effect="mutate",
+                )
+            )
         )
 
     async def invoke(self, run: TaskRun, call: CapabilityCall, context) -> Observation:
@@ -239,6 +263,14 @@ def _profile_resolver(profile: AgentProfile, *, when_to_use: str = "Test profile
 _DEFAULT_PROFILE_RESOLVER = _profile_resolver(_DEFAULT_PROFILE)
 
 
+def _discover_call(query: str = "echo") -> CapabilityCall:
+    return CapabilityCall(capability=CAPABILITY_DISCOVER_TOOL_ID, args={"action": "search", "query": query})
+
+
+def _invoke_call(capability_id: str, args: dict[str, object] | None = None) -> CapabilityCall:
+    return CapabilityCall(capability=normalize_capability_id(capability_id), args=args or {})
+
+
 def test_profile_resolver_exposes_planning_metadata_and_filters_by_caller() -> None:
     profile = AgentProfile(profile_id="research", system_prompt="Research carefully.", capability_ceiling=frozenset())
     descriptor = ProfileDescriptor(
@@ -259,6 +291,19 @@ def test_profile_resolver_exposes_planning_metadata_and_filters_by_caller() -> N
 
     assert resolver.list_profiles(ProfileQuery(caller=ResolveContext(username="alice@example.com"))) == (descriptor,)
     assert resolver.list_profiles(ProfileQuery(caller=ResolveContext(username="bob@example.com"))) == ()
+
+
+def test_profile_ceiling_accepts_hierarchical_selectors() -> None:
+    profile = AgentProfile(
+        profile_id="browser",
+        system_prompt="",
+        capability_ceiling=frozenset({"linux_workstation:browser:**", "skill:reviewed.inspect"}),
+    )
+
+    assert profile.capability_ceiling == frozenset({"linux_workstation:browser:**", "skill:reviewed:inspect"})
+    assert ceiling_allows(profile.capability_ceiling, "linux_workstation:browser:screenshot")
+    assert ceiling_allows(profile.capability_ceiling, "skill:reviewed:inspect")
+    assert not ceiling_allows(profile.capability_ceiling, "linux_workstation:shell:exec")
 
 
 def test_profile_resolver_rejects_inconsistent_registration() -> None:
@@ -334,28 +379,194 @@ Follow primary sources.
 
 
 @pytest.mark.asyncio
-async def test_sub_agent_executes_capability_then_finishes() -> None:
+async def test_sub_agent_baseline_does_not_activate_installed_skill_guide(tmp_path: Path) -> None:
+    guide_marker = "PHASE_ZERO_GUIDE_MARKER"
+    skill_root = tmp_path / "workspace" / "skills" / "100"
+    skill_root.mkdir(parents=True)
+    (skill_root / "SKILL.md").write_text(
+        f"# Baseline guide\nAlways include {guide_marker} in the result.\n",
+        encoding="utf-8",
+    )
+    seen_prompts: list[str] = []
+
+    class _CapturingLLM:
+        async def complete_turn(self, state: AgentModelState) -> AgentModelTurn:
+            seen_prompts.append(state.system_prompt)
+            return AgentModelTurn(FinalAnswer(summary="done"))
+
+    executor = _make_sub_agent_executor(_CapturingLLM(), _RecordingInvoker())
+    run = _sub_agent_run(capabilities=())
+    run.spec.instructions = "Use the installed baseline guide."
+
+    result = await executor.run(run, _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    assert seen_prompts == [""]
+    assert guide_marker not in seen_prompts[0]
+
+
+@pytest.mark.asyncio
+async def test_sub_agent_activates_pinned_skill_guide_before_first_model_turn(tmp_path: Path) -> None:
+    guide_marker = "PHASE_A_GUIDE_MARKER"
+    workspace = tmp_path / "workspace"
+    skill_root = tmp_path / "skills" / "100" / "resolved" / "cortex"
+    skill_root.mkdir(parents=True)
+    (skill_root / "SKILL.md").write_text(
+        f"# Phase A guide\nAlways include {guide_marker} in the result.\n" + ("Follow this workflow. " * 30),
+        encoding="utf-8",
+    )
+    (skill_root / "references").mkdir()
+    (skill_root / "references" / "details.md").write_text("PROJECTED_REFERENCE", encoding="utf-8")
+    (workspace / "skills").mkdir(parents=True)
+    (workspace / "skills" / "index.json").write_text(
+        json.dumps([{"id": 100, "name": "phase-a", "description": "Phase A guide."}]),
+        encoding="utf-8",
+    )
+    registry = SkillGuideRegistry(workspace)
+    ref = registry.list_guides()[0].ref
+    seen_prompts: list[str] = []
+
+    class _CapturingLLM:
+        async def complete_turn(self, state: AgentModelState) -> AgentModelTurn:
+            seen_prompts.append(state.system_prompt)
+            return AgentModelTurn(FinalAnswer(summary="done"))
+
+    executor = SubAgentExecutor(
+        NativeAgentLoopEngine(_CapturingLLM()),
+        _RecordingInvoker(),
+        profile_resolver=_DEFAULT_PROFILE_RESOLVER,
+        guide_registry=registry,
+    )
+    run = _sub_agent_run(capabilities=())
+    assert isinstance(run.spec.dispatch, SubAgentDispatch)
+    run.spec.dispatch.instruction_refs = [ref]
+
+    result = await executor.run(run, _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    assert len(seen_prompts) == 1
+    assert guide_marker in seen_prompts[0]
+    assert f'version="{ref.version}"' in seen_prompts[0]
+    assert f'content_hash="{ref.content_hash}"' in seen_prompts[0]
+    projected_root = workspace / ".sico" / "runs" / run.run_id / "skills" / "100" / ref.version
+    assert f"Base directory for this skill: {projected_root.relative_to(workspace).as_posix()}" in seen_prompts[0]
+    assert (projected_root / "references" / "details.md").read_text(encoding="utf-8") == "PROJECTED_REFERENCE"
+
+
+@pytest.mark.asyncio
+async def test_sub_agent_rejects_stale_skill_guide_before_first_model_turn(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    (workspace / "skills").mkdir(parents=True)
+    (workspace / "skills" / "index.json").write_text(
+        json.dumps([{"id": 100, "name": "phase-a", "description": "Phase A guide."}]),
+        encoding="utf-8",
+    )
+    registry = SkillGuideRegistry(workspace)
+
+    class _UnexpectedLLM:
+        async def complete_turn(self, state: AgentModelState) -> AgentModelTurn:
+            raise AssertionError("model must not run with a stale guide reference")
+
+    executor = SubAgentExecutor(
+        NativeAgentLoopEngine(_UnexpectedLLM()),
+        _RecordingInvoker(),
+        profile_resolver=_DEFAULT_PROFILE_RESOLVER,
+        guide_registry=registry,
+    )
+    run = _sub_agent_run(capabilities=())
+    assert isinstance(run.spec.dispatch, SubAgentDispatch)
+    run.spec.dispatch.instruction_refs = [SkillGuideRef(skill_id=100, version="deleted", content_hash="0" * 64)]
+
+    result = await executor.run(run, _FakeStore())
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.USER_INPUT
+    assert "unavailable" in result.error_message
+
+
+@pytest.mark.asyncio
+async def test_sub_agent_executes_capability_then_finishes(tmp_path: Path) -> None:
     store = _FakeStore()
     llm = _ScriptedLLM(
-        CapabilityCall(capability="run_testcase.execute", args={"id": "TC-001"}),
+        _discover_call("run testcase"),
+        _invoke_call("run_testcase.execute", {"id": "TC-001"}),
         FinalAnswer(summary="verdict: pass", output="TC-001 passed"),
     )
     invoker = _RecordingInvoker()
     executor = _make_sub_agent_executor(llm, invoker)
 
-    result = await executor.run(
-        _sub_agent_run(capabilities=("run_testcase.execute", "testcase_rewrite.rewrite"), max_model_turns=8),
-        store,
-    )
+    run = _sub_agent_run(capabilities=("run_testcase.execute", "testcase_rewrite.rewrite"), max_model_turns=8)
+    result = await executor.run(run, store)
 
     assert result.status == TaskStatus.COMPLETED
     assert result.summary == "verdict: pass"
-    assert [call.capability for call in invoker.calls] == ["skill:run_testcase.execute"]
-    assert any("run_testcase.execute" in message for _, message in store.progress)
+    assert [call.capability for call in invoker.calls] == ["skill:run_testcase:execute"]
+    assert any("skill:run_testcase:execute" in message for _, message in store.progress)
+    transcript_path = (
+        tmp_path / "workspace" / "results" / run.batch_id / run.run_id / f"attempt-{run.attempt}" / "events.jsonl"
+    )
+    records = [json.loads(line) for line in transcript_path.read_text(encoding="utf-8").splitlines()]
+    assert records[-1]["event"] == "loop_finished"
+    assert any(record["event"] == "tool_call_completed" for record in records)
 
 
 @pytest.mark.asyncio
-async def test_sub_agent_effective_grants_preserve_order_and_filter_unavailable_capabilities() -> None:
+async def test_sub_agent_crash_preserves_complete_exception_diagnostics() -> None:
+    class _MalformedDecisionLLM:
+        async def complete_turn(self, state: AgentModelState) -> AgentModelTurn:
+            json.loads('{"command":"python script.py"}\n{"unexpected":"second value"}')
+            raise AssertionError("unreachable")
+
+    result = await _make_sub_agent_executor(_MalformedDecisionLLM(), _RecordingInvoker()).run(
+        _sub_agent_run(capabilities=()),
+        _FakeStore(),
+    )
+
+    assert result.status == TaskStatus.FAILED
+    assert result.summary.startswith("Sub-agent loop crashed: Extra data:")
+    assert "Traceback (most recent call last):" in result.error_message
+    assert "json.decoder.JSONDecodeError: Extra data:" in result.error_message
+    assert "in complete_turn" in result.error_message
+    assert result.output == result.error_message
+
+    payload = result_to_tool_payload(
+        BatchResult(
+            batch_id="batch-1",
+            status=BatchStatus.FAILED,
+            total_count=1,
+            completed_count=0,
+            failed_count=1,
+            cancelled_count=0,
+            timed_out_count=0,
+            blocked_count=0,
+            results=[result],
+            artifacts_root="",
+        )
+    )
+    assert payload["error_message"] == result.error_message
+
+
+@pytest.mark.asyncio
+async def test_sub_agent_crash_includes_exception_process_streams() -> None:
+    class _ProcessFailure(RuntimeError):
+        stdout = b"partial command output\n"
+        stderr = b"python: cannot open file 'missing.py'\n"
+
+    class _CrashedLLM:
+        async def complete_turn(self, state: AgentModelState) -> AgentModelTurn:
+            raise _ProcessFailure("command backend failed")
+
+    result = await _make_sub_agent_executor(_CrashedLLM(), _RecordingInvoker()).run(
+        _sub_agent_run(capabilities=()),
+        _FakeStore(),
+    )
+
+    assert "stdout:\npartial command output" in result.error_message
+    assert "stderr:\npython: cannot open file 'missing.py'" in result.error_message
+
+
+@pytest.mark.asyncio
+async def test_sub_agent_exposes_runtime_discovery_instead_of_persisted_grants() -> None:
     seen_capabilities: list[tuple[str, ...]] = []
     seen_descriptors: list[tuple[AgentToolDescriptor, ...]] = []
 
@@ -382,13 +593,12 @@ async def test_sub_agent_effective_grants_preserve_order_and_filter_unavailable_
     )
 
     assert result.status == TaskStatus.COMPLETED
-    assert seen_capabilities == [("skill:run_testcase.execute", "builtin:echo")]
-    assert seen_descriptors[0][0].description == "Use skill:run_testcase.execute"
-    assert seen_descriptors[0][0].parameter_schema == {"type": "object"}
+    assert seen_capabilities == [(CAPABILITY_DISCOVER_TOOL_ID,)]
+    assert "automatically promotes" in seen_descriptors[0][0].description
 
 
 @pytest.mark.asyncio
-async def test_sub_agent_empty_profile_ceiling_denies_all_requested_capabilities() -> None:
+async def test_sub_agent_empty_profile_ceiling_still_exposes_discovery_controls() -> None:
     seen_capabilities: list[tuple[str, ...]] = []
 
     class _CapturingLLM:
@@ -406,7 +616,41 @@ async def test_sub_agent_empty_profile_ceiling_denies_all_requested_capabilities
     result = await executor.run(_sub_agent_run(capabilities=("echo",)), _FakeStore())
 
     assert result.status == TaskStatus.COMPLETED
-    assert seen_capabilities == [()]
+    assert seen_capabilities == [(CAPABILITY_DISCOVER_TOOL_ID,)]
+
+
+@pytest.mark.asyncio
+async def test_sub_agent_catalogue_uses_profile_ceiling_not_persisted_grants() -> None:
+    seen_history: list[list[Observation]] = []
+
+    class _DiscoveringLLM:
+        async def complete_turn(self, state: AgentModelState) -> AgentModelTurn:
+            seen_history.append(list(state.history))
+            if not state.history:
+                return AgentModelTurn(
+                    CapabilityCall(
+                        capability=CAPABILITY_DISCOVER_TOOL_ID,
+                        args={"action": "search", "query": "run"},
+                    )
+                )
+            return AgentModelTurn(FinalAnswer(summary="done"))
+
+    profile = AgentProfile(
+        profile_id="default",
+        system_prompt="",
+        capability_ceiling=frozenset({"skill:run_testcase:**"}),
+    )
+    executor = _make_sub_agent_executor(
+        _DiscoveringLLM(),
+        _RecordingInvoker(),
+        profile_resolver=_profile_resolver(profile),
+    )
+
+    result = await executor.run(_sub_agent_run(capabilities=("outside.run",)), _FakeStore())
+
+    assert result.status == TaskStatus.COMPLETED
+    payload = json.loads(seen_history[1][0].content)
+    assert payload["promoted_capability_ids"] == ["skill:run_testcase:execute"]
 
 
 @pytest.mark.asyncio
@@ -425,7 +669,7 @@ async def test_sub_agent_rejects_capability_outside_allow_list() -> None:
 async def test_sub_agent_truncates_at_step_budget() -> None:
     store = _FakeStore()
     # LLM never returns a FinalAnswer; always asks for another capability call.
-    llm = _ScriptedLLM(*[CapabilityCall(capability="echo") for _ in range(10)])
+    llm = _ScriptedLLM(_discover_call(), *[_invoke_call("echo") for _ in range(10)])
     executor = _make_sub_agent_executor(llm, _RecordingInvoker())
 
     result = await executor.run(_sub_agent_run(capabilities=("echo",), max_model_turns=3), store)
@@ -463,14 +707,14 @@ async def test_sub_agent_feeds_an_undecodable_reply_back_as_a_failed_observation
 @pytest.mark.asyncio
 async def test_sub_agent_stops_when_the_same_failing_call_repeats() -> None:
     store = _FakeStore()
-    llm = _ScriptedLLM(*[CapabilityCall(capability="echo", args={"n": 1}) for _ in range(10)])
+    llm = _ScriptedLLM(_discover_call(), *[_invoke_call("echo", {"n": 1}) for _ in range(10)])
 
     class _AlwaysFailingInvoker:
         def __init__(self) -> None:
             self.calls: list[CapabilityCall] = []
 
-        async def available_descriptors(self, run: TaskRun, capability_ids: tuple[str, ...]) -> tuple[CapabilityDescriptor, ...]:
-            return await _RecordingInvoker().available_descriptors(run, capability_ids)
+        async def list_descriptors(self, run: TaskRun, query: CatalogueQuery) -> tuple[CapabilityDescriptor, ...]:
+            return await _RecordingInvoker().list_descriptors(run, query)
 
         async def invoke(self, run: TaskRun, call: CapabilityCall, context) -> Observation:
             self.calls.append(call)
@@ -490,20 +734,39 @@ async def test_sub_agent_stops_when_the_same_failing_call_repeats() -> None:
 
 
 @pytest.mark.asyncio
+async def test_sub_agent_stops_when_the_same_successful_call_repeats() -> None:
+    store = _FakeStore()
+    llm = _ScriptedLLM(_discover_call(), *[_invoke_call("echo", {"n": 1}) for _ in range(10)])
+    invoker = _RecordingInvoker()
+    executor = _make_sub_agent_executor(llm, invoker, stall_limit=3)
+
+    result = await executor.run(
+        _sub_agent_run(capabilities=("echo",), max_model_turns=9),
+        store,
+    )
+
+    assert result.status == TaskStatus.FAILED
+    assert result.error_class == ErrorClass.TRANSIENT
+    assert "without progress" in result.summary
+    assert len(invoker.calls) == 3
+
+
+@pytest.mark.asyncio
 async def test_sub_agent_stall_counter_resets_after_a_successful_call() -> None:
     store = _FakeStore()
     llm = _ScriptedLLM(
-        CapabilityCall(capability="echo", args={"n": 1}),
-        CapabilityCall(capability="echo", args={"n": 1}),
-        CapabilityCall(capability="echo", args={"n": 2}),
-        CapabilityCall(capability="echo", args={"n": 1}),
-        CapabilityCall(capability="echo", args={"n": 1}),
+        _discover_call(),
+        _invoke_call("echo", {"n": 1}),
+        _invoke_call("echo", {"n": 1}),
+        _invoke_call("echo", {"n": 2}),
+        _invoke_call("echo", {"n": 1}),
+        _invoke_call("echo", {"n": 1}),
         FinalAnswer(summary="done"),
     )
 
     class _FailsRepeats:
-        async def available_descriptors(self, run: TaskRun, capability_ids: tuple[str, ...]) -> tuple[CapabilityDescriptor, ...]:
-            return await _RecordingInvoker().available_descriptors(run, capability_ids)
+        async def list_descriptors(self, run: TaskRun, query: CatalogueQuery) -> tuple[CapabilityDescriptor, ...]:
+            return await _RecordingInvoker().list_descriptors(run, query)
 
         async def invoke(self, run: TaskRun, call: CapabilityCall, context) -> Observation:
             ok = call.args.get("n") == 2
@@ -526,7 +789,7 @@ async def test_sub_agent_invocation_policy_denial_is_returned_as_observation() -
     class _DenyMutations:
         async def evaluate(self, context, call):
             assert context.descriptor.effect == "mutate"
-            assert context.step == 1
+            assert context.step == 2
             assert call.capability == "builtin:echo"
             return InvocationPolicyDecision(allowed=False, reason="observe before mutation")
 
@@ -534,7 +797,9 @@ async def test_sub_agent_invocation_policy_denial_is_returned_as_observation() -
         async def complete_turn(self, state: AgentModelState) -> AgentModelTurn:
             seen_history.append(list(state.history))
             if not state.history:
-                return AgentModelTurn(CapabilityCall(capability="builtin:echo"))
+                return AgentModelTurn(_discover_call())
+            if len(state.history) == 1:
+                return AgentModelTurn(_invoke_call("builtin:echo"))
             return AgentModelTurn(FinalAnswer(summary="stopped"))
 
     profile = AgentProfile(
@@ -554,8 +819,8 @@ async def test_sub_agent_invocation_policy_denial_is_returned_as_observation() -
 
     assert result.status == TaskStatus.COMPLETED
     assert not invoker.calls
-    assert seen_history[1][0].error_class == ErrorClass.POLICY_DENY.value
-    assert seen_history[1][0].content == "observe before mutation"
+    assert seen_history[2][1].error_class == ErrorClass.POLICY_DENY.value
+    assert seen_history[2][1].content == "observe before mutation"
 
 
 @pytest.mark.asyncio
@@ -702,7 +967,7 @@ class _CapturingExecutor:
             duration_ms=0,
         )
         # Executors persist their own terminal result; the invoker relies on that
-        # to serve a replayed call from the store instead of re-running it.
+        # to serve a duplicate invocation from the store instead of re-running it.
         token = await store.claim_run(run.run_id, "capturing")
         await store.write_result(run.run_id, result, token)
         return result
@@ -733,6 +998,12 @@ class _StubResolver:
             handler=None,  # type: ignore[arg-type]
         )
 
+    async def list_descriptors(self, query: CatalogueQuery) -> tuple[CapabilityDescriptor, ...]:
+        binding = await self.resolve("builtin:echo", query.caller)
+        if binding is None or not query.matches(binding.descriptor):
+            return ()
+        return (binding.descriptor,)
+
 
 def _invoker(executor, store: _FakeStore, **kwargs):
     from app.biz.task_runtime.sub_agent.invoker import RunCapabilityInvoker
@@ -758,8 +1029,9 @@ async def test_invoker_live_availability_is_scoped_to_the_run_caller() -> None:
     allowed_run = _sub_agent_run(capabilities=("echo",))
     denied_run = allowed_run.model_copy(update={"username": "mallory@example.com"})
 
-    allowed = await invoker.available_descriptors(allowed_run, ("builtin:echo",))
-    denied = await invoker.available_descriptors(denied_run, ("builtin:echo",))
+    query = CatalogueQuery(selectors=("builtin:echo",))
+    allowed = await invoker.list_descriptors(allowed_run, query)
+    denied = await invoker.list_descriptors(denied_run, query)
 
     assert [descriptor.capability_id for descriptor in allowed] == ["builtin:echo"]
     assert denied == ()
@@ -829,7 +1101,7 @@ async def test_invoker_executes_the_same_resolved_binding_used_by_policy() -> No
 
 
 @pytest.mark.asyncio
-async def test_invoker_namespaces_a_bare_builtin_capability() -> None:
+async def test_invoker_namespaces_a_bare_builtin_capability(tmp_path: Path) -> None:
     capability_exec = _CapturingExecutor("capability")
     parent = _sub_agent_run(capabilities=("echo",))
 
@@ -843,6 +1115,17 @@ async def test_invoker_namespaces_a_bare_builtin_capability() -> None:
     assert child.spec.capability_id == "builtin:echo"
     assert child.spec.args == {"text": "hi"}
     assert child.run_id != parent.run_id and child.run_id.startswith(parent.run_id)
+    transcript = (
+        tmp_path
+        / "workspace"
+        / "results"
+        / child.batch_id
+        / child.run_id
+        / f"attempt-{child.attempt}"
+        / "events.jsonl"
+    )
+    records = [json.loads(line) for line in transcript.read_text(encoding="utf-8").splitlines()]
+    assert [record["event"] for record in records] == ["tool_call_requested", "tool_call_completed"]
 
 
 @pytest.mark.asyncio
@@ -855,7 +1138,7 @@ async def test_invoker_namespaces_a_dotted_skill_capability() -> None:
     )
 
     child = capability_exec.seen[0]
-    assert child.spec.capability_id == "skill:run_testcase.execute"
+    assert child.spec.capability_id == "skill:run_testcase:execute"
     assert child.spec.skill_name == "run_testcase"
 
 
@@ -894,6 +1177,40 @@ async def test_invoker_maps_failure_to_observation() -> None:
     assert observation.ok is False
     assert observation.content == "boom"
     assert observation.status == TaskStatus.FAILED.value
+
+
+def test_invoker_projects_image_artifacts_into_observation_content(tmp_path: Path) -> None:
+    image_path = tmp_path / "results" / "screenshot.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"png")
+    result = TaskResult(
+        run_id="run-1",
+        task_id="task-1",
+        status=TaskStatus.COMPLETED,
+        title="Screenshot",
+        summary="Captured screenshot.",
+        artifacts=[
+            ArtifactRef(
+                name="screenshot.png",
+                type="screenshot",
+                role="primary",
+                uri="/storage/task-runtime/run-1/screenshot.png",
+                filepath="results/screenshot.png",
+            )
+        ],
+    )
+
+    observation = _observation_from_result(
+        CapabilityCall(capability="linux_workstation:browser:screenshot"),
+        result,
+        workspace=tmp_path,
+    )
+
+    assert observation.artifacts == ("results/screenshot.png",)
+    assert observation.contents[0].type == "image"
+    assert observation.contents[0].uri == "/storage/task-runtime/run-1/screenshot.png"
+    assert observation.contents[0].mime_type == "image/png"
+    assert observation.contents[0].metadata["local_path"] == str(image_path)
 
 
 @pytest.mark.asyncio
@@ -943,6 +1260,47 @@ async def test_invoker_keeps_the_child_out_of_the_parent_batch() -> None:
     assert child.batch_id.startswith(parent.run_id)
 
 
+@pytest.mark.asyncio
+async def test_invoker_baseline_correlates_nested_run_and_inherited_sandbox() -> None:
+    store = _FakeStore()
+    capability_exec = _CapturingExecutor("capability")
+    parent = _sub_agent_run(capabilities=("echo",))
+    parent.spec.required_sandbox = ["android", "windows"]
+    parent.spec.set_selected_sandbox("windows")
+    parent.sandbox = SandboxLeaseRef(
+        sandbox_id="sandbox-1",
+        type="windows",
+        endpoint="https://sandbox.example.test",
+        acquired_at=1,
+    )
+    parent.bind_scheduled_batch("scheduled-batch-1")
+    assert isinstance(parent.spec.dispatch, SubAgentDispatch)
+    parent.spec.dispatch.instruction_refs = [SkillGuideRef(skill_id=7, version="v1", content_hash="1" * 64)]
+    call = CapabilityCall(capability="echo", call_id="step-1")
+
+    observation = await _invoker(capability_exec, store).invoke(parent, call)
+
+    child = capability_exec.seen[0]
+    assert RuntimeTraceSnapshot.capture_nested_call(parent, child, call, observation) == RuntimeTraceSnapshot(
+        parent_run_id="run-t-sub",
+        child_run_id="run-t-sub-step-1",
+        call_id="step-1",
+        capability_id="builtin:echo",
+        backend="in_process",
+        lease_id="sandbox-1",
+    )
+    assert child.batch_id == f"{parent.run_id}-calls"
+    assert child.batch_id != parent.batch_id
+    assert child.spec.sandbox_options == ("android", "windows")
+    assert child.spec.selected_sandbox == "windows"
+    assert child.sandbox == parent.sandbox
+    assert child.scheduled_batch_id == parent.scheduled_batch_id
+    assert child.spec.metadata["_task_runtime"]["instruction_refs"] == [
+        {"skill_id": 7, "version": "v1", "content_hash": "1" * 64}
+    ]
+    assert observation.capability == call.capability
+
+
 def test_invoker_derives_a_stable_child_run_id() -> None:
     from app.biz.task_runtime.sub_agent.invoker import _child_run_id
 
@@ -969,8 +1327,8 @@ def test_child_run_preserves_selected_sandbox_from_multiple_options() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invoker_reuses_the_prior_result_on_idempotent_replay() -> None:
-    # Replaying the same loop step must land on the same child row and return the
+async def test_invoker_reuses_the_prior_result_on_duplicate_invocation() -> None:
+    # Repeating the same loop step must land on the same child row and return the
     # recorded result rather than executing the capability a second time.
     store = _FakeStore()
     capability_exec = _CapturingExecutor("capability")
@@ -990,7 +1348,7 @@ async def test_invoker_reuses_the_prior_result_on_idempotent_replay() -> None:
 async def test_invoker_reuses_a_recorded_result_without_a_collision_error() -> None:
     # The stores do not reject a duplicate create: the backend answers a
     # byte-identical re-create with success and the file store overwrites. The
-    # prior row therefore has to be *read*, or a replay would silently re-run a
+    # prior row therefore has to be *read*, or a duplicate would silently re-run a
     # side-effecting capability.
     store = _FakeStore()
     capability_exec = _CapturingExecutor("capability")
@@ -1010,7 +1368,7 @@ async def test_invoker_reuses_a_recorded_result_without_a_collision_error() -> N
 async def test_invoker_refuses_to_reuse_a_row_recorded_for_a_different_call() -> None:
     # The child id binds the parent run and the loop step, not the call itself.
     # A retried step that now asks for different work must not inherit the old
-    # answer, so the mismatch fails closed instead of executing or replaying.
+    # answer, so the mismatch fails closed instead of executing the duplicate.
     store = _FakeStore()
     capability_exec = _CapturingExecutor("capability")
     invoker = _invoker(capability_exec, store)

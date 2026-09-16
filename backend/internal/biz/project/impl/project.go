@@ -15,6 +15,7 @@ import (
 	singleAgentService "sico-backend/internal/biz/agent"
 	appresp "sico-backend/internal/biz/common/response"
 	notificationService "sico-backend/internal/biz/notification"
+	ownership "sico-backend/internal/biz/ownership"
 	rbac "sico-backend/internal/biz/rbac"
 	sandboxbiz "sico-backend/internal/biz/sandbox"
 	singleAgentEntity "sico-backend/internal/entity/agent/singleagent"
@@ -23,13 +24,13 @@ import (
 	"sico-backend/internal/infra/storage"
 	"sico-backend/internal/shared/apperr"
 	"sico-backend/internal/shared/errcode"
+	"sico-backend/internal/shared/tenantctx"
 	"sico-backend/internal/shared/types"
 	agentrepo "sico-backend/internal/store/agent/singleagent/repository"
 	"sico-backend/internal/store/project/repository"
 	"sico-backend/internal/transport/http/dto/common"
 	notificationdto "sico-backend/internal/transport/http/dto/notification"
 	projectdto "sico-backend/internal/transport/http/dto/project"
-	userdto "sico-backend/internal/transport/http/dto/rbac/user"
 	sandboxdto "sico-backend/internal/transport/http/dto/sandbox"
 	"sico-backend/pkg/logger"
 	"sico-backend/pkg/safego"
@@ -44,6 +45,8 @@ type Components struct {
 	IDGen             idgen.IDGenerator
 	BlobClient        storage.Storage
 	AgentInstanceRepo agentrepo.SingleAgentInstanceRepository
+	Access            rbac.Access
+	Ownership         ownership.Resolver
 }
 
 // Service provides project-related business operations.
@@ -59,13 +62,60 @@ func NewService(c *Components) *Service {
 	return &Service{Components: c}
 }
 
+func (s *Service) access() rbac.Access {
+	if s != nil && s.Components != nil && s.Access != nil {
+		return s.Access
+	}
+	return rbac.NewUninitializedAccessServices()
+}
+
+func (s *Service) requireOrganization(ctx context.Context, organizationID int64, allowGlobal bool) error {
+	if s == nil || s.Components == nil || s.Ownership == nil {
+		return nil
+	}
+	return s.Ownership.RequireOrganization(ctx, organizationID, allowGlobal)
+}
+
+func (s *Service) requireProjectOrganization(ctx context.Context, projectID int64) error {
+	if s == nil || s.Components == nil || s.Ownership == nil {
+		return nil
+	}
+	organizationID, err := s.Ownership.ProjectOrganization(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	return s.Ownership.RequireOrganization(ctx, organizationID, false)
+}
+
+func (s *Service) requireProjectOrganizationString(ctx context.Context, projectID string) error {
+	if s == nil || s.Components == nil || s.Ownership == nil {
+		return nil
+	}
+	if tenantctx.IsTrustedInternal(ctx) {
+		return nil
+	}
+	if normalizeProjectID(projectID) == storage.DefaultPathPrefix {
+		return nil
+	}
+	parsedProjectID, err := strconv.ParseInt(projectID, 10, 64)
+	if err != nil {
+		return apperr.New(errcode.CommonInvalidParam, "invalid projectId")
+	}
+	return s.requireProjectOrganization(ctx, parsedProjectID)
+}
+
 // CreateProject creates a new project owned by the given creator.
 func (s *Service) CreateProject(
 	ctx context.Context, req *projectdto.CreateProjectRequest, creator string,
 ) (*projectdto.CreateProjectResponse, error) {
+	if err := s.requireOrganization(ctx, req.OrganizationId, true); err != nil {
+		return nil, err
+	}
 	// Enforce project.create permission at org scope (or platform scope if no org specified).
 	if req.OrganizationId > 0 {
-		if err := rbac.CheckCtxAccess(ctx, rbac.ScopeOrg, req.OrganizationId, "project", "create"); err != nil {
+		if err := s.access().Require(
+			ctx, rbac.OrganizationScope(req.OrganizationId), rbac.PermissionProjectCreate,
+		); err != nil {
 			return nil, err
 		}
 	}
@@ -84,7 +134,10 @@ func (s *Service) CreateProject(
 func (s *Service) UpdateProject(
 	ctx context.Context, req *projectdto.UpdateProjectRequest,
 ) (*projectdto.UpdateProjectResponse, error) {
-	if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, req.Id, "project", "manage"); err != nil {
+	if err := s.requireProjectOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
+	if err := s.access().Require(ctx, rbac.ProjectScope(req.Id), rbac.PermissionProjectManage); err != nil {
 		return nil, err
 	}
 
@@ -99,7 +152,10 @@ func (s *Service) UpdateProject(
 func (s *Service) DeleteProject(
 	ctx context.Context, req *projectdto.DeleteProjectRequest,
 ) (*projectdto.DeleteProjectResponse, error) {
-	if err := rbac.CheckCtxAccess(ctx, rbac.ScopeProject, req.Id, "project", "manage"); err != nil {
+	if err := s.requireProjectOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
+	if err := s.access().Require(ctx, rbac.ProjectScope(req.Id), rbac.PermissionProjectManage); err != nil {
 		return nil, err
 	}
 
@@ -136,8 +192,21 @@ func (s *Service) ListProjects(
 		return nil, apperr.New(errcode.CommonUnavailable, "project service not initialized")
 	}
 
+	organizationID := req.OrganizationId
+	platformAdminOverride := organizationID != nil && s.access().IsPlatformAdmin(ctx)
+	if s.Ownership != nil && !platformAdminOverride {
+		selectedOrganizationID, err := s.Ownership.RequireSelected(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if organizationID != nil && *organizationID != selectedOrganizationID {
+			return nil, apperr.New(errcode.CommonNotFound, "resource not found")
+		}
+		organizationID = &selectedOrganizationID
+	}
+
 	filter := &repository.ProjectFilter{
-		OrganizationID:  req.OrganizationId,
+		OrganizationID:  organizationID,
 		CreatorUsername: req.CreatorUsername,
 		OwnerUsername:   req.OwnerUsername,
 	}
@@ -195,6 +264,9 @@ func (s *Service) GetProject(
 	if s == nil || s.ProjectRepo == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "project service not initialized")
 	}
+	if err := s.requireProjectOrganization(ctx, req.Id); err != nil {
+		return nil, err
+	}
 
 	projectModel, err := s.ProjectRepo.GetProjectByID(ctx, req.Id)
 	if err != nil {
@@ -206,7 +278,7 @@ func (s *Service) GetProject(
 
 	projectDTO := projectModelToDTO(projectModel)
 
-	if admins, err := rbac.ListProjectAdminUsernames(ctx, []int64{projectModel.ID}); err == nil {
+	if admins, err := s.access().ListProjectAdminUsernames(ctx, []int64{projectModel.ID}); err == nil {
 		projectDTO.OperatorAdmins = admins[projectModel.ID]
 	}
 
@@ -245,6 +317,9 @@ func (s *Service) AddProjectAsset(
 	file io.Reader,
 	fileExtra FileExtraInfo,
 ) (*projectdto.AddProjectAssetResponse, error) {
+	if err := s.requireProjectOrganizationString(ctx, req.ProjectId); err != nil {
+		return nil, err
+	}
 	id, url, sasURL, meta, err := s.doAddProjectAsset(ctx, req, creator, file, fileExtra)
 	if err != nil {
 		return nil, err
@@ -266,6 +341,9 @@ func (s *Service) CreateProjectAssetUploadURL(
 	req *projectdto.CreateProjectAssetUploadURLRequest,
 	fileExtra FileExtraInfo,
 ) (*projectdto.CreateProjectAssetUploadURLResponse, error) {
+	if err := s.requireProjectOrganizationString(ctx, req.ProjectId); err != nil {
+		return nil, err
+	}
 	objectKey, uploadURL, meta, err := s.doCreateProjectAssetUploadURL(ctx, req, fileExtra)
 	if err != nil {
 		return nil, err
@@ -295,6 +373,9 @@ func (s *Service) CompleteProjectAssetUpload(
 	creator string,
 	fileExtra FileExtraInfo,
 ) (*projectdto.CompleteProjectAssetUploadResponse, error) {
+	if err := s.requireProjectOrganizationString(ctx, req.ProjectId); err != nil {
+		return nil, err
+	}
 	id, url, sasURL, meta, err := s.doCompleteProjectAssetUpload(ctx, req, creator, fileExtra)
 	if err != nil {
 		return nil, err
@@ -321,6 +402,9 @@ func (s *Service) DeleteProjectAsset(
 		}
 		return nil, err
 	}
+	if err := s.requireProjectOrganizationString(ctx, asset.ProjectID); err != nil {
+		return nil, err
+	}
 
 	if err := s.ProjectRepo.DeleteProjectAsset(ctx, req.Id); err != nil {
 		return nil, err
@@ -338,6 +422,9 @@ func (s *Service) DeleteProjectAsset(
 func (s *Service) GetProjectAssetList(
 	ctx context.Context, req *projectdto.GetProjectAssetListRequest,
 ) (*projectdto.GetProjectAssetListResponse, error) {
+	if err := s.requireProjectOrganizationString(ctx, req.ProjectId); err != nil {
+		return nil, err
+	}
 	assets, total, err := s.doGetUserProjectAssetList(ctx, req.Username, req.ProjectId, req.Page, req.PageSize)
 	if err != nil {
 		return nil, err
@@ -376,7 +463,7 @@ func (s *Service) doCreateProject(
 	}
 
 	// Project admins are also project members.
-	if err := rbac.AssignProjectRole(ctx, creator, rbac.RoleProjectMember, projectModel.ID); err != nil {
+	if err := s.access().AssignProjectRole(ctx, creator, rbac.RoleProjectMember, projectModel.ID); err != nil {
 		logger.CtxError(ctx, "failed to assign project member role to creator: projectId=%d, creator=%s, err=%v",
 			projectModel.ID, creator, err)
 		if delErr := s.ProjectRepo.DeleteProject(ctx, projectModel.ID); delErr != nil {
@@ -386,10 +473,10 @@ func (s *Service) doCreateProject(
 		return 0, err
 	}
 
-	if err := rbac.AssignProjectRole(ctx, creator, rbac.RoleProjectAdmin, projectModel.ID); err != nil {
+	if err := s.access().AssignProjectRole(ctx, creator, rbac.RoleProjectAdmin, projectModel.ID); err != nil {
 		logger.CtxError(ctx, "failed to assign project admin role to creator: projectId=%d, creator=%s, err=%v",
 			projectModel.ID, creator, err)
-		if removeErr := rbac.RemoveAllProjectRoles(ctx, projectModel.ID); removeErr != nil {
+		if removeErr := s.access().RemoveAllProjectRoles(ctx, projectModel.ID); removeErr != nil {
 			logger.CtxError(
 				ctx, "failed to roll back project roles: projectId=%d, err=%v", projectModel.ID, removeErr,
 			)
@@ -406,7 +493,7 @@ func (s *Service) doCreateProject(
 		if admin == "" || admin == creator {
 			continue
 		}
-		if err := rbac.AssignProjectRole(ctx, admin, rbac.RoleProjectAdmin, projectModel.ID); err != nil {
+		if err := s.access().AssignProjectRole(ctx, admin, rbac.RoleProjectAdmin, projectModel.ID); err != nil {
 			logger.CtxError(ctx, "failed to assign project admin: projectId=%d, admin=%s, err=%v",
 				projectModel.ID, admin, err)
 			// Non-fatal: creator is already assigned, additional admins can be retried.
@@ -444,7 +531,7 @@ func (s *Service) doDeleteProject(ctx context.Context, projectID int64) error {
 		logger.CtxError(ctx, "failed to delete project: projectId=%d, err=%v", projectID, err)
 		return err
 	}
-	if err := rbac.RemoveAllProjectRoles(ctx, projectID); err != nil {
+	if err := s.access().RemoveAllProjectRoles(ctx, projectID); err != nil {
 		logger.CtxError(ctx, "failed to remove project roles: projectId=%d, err=%v", projectID, err)
 		return err
 	}
@@ -459,7 +546,7 @@ func (s *Service) doGetUserProjectList(
 	// Map MemberType filter to RBAC role code.
 	roleCodeFilter := memberTypeToRoleFilter(req.MemberType)
 
-	memberships, _, err := rbac.GetUserProjectListByUsername(ctx, req.Username, roleCodeFilter)
+	memberships, _, err := s.access().GetUserProjectListByUsername(ctx, req.Username, roleCodeFilter)
 	if err != nil {
 		logger.CtxError(ctx, "failed to get user project list: username=%s, err=%v", req.Username, err)
 		return nil, 0, false, err
@@ -482,6 +569,11 @@ func (s *Service) doGetUserProjectList(
 		}
 	}
 
+	projectIDs, err = s.filterProjectIDsBySelectedOrganization(ctx, projectIDs)
+	if err != nil {
+		return nil, 0, false, err
+	}
+
 	// Apply pagination on the project IDs.
 	total := int64(len(projectIDs))
 	pagedIDs := paginateIDs(projectIDs, req.Page, req.PageSize)
@@ -496,7 +588,7 @@ func (s *Service) doGetUserProjectList(
 		return nil, 0, false, err
 	}
 
-	adminByProject, err := rbac.ListProjectAdminUsernames(ctx, pagedIDs)
+	adminByProject, err := s.access().ListProjectAdminUsernames(ctx, pagedIDs)
 	if err != nil {
 		logger.CtxError(ctx, "failed to get project admins: ids=%v, err=%v", pagedIDs, err)
 		return nil, 0, false, err
@@ -510,6 +602,36 @@ func (s *Service) doGetUserProjectList(
 
 	hasNext := int64(req.Page*req.PageSize) < total
 	return result, total, hasNext, nil
+}
+
+func (s *Service) filterProjectIDsBySelectedOrganization(
+	ctx context.Context,
+	projectIDs []int64,
+) ([]int64, error) {
+	if s.Ownership == nil {
+		return projectIDs, nil
+	}
+	selectedOrganizationID, err := s.Ownership.RequireSelected(ctx)
+	if err != nil {
+		return nil, err
+	}
+	projects, err := s.ProjectRepo.GetProjectByIDs(ctx, projectIDs)
+	if err != nil {
+		return nil, err
+	}
+	allowedProjectIDs := make(map[int64]struct{}, len(projects))
+	for _, project := range projects {
+		if project.OrganizationID == selectedOrganizationID {
+			allowedProjectIDs[project.ID] = struct{}{}
+		}
+	}
+	filteredProjectIDs := make([]int64, 0, len(allowedProjectIDs))
+	for _, projectID := range projectIDs {
+		if _, ok := allowedProjectIDs[projectID]; ok {
+			filteredProjectIDs = append(filteredProjectIDs, projectID)
+		}
+	}
+	return filteredProjectIDs, nil
 }
 
 func paginateIDs(ids []int64, page, pageSize int32) []int64 {
@@ -842,6 +964,9 @@ func (s *Service) QueryProjectStatistics(
 ) (*projectdto.QueryProjectStatisticsResponse, error) {
 
 	projectId := req.Id
+	if err := s.requireProjectOrganization(ctx, projectId); err != nil {
+		return nil, err
+	}
 
 	singleAgentService := singleAgentService.Default()
 	filter := &singleAgentEntity.ListSingleAgentInstanceFilter{
@@ -902,7 +1027,7 @@ func (s *Service) QueryProjectStatistics(
 }
 
 func (s *Service) syncProjectAdmins(ctx context.Context, projectID int64, admins []string) error {
-	existingMap, err := rbac.ListProjectAdminUsernames(ctx, []int64{projectID})
+	existingMap, err := s.access().ListProjectAdminUsernames(ctx, []int64{projectID})
 	if err != nil {
 		logger.CtxError(
 			ctx,
@@ -928,14 +1053,14 @@ func (s *Service) syncProjectAdmins(ctx context.Context, projectID int64, admins
 	}
 
 	for _, admin := range toAdd {
-		if err := rbac.AssignProjectRole(ctx, admin, rbac.RoleProjectAdmin, projectID); err != nil {
+		if err := s.access().AssignProjectRole(ctx, admin, rbac.RoleProjectAdmin, projectID); err != nil {
 			logger.CtxError(ctx, "failed to add project admin: projectId=%d, admin=%s, err=%v",
 				projectID, admin, err)
 		}
 	}
 
 	for _, admin := range toRemove {
-		if err := rbac.RemoveProjectRole(ctx, admin, rbac.RoleProjectAdmin, projectID); err != nil {
+		if err := s.access().RemoveProjectRole(ctx, admin, rbac.RoleProjectAdmin, projectID); err != nil {
 			logger.CtxError(ctx, "failed to remove project admin: projectId=%d, admin=%s, err=%v",
 				projectID, admin, err)
 		}
@@ -1002,14 +1127,14 @@ func (s *Service) fetchProjectUserDigests(
 	var err error
 
 	if adminsOnly {
-		adminMap, e := rbac.ListProjectAdminUsernames(ctx, []int64{projectID})
+		adminMap, e := s.access().ListProjectAdminUsernames(ctx, []int64{projectID})
 		if e != nil {
 			logger.CtxError(ctx, "fetchProjectUserDigests: failed to list admin usernames: %v", e)
 			return nil
 		}
 		usernames = adminMap[projectID]
 	} else {
-		usernames, err = rbac.ListProjectMemberUsernames(ctx, projectID)
+		usernames, err = s.access().ListProjectMemberUsernames(ctx, projectID)
 		if err != nil {
 			logger.CtxError(ctx, "fetchProjectUserDigests: failed to list member usernames: %v", err)
 			return nil
@@ -1020,29 +1145,28 @@ func (s *Service) fetchProjectUserDigests(
 		return nil
 	}
 
-	rbacSvc := rbac.Default()
-	if rbacSvc == nil {
+	access := s.access()
+	if !access.Initialized() {
 		return nil
 	}
 
 	digests := make([]*common.UserDigest, 0, len(usernames))
 	for _, username := range usernames {
-		resp, err := rbacSvc.GetUser(ctx, &userdto.GetUserRequest{Username: username})
-		if err != nil || resp == nil || resp.Data == nil || resp.Data.User == nil {
+		user, err := access.GetUserSummary(ctx, username)
+		if err != nil || user == nil {
 			continue
 		}
-		u := resp.Data.User
 		iconURL := ""
-		if u.RawIconUri != "" {
-			if url, err := storage.PathToUrl(u.RawIconUri); err == nil {
+		if user.RawIconURI != "" {
+			if url, err := storage.PathToUrl(user.RawIconURI); err == nil {
 				iconURL = url
 			}
 		}
 		digests = append(digests, &common.UserDigest{
-			Id:       u.Id,
-			Alias:    u.Alias,
-			Username: u.Username,
-			Email:    u.Email,
+			Id:       user.ID,
+			Alias:    user.Alias,
+			Username: user.Username,
+			Email:    user.Email,
 			IconUrl:  iconURL,
 		})
 	}
@@ -1147,6 +1271,9 @@ func (s *Service) CreateProjectDeliverable(
 	req *projectdto.CreateProjectDeliverableRequest,
 	creator string,
 ) (*projectdto.CreateProjectDeliverableResponse, error) {
+	if err := s.requireProjectOrganization(ctx, req.ProjectId); err != nil {
+		return nil, err
+	}
 	record := &repository.ProjectDeliverableModel{
 		ProjectID:       req.ProjectId,
 		FileName:        req.FileName,
@@ -1218,7 +1345,7 @@ func (s *Service) notifyDeliverablePublished(
 		return
 	}
 
-	members, err := rbac.ListProjectMemberUsernames(ctx, req.ProjectId)
+	members, err := s.access().ListProjectMemberUsernames(ctx, req.ProjectId)
 	if err != nil {
 		logger.CtxError(ctx, "notifyDeliverablePublished: failed to list project members: %v", err)
 		return
@@ -1256,6 +1383,9 @@ func (s *Service) ListProjectDeliverables(
 	ctx context.Context,
 	req *projectdto.ListProjectDeliverablesRequest,
 ) (*projectdto.ListProjectDeliverablesResponse, error) {
+	if err := s.requireProjectOrganization(ctx, req.ProjectId); err != nil {
+		return nil, err
+	}
 	page := req.GetPage()
 	if page <= 0 {
 		page = 1
@@ -1311,6 +1441,9 @@ func (s *Service) GetProjectDeliverable(
 	if err != nil {
 		return nil, apperr.New(errcode.CommonNotFound, "deliverable not found")
 	}
+	if err := s.requireProjectOrganization(ctx, record.ProjectID); err != nil {
+		return nil, err
+	}
 
 	fileSasUrl, _ := storage.PathToUrl(record.FileURI)
 	d := &projectdto.ProjectDeliverable{
@@ -1336,10 +1469,14 @@ func (s *Service) DeleteProjectDeliverable(
 	ctx context.Context,
 	req *projectdto.DeleteProjectDeliverableRequest,
 ) (*projectdto.DeleteProjectDeliverableResponse, error) {
-	if _, err := s.ProjectRepo.GetProjectDeliverable(ctx, req.Id); err != nil {
+	record, err := s.ProjectRepo.GetProjectDeliverable(ctx, req.Id)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperr.New(errcode.CommonNotFound, "deliverable not found")
 		}
+		return nil, err
+	}
+	if err := s.requireProjectOrganization(ctx, record.ProjectID); err != nil {
 		return nil, err
 	}
 

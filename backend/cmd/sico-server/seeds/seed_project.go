@@ -44,7 +44,7 @@ func ensureProjectMembership(ctx context.Context, injector *di.Injector, project
 	if role == int32(projectdto.MemberType_MEMBER_TYPE_ADMIN) {
 		roleCode = rbac.RoleProjectAdmin
 	}
-	if err := rbac.AssignProjectRole(ctx, username, roleCode, projectID); err != nil {
+	if err := injector.Access.AssignProjectRole(ctx, username, roleCode, projectID); err != nil {
 		logger.CtxWarn(ctx, "ensureProjectMembership: RBAC assign role=%s user=%s project=%d: %v (non-fatal)",
 			roleCode, username, projectID, err)
 	}

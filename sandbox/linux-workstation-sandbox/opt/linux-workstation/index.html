@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux Workstation Sandbox</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+            background: #1e1e1e;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .toolbar {
+            min-height: 48px;
+            background: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 8px 16px;
+            gap: 12px;
+            user-select: none;
+        }
+
+        .toolbar-title {
+            font-weight: 500;
+            font-size: 14px;
+            color: #cccccc;
+            margin-right: auto;
+        }
+
+        .panel-toggles {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .panel-toggle {
+            padding: 6px 12px;
+            background: #3c3c3c;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #cccccc;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .panel-toggle:hover {
+            background: #4a4a4a;
+            border-color: #6a6a6a;
+        }
+
+        .panel-toggle.active {
+            background: #0e639c;
+            border-color: #1177bb;
+            color: white;
+        }
+
+        .panel-toggle .indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #6c6c6c;
+        }
+
+        .panel-toggle.active .indicator {
+            background: #4dff4d;
+            box-shadow: 0 0 4px #4dff4d;
+        }
+
+        .layout-buttons {
+            display: flex;
+            gap: 4px;
+            margin-left: 12px;
+            padding-left: 12px;
+            border-left: 1px solid #555;
+            flex-wrap: wrap;
+        }
+
+        .layout-btn {
+            width: 32px;
+            height: 32px;
+            background: #3c3c3c;
+            border: 1px solid #555;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .layout-btn:hover {
+            background: #4a4a4a;
+            border-color: #6a6a6a;
+        }
+
+        .layout-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: #cccccc;
+        }
+
+        .workspace {
+            position: relative;
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .panel-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            min-width: 100px;
+            min-height: 100px;
+        }
+
+        .panel-container.horizontal {
+            flex-direction: row;
+        }
+
+        .panel-container.vertical {
+            flex-direction: column;
+        }
+
+        .panel {
+            flex: 1;
+            position: relative;
+            display: none;
+            background: #1e1e1e;
+            min-width: 200px;
+            min-height: 200px;
+        }
+
+        .panel.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            height: 32px;
+            background: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            user-select: none;
+            cursor: move;
+        }
+
+        .panel-title {
+            font-size: 13px;
+            color: #cccccc;
+            flex: 1;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .panel-action {
+            width: 20px;
+            height: 20px;
+            background: transparent;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 3px;
+            font-size: 16px;
+        }
+
+        .panel-action:hover {
+            background: #3c3c3c;
+            color: #cccccc;
+        }
+
+        .panel-content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .resizer {
+            position: absolute;
+            background: transparent;
+            z-index: 1000;
+        }
+
+        .resizer:hover {
+            background: #007acc;
+        }
+
+        .resizer.horizontal {
+            width: 4px;
+            height: 100%;
+            cursor: col-resize;
+            right: -2px;
+            top: 0;
+        }
+
+        .resizer.vertical {
+            width: 100%;
+            height: 4px;
+            cursor: row-resize;
+            bottom: -2px;
+            left: 0;
+        }
+
+        .drag-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 9999;
+            display: none;
+        }
+
+        .drag-overlay.active {
+            display: block;
+        }
+
+        .drop-indicator {
+            position: absolute;
+            background: rgba(14, 99, 156, 0.3);
+            border: 2px dashed #0e639c;
+            border-radius: 4px;
+            pointer-events: none;
+            display: none;
+        }
+
+        .drop-indicator.active {
+            display: block;
+        }
+
+        .floating-panel {
+            position: absolute;
+            background: #2d2d30;
+            border: 1px solid #555;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #666;
+            font-size: 14px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #3c3c3c;
+            border-top: 3px solid #0e639c;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 8px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-container {
+            width: 90%;
+            height: 90%;
+            max-width: 1400px;
+            max-height: 900px;
+            background: #2d2d30;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            height: 48px;
+            background: #1e1e1e;
+            border-bottom: 1px solid #3e3e42;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+        }
+
+        .modal-title {
+            flex: 1;
+            font-weight: 500;
+            color: #cccccc;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            background: transparent;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            background: #3c3c3c;
+            color: #fff;
+        }
+
+        .modal-content {
+            flex: 1;
+            overflow: hidden;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .modal-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+            border-radius: 0 0 8px 8px;
+        }
+
+        body.embed-mode .toolbar,
+        body.embed-mode .panel-header,
+        body.embed-mode .resizer {
+            display: none !important;
+        }
+
+        body.embed-mode .panel,
+        body.embed-mode .panel-container {
+            min-width: 0;
+            min-height: 0;
+        }
+
+        @media (max-width: 960px) {
+            .toolbar {
+                align-items: flex-start;
+                gap: 10px;
+                padding: 10px 12px;
+            }
+
+            .toolbar-title {
+                width: 100%;
+                margin-right: 0;
+            }
+
+            .layout-buttons {
+                margin-left: 0;
+                padding-left: 0;
+                border-left: none;
+            }
+
+            .panel {
+                min-width: 0;
+                min-height: 160px;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js"></script>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-title">Linux Workstation Sandbox</div>
+        <div class="panel-toggles">
+            <button class="panel-toggle" data-panel="code">
+                <span class="indicator"></span>
+                Code
+            </button>
+            <button class="panel-toggle" data-panel="browser">
+                <span class="indicator"></span>
+                Browser
+            </button>
+            <button class="panel-toggle" data-panel="terminal">
+                <span class="indicator"></span>
+                Terminal
+            </button>
+        </div>
+        <button class="panel-toggle" onclick="workspace.openDocsModal()" style="margin-left: 12px; border-left: 1px solid #555; padding-left: 12px;">
+            📖 Docs
+        </button>
+        <button class="panel-toggle" id="mcpCopyBtn" data-clipboard-text="" title="Copy MCP Link" style="margin-left: 8px;">
+            🔗 MCP
+        </button>
+        <div class="layout-buttons">
+            <button class="layout-btn" title="Grid Layout" onclick="workspace.setLayout('grid')">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="8" height="8"/>
+                    <rect x="13" y="3" width="8" height="8"/>
+                    <rect x="3" y="13" width="8" height="8"/>
+                    <rect x="13" y="13" width="8" height="8"/>
+                </svg>
+            </button>
+            <button class="layout-btn" title="Vertical Split" onclick="workspace.setLayout('vertical')">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="8" height="18"/>
+                    <rect x="13" y="3" width="8" height="18"/>
+                </svg>
+            </button>
+            <button class="layout-btn" title="Horizontal Split" onclick="workspace.setLayout('horizontal')">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="18" height="8"/>
+                    <rect x="3" y="13" width="18" height="8"/>
+                </svg>
+            </button>
+            <button class="layout-btn" title="Single Panel" onclick="workspace.setLayout('single')">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="18" height="18"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="workspace" id="workspace">
+        <div class="panel-container horizontal" id="mainContainer"></div>
+    </div>
+
+    <div class="drag-overlay" id="dragOverlay"></div>
+    <div class="drop-indicator" id="dropIndicator"></div>
+
+    <!-- Documentation Modal -->
+    <div class="modal-overlay" id="docsModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title">📖 API Documentation</div>
+                <button class="modal-close" onclick="workspace.closeDocsModal()">×</button>
+            </div>
+            <div class="modal-content">
+                <iframe class="modal-iframe" id="docsFrame" src=""></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class WorkspaceManager {
+            constructor() {
+                // Order matters for layout - Code first (left), Browser second (right)
+                this.panels = {
+                    code: {
+                        title: 'Code',
+                        baseUrl: '/code-server/',
+                        available: true,
+                        active: true,  // Default enabled
+                        element: null
+                    },
+                    browser: {
+                        title: 'Browser',
+                        baseUrl: '/vnc/vnc_lite.html',
+                        defaultParams: {
+                            scale: 'true'
+                        },
+                        available: true,
+                        active: true,  // Default enabled
+                        element: null
+                    },
+                    terminal: {
+                        title: 'Terminal',
+                        baseUrl: '/terminal',
+                        available: true,
+                        active: false,
+                        element: null
+                    }
+                };
+
+                // Parse current page query parameters once
+                this.currentQuery = new URLSearchParams(window.location.search);
+                this.proxyBase = this.getProxyBase();
+                this.embedMode = this.isTruthy(this.currentQuery.get('embed')) || this.currentQuery.get('mode') === 'browser';
+
+                this.currentLayout = 'grid';
+                this.draggedPanel = null;
+                this.resizing = false;
+                this.terminalFocusFrame = null;
+                this.boundTerminalMessageHandler = this.handleTerminalMessage.bind(this);
+                this.init();
+            }
+
+            isTruthy(value) {
+                return value === '1' || value === 'true' || value === 'yes';
+            }
+
+            getProxyBase() {
+                const path = window.location.pathname || '';
+                const match = path.match(/^(.*\/api\/(?:sico|dwp)\/sandbox\/(?:resources\/linux_workstation\/[^/]+|instance\/[^/]+\/linux_workstation))(?:\/index\.html|\/)?$/);
+                return match ? match[1] : '';
+            }
+
+            joinBase(base, path) {
+                if (!base) {
+                    return path;
+                }
+                const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base;
+                const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+                return `${normalizedBase}${normalizedPath}`;
+            }
+
+            resolveBaseUrl(baseUrl) {
+                if (!baseUrl || /^[a-z]+:\/\//i.test(baseUrl)) {
+                    return baseUrl;
+                }
+                if (/^\/api\/(?:sico|dwp)\/sandbox\//.test(baseUrl)) {
+                    return baseUrl;
+                }
+                if (!this.proxyBase) {
+                    return baseUrl;
+                }
+                if (baseUrl === this.proxyBase || baseUrl.startsWith(`${this.proxyBase}/`)) {
+                    return baseUrl;
+                }
+                return this.joinBase(this.proxyBase, baseUrl);
+            }
+
+            buildBrowserSocketPath() {
+                if (!this.proxyBase) {
+                    return 'websockify';
+                }
+                return this.joinBase(this.proxyBase, '/vnc/websockify').replace(/^\//, '');
+            }
+
+            isPanelAvailable(panelId) {
+                return Boolean(this.panels[panelId]) && this.panels[panelId].available !== false;
+            }
+
+            requestTerminalFocus() {
+                if (!this.terminalFocusFrame?.contentWindow) {
+                    return;
+                }
+                this.terminalFocusFrame.contentWindow.postMessage({ type: 'focus-terminal' }, window.location.origin);
+            }
+
+            handleTerminalMessage(event) {
+                if (event.origin !== window.location.origin) {
+                    return;
+                }
+                if (!this.terminalFocusFrame?.contentWindow || event.source !== this.terminalFocusFrame.contentWindow) {
+                    return;
+                }
+                if (event.data?.type === 'terminal-ready-for-focus') {
+                    this.requestTerminalFocus();
+                }
+            }
+
+            updatePanelToggleVisibility() {
+                Object.entries(this.panels).forEach(([id, panel]) => {
+                    const toggle = document.querySelector(`.panel-toggle[data-panel="${id}"]`);
+                    if (toggle) {
+                        toggle.hidden = panel.available === false;
+                    }
+                });
+            }
+
+            setPanelAvailability(panelId, available) {
+                const panel = this.panels[panelId];
+                if (!panel) {
+                    return;
+                }
+
+                panel.available = available;
+                if (!available) {
+                    panel.active = false;
+                }
+                this.updatePanelToggleVisibility();
+            }
+
+            getRequestedPanels() {
+                const mode = this.currentQuery.get('mode');
+                if (mode === 'browser') {
+                    return ['browser'];
+                }
+
+                const requested = this.currentQuery.get('panels') || this.currentQuery.get('panel');
+                if (!requested) {
+                    return this.embedMode ? ['browser'] : null;
+                }
+
+                const panels = requested
+                    .split(',')
+                    .map(panel => panel.trim())
+                    .filter(panel => panel && this.isPanelAvailable(panel));
+
+                return panels.length > 0 ? panels : null;
+            }
+
+            applyQueryOverrides() {
+                const requestedPanels = this.getRequestedPanels();
+                if (requestedPanels) {
+                    Object.keys(this.panels).forEach(id => {
+                        this.panels[id].active = requestedPanels.includes(id);
+                    });
+                }
+
+                const requestedLayout = this.currentQuery.get('layout');
+                if (requestedLayout && ['grid', 'vertical', 'horizontal', 'single'].includes(requestedLayout)) {
+                    this.currentLayout = requestedLayout;
+                } else if (requestedPanels && requestedPanels.length === 1) {
+                    this.currentLayout = 'single';
+                }
+
+                document.body.classList.toggle('embed-mode', this.embedMode);
+            }
+
+            syncToggleButtons() {
+                Object.entries(this.panels).forEach(([id, panel]) => {
+                    const toggle = document.querySelector(`.panel-toggle[data-panel="${id}"]`);
+                    if (toggle) {
+                        toggle.classList.toggle('active', panel.active);
+                    }
+                });
+            }
+
+            buildToolUrl(path) {
+                return this.resolveBaseUrl(path);
+            }
+
+            // Build URL with query parameter passthrough
+            buildPanelUrl(panelData) {
+                const url = new URL(this.resolveBaseUrl(panelData.baseUrl), window.location.origin);
+                const controlParams = new Set(['embed', 'layout', 'mode', 'panel', 'panels']);
+
+                // Add default parameters for this panel (e.g., browser VNC settings)
+                if (panelData.defaultParams) {
+                    Object.entries(panelData.defaultParams).forEach(([key, value]) => {
+                        url.searchParams.set(key, value);
+                    });
+                }
+
+                // Pass through current page query parameters
+                this.currentQuery.forEach((value, key) => {
+                    if (controlParams.has(key)) {
+                        return;
+                    }
+                    // Don't override panel-specific defaults
+                    if (!url.searchParams.has(key)) {
+                        url.searchParams.set(key, value);
+                    }
+                });
+
+                if (panelData.id === 'browser') {
+                    url.searchParams.set('path', this.buildBrowserSocketPath());
+                }
+
+                return url.pathname + url.search;
+            }
+
+            init() {
+                this.updatePanelToggleVisibility();
+                this.setupEventListeners();
+                this.loadSavedState();
+                this.applyQueryOverrides();
+                this.syncToggleButtons();
+                this.renderPanels();
+                this.setupWindowResize();
+                this.initClipboard();
+                window.addEventListener('message', this.boundTerminalMessageHandler);
+            }
+
+            setupEventListeners() {
+                // Panel toggles
+                document.querySelectorAll('.panel-toggle').forEach(toggle => {
+                    toggle.addEventListener('click', () => {
+                        const panelId = toggle.dataset.panel;
+                        if (!panelId || !this.panels[panelId]) {
+                            return;
+                        }
+                        this.togglePanel(panelId);
+                    });
+                });
+
+                // Global mouse events for resizing
+                document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                document.addEventListener('mouseup', () => this.handleMouseUp());
+            }
+
+            setupWindowResize() {
+                let resizeTimeout;
+                window.addEventListener('resize', () => {
+                    // Clear existing flex styles to allow natural resizing
+                    clearTimeout(resizeTimeout);
+
+                    // Use debouncing to avoid too many recalculations
+                    resizeTimeout = setTimeout(() => {
+                        this.resetPanelSizes();
+                    }, 250);
+                });
+            }
+
+            resetPanelSizes() {
+                // Reset all panel flex styles to allow them to resize naturally
+                const panels = document.querySelectorAll('.panel');
+                panels.forEach(panel => {
+                    // Remove fixed flex sizing, let panels flow naturally
+                    panel.style.flex = '';
+                });
+            }
+
+            togglePanel(panelId) {
+                const panel = this.panels[panelId];
+                if (!panel) {
+                    return;
+                }
+                panel.active = !panel.active;
+
+                const toggle = document.querySelector(`.panel-toggle[data-panel="${panelId}"]`);
+                toggle.classList.toggle('active', panel.active);
+
+                this.renderPanels();
+                this.saveState();
+            }
+
+            renderPanels() {
+                const container = document.getElementById('mainContainer');
+
+                // Store existing panels before clearing
+                const existingPanels = {};
+                container.querySelectorAll('.panel').forEach(panel => {
+                    const id = panel.dataset.panelId;
+                    if (id && this.panels[id]) {
+                        existingPanels[id] = panel;
+                    }
+                });
+
+                container.innerHTML = '';
+
+                const activePanels = Object.entries(this.panels)
+                    .filter(([_, panel]) => panel.active && panel.available !== false)
+                    .map(([id, panel]) => ({ id, ...panel, existingElement: existingPanels[id] }));
+
+                if (!activePanels.some(panel => panel.id === 'terminal')) {
+                    this.terminalFocusFrame = null;
+                }
+
+                // Sync toggle buttons with panel states
+                this.syncToggleButtons();
+
+                if (activePanels.length === 0) {
+                    container.innerHTML = '<div class="loading-indicator">Select panels to display</div>';
+                    return;
+                }
+
+                this.applyLayout(container, activePanels);
+            }
+
+            applyLayout(container, activePanels) {
+                switch (this.currentLayout) {
+                    case 'grid':
+                        this.applyGridLayout(container, activePanels);
+                        break;
+                    case 'vertical':
+                        this.applyVerticalLayout(container, activePanels);
+                        break;
+                    case 'horizontal':
+                        this.applyHorizontalLayout(container, activePanels);
+                        break;
+                    case 'single':
+                        this.applySingleLayout(container, activePanels);
+                        break;
+                }
+            }
+
+            applyGridLayout(container, panels) {
+                container.className = 'panel-container vertical';
+
+                if (panels.length === 1) {
+                    this.createOrReusePanel(container, panels[0]);
+                } else if (panels.length === 2) {
+                    container.className = 'panel-container horizontal';
+                    panels.forEach(panel => this.createOrReusePanel(container, panel));
+                } else if (panels.length === 3) {
+                    container.className = 'panel-container horizontal';
+                    this.createOrReusePanel(container, panels[0]);
+                    const rightContainer = this.createContainer(container, 'vertical');
+                    this.createOrReusePanel(rightContainer, panels[1]);
+                    this.createOrReusePanel(rightContainer, panels[2]);
+                } else if (panels.length === 4) {
+                    const topRow = this.createContainer(container, 'horizontal');
+                    const bottomRow = this.createContainer(container, 'horizontal');
+                    this.createOrReusePanel(topRow, panels[0]);
+                    this.createOrReusePanel(topRow, panels[1]);
+                    this.createOrReusePanel(bottomRow, panels[2]);
+                    this.createOrReusePanel(bottomRow, panels[3]);
+                } else if (panels.length >= 5) {
+                    // For 5+ panels, create a 3x2 grid layout
+                    const topRow = this.createContainer(container, 'horizontal');
+                    const bottomRow = this.createContainer(container, 'horizontal');
+
+                    // Top row: first 3 panels
+                    for (let i = 0; i < Math.min(3, panels.length); i++) {
+                        this.createOrReusePanel(topRow, panels[i]);
+                    }
+
+                    // Bottom row: remaining panels
+                    for (let i = 3; i < panels.length; i++) {
+                        this.createOrReusePanel(bottomRow, panels[i]);
+                    }
+                }
+            }
+
+            applyVerticalLayout(container, panels) {
+                container.className = 'panel-container horizontal';
+                panels.forEach(panel => this.createOrReusePanel(container, panel));
+            }
+
+            applyHorizontalLayout(container, panels) {
+                container.className = 'panel-container vertical';
+                panels.forEach(panel => this.createOrReusePanel(container, panel));
+            }
+
+            applySingleLayout(container, panels) {
+                container.className = 'panel-container horizontal';
+                if (panels.length > 0) {
+                    this.createOrReusePanel(container, panels[0]);
+                }
+            }
+
+            createContainer(parent, direction) {
+                const container = document.createElement('div');
+                container.className = `panel-container ${direction}`;
+                parent.appendChild(container);
+                return container;
+            }
+
+            createOrReusePanel(parent, panelData) {
+                // If we have an existing element, reuse it
+                if (panelData.existingElement) {
+                    parent.appendChild(panelData.existingElement);
+                    this.panels[panelData.id].element = panelData.existingElement;
+
+                    // Re-add resizer if needed
+                    this.addResizerIfNeeded(parent, panelData.existingElement);
+                    return;
+                }
+
+                // Otherwise create new panel
+                this.createPanel(parent, panelData);
+            }
+
+            addResizerIfNeeded(parent, panel) {
+                // Remove any existing resizer first
+                const existingResizer = panel.querySelector('.resizer');
+                if (existingResizer) {
+                    existingResizer.remove();
+                }
+
+                // Add resizer if not the last panel
+                const siblings = Array.from(parent.children).filter(child =>
+                    child.classList.contains('panel'));
+                const index = siblings.indexOf(panel);
+
+                if (index > 0) {
+                    const prevPanel = siblings[index - 1];
+                    const resizer = document.createElement('div');
+                    resizer.className = `resizer ${parent.classList.contains('horizontal') ? 'horizontal' : 'vertical'}`;
+                    resizer.addEventListener('mousedown', (e) => this.startResize(e, prevPanel, parent));
+                    prevPanel.appendChild(resizer);
+                }
+            }
+
+            createPanel(parent, panelData) {
+                const panel = document.createElement('div');
+                panel.className = 'panel active';
+                panel.dataset.panelId = panelData.id;
+
+                const header = document.createElement('div');
+                header.className = 'panel-header';
+
+                header.innerHTML = `
+                    <div class="panel-title">${panelData.title}</div>
+                    <div class="panel-actions">
+                        <button class="panel-action" onclick="workspace.openInNewWindow('${panelData.id}')" title="Open in New Window">⧉</button>
+                        <button class="panel-action" onclick="workspace.refreshPanel('${panelData.id}')" title="Refresh">⟳</button>
+                        <button class="panel-action" onclick="workspace.maximizePanel('${panelData.id}')" title="Maximize">⬜</button>
+                        <button class="panel-action" onclick="workspace.closePanel('${panelData.id}')" title="Close">×</button>
+                    </div>
+                `;
+
+                const content = document.createElement('div');
+                content.className = 'panel-content';
+                content.innerHTML = `
+                    <div class="loading-indicator">
+                        <div class="spinner"></div>
+                        Loading ${panelData.title}...
+                    </div>
+                `;
+
+                const iframe = document.createElement('iframe');
+                iframe.className = 'panel-iframe';
+                iframe.name = `panel-${panelData.id}`;  // Add name for identification
+
+                // For terminal, always use base URL and let server handle session
+                let finalUrl = this.buildPanelUrl(panelData);
+
+                iframe.src = finalUrl;
+                iframe.style.display = 'none';
+
+                iframe.onload = () => {
+                    content.querySelector('.loading-indicator').style.display = 'none';
+                    iframe.style.display = 'block';
+
+                    // Log terminal session for debugging
+                    if (panelData.id === 'terminal') {
+                        this.handleTerminalSession(iframe, panelData);
+                    }
+                };
+
+                content.appendChild(iframe);
+                panel.appendChild(header);
+                panel.appendChild(content);
+
+                // Add resizer if not the last panel
+                const siblings = Array.from(parent.children).filter(child =>
+                    child.classList.contains('panel'));
+
+                if (siblings.length > 0) {
+                    const prevPanel = siblings[siblings.length - 1];
+                    const resizer = document.createElement('div');
+                    resizer.className = `resizer ${parent.classList.contains('horizontal') ? 'horizontal' : 'vertical'}`;
+                    resizer.addEventListener('mousedown', (e) => this.startResize(e, prevPanel, parent));
+                    prevPanel.appendChild(resizer);
+                }
+
+                parent.appendChild(panel);
+                this.panels[panelData.id].element = panel;
+
+                // Setup drag and drop
+                this.setupPanelDrag(header, panel);
+            }
+
+            setupPanelDrag(header, panel) {
+                let isDragging = false;
+                let startX, startY;
+                let initialX, initialY;
+
+                header.addEventListener('mousedown', (e) => {
+                    if (e.target.classList.contains('panel-action')) return;
+
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    initialX = panel.offsetLeft;
+                    initialY = panel.offsetTop;
+
+                    document.getElementById('dragOverlay').classList.add('active');
+                    e.preventDefault();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+
+                    const deltaX = e.clientX - startX;
+                    const deltaY = e.clientY - startY;
+
+                    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+                        this.draggedPanel = panel;
+                        // Visual feedback for dragging
+                        panel.style.opacity = '0.7';
+                    }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        document.getElementById('dragOverlay').classList.remove('active');
+
+                        if (panel.style.opacity === '0.7') {
+                            panel.style.opacity = '';
+                        }
+
+                        this.draggedPanel = null;
+                    }
+                });
+            }
+
+            startResize(e, panel, container) {
+                this.resizing = true;
+                const isHorizontal = container.classList.contains('horizontal');
+                const startPos = isHorizontal ? e.clientX : e.clientY;
+                const startSize = isHorizontal ? panel.offsetWidth : panel.offsetHeight;
+
+                // Get the next sibling panel (skip non-panel elements)
+                let nextPanel = panel.nextElementSibling;
+                while (nextPanel && !nextPanel.classList.contains('panel')) {
+                    nextPanel = nextPanel.nextElementSibling;
+                }
+
+                if (!nextPanel) return; // No panel to resize against
+
+                const nextStartSize = isHorizontal ? nextPanel.offsetWidth : nextPanel.offsetHeight;
+
+                document.getElementById('dragOverlay').classList.add('active');
+
+                this.resizeHandler = (e) => {
+                    if (!this.resizing) return;
+
+                    const currentPos = isHorizontal ? e.clientX : e.clientY;
+                    const delta = currentPos - startPos;
+
+                    // Calculate new sizes
+                    const newSize = startSize + delta;
+                    const nextNewSize = nextStartSize - delta;
+
+                    if (newSize > 200 && nextNewSize > 200) {
+                        panel.style.flex = `0 0 ${newSize}px`;
+                        nextPanel.style.flex = `0 0 ${nextNewSize}px`;
+                    }
+                };
+
+                e.preventDefault();
+            }
+
+            handleMouseMove(e) {
+                if (this.resizeHandler) {
+                    this.resizeHandler(e);
+                }
+            }
+
+            handleMouseUp() {
+                if (this.resizing) {
+                    this.resizing = false;
+                    this.resizeHandler = null;
+                    document.getElementById('dragOverlay').classList.remove('active');
+                }
+            }
+
+            handleTerminalSession(iframe, panelData) {
+                // Always let terminal handle its own session management
+                // The terminal will redirect to include session_id automatically
+                this.terminalFocusFrame = iframe;
+                setTimeout(() => this.requestTerminalFocus(), 50);
+                console.log('Terminal loaded, session will be managed by server');
+            }
+
+            openDocsModal() {
+                const modal = document.getElementById('docsModal');
+                const iframe = document.getElementById('docsFrame');
+                const docsUrl = this.buildToolUrl('/v1/docs');
+
+                // Load docs URL only if not already loaded or is about:blank
+                if (!iframe.src || iframe.src === 'about:blank' || !iframe.src.includes(docsUrl)) {
+                    iframe.src = docsUrl;
+                }
+
+                modal.classList.add('active');
+
+                // Add ESC key listener
+                this.docsEscListener = (e) => {
+                    if (e.key === 'Escape') {
+                        this.closeDocsModal();
+                    }
+                };
+                document.addEventListener('keydown', this.docsEscListener);
+
+                // Add click outside listener only once
+                if (!this.modalClickListener) {
+                    this.modalClickListener = (e) => {
+                        if (e.target === modal) {
+                            this.closeDocsModal();
+                        }
+                    };
+                    modal.addEventListener('click', this.modalClickListener);
+                }
+            }
+
+            closeDocsModal() {
+                const modal = document.getElementById('docsModal');
+                modal.classList.remove('active');
+
+                // Remove ESC listener
+                if (this.docsEscListener) {
+                    document.removeEventListener('keydown', this.docsEscListener);
+                    this.docsEscListener = null;
+                }
+            }
+
+            initClipboard() {
+                // Generate MCP link
+                const currentUrl = new URL(window.location.href);
+                currentUrl.pathname = this.buildToolUrl('/mcp');
+                currentUrl.search = '';
+                const mcpLink = currentUrl.toString();
+
+                // Set the data attribute
+                const btn = document.getElementById('mcpCopyBtn');
+                btn.setAttribute('data-clipboard-text', mcpLink);
+
+                // Initialize clipboard.js
+                const clipboard = new ClipboardJS('#mcpCopyBtn');
+
+                clipboard.on('success', (e) => {
+                    const button = e.trigger;
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '✅ Copied!';
+                    button.style.background = '#0e639c';
+
+                    setTimeout(() => {
+                        button.innerHTML = originalText;
+                        button.style.background = '';
+                    }, 2000);
+
+                    e.clearSelection();
+                });
+
+                clipboard.on('error', (e) => {
+                    prompt('Copy this MCP link:', mcpLink);
+                });
+            }
+
+            openInNewWindow(panelId) {
+                const panel = this.panels[panelId];
+                if (panel) {
+                    // Build URL with query parameters
+                    const finalUrl = this.buildPanelUrl(panel);
+                    window.open(finalUrl, '_blank');
+                }
+            }
+
+            refreshPanel(panelId) {
+                const panel = this.panels[panelId];
+                if (panel.element) {
+                    const iframe = panel.element.querySelector('.panel-iframe');
+                    if (iframe) {
+                        // Simply reload the iframe, let server handle session
+                        iframe.src = iframe.src;
+                    }
+                }
+            }
+
+            maximizePanel(panelId) {
+                // Temporarily show only this panel
+                Object.keys(this.panels).forEach(id => {
+                    const toggle = document.querySelector(`.panel-toggle[data-panel="${id}"]`);
+                    if (id !== panelId) {
+                        this.panels[id].wasActive = this.panels[id].active;
+                        this.panels[id].active = false;
+                        if (toggle) {
+                            toggle.classList.remove('active');
+                        }
+                    } else {
+                        this.panels[id].active = true;
+                        if (toggle) {
+                            toggle.classList.add('active');
+                        }
+                    }
+                });
+
+                this.panels[panelId].maximized = true;
+                this.renderPanels();
+                this.saveState();
+            }
+
+            closePanel(panelId) {
+                // Close panel and update toggle button
+                this.panels[panelId].active = false;
+                if (panelId === 'terminal') {
+                    this.terminalFocusFrame = null;
+                }
+                const toggle = document.querySelector(`.panel-toggle[data-panel="${panelId}"]`);
+                if (toggle) {
+                    toggle.classList.remove('active');
+                }
+                this.renderPanels();
+                this.saveState();
+            }
+
+            setLayout(layout) {
+                this.currentLayout = layout;
+                this.renderPanels();
+                this.saveState();
+            }
+
+            saveState() {
+                if (this.embedMode) {
+                    return;
+                }
+
+                const state = {
+                    panels: Object.entries(this.panels).reduce((acc, [id, panel]) => {
+                        acc[id] = {
+                            active: panel.active
+                        };
+                        return acc;
+                    }, {}),
+                    layout: this.currentLayout
+                };
+                localStorage.setItem('workspaceState', JSON.stringify(state));
+            }
+
+            loadSavedState() {
+                if (this.embedMode || this.currentQuery.has('panels') || this.currentQuery.has('panel') || this.currentQuery.get('mode') === 'browser') {
+                    return;
+                }
+
+                const saved = localStorage.getItem('workspaceState');
+                if (saved) {
+                    try {
+                        const state = JSON.parse(saved);
+
+                        // Restore panel states
+                        Object.entries(state.panels || {}).forEach(([id, panelState]) => {
+                            if (this.panels[id]) {
+                                this.panels[id].active = panelState.active;
+                                const toggle = document.querySelector(`.panel-toggle[data-panel="${id}"]`);
+                                if (toggle) {
+                                    toggle.classList.toggle('active', panelState.active);
+                                }
+                            }
+                        });
+
+                        // Restore layout
+                        if (state.layout) {
+                            this.currentLayout = state.layout;
+                        }
+                    } catch (e) {
+                        console.error('Failed to load saved state:', e);
+                    }
+                } else {
+                    // First time load - set default active toggles
+                    ['code', 'browser'].forEach(id => {
+                        const toggle = document.querySelector(`.panel-toggle[data-panel="${id}"]`);
+                        if (toggle) {
+                            toggle.classList.add('active');
+                        }
+                    });
+                }
+            }
+        }
+
+        // Initialize workspace
+        const workspace = new WorkspaceManager();
+    </script>
+</body>
+</html>

@@ -14,13 +14,15 @@ service KnowledgeService {
 
 message ExtractDocumentResponse {
     string message = 1; // @gotag: json:"message"
+    string title = 2;   // @gotag: json:"title"
     int32 code = 253;   // @gotag: json:"code"
 }
 
 message GetDocumentDetailsRequest {
-    int64 document_id = 1;       // @gotag: json:"documentId"
-    int64 project_id = 2;        // @gotag: json:"projectId"
-    string agent_id = 3;         // @gotag: json:"agentId"
+    int64 document_id = 1;                  // @gotag: json:"documentId"
+    int64 project_id = 2;                   // @gotag: json:"projectId"
+    string agent_id = 3;                    // @gotag: json:"agentId"
+    KnowledgeDocumentType document_type = 4; // @gotag: json:"documentType"
 }
 
 message GetDocumentDetailsResponse {

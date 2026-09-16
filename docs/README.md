@@ -6,6 +6,7 @@ This directory contains the main documentation for Sico.
 | --- | --- |
 | **Overview**: what Sico is and why it exists | [overview.md](overview.md) |
 | **Quick Start**: run Sico locally with Docker or Kind | [quickstart.md](quickstart.md) |
+| **Local observability**: inspect and validate traces, metrics, and logs | [observability.md](observability.md) |
 | **Technical Report**: full system architecture, Experience Learning pipeline, and design rationale | [technical_report.md](technical_report.md) |
 | **Development**: building, testing, and extending Sico | [development.md](development.md) |
 | **Roadmap**: direction and what is in / out of scope | [roadmap.md](roadmap.md) |

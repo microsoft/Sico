@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sico-backend-linux-workstation
+  namespace: sandbox
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sico-backend-linux-workstation
+  namespace: sandbox
+subjects:
+  - kind: ServiceAccount
+    name: sico-backend
+    namespace: sico
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sico-backend-linux-workstation

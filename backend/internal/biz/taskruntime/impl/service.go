@@ -6,7 +6,9 @@ package impl
 
 import (
 	"context"
+	"encoding/json"
 
+	telemetrymetrics "sico-backend/internal/infra/telemetry/metrics"
 	taskruntimerepo "sico-backend/internal/store/taskruntime/repository"
 	rgrpc "sico-backend/internal/transport/reverse_grpc/pb/taskruntime"
 )
@@ -23,20 +25,39 @@ func NewService(repo taskruntimerepo.TaskRuntimeRepository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) RpcCreateBatch(ctx context.Context, req *rgrpc.CreateBatchRequest) (*rgrpc.EmptyTaskRuntimeResponse, error) {
-	if err := s.repo.CreateBatch(ctx, req.GetBatchJson()); err != nil {
+func (s *Service) RpcCreateBatch(ctx context.Context, req *rgrpc.CreateBatchRequest) (*rgrpc.CreateBatchResponse, error) {
+	result, err := s.repo.CreateBatch(ctx, req.GetBatchJson())
+	if err != nil {
 		return nil, translateError("RpcCreateBatch", err)
 	}
-
-	return emptyOK(), nil
-}
-
-func (s *Service) RpcUpdateBatch(ctx context.Context, req *rgrpc.UpdateBatchRequest) (*rgrpc.EmptyTaskRuntimeResponse, error) {
-	if err := s.repo.UpdateBatch(ctx, req.GetBatchJson()); err != nil {
-		return nil, translateError("RpcUpdateBatch", err)
+	if result.Created {
+		telemetrymetrics.RecordBatchCreated(ctx)
 	}
 
-	return emptyOK(), nil
+	return &rgrpc.CreateBatchResponse{
+		BatchJson: result.BatchJSON,
+		Created:   result.Created,
+		Code:      0,
+		Msg:       responseSuccess,
+	}, nil
+}
+
+func (s *Service) RpcUpdateBatch(ctx context.Context, req *rgrpc.UpdateBatchRequest) (*rgrpc.UpdateBatchResponse, error) {
+	result, err := s.repo.UpdateBatch(ctx, req.GetBatchJson())
+	if err != nil {
+		return nil, translateError("RpcUpdateBatch", err)
+	}
+	if result.TerminalTransitioned {
+		fields := extractBatchFields(result.BatchJSON)
+		telemetrymetrics.RecordBatchTerminal(ctx, fields.Status, fields.durationMS(), fields.durationMS() > 0)
+	}
+
+	return &rgrpc.UpdateBatchResponse{
+		BatchJson: result.BatchJSON,
+		Applied:   result.Applied,
+		Code:      0,
+		Msg:       responseSuccess,
+	}, nil
 }
 
 func (s *Service) RpcGetBatch(ctx context.Context, req *rgrpc.GetBatchRequest) (*rgrpc.GetBatchResponse, error) {
@@ -49,8 +70,12 @@ func (s *Service) RpcGetBatch(ctx context.Context, req *rgrpc.GetBatchRequest) (
 }
 
 func (s *Service) RpcCreateRun(ctx context.Context, req *rgrpc.CreateRunRequest) (*rgrpc.EmptyTaskRuntimeResponse, error) {
-	if err := s.repo.CreateRun(ctx, req.GetRunJson()); err != nil {
+	created, err := s.repo.CreateRun(ctx, req.GetRunJson())
+	if err != nil {
 		return nil, translateError("RpcCreateRun", err)
+	}
+	if created {
+		telemetrymetrics.RecordRunCreated(ctx, extractRunFields(req.GetRunJson()).Executor)
 	}
 
 	return emptyOK(), nil
@@ -116,24 +141,35 @@ func (s *Service) RpcSetRunProgress(
 }
 
 func (s *Service) RpcWriteResult(ctx context.Context, req *rgrpc.WriteResultRequest) (*rgrpc.EmptyTaskRuntimeResponse, error) {
-	if err := s.repo.WriteResult(ctx, req.GetRunId(), req.GetTokenJson(), req.GetResultJson()); err != nil {
+	durationMS, err := s.repo.WriteResult(ctx, req.GetRunId(), req.GetTokenJson(), req.GetResultJson())
+	if err != nil {
 		return nil, translateError("RpcWriteResult", err)
 	}
+	fields := extractRunFields(req.GetResultJson())
+	telemetrymetrics.RecordRunTerminal(ctx, fields.Status, fields.Executor, durationMS, durationMS > 0)
 
 	return emptyOK(), nil
 }
 
 func (s *Service) RpcCancelBatch(ctx context.Context, req *rgrpc.CancelBatchRequest) (*rgrpc.EmptyTaskRuntimeResponse, error) {
-	if err := s.repo.CancelBatch(ctx, req.GetBatchId(), req.GetReason()); err != nil {
+	result, err := s.repo.CancelBatch(ctx, req.GetBatchId(), req.GetReason())
+	if err != nil {
 		return nil, translateError("RpcCancelBatch", err)
+	}
+	if result.Transitioned {
+		telemetrymetrics.RecordBatchTerminal(ctx, "cancelled", result.DurationMS, result.DurationMS > 0)
 	}
 
 	return emptyOK(), nil
 }
 
 func (s *Service) RpcCancelRun(ctx context.Context, req *rgrpc.CancelRunRequest) (*rgrpc.EmptyTaskRuntimeResponse, error) {
-	if err := s.repo.CancelRun(ctx, req.GetRunId(), req.GetReason()); err != nil {
+	result, err := s.repo.CancelRun(ctx, req.GetRunId(), req.GetReason())
+	if err != nil {
 		return nil, translateError("RpcCancelRun", err)
+	}
+	if result.Transitioned {
+		telemetrymetrics.RecordRunTerminal(ctx, "cancelled", "", result.DurationMS, result.DurationMS > 0)
 	}
 
 	return emptyOK(), nil
@@ -206,4 +242,31 @@ func (s *Service) RpcSweepStaleRuns(
 
 func emptyOK() *rgrpc.EmptyTaskRuntimeResponse {
 	return &rgrpc.EmptyTaskRuntimeResponse{Code: 0, Msg: responseSuccess}
+}
+
+type runFields struct {
+	Status   string `json:"status"`
+	Executor string `json:"executor"`
+}
+
+func extractRunFields(runJSON string) runFields {
+	var fields runFields
+	_ = json.Unmarshal([]byte(runJSON), &fields)
+	return fields
+}
+
+type batchFields struct {
+	Status    string `json:"status"`
+	CreatedAt int64  `json:"created_at"`
+	EndedAt   int64  `json:"ended_at"`
+}
+
+func (fields batchFields) durationMS() int64 {
+	return fields.EndedAt - fields.CreatedAt
+}
+
+func extractBatchFields(batchJSON string) batchFields {
+	var fields batchFields
+	_ = json.Unmarshal([]byte(batchJSON), &fields)
+	return fields
 }

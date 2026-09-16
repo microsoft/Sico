@@ -196,7 +196,7 @@ func ListOrganizations(ctx *gin.Context) {
 		req.PageSize = 10
 	}
 
-	resp, err := orgbiz.Default().ListOrganizations(reqctx(ctx), &req)
+	resp, err := orgbiz.Default().ListVisibleOrganizations(reqctx(ctx), &req)
 	if err != nil {
 		internalServerErrorResponse(ctx, err)
 		return

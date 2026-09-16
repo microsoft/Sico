@@ -671,8 +671,7 @@ async def test_tabular_planner_requests_explicit_scope_above_table_limit(
         effect="mutate",
     )
     contexts = tuple(
-        TabularPlanningContext(document, sheet, rows, (descriptor,), context_id=f"table-{index}")
-        for index in range(51)
+        TabularPlanningContext(document, sheet, rows, (descriptor,), context_id=f"table-{index}") for index in range(51)
     )
 
     outcome = await LlmTabularPlanner(lambda *args: pytest.fail("scope limit must run before planner")).plan(
@@ -847,7 +846,7 @@ async def test_tabular_batch_preserves_selected_skill_reporting_context(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "workspace" / "attachments" / "accounts.csv"
-    path.write_text("User Name\nalice\n", encoding="utf-8")
+    path.write_bytes(b"User Name\nalice\n")
     skill_dir = tmp_path / "account-skill"
     skill_dir.mkdir()
     skill_description = "# Account import\n\nReporting: include the imported account count."
@@ -1009,8 +1008,8 @@ async def test_service_uses_one_tabular_planner_call_for_ambiguous_capabilities(
     async def choose_capability(batch_goal, contexts):
         calls.append(tuple(context.sheet.table_id for context in contexts))
         assert [descriptor.capability_id for descriptor in contexts[0].descriptors] == [
-            "skill:accounts.primary",
-            "skill:accounts.backup",
+            "skill:accounts:primary",
+            "skill:accounts:backup",
         ]
         return TabularPlannerOutput(
             tables=[
@@ -1059,7 +1058,7 @@ async def test_service_uses_one_tabular_planner_call_for_ambiguous_capabilities(
 
     assert isinstance(outcome, PreparedTaskBatch)
     assert len(calls) == 1
-    assert outcome.batch.tasks[0].capability_id == "skill:accounts.primary"
+    assert outcome.batch.tasks[0].capability_id == "skill:accounts:primary"
     assert outcome.batch.tasks[0].args["username"] == "alice"
 
 
@@ -1330,8 +1329,8 @@ async def test_bindable_fallback_does_not_bypass_semantic_capability_planning(
     async def choose_capability(batch_goal, contexts):
         calls.append(contexts)
         assert [descriptor.capability_id for descriptor in contexts[0].descriptors] == [
-            "skill:generic.noop",
-            "skill:accounts.import",
+            "skill:generic:noop",
+            "skill:accounts:import",
         ]
         return TabularPlannerOutput(
             tables=[
@@ -1358,7 +1357,7 @@ async def test_bindable_fallback_does_not_bypass_semantic_capability_planning(
 
     assert isinstance(outcome, PreparedTaskBatch)
     assert len(calls) == 1
-    assert outcome.batch.tasks[0].capability_id == "skill:accounts.import"
+    assert outcome.batch.tasks[0].capability_id == "skill:accounts:import"
     assert outcome.batch.tasks[0].args == {"username": "alice"}
 
 
@@ -1498,7 +1497,7 @@ async def test_service_prepares_from_snapshot_after_original_attachment_is_remov
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "workspace" / "attachments" / "accounts.csv"
-    path.write_text("User Name\nalice\n", encoding="utf-8")
+    path.write_bytes(b"User Name\nalice\n")
     WorkspaceSourceService().index_path(
         tmp_path / "workspace",
         "attachments/accounts.csv",
@@ -1851,7 +1850,7 @@ async def test_tabular_source_can_explicitly_allow_internal_capability(
     outcome = await service.prepare(context, json.dumps(request))
 
     assert isinstance(outcome, PreparedTaskBatch)
-    assert outcome.batch.tasks[0].capability_id == "skill:internal-cases.assign"
+    assert outcome.batch.tasks[0].capability_id == "skill:internal-cases:assign"
 
 
 @pytest.mark.asyncio
@@ -2101,10 +2100,7 @@ async def test_instruction_source_rejects_internal_source_path_inside_command(co
 def test_delegate_request_rejects_too_many_sources() -> None:
     request = {
         "batch_goal": "Too many sources",
-        "sources": [
-            {"type": "instructions", "items": [{"goal": f"Task {index}"}]}
-            for index in range(MAX_DELEGATE_SOURCES + 1)
-        ],
+        "sources": [{"type": "instructions", "items": [{"goal": f"Task {index}"}]} for index in range(MAX_DELEGATE_SOURCES + 1)],
     }
 
     outcome = parse_delegate_request(json.dumps(request))

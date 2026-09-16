@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+from dataclasses import replace
 
-from .contracts import CommandResult, CommandSession, CommandSpec, StatelessSession, container_env, to_host_path
+from .contracts import CommandResult, CommandSession, CommandSpec, container_env, to_host_path
 from .local import collect_subprocess
 
 
@@ -22,7 +23,7 @@ class DockerBackend:
         return await collect_subprocess(proc, spec.timeout_seconds)
 
     def open_session(self, *, pod_name: str = "", image: str = "") -> CommandSession:
-        return StatelessSession(self)
+        return _DockerSession(self, pod_name=pod_name, image=image)
 
     def _build_docker_argv(self, spec: CommandSpec) -> list[str]:
         argv: list[str] = [self.docker_path, "run", "--rm"]
@@ -46,3 +47,22 @@ def _default_runner_image() -> str:
     from app.storage.sandbox_pod import DEFAULT_IMAGE
 
     return os.getenv("TASK_RUNTIME_PYTHON_RUNNER_IMAGE", DEFAULT_IMAGE).strip() or DEFAULT_IMAGE
+
+
+class _DockerSession:
+    def __init__(self, backend: DockerBackend, *, pod_name: str, image: str) -> None:
+        self._backend = backend
+        self._pod_name = pod_name
+        self._image = image
+
+    async def run(self, spec: CommandSpec) -> CommandResult:
+        return await self._backend.run(
+            replace(
+                spec,
+                pod_name=spec.pod_name or self._pod_name,
+                image=spec.image or self._image,
+            )
+        )
+
+    async def aclose(self) -> None:
+        return None

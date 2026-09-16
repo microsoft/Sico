@@ -9,6 +9,9 @@ __all__ = (
     "GetInstanceSandboxesRequest",
     "GetInstanceSandboxesResponse",
     "InstanceSandboxInfo",
+    "LinuxWorkstationSandboxHttpFormField",
+    "LinuxWorkstationSandboxHttpRequest",
+    "LinuxWorkstationSandboxHttpResponse",
     "ReleaseSandboxRequest",
     "ReleaseSandboxResponse",
     "ResetSandboxRequest",
@@ -202,6 +205,128 @@ default_message_pool.register_message(
 
 
 @dataclass(eq=False, repr=False)
+class LinuxWorkstationSandboxHttpFormField(betterproto2.Message):
+    name: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"name"
+    """
+
+    text_value: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"textValue"
+    """
+
+    bytes_value: "bytes" = betterproto2.field(3, betterproto2.TYPE_BYTES)
+    """
+    @gotag: json:"bytesValue"
+    """
+
+    file_name: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"fileName"
+    """
+
+    content_type: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"contentType"
+    """
+
+
+default_message_pool.register_message(
+    "reverse_rpc",
+    "LinuxWorkstationSandboxHttpFormField",
+    LinuxWorkstationSandboxHttpFormField,
+)
+
+
+@dataclass(eq=False, repr=False)
+class LinuxWorkstationSandboxHttpRequest(betterproto2.Message):
+    proxy_base_path: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"proxyBasePath"
+    """
+
+    method: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"method"
+    """
+
+    path: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"path"
+    """
+
+    query_json: "str" = betterproto2.field(4, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"queryJson"
+    """
+
+    json_body_json: "str" = betterproto2.field(5, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"jsonBodyJson"
+    """
+
+    form_fields: "list[LinuxWorkstationSandboxHttpFormField]" = betterproto2.field(
+        6, betterproto2.TYPE_MESSAGE, repeated=True
+    )
+    """
+    @gotag: json:"formFields"
+    """
+
+    agent_instance_id: "str" = betterproto2.field(7, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"agentInstanceId"
+    """
+
+
+default_message_pool.register_message(
+    "reverse_rpc",
+    "LinuxWorkstationSandboxHttpRequest",
+    LinuxWorkstationSandboxHttpRequest,
+)
+
+
+@dataclass(eq=False, repr=False)
+class LinuxWorkstationSandboxHttpResponse(betterproto2.Message):
+    status_code: "int" = betterproto2.field(1, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"statusCode"
+    """
+
+    content_type: "str" = betterproto2.field(2, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"contentType"
+    """
+
+    body_text: "str" = betterproto2.field(3, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"bodyText"
+    """
+
+    body_bytes: "bytes" = betterproto2.field(4, betterproto2.TYPE_BYTES)
+    """
+    @gotag: json:"bodyBytes"
+    """
+
+    code: "int" = betterproto2.field(253, betterproto2.TYPE_INT32)
+    """
+    @gotag: json:"code"
+    """
+
+    msg: "str" = betterproto2.field(254, betterproto2.TYPE_STRING)
+    """
+    @gotag: json:"msg"
+    """
+
+
+default_message_pool.register_message(
+    "reverse_rpc",
+    "LinuxWorkstationSandboxHttpResponse",
+    LinuxWorkstationSandboxHttpResponse,
+)
+
+
+@dataclass(eq=False, repr=False)
 class ReleaseSandboxRequest(betterproto2.Message):
     instance_id: "str" = betterproto2.field(1, betterproto2.TYPE_STRING)
     """
@@ -332,6 +457,19 @@ class ReverseSandboxRpcStub:
             ResetSandboxResponse.FromString,
         )(message)
 
+    def rpc_proxy_linux_workstation_sandbox_http(
+        self, message: "LinuxWorkstationSandboxHttpRequest"
+    ) -> "LinuxWorkstationSandboxHttpResponse":
+        """
+        RpcProxyLinuxWorkstationSandboxHttp forwards an authorized request to a Linux Workstation assigned to the instance.
+        """
+
+        return self._channel.unary_unary(
+            "/reverse_rpc.ReverseSandboxRPC/RpcProxyLinuxWorkstationSandboxHttp",
+            LinuxWorkstationSandboxHttpRequest.SerializeToString,
+            LinuxWorkstationSandboxHttpResponse.FromString,
+        )(message)
+
 
 class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
     async def rpc_apply_sandbox(
@@ -373,6 +511,15 @@ class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
 
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
+    async def rpc_proxy_linux_workstation_sandbox_http(
+        self, message: "LinuxWorkstationSandboxHttpRequest"
+    ) -> "LinuxWorkstationSandboxHttpResponse":
+        """
+        RpcProxyLinuxWorkstationSandboxHttp forwards an authorized request to a Linux Workstation assigned to the instance.
+        """
+
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
     async def __rpc_rpc_apply_sandbox(
         self, stream: "grpclib.server.Stream[ApplySandboxRequest, ApplySandboxResponse]"
     ) -> None:
@@ -407,6 +554,15 @@ class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
         response = await self.rpc_reset_sandbox(request)
         await stream.send_message(response)
 
+    async def __rpc_rpc_proxy_linux_workstation_sandbox_http(
+        self,
+        stream: "grpclib.server.Stream[LinuxWorkstationSandboxHttpRequest, LinuxWorkstationSandboxHttpResponse]",
+    ) -> None:
+        request = await stream.recv_message()
+        assert request is not None
+        response = await self.rpc_proxy_linux_workstation_sandbox_http(request)
+        await stream.send_message(response)
+
     def __mapping__(self) -> "dict[str, grpclib.const.Handler]":
         return {
             "/reverse_rpc.ReverseSandboxRPC/RpcApplySandbox": grpclib.const.Handler(
@@ -432,5 +588,11 @@ class ReverseSandboxRpcBase(betterproto2_grpclib.ServiceBase):
                 grpclib.const.Cardinality.UNARY_UNARY,
                 ResetSandboxRequest,
                 ResetSandboxResponse,
+            ),
+            "/reverse_rpc.ReverseSandboxRPC/RpcProxyLinuxWorkstationSandboxHttp": grpclib.const.Handler(
+                self.__rpc_rpc_proxy_linux_workstation_sandbox_http,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                LinuxWorkstationSandboxHttpRequest,
+                LinuxWorkstationSandboxHttpResponse,
             ),
         }

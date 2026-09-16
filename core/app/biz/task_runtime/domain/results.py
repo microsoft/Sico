@@ -380,6 +380,8 @@ async def batch_results(store: RunStore, runs: list[TaskRun]) -> list[TaskResult
             continue
         if detail.result is not None:
             results.append(detail.result)
+        elif detail.run.status in TERMINAL_STATUSES:
+            results.append(terminal_result_from_run(detail.run))
     return results
 
 

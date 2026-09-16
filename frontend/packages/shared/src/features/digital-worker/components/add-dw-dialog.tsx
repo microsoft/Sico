@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useLingui } from "@lingui/react/macro";
 import {
   Button,
@@ -10,21 +9,15 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Loader2 } from "lucide-react";
-import { useEffect } from "react";
 import type * as React from "react";
-import { useForm } from "react-hook-form";
 
 import { AddDwDialogHeader } from "./add-dw-dialog-header";
-import {
-  ADD_DW_INITIAL_VALUES,
-  addDwSchema,
-  type AddDwValues,
-} from "./add-dw-fields";
 import { AvatarField } from "./avatar-field";
 import { DwField } from "./dw-field";
 import { NameField } from "./name-field";
 import { ProjectField } from "./project-field";
 import { userAtom } from "../../../atoms/auth-atom";
+import { useAddDwForm } from "../../../hooks/use-add-dw-form";
 import { createProjectDialogOpenAtom } from "../../projects/atoms/create-project-dialog-atom";
 import { useProjectsInfiniteQueryNonSuspense } from "../../projects/hooks/use-projects-query";
 import { useAgentInfosQuery } from "../../studio/hooks/use-agent-infos-query";
@@ -66,27 +59,22 @@ export function AddDwDialog({
     templatesQuery.isError,
     templates.length,
   );
-  const form = useForm<AddDwValues>({
-    resolver: zodResolver(addDwSchema),
-    defaultValues: ADD_DW_INITIAL_VALUES,
-    mode: "onSubmit",
-    reValidateMode: "onChange",
-  });
   const { onSubmit, isPending } = useAddDwSubmit(user?.email, templates, () =>
     onOpenChange(false),
   );
-  const saveLabel = isPending
+  const avatarForm = useAddDwForm({
+    open,
+    isPending,
+    onOpenChange,
+    onSubmit,
+  });
+  const { form } = avatarForm;
+  const saveLabel = avatarForm.isSaving
     ? t({ id: "common.status.saving", message: "Saving…" })
     : t({ id: "common.action.save", message: "Save" });
 
-  useEffect(() => {
-    if (open) {
-      form.reset(ADD_DW_INITIAL_VALUES);
-    }
-  }, [open, form]);
-
   const handleCreateProject = (): void => {
-    onOpenChange(false);
+    avatarForm.handleOpenChange(false);
     setCreateProjectOpen(true);
     void navigate({ to: "/project" });
   };
@@ -98,10 +86,10 @@ export function AddDwDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={avatarForm.handleOpenChange}>
       <DialogContent variant="content" className="w-150">
         <AddDwDialogHeader />
-        <form noValidate onSubmit={form.handleSubmit(onSubmit)}>
+        <form noValidate onSubmit={avatarForm.handleSubmit}>
           <FieldGroup>
             <ProjectField
               control={form.control}
@@ -116,23 +104,30 @@ export function AddDwDialog({
               onPick={handlePick}
             />
             <NameField control={form.control} />
-            <AvatarField control={form.control} />
+            <AvatarField
+              preset={avatarForm.preset}
+              onSelectPreset={avatarForm.onSelectPreset}
+              disabled={avatarForm.isSaving}
+              uploading={avatarForm.isUploading}
+            />
           </FieldGroup>
           <DialogFooter className="mt-6">
             <Button
               type="button"
               variant="subtle"
-              onClick={() => onOpenChange(false)}
+              onClick={() => avatarForm.handleOpenChange(false)}
             >
               {t({ id: "common.action.cancel", message: "Cancel" })}
             </Button>
             <Button
               type="submit"
               variant="primary"
-              aria-busy={isPending}
-              disabled={isPending}
+              aria-busy={avatarForm.isSaving}
+              disabled={avatarForm.isSaving}
             >
-              {isPending ? <Loader2 className="animate-spin" /> : null}
+              {avatarForm.isSaving ? (
+                <Loader2 className="animate-spin" />
+              ) : null}
               {saveLabel}
             </Button>
           </DialogFooter>

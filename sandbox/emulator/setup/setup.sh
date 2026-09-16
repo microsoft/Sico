@@ -62,6 +62,7 @@ set -euo pipefail
 # ========================= Constants ========================
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EMULATOR_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/token-env.sh"
 PID_FILE="$EMULATOR_ROOT/.emulator-service.pid"
 STATE_FILE="$EMULATOR_ROOT/.emulator-service.env"
 LOG_FILE="$EMULATOR_ROOT/.emulator-service.log"
@@ -123,6 +124,7 @@ CONFIGURED_ANDROID_HOME=""
 SERVICE_STATE_PID=""
 SERVICE_STATE_HOST=""
 SERVICE_STATE_PORT=""
+SICO_SANDBOX_SERVICE_TOKEN="${SICO_SANDBOX_SERVICE_TOKEN:-}"
 
 # ========================= Helpers ==========================
 readonly RED='\033[0;31m'
@@ -137,6 +139,64 @@ success() { echo -e "${GREEN}✓${RESET} $*"; }
 warn()    { echo -e "${YELLOW}⚠${RESET} $*"; }
 error()   { echo -e "${RED}✗${RESET} $*" >&2; }
 fatal()   { error "$@"; exit 1; }
+
+prepare_emulator_auth() {
+    local repository_root="$(cd "$EMULATOR_ROOT/../.." && pwd)"
+    local root_env=""
+    local emulator_env="$EMULATOR_ROOT/.env"
+    local configured_token="$SICO_SANDBOX_SERVICE_TOKEN"
+    local root_token=""
+    local emulator_token=""
+
+    if [[ -f "$repository_root/backend/go.mod" ]] &&
+        [[ -f "$repository_root/scripts/load-env.sh" ]] &&
+        [[ -d "$repository_root/sandbox/emulator" ]] &&
+        [[ "$(cd "$repository_root/sandbox/emulator" && pwd)" == "$EMULATOR_ROOT" ]]; then
+        root_env="$repository_root/.env"
+    fi
+    if [[ -n "$root_env" ]]; then
+        root_token="$(read_sandbox_service_token "$root_env")"
+    fi
+    emulator_token="$(read_sandbox_service_token "$emulator_env")"
+    if [[ -n "$configured_token" ]]; then
+        validate_sandbox_service_token "$configured_token" "the process environment"
+    fi
+    if [[ -n "$root_token" ]]; then
+        validate_sandbox_service_token "$root_token" "$root_env"
+    fi
+    if [[ -n "$emulator_token" ]]; then
+        validate_sandbox_service_token "$emulator_token" "$emulator_env"
+    fi
+    if [[ -n "$root_token" && -n "$emulator_token" && "$root_token" != "$emulator_token" ]]; then
+        fatal "SICO_SANDBOX_SERVICE_TOKEN differs between repository-root and emulator .env files."
+    fi
+    local file_token="${emulator_token:-$root_token}"
+    if [[ -n "$configured_token" && -n "$file_token" && "$configured_token" != "$file_token" ]]; then
+        fatal "SICO_SANDBOX_SERVICE_TOKEN differs between the process environment and local .env files."
+    fi
+    configured_token="${configured_token:-$file_token}"
+    if [[ -n "$root_env" && -f "$root_env" ]]; then
+        ensure_sandbox_service_token "$root_env" "$configured_token"
+        configured_token="$(read_sandbox_service_token "$root_env")"
+    else
+        if [[ ! -f "$emulator_env" ]]; then
+            if [[ -f "$EMULATOR_ROOT/.env.example" ]]; then
+                cp "$EMULATOR_ROOT/.env.example" "$emulator_env"
+            else
+                touch "$emulator_env"
+            fi
+        fi
+        ensure_sandbox_service_token "$emulator_env" "$configured_token"
+        configured_token="$(read_sandbox_service_token "$emulator_env")"
+    fi
+    [[ -n "$configured_token" ]] || fatal "SICO_SANDBOX_SERVICE_TOKEN is required in the environment or repository-root .env."
+    SICO_SANDBOX_SERVICE_TOKEN="$configured_token"
+}
+
+# Use only for emulator service requests; downloads use curl directly.
+emulator_api_curl() {
+    curl -H "Authorization: Bearer $SICO_SANDBOX_SERVICE_TOKEN" "$@"
+}
 
 step() {
     echo ""
@@ -721,12 +781,14 @@ ensure_local_venv() {
 exec_service_foreground() {
     exec env MUMU_MANAGER_PATH="$CONFIGURED_MUMU_MANAGER_PATH" \
              ANDROID_HOME="${CONFIGURED_ANDROID_HOME:-}" \
+             SICO_SANDBOX_SERVICE_TOKEN="$SICO_SANDBOX_SERVICE_TOKEN" \
              "${PYTHON_CMD[@]}" -m uvicorn app.main:app --host "$SERVICE_HOST" --port "$SERVICE_PORT"
 }
 
 launch_service_background() {
     nohup env MUMU_MANAGER_PATH="$CONFIGURED_MUMU_MANAGER_PATH" \
               ANDROID_HOME="${CONFIGURED_ANDROID_HOME:-}" \
+              SICO_SANDBOX_SERVICE_TOKEN="$SICO_SANDBOX_SERVICE_TOKEN" \
               "${PYTHON_CMD[@]}" -m uvicorn app.main:app \
         --host "$SERVICE_HOST" \
         --port "$SERVICE_PORT" \
@@ -984,12 +1046,12 @@ start_default_emulator() {
             return 1
         fi
         info "Starting emulator device-0 via API..."
-        if curl -sf -X POST "${api_base}/api/v1/emulators/0/start" \
+        if emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/0/start" \
             -H "Content-Type: application/json" -d '{}' >/dev/null 2>&1; then
             success "Emulator device-0 started."
         else
             warn "Failed to start device-0 via API. You can start it manually:"
-            echo "  curl -X POST ${api_base}/api/v1/emulators/0/start -H 'Content-Type: application/json' -d '{}'"
+            echo "  curl -X POST ${api_base}/api/v1/emulators/0/start -H \"Authorization: Bearer \${SICO_SANDBOX_SERVICE_TOKEN}\" -H 'Content-Type: application/json' -d '{}'"
             return 1
         fi
     else
@@ -1000,7 +1062,7 @@ start_default_emulator() {
         while IFS= read -r existing_index; do
             [[ -z "$existing_index" ]] && continue
             info "Found existing device-${existing_index}. Starting it..."
-            if curl -sf -X POST "${api_base}/api/v1/emulators/${existing_index}/start" \
+            if emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${existing_index}/start" \
                 -H "Content-Type: application/json" -d '{}' >/dev/null 2>&1; then
                 device_index="$existing_index"
                 success "Emulator device-${device_index} started."
@@ -1012,12 +1074,12 @@ start_default_emulator() {
         if [[ -z "$device_index" ]]; then
             if ! device_index=$(create_mumu_phone_device "$api_base"); then
                 warn "Failed to create the first phone-mode MuMu device. You can create one manually:"
-                echo "  curl -X POST ${api_base}/api/v1/emulators/emulator -H 'Content-Type: application/json' -d '{\"count\": 1, \"start\": false}'"
+                echo "  curl -X POST ${api_base}/api/v1/emulators/emulator -H \"Authorization: Bearer \${SICO_SANDBOX_SERVICE_TOKEN}\" -H 'Content-Type: application/json' -d '{\"count\": 1, \"start\": false}'"
                 return 1
             fi
 
             info "Starting emulator device-${device_index} via API..."
-            if curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/start" \
+            if emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/start" \
                 -H "Content-Type: application/json" -d '{}' >/dev/null 2>&1; then
                 success "Emulator device-${device_index} created and started."
             else
@@ -1073,7 +1135,7 @@ create_mumu_phone_device() {
     local create_resp=""
     local created_index=""
     info "Creating a new phone-mode emulator device via API..." >&2
-    if ! create_resp=$(curl -sf -X POST "${api_base}/api/v1/emulators/emulator" \
+    if ! create_resp=$(emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/emulator" \
         -H "Content-Type: application/json" -d '{"count": 1, "start": false}' 2>/dev/null); then
         return 1
     fi
@@ -1096,7 +1158,7 @@ _wait_for_device_ready() {
     info "Waiting for device-${device_index} to be ready..."
     local waited=0
     while [[ $waited -lt 90 ]]; do
-        if curl -sf "${api_base}/api/v1/emulators/${device_index}/apps?include_system=false" >/dev/null 2>&1; then
+        if emulator_api_curl -sf "${api_base}/api/v1/emulators/${device_index}/apps?include_system=false" >/dev/null 2>&1; then
             success "Device-${device_index} is ready."
             return 0
         fi
@@ -1116,22 +1178,22 @@ _configure_device_display() {
     info "Setting display to ${SCREEN_WIDTH}x${SCREEN_HEIGHT} @ ${SCREEN_DPI}dpi on device-${device_index}..."
     local failed=false
 
-    if ! curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+    if ! emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
         -H "Content-Type: application/json" \
         -d '{"command": "settings put system accelerometer_rotation 0"}' >/dev/null 2>&1; then
         failed=true
     fi
-    if ! curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+    if ! emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
         -H "Content-Type: application/json" \
         -d '{"command": "settings put system user_rotation 0"}' >/dev/null 2>&1; then
         failed=true
     fi
-    if ! curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+    if ! emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
         -H "Content-Type: application/json" \
         -d "{\"command\": \"wm size ${SCREEN_WIDTH}x${SCREEN_HEIGHT}\"}" >/dev/null 2>&1; then
         failed=true
     fi
-    if ! curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+    if ! emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
         -H "Content-Type: application/json" \
         -d "{\"command\": \"wm density ${SCREEN_DPI}\"}" >/dev/null 2>&1; then
         failed=true
@@ -1146,7 +1208,7 @@ list_known_emulator_indices() {
     local api_base="$1"
     local payload indices
 
-    payload=$(curl -sf "${api_base}/api/v1/emulators/indices" 2>/dev/null) || return 1
+    payload=$(emulator_api_curl -sf "${api_base}/api/v1/emulators/indices" 2>/dev/null) || return 1
     indices=$(printf '%s' "$payload" \
         | tr -d '[:space:]' \
         | sed -n 's/.*"indices":\[\([^]]*\)\].*/\1/p' \
@@ -1177,23 +1239,23 @@ install_apks_via_api() {
         if _verify_package_installed_via_api "$api_base" "$device_index" "$PACKAGE_NAME"; then
             success "ADBKeyboard already installed. Skipping."
             # Ensure IME is enabled even if already installed
-            curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+            emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
                 -H "Content-Type: application/json" \
                 -d "{\"command\": \"ime enable $IME_ID\"}" >/dev/null 2>&1
-            curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+            emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
                 -H "Content-Type: application/json" \
                 -d "{\"command\": \"ime set $IME_ID\"}" >/dev/null 2>&1
         elif [[ -f "$APK_PATH" ]]; then
             info "Installing ADBKeyboard on device-${device_index}..."
-            if curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/apps/install" \
+            if emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/apps/install" \
                 -F "file=@${APK_PATH}" >/dev/null 2>&1; then
                 if _verify_package_installed_via_api "$api_base" "$device_index" "$PACKAGE_NAME"; then
                     success "ADBKeyboard installed."
                     # Enable ADBKeyboard IME only after verified install
-                    curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+                    emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
                         -H "Content-Type: application/json" \
                         -d "{\"command\": \"ime enable $IME_ID\"}" >/dev/null 2>&1
-                    curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+                    emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
                         -H "Content-Type: application/json" \
                         -d "{\"command\": \"ime set $IME_ID\"}" >/dev/null 2>&1
                     success "ADBKeyboard enabled as default IME."
@@ -1218,7 +1280,7 @@ install_apks_via_api() {
             success "Microsoft Edge already installed. Skipping."
         elif [[ -f "$EDGE_APK_PATH" ]]; then
             info "Installing Microsoft Edge on device-${device_index}..."
-            if curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/apps/install" \
+            if emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/apps/install" \
                 -F "file=@${EDGE_APK_PATH}" >/dev/null 2>&1; then
                 if _verify_package_installed_via_api "$api_base" "$device_index" "$EDGE_PACKAGE"; then
                     success "Microsoft Edge installed."
@@ -1245,7 +1307,7 @@ _verify_package_installed_via_api() {
     local out attempt
 
     for attempt in 1 2 3; do
-        out=$(curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
+        out=$(emulator_api_curl -sf -X POST "${api_base}/api/v1/emulators/${device_index}/adb/shell" \
             -H "Content-Type: application/json" \
             -d "{\"command\": \"pm list packages ${package_name}\"}" 2>/dev/null) || { sleep 3; continue; }
 
@@ -1304,7 +1366,7 @@ stop_all_emulators() {
                 local idx http_code
                 while IFS= read -r idx; do
                     [[ -z "$idx" ]] && continue
-                    http_code=$(curl -s -o /dev/null -w '%{http_code}' \
+                    http_code=$(emulator_api_curl -s -o /dev/null -w '%{http_code}' \
                         -X POST "${api_base}/api/v1/emulators/${idx}/stop" 2>/dev/null) || true
                     if [[ "$http_code" == "200" ]]; then
                         success "  Device $idx stopped."
@@ -1616,6 +1678,7 @@ print_install_banner() {
 }
 
 prepare_service_runtime() {
+    prepare_emulator_auth
     detect_platform
     if [[ "$OS" == "windows" ]]; then
         resolve_mumu_manager_path
@@ -1907,6 +1970,7 @@ case "$COMMAND" in
     bootstrap|device-bootstrap)
              prepare_service_runtime; do_bootstrap; exit $? ;;
     stop-devices|devices-stop)
+             prepare_emulator_auth
              detect_platform
              if [[ "$OS" == "windows" ]]; then resolve_mumu_manager_path; else resolve_android_home; fi
              load_service_state >/dev/null 2>&1 || true

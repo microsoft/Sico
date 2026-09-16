@@ -5,7 +5,7 @@ import type * as React from "react";
 
 import { ProjectAvatar } from "../../../components/project-avatar";
 import { FIELD_LABEL_CLASS } from "../../../constants/form";
-import { useCoverUpload } from "../hooks/use-cover-upload";
+import { useImageUpload } from "../../../hooks/use-image-upload";
 
 export type CoverFieldProps = {
   value: string | undefined;
@@ -14,13 +14,13 @@ export type CoverFieldProps = {
 
 /** Square cover picker with EAGER upload: click the tile → local preview +
  * spinner overlay while uploading → the resolved relative `uri` is stored on the
- * form. The upload state machine lives in {@link useCoverUpload}. */
+ * form. The upload state machine lives in {@link useImageUpload}. */
 export function CoverField({
   value,
   onChange,
 }: CoverFieldProps): React.JSX.Element {
   const { t } = useLingui();
-  const { inputRef, uploading, preview, onPick } = useCoverUpload(onChange);
+  const { inputRef, uploading, preview, onPick } = useImageUpload(onChange);
 
   let coverLabel = t({
     id: "projects.coverField.upload",

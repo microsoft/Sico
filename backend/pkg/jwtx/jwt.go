@@ -37,7 +37,10 @@ type Auther interface {
 	Release(ctx context.Context) error
 }
 
-const defaultKey = "CG24SDVP8OHPK395GB5G"
+const (
+	defaultKey             = "CG24SDVP8OHPK395GB5G"
+	defaultTokenExpiration = 7 * 24 * time.Hour
+)
 
 var ErrInvalidToken = errors.New("invalid token")
 
@@ -72,7 +75,7 @@ func SetExpired(expired int) Option {
 func New(store Storer, opts ...Option) Auther {
 	o := options{
 		tokenType:     "Bearer",
-		expired:       86400,
+		expired:       int(defaultTokenExpiration / time.Second),
 		signingMethod: jwt.SigningMethodHS512,
 		signingKey:    []byte(defaultKey),
 	}

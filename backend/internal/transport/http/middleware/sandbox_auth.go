@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -68,7 +69,10 @@ type SandboxAuthConfig struct {
 // SandboxAuthMiddleware creates a middleware for sandbox client authentication
 // It validates the request signature using HMAC-SHA256
 func SandboxAuthMiddleware() gin.HandlerFunc {
-	config := getSandboxAuthConfig()
+	return sandboxAuthMiddleware(getSandboxAuthConfig())
+}
+
+func sandboxAuthMiddleware(config *SandboxAuthConfig) gin.HandlerFunc {
 	if config == nil || config.RedisClient == nil {
 		logger.Error("SandboxAuthMiddleware: redis client is not configured")
 		return func(c *gin.Context) {
@@ -86,10 +90,6 @@ func SandboxAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if !checkAndStoreNonce(c, config, headers.clientID, headers.nonce) {
-			return
-		}
-
 		secret, ok := lookupSandboxClientSecret(c, config, headers.clientID)
 		if !ok {
 			return
@@ -102,6 +102,10 @@ func SandboxAuthMiddleware() gin.HandlerFunc {
 		instanceID := extractInstanceIDFromSicoContextHeader(headers.contextHeader)
 		if instanceID == "" {
 			abortWithError(c, http.StatusBadRequest, "Invalid X-Sico-Context header")
+			return
+		}
+
+		if !checkAndStoreNonce(c, config, headers.clientID, headers.nonce) {
 			return
 		}
 
@@ -169,21 +173,26 @@ func validateSandboxTimestamp(c *gin.Context, timestamp string) bool {
 // checkAndStoreNonce rejects replayed nonces and records the nonce for future requests.
 func checkAndStoreNonce(c *gin.Context, config *SandboxAuthConfig, clientID, nonce string) bool {
 	nonceKey := fmt.Sprintf("sandbox:nonce:%s:%s", clientID, nonce)
-	exists, err := config.RedisClient.Exists(c.Request.Context(), nonceKey).Result()
+	result, err := config.RedisClient.SetArgs(
+		c.Request.Context(),
+		nonceKey,
+		"1",
+		redis.SetArgs{Mode: "NX", TTL: NonceExpiry},
+	).Result()
+	if errors.Is(err, redis.Nil) {
+		abortWithError(c, http.StatusUnauthorized, "Nonce already used (replay attack detected)")
+		return false
+	}
 	if err != nil {
-		logger.Error("Failed to check nonce existence: %v", err)
+		logger.Error("Failed to store nonce: %v", err)
 		abortWithError(c, http.StatusInternalServerError, "Internal server error")
 		return false
 	}
 
-	if exists > 0 {
-		abortWithError(c, http.StatusUnauthorized, "Nonce already used (replay attack detected)")
+	if result != "OK" {
+		logger.Error("Failed to store nonce: unexpected Redis response %q", result)
+		abortWithError(c, http.StatusInternalServerError, "Internal server error")
 		return false
-	}
-
-	if err := config.RedisClient.Set(c.Request.Context(), nonceKey, "1", NonceExpiry).Err(); err != nil {
-		logger.Error("Failed to store nonce: %v", err)
-		// Continue anyway - security vs availability tradeoff
 	}
 
 	return true
@@ -211,8 +220,7 @@ func verifySandboxSignature(c *gin.Context, h sandboxAuthHeaders, secret string)
 	expectedSignature := calculateHMAC(payload, secret)
 
 	if !hmac.Equal([]byte(h.signature), []byte(expectedSignature)) {
-		logger.Warn("Signature mismatch for client %s. Expected: %s, Got: %s, Payload: %s",
-			h.clientID, expectedSignature, h.signature, payload)
+		logger.Warn("Signature mismatch for sandbox client %s", h.clientID)
 		abortWithError(c, http.StatusUnauthorized, "Invalid signature")
 		return false
 	}

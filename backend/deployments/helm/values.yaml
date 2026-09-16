@@ -5,6 +5,10 @@ image:
   tag: local
   pullPolicy: IfNotPresent
 
+serviceAccount:
+  create: false
+  name: default
+
 service:
   type: ClusterIP
   ports:
@@ -16,6 +20,7 @@ env:
   # Valid values: development | test | production. Defaults to production
   # when unset.
   APP_ENV: production
+  SEED_AGENT_INSTANCES: "false"
   DB_HOST: sico-mysql
   DB_PORT: "3306"
   REDIS_HOST: sico-redis
@@ -42,3 +47,6 @@ resources:
 # SANDBOX_CLIENT_SECRET_TEST_CLIENT (optional; used by the `test-client`
 # sandbox example flow — see examples/sandbox/README.md).
 secretName: sico-credentials
+
+# Existing Secret containing SICO_SANDBOX_SERVICE_TOKEN.
+sandboxAuthSecretName: sandbox-service-auth

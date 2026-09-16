@@ -6,13 +6,57 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"sico-backend/internal/biz/ownership"
 	entity "sico-backend/internal/entity/notification"
+	"sico-backend/internal/shared/apperr"
+	"sico-backend/internal/shared/errcode"
 	mockrepo "sico-backend/internal/store/notification/repository/mock"
+	commondto "sico-backend/internal/transport/http/dto/common"
 	pb "sico-backend/internal/transport/http/dto/notification"
 	"sico-backend/internal/transport/http/middleware"
 	rgrpc "sico-backend/internal/transport/reverse_grpc/pb/notification"
 	"sico-backend/pkg/jwtx"
 )
+
+type notificationOwnership struct {
+	ownership.Resolver
+	selectedOrganizationID int64
+	projectOrganizations   map[int64]int64
+	agentOrganizations     map[string]int64
+	instanceOrganizations  map[int64]int64
+	conversationOrgs       map[int64]int64
+}
+
+func (o *notificationOwnership) RequireSelected(context.Context) (int64, error) {
+	return o.selectedOrganizationID, nil
+}
+
+func (o *notificationOwnership) RequireOrganization(
+	_ context.Context,
+	organizationID int64,
+	_ bool,
+) error {
+	if organizationID != o.selectedOrganizationID {
+		return apperr.New(errcode.CommonNotFound, "resource not found")
+	}
+	return nil
+}
+
+func (o *notificationOwnership) ProjectOrganization(_ context.Context, projectID int64) (int64, error) {
+	return o.projectOrganizations[projectID], nil
+}
+
+func (o *notificationOwnership) AgentOrganization(_ context.Context, agentID string) (int64, error) {
+	return o.agentOrganizations[agentID], nil
+}
+
+func (o *notificationOwnership) AgentInstanceOrganization(_ context.Context, instanceID int64) (int64, error) {
+	return o.instanceOrganizations[instanceID], nil
+}
+
+func (o *notificationOwnership) ConversationOrganization(_ context.Context, conversationID int64) (int64, error) {
+	return o.conversationOrgs[conversationID], nil
+}
 
 func newTestNotificationService() *Service {
 	return NewService(&Components{
@@ -185,4 +229,106 @@ func TestRpcCreateNotification(t *testing.T) {
 		require.NotNil(t, resp.Data)
 		require.Greater(t, resp.Data.Id, int64(0))
 	})
+}
+
+func TestCreateResolvesOrganizationFromAuthoritativeOwner(t *testing.T) {
+	notificationRepo := mockrepo.NewMockNotificationRepo()
+	service := NewService(&Components{
+		NotificationRepo: notificationRepo,
+		Ownership: &notificationOwnership{
+			agentOrganizations: map[string]int64{"agent-1": 10},
+		},
+	})
+
+	id, err := service.Create(context.Background(), &entity.Notification{
+		ReceiverUsername: "bob",
+		Type:             pb.NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED,
+		OrganizationId:   999,
+		ExtraInfo: &pb.NotificationExtraInfo{
+			AgentEditorUpdate: &pb.NotificationExtraInfoAgentEditorUpdate{
+				Agent: &commondto.AgentDigest{AgentId: "agent-1"},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	scoped := notificationRepo.(interface {
+		GetByOrganization(context.Context, int64, int64) (*entity.Notification, error)
+	})
+	created, err := scoped.GetByOrganization(context.Background(), id, 10)
+	require.NoError(t, err)
+	require.Equal(t, int64(10), created.OrganizationId)
+}
+
+func TestCreateRejectsUnresolvedOrganization(t *testing.T) {
+	service := NewService(&Components{
+		NotificationRepo: mockrepo.NewMockNotificationRepo(),
+		Ownership:        &notificationOwnership{},
+	})
+
+	_, err := service.Create(context.Background(), &entity.Notification{
+		ReceiverUsername: "bob",
+		Type:             pb.NotificationType_NOTIFICATION_TYPE_UNKNOWN,
+	})
+	require.Error(t, err)
+}
+
+func TestCreateNotificationRejectsForeignOrganization(t *testing.T) {
+	service := NewService(&Components{
+		NotificationRepo: mockrepo.NewMockNotificationRepo(),
+		Ownership: &notificationOwnership{
+			selectedOrganizationID: 10,
+			agentOrganizations:     map[string]int64{"agent-1": 20},
+		},
+	})
+
+	_, err := service.CreateNotification(ctxWithUser("alice"), &pb.CreateNotificationRequest{
+		ReceiverUsername: "bob",
+		Type:             pb.NotificationType_NOTIFICATION_TYPE_AGENT_EDITOR_ASSIGNED,
+		ExtraInfo: &pb.NotificationExtraInfo{
+			AgentEditorUpdate: &pb.NotificationExtraInfoAgentEditorUpdate{
+				Agent: &commondto.AgentDigest{AgentId: "agent-1"},
+			},
+		},
+	})
+	require.Error(t, err)
+}
+
+func TestNotificationTenantIsolation(t *testing.T) {
+	notificationRepo := mockrepo.NewMockNotificationRepo()
+	for _, notification := range []*entity.Notification{
+		{ReceiverUsername: "bob", OrganizationId: 10, Status: pb.NotificationStatus_NOTIFICATION_STATUS_UNREAD},
+		{ReceiverUsername: "bob", OrganizationId: 20, Status: pb.NotificationStatus_NOTIFICATION_STATUS_UNREAD},
+		{ReceiverUsername: "bob", OrganizationId: 0, Status: pb.NotificationStatus_NOTIFICATION_STATUS_UNREAD},
+	} {
+		_, err := notificationRepo.Create(context.Background(), notification)
+		require.NoError(t, err)
+	}
+	service := NewService(&Components{
+		NotificationRepo: notificationRepo,
+		Ownership:        &notificationOwnership{selectedOrganizationID: 10},
+	})
+	ctx := ctxWithUser("bob")
+
+	response, err := service.ListNotification(ctx, &pb.ListNotificationRequest{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), response.Data.Total)
+	require.Len(t, response.Data.Notifications, 1)
+	require.Equal(t, int64(10), response.Data.Notifications[0].OrganizationId)
+
+	_, err = service.UpdateNotificationStatus(ctx, &pb.UpdateNotificationStatusRequest{
+		Id: 2, Status: pb.NotificationStatus_NOTIFICATION_STATUS_READ,
+	})
+	require.Error(t, err)
+
+	readAll, err := service.ReadAllNotifications(ctx)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int64{1}, readAll.Data.Ids)
+
+	scoped := notificationRepo.(interface {
+		GetByOrganization(context.Context, int64, int64) (*entity.Notification, error)
+	})
+	foreign, err := scoped.GetByOrganization(context.Background(), 2, 20)
+	require.NoError(t, err)
+	require.Equal(t, pb.NotificationStatus_NOTIFICATION_STATUS_UNREAD, foreign.Status)
 }

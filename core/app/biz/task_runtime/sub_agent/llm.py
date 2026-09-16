@@ -31,11 +31,11 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import replace
 from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel, Field
 
+from .image_content import image_data_url
 from .loop import (
     AgentAction,
     AgentContent,
@@ -48,8 +48,6 @@ from .loop import (
     InvalidAction,
     TokenUsage,
 )
-from ..capabilities.ids import normalize_capability_id
-
 logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T", bound=BaseModel)
@@ -58,13 +56,14 @@ _T = TypeVar("_T", bound=BaseModel)
 # gist of each prior step to choose the next one.
 _MAX_HISTORY = 12
 _MAX_CONTENT_CHARS = 600
+_STRUCTURED_DECISION_ATTEMPTS = 2
 
 _SYSTEM_PREAMBLE = (
-    "You are a focused sub-agent. You accomplish ONE task by calling a fixed "
-    "allow-list of capabilities, at most one per step, and then reporting a "
-    "final answer. You may ONLY call capabilities listed under 'Capabilities'; "
-    "never invent or guess a capability name. Prefer the fewest steps and finish "
-    "as soon as the task is satisfied or cannot make further progress."
+    "You are a focused sub-agent. You accomplish ONE task by calling at most one tool per step, then report a final "
+    "answer. Use runtime:capability:discover with action='search' when you need an execution tool; matching tools are "
+    "automatically promoted with full schemas and become directly callable on the next turn. Use action='browse' only "
+    "for inventory or listing questions because browse never promotes. Your profile and runtime policy determine what "
+    "discovery exposes. Prefer the fewest steps and finish as soon as the task is satisfied or cannot progress."
 )
 
 _DECISION_INSTRUCTIONS = (
@@ -145,16 +144,38 @@ class HubSubAgentLLM:
         if self._temperature is not None:
             kwargs["temperature"] = self._temperature
         content_blocks = _multimodal_content(state, prompt)
-        completion = await client.complete_structured_result(
-            _Decision,
-            **({"content_blocks": content_blocks} if len(content_blocks) > 1 else {"prompt": prompt}),
-            **kwargs,
-        )
+        completion = None
+        retry_feedback = ""
+        for attempt in range(1, _STRUCTURED_DECISION_ATTEMPTS + 1):
+            attempt_prompt = prompt + retry_feedback
+            attempt_content_blocks = _replace_text_prompt(content_blocks, attempt_prompt)
+            try:
+                completion = await client.complete_structured_result(
+                    _Decision,
+                    **(
+                        {"content_blocks": attempt_content_blocks}
+                        if len(attempt_content_blocks) > 1
+                        else {"prompt": attempt_prompt}
+                    ),
+                    **kwargs,
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 - retry happens before any model action is accepted or executed.
+                if attempt == _STRUCTURED_DECISION_ATTEMPTS:
+                    completion = _recover_ordered_decision(exc)
+                    if completion is None:
+                        raise
+                    logger.warning(
+                        "sub-agent recovered first ordered decision after corrective retry output_count=%d",
+                        len(exc.candidates),
+                    )
+                    break
+                retry_feedback = _structured_retry_feedback(exc)
+                logger.warning("sub-agent structured decision failed; retrying", exc_info=True)
+        assert completion is not None
         usage = completion.usage
         trace = completion.trace
         action = _to_action(completion.value)
-        if isinstance(action, CapabilityCall):
-            action = replace(action, capability=normalize_capability_id(action.capability))
         return AgentModelTurn(
             action=action,
             usage=TokenUsage(
@@ -176,6 +197,34 @@ class HubSubAgentLLM:
 
             self._client = HubLLMClient() if self._model is None else HubLLMClient(model=self._model)
         return self._client
+
+
+def _replace_text_prompt(content_blocks: list[dict[str, Any]], prompt: str) -> list[dict[str, Any]]:
+    return [{"type": "text", "text": prompt}, *content_blocks[1:]]
+
+
+def _structured_retry_feedback(exc: Exception) -> str:
+    from app.llmhubs.structured import StructuredResponseDecodeError
+
+    if not isinstance(exc, StructuredResponseDecodeError):
+        return ""
+    return (
+        "\n\nYour previous structured response was rejected:\n"
+        f"{exc}\n\n"
+        "Correct it now. Return exactly ONE structured decision and no alternatives, commentary, or second JSON value. "
+        "If another capability call is needed, return only that call; do not also return a fallback final_answer. "
+        "Return final_answer only when no capability call is needed."
+    )
+
+
+def _recover_ordered_decision(exc: Exception):
+    from app.llmhubs.structured import StructuredCompletion, StructuredResponseDecodeError
+
+    if not isinstance(exc, StructuredResponseDecodeError) or len(exc.candidates) < 2:
+        return None
+    if not all(isinstance(candidate, _Decision) for candidate in exc.candidates):
+        return None
+    return StructuredCompletion(value=exc.candidates[0], usage=exc.usage, trace=exc.trace)
 
 
 class _ArgumentsDecodeError(ValueError):
@@ -231,9 +280,9 @@ def _parse_arguments(arguments_json: str) -> dict[str, object]:
 
 def _build_prompt(state: AgentModelState) -> str:
     """Render the full decision prompt from the current loop state (pure)."""
-    preamble = state.system_prompt if state.system_prompt else _SYSTEM_PREAMBLE
     sections = [
-        preamble,
+        _SYSTEM_PREAMBLE,
+        state.system_prompt.strip(),
         f"Task: {state.task.title}",
     ]
     instructions = state.task.instructions.strip()
@@ -273,7 +322,7 @@ def _multimodal_content(state: AgentModelState, prompt: str) -> list[dict[str, A
     media.extend(content for observation in state.history for content in observation.contents)
     for content in media:
         if content.type == "image" and content.uri:
-            blocks.append({"type": "image_url", "image_url": {"url": content.uri}})
+            blocks.append({"type": "image_url", "image_url": {"url": image_data_url(content)}})
     return blocks
 
 
@@ -317,6 +366,8 @@ def _render_observation(index: int, observation: Observation) -> list[str]:
     """
     verdict = "ok" if observation.ok else f"FAILED[{observation.status or 'unknown'}]"
     lines = [f"[{index}] {observation.capability or '(no capability)'} -> {verdict}: {_truncate(observation.content)}"]
+    if observation.arguments is not None:
+        lines.append(f"      arguments: {json.dumps(observation.arguments, ensure_ascii=False, sort_keys=True)}")
     if not observation.ok and observation.error_class:
         lines.append(f"      error_class: {observation.error_class}")
     if not observation.ok and observation.error_message and observation.error_message != observation.content:
@@ -326,8 +377,8 @@ def _render_observation(index: int, observation: Observation) -> list[str]:
     return lines
 
 
-def _truncate(text: str) -> str:
+def _truncate(text: str, max_chars: int = _MAX_CONTENT_CHARS) -> str:
     text = text or ""
-    if len(text) <= _MAX_CONTENT_CHARS:
+    if len(text) <= max_chars:
         return text
-    return text[:_MAX_CONTENT_CHARS] + "...(truncated)"
+    return text[:max_chars] + "...(truncated)"

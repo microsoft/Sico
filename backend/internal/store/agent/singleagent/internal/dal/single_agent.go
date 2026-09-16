@@ -152,12 +152,8 @@ func (sa *SingleAgentDAO) ListByFilter(
 		if !filter.Unrestricted {
 			q = q.Where(buildVisibilityGroup(q.Session(&gorm.Session{NewDB: true}), filter))
 		}
-		if len(filter.PublishStatuses) > 0 {
-			q = q.Where("publish_status IN ?", filter.PublishStatuses)
-		}
-		if filter.OrganizationID != nil {
-			q = q.Where("organization_id = ?", *filter.OrganizationID)
-		}
+		q = applyPublishStatusFilter(q, filter)
+		q = applyOrganizationFilter(q, filter)
 	}
 
 	var total int64
@@ -176,6 +172,31 @@ func (sa *SingleAgentDAO) ListByFilter(
 	}
 
 	return entities, total, nil
+}
+
+func applyOrganizationFilter(q *gorm.DB, filter *entity.ListSingleAgentFilter) *gorm.DB {
+	if filter.OrganizationID == nil {
+		return q
+	}
+	if filter.IncludeOrgFreeAgents || filter.IncludeOrgFreePublishedOnly {
+		return q.Where("organization_id IN ?", []int64{*filter.OrganizationID, 0})
+	}
+	return q.Where("organization_id = ?", *filter.OrganizationID)
+}
+
+func applyPublishStatusFilter(q *gorm.DB, filter *entity.ListSingleAgentFilter) *gorm.DB {
+	if len(filter.PublishStatuses) == 0 {
+		return q
+	}
+	if !filter.IncludeOwnerDrafts || filter.OwnerUsername == "" {
+		return q.Where("publish_status IN ?", filter.PublishStatuses)
+	}
+	return q.Where(
+		"(publish_status IN ? OR (creator_username = ? AND publish_status = ?))",
+		filter.PublishStatuses,
+		filter.OwnerUsername,
+		int32(single_agent.SingleAgentPublishStatus_SINGLE_AGENT_PUBLISH_STATUS_DRAFT),
+	)
 }
 
 // buildVisibilityGroup renders the OR-of-groups visibility predicate as a single

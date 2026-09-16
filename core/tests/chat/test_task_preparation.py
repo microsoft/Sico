@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
+
 import pytest
 
 from app.biz.chat.preparation import (
     AgentInvocation,
+    DelegatePreparationService,
     DirectCapability,
     LlmTaskPlanner,
     NeedsClarification,
@@ -17,11 +21,13 @@ from app.biz.chat.preparation import (
     WorkspaceCapabilityCatalogue,
     assemble_batch,
 )
-from app.biz.chat.preparation.planner import _planned_item_payload
+from app.biz.chat.preparation.planner import _descriptor_payload, _planned_item_payload
+from app.biz.chat.preparation.planner import _run_planner
 from app.biz.task_runtime.capabilities.loader import CapabilityCard
-from app.biz.task_runtime.planning import CatalogueQuery, ResolveContext
+from app.biz.task_runtime.planning import CatalogueQuery, PreparedTaskBatch, ResolveContext
 from app.biz.task_runtime.capabilities.descriptors import CapabilityDescriptor
 from app.biz.task_runtime.domain.models import CapabilityDispatch, SubAgentDispatch
+from app.biz.task_runtime.guides import SkillGuideRef
 from app.biz.task_runtime.sub_agent.profile import ALL_CAPABILITIES, ProfileDescriptor
 from app.tools.common import ToolContext
 
@@ -47,6 +53,7 @@ def test_assemble_batch_maps_both_decisions_without_source_specific_logic() -> N
     )
     agent = WorkItem(item_id="investigate-1", goal="Investigate the failure", params={"run_id": "r-1"})
 
+    guide_ref = SkillGuideRef(skill_id=6, version="v1", content_hash="1" * 64)
     prepared = assemble_batch(
         "Run cases, then investigate failures",
         (
@@ -59,7 +66,7 @@ def test_assemble_batch_maps_both_decisions_without_source_specific_logic() -> N
             ),
             PlannedWorkItem(
                 source=agent,
-                decision=AgentInvocation("default", ("builtin:echo",), max_model_turns=4),
+                decision=AgentInvocation("default", max_model_turns=4),
                 stage=1,
             ),
         ),
@@ -67,11 +74,12 @@ def test_assemble_batch_maps_both_decisions_without_source_specific_logic() -> N
         max_concurrency=2,
         batch_metadata={"source": "fixture"},
         adapter_state={"hint": "summarize"},
+        instruction_refs=(guide_ref,),
     )
 
     first, second = prepared.batch.tasks
     assert isinstance(first.dispatch, CapabilityDispatch)
-    assert first.dispatch.capability_id == "skill:android-test.run"
+    assert first.dispatch.capability_id == "skill:android-test:run"
     assert first.args == {"case_id": "TC-1"}
     assert first.required_sandbox == ["android"]
     assert first.selected_sandbox == "android"
@@ -82,14 +90,440 @@ def test_assemble_batch_maps_both_decisions_without_source_specific_logic() -> N
     }
     assert isinstance(second.dispatch, SubAgentDispatch)
     assert second.dispatch.profile_id == "default"
-    assert second.dispatch.capability_grants == ["builtin:echo"]
+    assert second.dispatch.capability_grants == []
     assert second.dispatch.max_model_turns == 4
+    assert second.dispatch.instruction_refs == [guide_ref]
     assert second.stage == 1
     assert prepared.batch.description == "Run cases, then investigate failures"
     assert prepared.batch.join_strategy == "all_success"
     assert prepared.batch.max_concurrency == 2
     assert prepared.batch_metadata == {"source": "fixture"}
     assert prepared.adapter_state == {"hint": "summarize"}
+
+
+@pytest.mark.asyncio
+async def test_planner_selects_profile_without_granting_capabilities() -> None:
+    async def plan_once(*args):
+        return PlannerOutput(items=[PlannedDecision(item_id="1", dispatch_type="sub_agent", profile_id="default")])
+
+    writer = CapabilityDescriptor(
+        capability_id="builtin:write_artifact",
+        parameter_schema={"type": "object", "properties": {}},
+        required_sandbox=(),
+        workspace_access="read_only",
+        effect="mutate",
+    )
+    profile = ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES)
+
+    result = await LlmTaskPlanner(plan_once).plan(
+        "Write a document",
+        (WorkItem(item_id="1", goal="Write a document"),),
+        (writer,),
+        (profile,),
+    )
+
+    assert isinstance(result, tuple)
+    assert result[0].decision == AgentInvocation("default")
+
+
+@pytest.mark.asyncio
+async def test_planner_sub_agent_decision_does_not_select_capabilities() -> None:
+    async def plan_once(*args):
+        return PlannerOutput(
+            items=[
+                PlannedDecision(
+                    item_id="1",
+                    dispatch_type="sub_agent",
+                    profile_id="default",
+                )
+            ]
+        )
+
+    descriptors = (
+        _descriptor("linux_workstation:browser:open_url", required=("linux_workstation",)),
+        _descriptor("linux_workstation:browser:screenshot", required=("linux_workstation",)),
+        _descriptor("linux_workstation:file:read", required=("linux_workstation",)),
+    )
+    profile = ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES)
+
+    result = await LlmTaskPlanner(plan_once).plan(
+        "Inspect a page",
+        (WorkItem(item_id="1", goal="Inspect a page"),),
+        descriptors,
+        (profile,),
+    )
+
+    assert isinstance(result, tuple)
+    assert result[0].decision == AgentInvocation("default")
+
+
+@pytest.mark.asyncio
+async def test_planner_baseline_writer_respects_profile_ceiling() -> None:
+    async def plan_once(*args):
+        return PlannerOutput(items=[PlannedDecision(item_id="1", dispatch_type="sub_agent", profile_id="read-only")])
+
+    writer = CapabilityDescriptor(
+        capability_id="builtin:write_artifact",
+        parameter_schema={"type": "object", "properties": {}},
+        required_sandbox=(),
+        workspace_access="read_only",
+        effect="mutate",
+    )
+    profile = ProfileDescriptor("read-only", "Read-only tasks", frozenset())
+
+    result = await LlmTaskPlanner(plan_once).plan(
+        "Inspect a document",
+        (WorkItem(item_id="1", goal="Inspect a document"),),
+        (writer,),
+        (profile,),
+    )
+
+    assert isinstance(result, tuple)
+    assert result[0].decision == AgentInvocation("read-only")
+
+
+@pytest.mark.asyncio
+async def test_delegate_preparation_propagates_guides_without_capability_grants() -> None:
+    guide_ref = SkillGuideRef(skill_id=6, version="v1", content_hash="1" * 64)
+    writer = CapabilityDescriptor(
+        capability_id="builtin:write_artifact",
+        parameter_schema={"type": "object", "properties": {}},
+        required_sandbox=(),
+        workspace_access="read_only",
+        effect="mutate",
+    )
+
+    class _Catalogue:
+        def __init__(self) -> None:
+            self.providers: tuple[str, ...] = ()
+
+        async def list_descriptors(self, context, query):
+            self.providers = query.providers
+            return (writer,) if query.matches(writer) else ()
+
+    class _Profiles:
+        def list_profiles(self, query):
+            return (ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES),)
+
+    async def plan_once(*args):
+        return PlannerOutput(
+            items=[
+                PlannedDecision(
+                    item_id="instruction-01-001",
+                    dispatch_type="sub_agent",
+                    profile_id="default",
+                )
+            ]
+        )
+
+    catalogue = _Catalogue()
+    service = DelegatePreparationService(LlmTaskPlanner(plan_once), _Profiles(), catalogue)
+    context = ToolContext.model_construct(
+        username="alice",
+        agent_id="agent-1",
+        agent_instance_id=7,
+        project_id=9,
+        conversation_id=1,
+        turn_id=2,
+        skill_loader=None,
+        activated_skill_guides=[guide_ref],
+    )
+    request = {
+        "batch_goal": "Write a PRD",
+        "sources": [{"type": "instructions", "items": [{"goal": "Write a PRD"}]}],
+    }
+
+    outcome = await service.prepare(context, json.dumps(request))
+
+    assert isinstance(outcome, PreparedTaskBatch)
+    dispatch = outcome.batch.tasks[0].dispatch
+    assert isinstance(dispatch, SubAgentDispatch)
+    assert dispatch.capability_grants == []
+    assert dispatch.instruction_refs == [guide_ref]
+    assert catalogue.providers == ("builtin", "skill")
+
+
+@pytest.mark.asyncio
+async def test_profile_bound_item_inherits_assigned_sandbox_without_grants() -> None:
+    class _Profiles:
+        def list_profiles(self, query):
+            return (ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES),)
+
+    async def plan_once(*args):
+        return PlannerOutput(
+            items=[
+                PlannedDecision(
+                    item_id="instruction-01-001",
+                    dispatch_type="sub_agent",
+                    profile_id="default",
+                )
+            ]
+        )
+
+    service = DelegatePreparationService(LlmTaskPlanner(plan_once), _Profiles(), WorkspaceCapabilityCatalogue())
+    context = ToolContext.model_construct(
+        username="alice",
+        agent_id="agent-1",
+        agent_instance_id=7,
+        project_id=9,
+        conversation_id=1,
+        turn_id=2,
+        skill_loader=None,
+        activated_skill_guides=[],
+        assigned_sandbox_types=frozenset({"linux_workstation"}),
+    )
+    request = {
+        "batch_goal": "Inspect the desktop",
+        "sources": [
+            {
+                "type": "instructions",
+                "items": [
+                    {
+                        "goal": "Run a desktop command",
+                        "profile_id": "default",
+                    }
+                ],
+            }
+        ],
+    }
+
+    outcome = await service.prepare(context, json.dumps(request))
+
+    assert isinstance(outcome, PreparedTaskBatch)
+    task = outcome.batch.tasks[0]
+    assert isinstance(task.dispatch, SubAgentDispatch)
+    assert task.dispatch.capability_grants == []
+    assert task.required_sandbox == ["linux_workstation"]
+    assert task.selected_sandbox == "linux_workstation"
+
+
+@pytest.mark.asyncio
+async def test_unresolved_instruction_exposes_assigned_sandbox_provider_to_planner() -> None:
+    seen_capabilities: list[tuple[str, ...]] = []
+
+    class _Profiles:
+        def list_profiles(self, query):
+            return (ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES),)
+
+    async def plan_once(batch_goal, unresolved, prebound, catalogue, profiles):
+        seen_capabilities.append(tuple(descriptor.capability_id for descriptor in catalogue))
+        return PlannerOutput(
+            items=[
+                PlannedDecision(
+                    item_id="instruction-01-001",
+                    dispatch_type="sub_agent",
+                    profile_id="default",
+                )
+            ]
+        )
+
+    service = DelegatePreparationService(
+        LlmTaskPlanner(plan_once),
+        _Profiles(),
+        WorkspaceCapabilityCatalogue(),
+    )
+    context = ToolContext.model_construct(
+        username="alice",
+        agent_id="agent-1",
+        agent_instance_id=7,
+        project_id=9,
+        conversation_id=1,
+        turn_id=2,
+        skill_loader=None,
+        activated_skill_guides=[],
+        assigned_sandbox_types=frozenset({"linux_workstation"}),
+    )
+    request = {
+        "batch_goal": "Run a shell workflow",
+        "sources": [{"type": "instructions", "items": [{"goal": "Run echo hello, then print it"}]}],
+    }
+
+    outcome = await service.prepare(context, json.dumps(request))
+
+    assert isinstance(outcome, PreparedTaskBatch)
+    assert "linux_workstation:shell:exec" in seen_capabilities[0]
+    dispatch = outcome.batch.tasks[0].dispatch
+    assert isinstance(dispatch, SubAgentDispatch)
+    assert dispatch.requested_capability_selectors == []
+    assert dispatch.effective_capability_ids == []
+    assert outcome.batch.tasks[0].required_sandbox == ["linux_workstation"]
+    assert outcome.batch.tasks[0].selected_sandbox == "linux_workstation"
+
+
+@pytest.mark.asyncio
+async def test_delegate_rejects_item_capability_selectors() -> None:
+    class _Profiles:
+        def list_profiles(self, query):
+            return (ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES),)
+
+    service = DelegatePreparationService(LlmTaskPlanner(), _Profiles(), WorkspaceCapabilityCatalogue())
+    context = ToolContext.model_construct(
+        username="alice",
+        agent_id="agent-1",
+        agent_instance_id=7,
+        project_id=9,
+        conversation_id=1,
+        turn_id=2,
+        skill_loader=None,
+        activated_skill_guides=[],
+        assigned_sandbox_types=frozenset({"linux_workstation"}),
+    )
+    request = {
+        "batch_goal": "Inspect the browser",
+        "sources": [
+            {
+                "type": "instructions",
+                "items": [
+                    {
+                        "goal": "Inspect the browser state",
+                        "profile_id": "default",
+                        "capability_selectors": ["linux_workstation:browser:**"],
+                    }
+                ],
+            }
+        ],
+    }
+
+    outcome = await service.prepare(context, json.dumps(request))
+
+    assert isinstance(outcome, Rejected)
+    assert outcome.code == "delegate_request_invalid"
+
+
+@pytest.mark.asyncio
+async def test_hierarchical_selector_rejects_empty_authorized_expansion() -> None:
+    class _Profiles:
+        def list_profiles(self, query):
+            return (ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES),)
+
+    service = DelegatePreparationService(LlmTaskPlanner(), _Profiles(), WorkspaceCapabilityCatalogue())
+    context = ToolContext.model_construct(
+        username="alice",
+        agent_id="agent-1",
+        agent_instance_id=7,
+        project_id=9,
+        conversation_id=1,
+        turn_id=2,
+        skill_loader=None,
+        activated_skill_guides=[],
+        assigned_sandbox_types=frozenset({"linux_workstation"}),
+    )
+    request = {
+        "batch_goal": "Use unavailable browser capability",
+        "sources": [
+            {
+                "type": "instructions",
+                "items": [
+                    {
+                        "goal": "Print the page",
+                        "profile_id": "default",
+                        "capability_selectors": ["linux_workstation:printer:**"],
+                    }
+                ],
+            }
+        ],
+    }
+
+    outcome = await service.prepare(context, json.dumps(request))
+
+    assert isinstance(outcome, Rejected)
+    assert outcome.code == "delegate_request_invalid"
+
+
+@pytest.mark.asyncio
+async def test_hierarchical_selector_rejects_oversized_expansion() -> None:
+    class _Profiles:
+        def list_profiles(self, query):
+            return (ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES),)
+
+    class _LargeCatalogue:
+        async def list_descriptors(self, context, query):
+            return tuple(
+                CapabilityDescriptor(
+                    capability_id=f"bulk:operation:{index}",
+                    parameter_schema={"type": "object"},
+                    required_sandbox=(),
+                    workspace_access="none",
+                    effect="read",
+                )
+                for index in range(101)
+            )
+
+    service = DelegatePreparationService(LlmTaskPlanner(), _Profiles(), _LargeCatalogue())
+    context = ToolContext.model_construct(
+        username="alice",
+        agent_id="agent-1",
+        agent_instance_id=7,
+        project_id=9,
+        conversation_id=1,
+        turn_id=2,
+        skill_loader=None,
+        activated_skill_guides=[],
+        assigned_sandbox_types=frozenset(),
+    )
+    request = {
+        "batch_goal": "Run a broad toolkit",
+        "sources": [
+            {
+                "type": "instructions",
+                "items": [
+                    {
+                        "goal": "Use the toolkit",
+                        "profile_id": "default",
+                        "capability_selectors": ["bulk:**"],
+                    }
+                ],
+            }
+        ],
+    }
+
+    outcome = await service.prepare(context, json.dumps(request))
+
+    assert isinstance(outcome, Rejected)
+    assert outcome.code == "delegate_request_invalid"
+
+
+@pytest.mark.asyncio
+async def test_task_planner_retries_transient_non_zero_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+
+    async def generate(*, request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return SimpleNamespace(code=500, msg="runtime generate failed", outputs=[], text="")
+        return SimpleNamespace(
+            code=0,
+            msg="",
+            outputs=[
+                SimpleNamespace(
+                    json={
+                        "items": [
+                            {
+                                "item_id": "1",
+                                "dispatch_type": "sub_agent",
+                                "profile_id": "default",
+                            }
+                        ]
+                    },
+                    text="",
+                )
+            ],
+            text="",
+        )
+
+    monkeypatch.setattr("app.biz.chat.preparation.planner.app.llmhubs.generate", generate)
+
+    output = await _run_planner(
+        "Write a PRD",
+        (WorkItem(item_id="1", goal="Write a PRD"),),
+        (),
+        (),
+        (ProfileDescriptor("default", "General tasks", ALL_CAPABILITIES),),
+    )
+
+    assert output.items[0].profile_id == "default"
+    assert calls == 2
 
 
 def test_planned_work_item_rejects_stage_hint_conflict() -> None:
@@ -247,6 +681,23 @@ def test_prebound_planner_payload_includes_dependency_context() -> None:
     assert payload["goal"] == "Write the generated file"
     assert payload["title"] == "Generate file"
     assert payload["params"] == {"output_path": "results/generated.json"}
+
+
+def test_planner_descriptor_payload_exposes_filesystem_and_effect_policy() -> None:
+    descriptor = CapabilityDescriptor(
+        capability_id="builtin:run_command",
+        parameter_schema={"type": "object"},
+        required_sandbox=(),
+        workspace_access="read_only",
+        effect="mutate",
+        description="Generic command backend.",
+    )
+
+    payload = _descriptor_payload(descriptor)
+
+    assert payload["workspace_access"] == "read_only"
+    assert payload["effect"] == "mutate"
+    assert payload["required_sandbox"] == []
 
 
 @pytest.mark.asyncio
@@ -493,6 +944,7 @@ async def test_workspace_catalogue_is_caller_scoped_and_provider_filtered() -> N
         agent_instance_id=7,
         project_id=11,
         skill_loader=_Loader(),
+        assigned_sandbox_types=frozenset(),
     )
     catalogue = WorkspaceCapabilityCatalogue()
     query = CatalogueQuery(
@@ -506,8 +958,30 @@ async def test_workspace_catalogue_is_caller_scoped_and_provider_filtered() -> N
         CatalogueQuery(caller=ResolveContext(username="bob", agent_instance_id=7, project_id=11)),
     )
 
-    assert [descriptor.capability_id for descriptor in descriptors] == ["skill:android.run"]
+    assert [descriptor.capability_id for descriptor in descriptors] == ["skill:android:run"]
     assert denied == ()
+
+
+@pytest.mark.asyncio
+async def test_workspace_catalogue_scopes_sandbox_capabilities_to_assigned_types() -> None:
+    catalogue = WorkspaceCapabilityCatalogue()
+    query = CatalogueQuery(
+        caller=ResolveContext(username="alice", agent_instance_id=7, project_id=11),
+        providers=("linux_workstation",),
+    )
+    unassigned = ToolContext.model_construct(
+        username="alice",
+        agent_instance_id=7,
+        project_id=11,
+        skill_loader=None,
+        assigned_sandbox_types=frozenset(),
+    )
+    assigned = unassigned.model_copy(update={"assigned_sandbox_types": frozenset({"linux_workstation"})})
+
+    assert await catalogue.list_descriptors(unassigned, query) == ()
+    descriptors = await catalogue.list_descriptors(assigned, query)
+    assert "linux_workstation:shell:exec" in {descriptor.capability_id for descriptor in descriptors}
+    assert all(descriptor.required_sandbox == ("linux_workstation",) for descriptor in descriptors)
 
 
 @pytest.mark.asyncio

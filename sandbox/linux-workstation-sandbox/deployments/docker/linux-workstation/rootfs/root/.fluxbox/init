@@ -1,0 +1,4 @@
+session.menuFile: /etc/X11/fluxbox/fluxbox-menu
+session.keyFile: /etc/X11/fluxbox/keys
+session.styleFile: /usr/share/fluxbox/styles/Squared_for_Debian
+session.screen0.rootCommand:

@@ -1,7 +1,7 @@
 """Input expansion and planning for durable chat tasks."""
 
 from .assembly import assemble_batch
-from .catalogue import CapabilityCatalogue, WorkspaceCapabilityCatalogue
+from .catalogue import CapabilityCatalogue, CapabilityRetriever, WorkspaceCapabilityCatalogue
 from .factory import build_default_preparation_service
 from .models import (
     AgentInvocation,
@@ -21,6 +21,7 @@ from .service import DelegatePreparationService
 __all__ = [
     "AgentInvocation",
     "CapabilityCatalogue",
+    "CapabilityRetriever",
     "DirectCapability",
     "DelegatePreparationService",
     "DelegateRequest",

@@ -9,10 +9,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -175,6 +178,113 @@ func TestSandboxAuthMiddleware_MissingHeaders(t *testing.T) {
 	// For now, test that the middleware factory at least doesn't panic
 	handler := SandboxAuthMiddleware()
 	assert.NotNil(t, handler)
+}
+
+func newSandboxAuthTestEngine(client *redis.Client, secret string) *gin.Engine {
+	engine := gin.New()
+	engine.POST(
+		"/test",
+		sandboxAuthMiddleware(&SandboxAuthConfig{
+			RedisClient: client,
+			GetClientSecret: func(string) (string, error) {
+				return secret, nil
+			},
+		}),
+		func(c *gin.Context) { c.Status(http.StatusOK) },
+	)
+	return engine
+}
+
+func newSandboxAuthTestRequest(secret, nonce string) *http.Request {
+	clientID := "test-client"
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	signature := calculateHMAC(fmt.Sprintf("%s|%s|%s", clientID, timestamp, nonce), secret)
+	request := httptest.NewRequest(http.MethodPost, "/test", nil)
+	request.Header.Set(HeaderClientID, clientID)
+	request.Header.Set(HeaderTimestamp, timestamp)
+	request.Header.Set(HeaderNonce, nonce)
+	request.Header.Set(HeaderSignature, signature)
+	request.Header.Set(HeaderSicoContext, `{"agentInstanceId":42}`)
+	return request
+}
+
+func TestSandboxAuthMiddleware_InvalidSignatureDoesNotConsumeNonce(t *testing.T) {
+	miniRedis := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: miniRedis.Addr()})
+	t.Cleanup(func() { assert.NoError(t, client.Close()) })
+	const secret = "test-secret"
+	engine := newSandboxAuthTestEngine(client, secret)
+
+	invalidRequest := newSandboxAuthTestRequest(secret, "shared-nonce")
+	invalidRequest.Header.Set(HeaderSignature, "invalid")
+	invalidResponse := httptest.NewRecorder()
+	engine.ServeHTTP(invalidResponse, invalidRequest)
+	assert.Equal(t, http.StatusUnauthorized, invalidResponse.Code)
+
+	validResponse := httptest.NewRecorder()
+	engine.ServeHTTP(validResponse, newSandboxAuthTestRequest(secret, "shared-nonce"))
+	assert.Equal(t, http.StatusOK, validResponse.Code)
+}
+
+func TestSandboxAuthMiddleware_ConcurrentNonceClaimIsAtomic(t *testing.T) {
+	miniRedis := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: miniRedis.Addr()})
+	t.Cleanup(func() { assert.NoError(t, client.Close()) })
+	const secret = "test-secret"
+	const requestCount = 16
+	engine := newSandboxAuthTestEngine(client, secret)
+	start := make(chan struct{})
+	statuses := make(chan int, requestCount)
+	var waitGroup sync.WaitGroup
+
+	for range requestCount {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			request := newSandboxAuthTestRequest(secret, "concurrent-nonce")
+			response := httptest.NewRecorder()
+			<-start
+			engine.ServeHTTP(response, request)
+			statuses <- response.Code
+		}()
+	}
+	close(start)
+	waitGroup.Wait()
+	close(statuses)
+
+	allowed := 0
+	rejected := 0
+	for statusCode := range statuses {
+		switch statusCode {
+		case http.StatusOK:
+			allowed++
+		case http.StatusUnauthorized:
+			rejected++
+		default:
+			t.Fatalf("unexpected status code: %d", statusCode)
+		}
+	}
+	assert.Equal(t, 1, allowed)
+	assert.Equal(t, requestCount-1, rejected)
+}
+
+func TestSandboxAuthMiddleware_NonceStoreFailureIsClosed(t *testing.T) {
+	miniRedis, err := miniredis.Run()
+	assert.NoError(t, err)
+	address := miniRedis.Addr()
+	miniRedis.Close()
+	client := redis.NewClient(&redis.Options{
+		Addr: address, MaxRetries: -1,
+		DialTimeout: 50 * time.Millisecond, ReadTimeout: 50 * time.Millisecond,
+		WriteTimeout: 50 * time.Millisecond,
+	})
+	t.Cleanup(func() { assert.NoError(t, client.Close()) })
+	const secret = "test-secret"
+	engine := newSandboxAuthTestEngine(client, secret)
+
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, newSandboxAuthTestRequest(secret, "redis-error-nonce"))
+	assert.Equal(t, http.StatusInternalServerError, response.Code)
 }
 
 func TestGetDurationSeconds(t *testing.T) {

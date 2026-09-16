@@ -262,6 +262,133 @@ describe("axios interceptors", () => {
     expect(src).not.toContain("expiresAt");
   });
 
+  it.each(["get", "post"] as const)(
+    "attaches the bound organization to %s requests",
+    async (method) => {
+      const api = createApiClient({ getOrganizationId: () => 9 });
+      const mock = new MockAdapter(api);
+      mocks.push(mock);
+      mock.onAny("/organization-probe").reply((config) => {
+        expect(config.headers?.["X-Sico-Organization-ID"]).toBe("9");
+        return [200, OK_EMPTY];
+      });
+
+      await api.request({ url: "/organization-probe", method });
+    },
+  );
+
+  it("attaches the organization without changing a multipart upload body", async () => {
+    const api = createApiClient({ getOrganizationId: () => 9 });
+    const mock = new MockAdapter(api);
+    mocks.push(mock);
+    const body = new FormData();
+    body.append("file", new File(["content"], "attachment.txt"));
+    mock.onPost("/upload").reply((config) => {
+      expect(config.headers?.["X-Sico-Organization-ID"]).toBe("9");
+      expect(config.data).toBe(body);
+      return [200, OK_EMPTY];
+    });
+
+    await api.post("/upload", body);
+  });
+
+  it("reads the latest organization on every request", async () => {
+    let organizationId: number | null = 9;
+    const api = createApiClient({ getOrganizationId: () => organizationId });
+    const mock = new MockAdapter(api);
+    mocks.push(mock);
+    mock.onGet("/organization-probe").reply((config) => {
+      expect(config.headers?.["X-Sico-Organization-ID"]).toBe(
+        organizationId === null ? undefined : String(organizationId),
+      );
+      return [200, OK_EMPTY];
+    });
+
+    await api.get("/organization-probe");
+    organizationId = 10;
+    await api.get("/organization-probe");
+    organizationId = null;
+    await api.get("/organization-probe");
+  });
+
+  it("omits the organization before binding is known", async () => {
+    const api = createApiClient({ getOrganizationId: () => null });
+    const mock = new MockAdapter(api);
+    mocks.push(mock);
+    mock.onGet("/organization-probe").reply((config) => {
+      expect(config.headers?.["X-Sico-Organization-ID"]).toBeUndefined();
+      return [200, OK_EMPTY];
+    });
+
+    await api.get("/organization-probe");
+  });
+
+  it("attaches the organization even with an explicit Authorization header", async () => {
+    const api = createApiClient({ getOrganizationId: () => 9 });
+    const mock = new MockAdapter(api);
+    mocks.push(mock);
+    mock.onGet("/explicit-owner").reply((config) => {
+      expect(config.headers?.Authorization).toBe("Bearer explicit-token");
+      expect(config.headers?.["X-Sico-Organization-ID"]).toBe("9");
+      return [200, OK_EMPTY];
+    });
+
+    await api.get("/explicit-owner", {
+      headers: { Authorization: "Bearer explicit-token" },
+    });
+  });
+
+  it("uses the bound organization instead of an explicit stale organization", async () => {
+    const api = createApiClient({ getOrganizationId: () => 9 });
+    const mock = new MockAdapter(api);
+    mocks.push(mock);
+    mock.onGet("/organization-probe").reply((config) => {
+      expect(config.headers?.["x-sico-organization-id"]).toBe("9");
+      return [200, OK_EMPTY];
+    });
+
+    await api.get("/organization-probe", {
+      headers: { "x-sico-organization-id": "8" },
+    });
+  });
+
+  it("attaches the organization to absolute same-origin URLs", async () => {
+    const api = createApiClient({ getOrganizationId: () => 9 });
+    const mock = new MockAdapter(api);
+    mocks.push(mock);
+    const url = `${window.location.origin}/api/sico/probe`;
+    mock.onGet(url).reply((config) => {
+      expect(config.headers?.["X-Sico-Organization-ID"]).toBe("9");
+      return [200, OK_EMPTY];
+    });
+
+    await api.get(url);
+  });
+
+  it.each([
+    { url: "https://other.example/probe", baseURL: "/api/sico" },
+    { url: "/probe", baseURL: "https://other.example" },
+  ])(
+    "omits organization context for cross-origin requests: %o",
+    async (request) => {
+      const getOrganizationId = vi.fn(() => 9);
+      const api = createApiClient({
+        baseURL: request.baseURL,
+        getOrganizationId,
+      });
+      const mock = new MockAdapter(api);
+      mocks.push(mock);
+      mock.onGet(request.url).reply((config) => {
+        expect(config.headers?.["X-Sico-Organization-ID"]).toBeUndefined();
+        return [200, OK_EMPTY];
+      });
+
+      await api.get(request.url);
+
+      expect(getOrganizationId).not.toHaveBeenCalled();
+    },
+  );
+
   // --- baseURL / same-origin Authorization regressions --------------------
 
   it("applies the `baseURL` option to outgoing requests", async () => {

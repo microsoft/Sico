@@ -71,75 +71,79 @@ class BatchScheduler:
         def eligible_for_retry(run: TaskRun, result: TaskResult) -> bool:
             return should_retry is not None and prepare_retry is not None and should_retry(run, result)
 
-        while pending or running:
-            while stop_reason is None and pending and len(running) < concurrency:
-                next_index = next((index for index, run in enumerate(pending) if can_start(run)), None)
-                if next_index is None:
+        try:
+            while pending or running:
+                while stop_reason is None and pending and len(running) < concurrency:
+                    next_index = next((index for index, run in enumerate(pending) if can_start(run)), None)
+                    if next_index is None:
+                        break
+                    run = pending.pop(next_index)
+                    key = run_resource(run)
+                    if key is not None:
+                        resource_in_use[key] += 1
+                    task = asyncio.create_task(_execute_safely(execute, run))
+                    running[task] = (run, key)
+
+                if not running:
                     break
-                run = pending.pop(next_index)
-                key = run_resource(run)
-                if key is not None:
-                    resource_in_use[key] += 1
-                task = asyncio.create_task(_execute_safely(execute, run))
-                running[task] = (run, key)
 
-            if not running:
-                break
+                done, _ = await asyncio.wait(running.keys(), return_when=asyncio.FIRST_COMPLETED)
+                # Two-phase processing of the done set. ``asyncio.wait`` can return
+                # several finished tasks at once; collect their results first and
+                # decide whether THIS round produces a stop reason before deciding any
+                # retries. Otherwise iteration order could reopen a retryable failure
+                # moments before a sibling result trips fail_fast / first_success,
+                # leaving the reopened run to be cancelled instead of recording its
+                # real terminal result.
+                completed: list[tuple[TaskRun, TaskResult]] = []
+                for task in done:
+                    run, key = running.pop(task)
+                    if key is not None:
+                        resource_in_use[key] = max(0, resource_in_use[key] - 1)
+                    completed.append((run, task.result()))
 
-            done, _ = await asyncio.wait(running.keys(), return_when=asyncio.FIRST_COMPLETED)
-            # Two-phase processing of the done set. ``asyncio.wait`` can return
-            # several finished tasks at once; collect their results first and
-            # decide whether THIS round produces a stop reason before deciding any
-            # retries. Otherwise iteration order could reopen a retryable failure
-            # moments before a sibling result trips fail_fast / first_success,
-            # leaving the reopened run to be cancelled instead of recording its
-            # real terminal result.
-            completed: list[tuple[TaskRun, TaskResult]] = []
-            for task in done:
-                run, key = running.pop(task)
-                if key is not None:
-                    resource_in_use[key] = max(0, resource_in_use[key] - 1)
-                completed.append((run, task.result()))
-
-            # Does the batch stop because of THIS round? Under fail_fast any
-            # non-completed result stops the batch immediately, even a retryable
-            # one: fail_fast means "stop at the first failure" and must not spend
-            # a retry first. (first_success stops on a COMPLETED result.) Computed
-            # over the whole done set up front so a sibling stop is visible before
-            # any retry decision below.
-            round_stops = stop_reason is not None or any(
-                _stop_reason(join_strategy, result) is not None for _, result in completed
-            )
-
-            for run, result in completed:
-                # Retry only while the batch keeps progressing. If THIS round (or an
-                # earlier one) settled the batch into a stop, skip the reopen and
-                # record the prior terminal result, so a winding-down run is never
-                # stranded in QUEUED nor cancelled over its real result.
-                if not round_stops and eligible_for_retry(run, result):
-                    retry_run = await prepare_retry(run, result)
-                    if retry_run is not None:
-                        # Fair retry: requeue at the back so a flaky run never
-                        # starves its siblings.
-                        pending.append(retry_run)
-                        continue
-                    # Reopen was refused (run no longer reopenable) — fall through
-                    # and record the prior terminal result so the case is counted.
-                results[run.run_id] = result
-                _LOGGER.info(
-                    "batch %s progress: %d/%d cases finished — %s [%s]",
-                    run.batch_id,
-                    len(results),
-                    len(runs),
-                    run.spec.title,
-                    result.status.value,
+                # Does the batch stop because of THIS round? Under fail_fast any
+                # non-completed result stops the batch immediately, even a retryable
+                # one: fail_fast means "stop at the first failure" and must not spend
+                # a retry first. (first_success stops on a COMPLETED result.) Computed
+                # over the whole done set up front so a sibling stop is visible before
+                # any retry decision below.
+                round_stops = stop_reason is not None or any(
+                    _stop_reason(join_strategy, result) is not None for _, result in completed
                 )
-                stop_reason = stop_reason or _stop_reason(join_strategy, result)
 
-        if stop_reason is not None:
-            await self._cancel_remaining(pending, results, cancel_queued, stop_reason)
+                for run, result in completed:
+                    # Retry only while the batch keeps progressing. If THIS round (or an
+                    # earlier one) settled the batch into a stop, skip the reopen and
+                    # record the prior terminal result, so a winding-down run is never
+                    # stranded in QUEUED nor cancelled over its real result.
+                    if not round_stops and eligible_for_retry(run, result):
+                        retry_run = await prepare_retry(run, result)
+                        if retry_run is not None:
+                            # Fair retry: requeue at the back so a flaky run never
+                            # starves its siblings.
+                            pending.append(retry_run)
+                            continue
+                        # Reopen was refused (run no longer reopenable) — fall through
+                        # and record the prior terminal result so the case is counted.
+                    results[run.run_id] = result
+                    _LOGGER.info(
+                        "batch %s progress: %d/%d cases finished — %s [%s]",
+                        run.batch_id,
+                        len(results),
+                        len(runs),
+                        run.spec.title,
+                        result.status.value,
+                    )
+                    stop_reason = stop_reason or _stop_reason(join_strategy, result)
 
-        return sorted(results.values(), key=lambda result: _batch_item_index(runs, result.run_id))
+            if stop_reason is not None:
+                await self._cancel_remaining(pending, results, cancel_queued, stop_reason)
+
+            return sorted(results.values(), key=lambda result: _batch_item_index(runs, result.run_id))
+        finally:
+            in_flight = tuple(running)
+            await _cancel_and_wait(in_flight)
 
     async def _cancel_remaining(
         self,
@@ -295,6 +299,23 @@ async def _execute_safely(
     except Exception as exc:
         _LOGGER.exception("batch_scheduler_worker_failed run_id=%s", run.run_id)
         return _internal_failure_result(run, exc)
+
+
+async def _cancel_and_wait(tasks: tuple[asyncio.Task[TaskResult], ...]) -> None:
+    """Cancel child tasks while shielding their cleanup from repeated cancellation."""
+    if not tasks:
+        return
+    for task in tasks:
+        task.cancel()
+    waiter = asyncio.gather(*tasks, return_exceptions=True)
+    interrupted: asyncio.CancelledError | None = None
+    while not waiter.done():
+        try:
+            await asyncio.shield(waiter)
+        except asyncio.CancelledError as exc:
+            interrupted = exc
+    if interrupted is not None:
+        raise interrupted
 
 
 def _stop_reason(join_strategy: JoinStrategy, result: TaskResult) -> str | None:

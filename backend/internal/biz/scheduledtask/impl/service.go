@@ -8,6 +8,7 @@ import (
 
 	appresp "sico-backend/internal/biz/common/response"
 	conversationmodel "sico-backend/internal/biz/conversation/model"
+	"sico-backend/internal/biz/ownership"
 	notificationentity "sico-backend/internal/entity/notification"
 	entity "sico-backend/internal/entity/scheduledtask"
 	"sico-backend/internal/infra/cron"
@@ -44,6 +45,7 @@ type Components struct {
 	DeliverableStorage  DeliverableStorage
 	Cron                cron.Cron
 	Parser              cron.Parser
+	Ownership           ownership.Resolver
 }
 
 type NotificationService interface {
@@ -62,10 +64,24 @@ type Service struct{ *Components }
 
 func NewService(components *Components) *Service { return &Service{Components: components} }
 
+func (s *Service) requireAgentInstanceOrganization(ctx context.Context, instanceID int64) error {
+	if s == nil || s.Components == nil || s.Ownership == nil {
+		return nil
+	}
+	organizationID, err := s.Ownership.AgentInstanceOrganization(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	return s.Ownership.RequireOrganization(ctx, organizationID, false)
+}
+
 func (s *Service) Create(
 	ctx context.Context,
 	req *pb.CreateScheduledTaskRequest,
 ) (*pb.CreateScheduledTaskResponse, error) {
+	if err := s.requireAgentInstanceOrganization(ctx, req.AgentInstanceId); err != nil {
+		return nil, err
+	}
 	username := middleware.MustGetUsernameFromCtx(ctx)
 	name, message, nextRunAt, err := s.validateAndNext(
 		ctx, req.Name, req.Message, req.AgentInstanceId, req.CronExpression, req.Timezone,
@@ -110,6 +126,9 @@ func (s *Service) Update(
 	if _, err := s.ownedTask(ctx, req.Id); err != nil {
 		return nil, err
 	}
+	if err := s.requireAgentInstanceOrganization(ctx, req.AgentInstanceId); err != nil {
+		return nil, err
+	}
 	name, message, nextRunAt, err := s.validateAndNext(
 		ctx, req.Name, req.Message, req.AgentInstanceId, req.CronExpression, req.Timezone,
 	)
@@ -145,6 +164,9 @@ func (s *Service) Delete(
 	ctx context.Context,
 	req *pb.DeleteScheduledTaskRequest,
 ) (*pb.DeleteScheduledTaskResponse, error) {
+	if _, err := s.ownedTask(ctx, req.Id); err != nil {
+		return nil, err
+	}
 	deleted, err := s.Repository.DeleteForCreator(ctx, req.Id, middleware.MustGetUsernameFromCtx(ctx))
 	if err != nil {
 		return nil, err
@@ -160,9 +182,27 @@ func (s *Service) List(
 	req *pb.ListScheduledTasksRequest,
 ) (*pb.ListScheduledTasksResponse, error) {
 	offset := int(req.Page-1) * int(req.PageSize)
-	tasks, total, err := s.Repository.ListForCreator(
-		ctx, middleware.MustGetUsernameFromCtx(ctx), offset, int(req.PageSize),
-	)
+	username := middleware.MustGetUsernameFromCtx(ctx)
+	var tasks []*entity.ScheduledTask
+	var total int64
+	var err error
+	if s.Ownership != nil {
+		organizationID, scopeErr := s.Ownership.RequireSelected(ctx)
+		if scopeErr != nil {
+			return nil, scopeErr
+		}
+		scoped, ok := s.Repository.(repository.OrganizationScopedRepository)
+		if !ok {
+			return nil, apperr.New(
+				errcode.CommonUnavailable, "scheduled task repository does not support organization scoping",
+			)
+		}
+		tasks, total, err = scoped.ListForCreatorInOrganization(
+			ctx, username, organizationID, offset, int(req.PageSize),
+		)
+	} else {
+		tasks, total, err = s.Repository.ListForCreator(ctx, username, offset, int(req.PageSize))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -473,6 +513,9 @@ func (s *Service) ownedTask(ctx context.Context, id int64) (*entity.ScheduledTas
 	}
 	if task == nil {
 		return nil, apperr.New(errcode.CommonNotFound, "scheduled task not found")
+	}
+	if err := s.requireAgentInstanceOrganization(ctx, task.AgentInstanceID); err != nil {
+		return nil, err
 	}
 	return task, nil
 }

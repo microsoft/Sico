@@ -6,6 +6,7 @@ const organizationBaseSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   description: z.string(),
+  iconUrl: z.string().nullish(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

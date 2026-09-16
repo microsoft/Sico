@@ -4,23 +4,31 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
+import mimetypes
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from ..capabilities.descriptors import (
     CapabilityBinding,
     CapabilityDescriptor,
+    CatalogueQuery,
     ResolveContext,
     split_sensitive_arguments,
 )
 from ..capabilities.ids import normalize_capability_id
 from ..capabilities.resolver import CapabilityResolver
 from ..capabilities.executor import CapabilityExecutionPolicy
-from ..domain.models import CapabilityDispatch, ErrorClass, TaskDetail, TaskResult, TaskRun, TaskSpec, TaskStatus
+from ..domain.models import ArtifactRef, CapabilityDispatch, ErrorClass, TaskDetail, TaskResult, TaskRun, TaskSpec, TaskStatus
 from ..domain.state_machine import TERMINAL_RUN_STATUSES
 from ..storage.run_store import IdempotencyCollisionError, RunStore
 from ..domain.time import now_ms as _now_ms
-from .loop import CapabilityCall, Observation
+from .loop import AgentContent, CapabilityCall, Observation
+from .loop.events import ToolCallCompletedEvent, ToolCallRequestedEvent
+from .loop.transcript import AgentEventTranscript
+from ..workspace.layout import workspace_layout
 from .profile import InvocationPolicy, InvocationPolicyContext
 
 
@@ -37,10 +45,10 @@ class AgentInvocationContext:
 class CapabilityInvoker(Protocol):
     """Resolve and execute allow-listed capabilities for the sub-agent loop."""
 
-    async def available_descriptors(
+    async def list_descriptors(
         self,
         run: TaskRun,
-        capability_ids: tuple[str, ...],
+        query: CatalogueQuery,
     ) -> tuple[CapabilityDescriptor, ...]: ...
 
     async def invoke(
@@ -92,8 +100,8 @@ class RunCapabilityInvoker:
 
     The binding is resolved once, before persistence, so sensitive arguments can
     be separated and policy evaluates the same descriptor the handler executes.
-    A deterministic child id makes a replay reuse the recorded result instead of
-    repeating a side effect.
+    A deterministic child id makes a duplicate invocation reuse the recorded
+    result instead of repeating a side effect.
     """
 
     def __init__(
@@ -106,18 +114,21 @@ class RunCapabilityInvoker:
         self._resolver = resolver
         self._store = store
 
-    async def available_descriptors(
+    async def list_descriptors(
         self,
         run: TaskRun,
-        capability_ids: tuple[str, ...],
+        query: CatalogueQuery,
     ) -> tuple[CapabilityDescriptor, ...]:
-        context = ResolveContext.from_run(run)
-        available: list[CapabilityDescriptor] = []
-        for capability_id in capability_ids:
-            binding = await self._resolver.resolve(capability_id, context)
-            if binding is not None:
-                available.append(binding.descriptor)
-        return tuple(available)
+        return await self._resolver.list_descriptors(
+            CatalogueQuery(
+                caller=ResolveContext.from_run(run),
+                providers=query.providers,
+                selectors=query.selectors,
+                search=query.search,
+                limit=query.limit,
+                include_internal=query.include_internal,
+            )
+        )
 
     async def invoke(
         self,
@@ -126,6 +137,7 @@ class RunCapabilityInvoker:
         context: AgentInvocationContext | None = None,
     ) -> Observation:
         context = context or AgentInvocationContext(profile_id="", step=0, policies=(), history=())
+        workspace = _run_workspace(run)
         capability_id = normalize_capability_id(call.capability)
         binding = await self._resolver.resolve(capability_id, ResolveContext.from_run(run))
         if binding is None:
@@ -137,17 +149,34 @@ class RunCapabilityInvoker:
         except Exception as exc:  # noqa: BLE001 - a store fault is a failed call, not a crashed loop.
             return _failed_observation(call, f"Capability {call.capability!r} could not be dispatched: {exc}")
         if prior is not None:
-            return _observation_from_result(call, prior)
+            return _observation_from_result(call, prior, workspace=workspace)
+        transcript = AgentEventTranscript(_child_event_transcript_path(child))
+        await _reset_transcript(transcript)
+        await _append_transcript(transcript, ToolCallRequestedEvent(turn=max(1, context.step), call=call))
+        started = time.perf_counter()
         try:
             policy = _ProfileCapabilityPolicy(context, call) if context.policies else None
             result = await self._executor.run_resolved(child, self._store, binding, policy)
         except asyncio.CancelledError:
             with contextlib.suppress(Exception, asyncio.CancelledError):
                 await self._store.cancel_run(child.run_id, "Parent sub-agent run was cancelled.")
+            await _flush_transcript(transcript)
             raise
         except Exception as exc:  # noqa: BLE001 - report any capability fault as a failed observation.
-            return await self._reconciled_failure(call, child, exc)
-        return _observation_from_result(call, result)
+            observation = await self._reconciled_failure(call, child, exc)
+        else:
+            observation = _observation_from_result(call, result, workspace=workspace)
+        await _append_transcript(
+            transcript,
+            ToolCallCompletedEvent(
+                turn=max(1, context.step),
+                call=call,
+                observation=observation,
+                duration_ms=int((time.perf_counter() - started) * 1000),
+            ),
+        )
+        await _flush_transcript(transcript)
+        return observation
 
     async def _reconciled_failure(self, call: CapabilityCall, child: TaskRun, exc: Exception) -> Observation:
         """Prefer a recorded result when an executor response is lost."""
@@ -155,7 +184,7 @@ class RunCapabilityInvoker:
         with contextlib.suppress(Exception):
             detail = await self._existing_child(child.run_id)
         if detail is not None and detail.result is not None:
-            return _observation_from_result(call, detail.result)
+            return _observation_from_result(call, detail.result, workspace=_run_workspace(child))
         with contextlib.suppress(Exception, asyncio.CancelledError):
             await self._store.cancel_run(child.run_id, f"Nested capability call did not complete: {exc}")
         return _failed_observation(call, f"Capability {call.capability!r} crashed: {exc}")
@@ -246,11 +275,18 @@ def _child_batch_id(parent: TaskRun) -> str:
 
 
 def _capability_spec(parent: TaskRun, capability_id: str, args: dict[str, object]) -> TaskSpec:
+    metadata = copy.deepcopy(parent.spec.metadata)
+    instruction_refs = tuple(getattr(parent.spec.dispatch, "instruction_refs", ()) or ())
+    if instruction_refs:
+        runtime_metadata = metadata.setdefault("_task_runtime", {})
+        if isinstance(runtime_metadata, dict):
+            runtime_metadata["instruction_refs"] = [ref.model_dump(mode="json") for ref in instruction_refs]
     spec = TaskSpec(
         task_id=f"{parent.spec.task_id}:{capability_id}",
         title=f"{parent.spec.title} · {capability_id}",
         dispatch=CapabilityDispatch(capability_id=capability_id),
         args=dict(args),
+        metadata=metadata,
         required_sandbox=parent.spec.required_sandbox,
     )
     spec.set_selected_sandbox(parent.spec.selected_sandbox)
@@ -262,7 +298,35 @@ def _child_run_id(parent: TaskRun, call: CapabilityCall) -> str:
     return f"{parent.run_id}-{call.call_id or call.capability}"
 
 
-def _observation_from_result(call: CapabilityCall, result: TaskResult) -> Observation:
+def _child_event_transcript_path(run: TaskRun):
+    workspace = _run_workspace(run)
+    return workspace / "results" / run.batch_id / run.run_id / f"attempt-{run.attempt}" / "events.jsonl"
+
+
+def _run_workspace(run: TaskRun) -> Path:
+    return workspace_layout().workspace_path(
+        run.agent_instance_id,
+        run.username,
+        conversation_id=run.parent_conversation_id,
+    )
+
+
+async def _reset_transcript(transcript: AgentEventTranscript) -> None:
+    with contextlib.suppress(Exception):
+        await transcript.reset()
+
+
+async def _append_transcript(transcript: AgentEventTranscript, event) -> None:
+    with contextlib.suppress(Exception):
+        await transcript.append(event)
+
+
+async def _flush_transcript(transcript: AgentEventTranscript) -> None:
+    with contextlib.suppress(Exception):
+        await transcript.flush()
+
+
+def _observation_from_result(call: CapabilityCall, result: TaskResult, *, workspace: Path | None = None) -> Observation:
     return Observation(
         capability=call.capability,
         ok=result.status == TaskStatus.COMPLETED,
@@ -274,6 +338,29 @@ def _observation_from_result(call: CapabilityCall, result: TaskResult) -> Observ
         error_class=result.error_class.value if result.error_class else "",
         error_message=result.error_message,
         artifacts=tuple(artifact.filepath or artifact.uri for artifact in result.artifacts),
+        contents=tuple(
+            content
+            for artifact in result.artifacts
+            if (content := _image_content(artifact, workspace)) is not None
+        ),
+    )
+
+
+def _image_content(artifact: ArtifactRef, workspace: Path | None) -> AgentContent | None:
+    mime_type = str(artifact.metadata.get("mime_type") or mimetypes.guess_type(artifact.name)[0] or "")
+    if artifact.type != "screenshot" and not mime_type.startswith("image/"):
+        return None
+    metadata: dict[str, object] = {"artifact_name": artifact.name, "artifact_uri": artifact.uri}
+    if workspace is not None and artifact.filepath:
+        candidate = (workspace / artifact.filepath).resolve()
+        resolved_workspace = workspace.resolve()
+        if candidate.is_relative_to(resolved_workspace) and candidate.is_file():
+            metadata["local_path"] = str(candidate)
+    return AgentContent(
+        type="image",
+        uri=artifact.uri,
+        mime_type=mime_type or "image/png",
+        metadata=metadata,
     )
 
 

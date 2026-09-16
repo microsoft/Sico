@@ -9,6 +9,7 @@ from app.biz.task_runtime.planning import (
     CapabilityDescriptor,
     CatalogueQuery,
     builtin_descriptors,
+    sandbox_capability_descriptors,
     skill_descriptors,
 )
 from app.tools.common import ToolContext
@@ -28,6 +29,35 @@ class CapabilityCatalogue(Protocol):
     ) -> tuple[CapabilityDescriptor, ...]: ...
 
 
+class CapabilityRetriever:
+    """Build caller-scoped catalogue queries for both planning and chat discovery."""
+
+    def __init__(self, catalogue: CapabilityCatalogue) -> None:
+        self._catalogue = catalogue
+
+    async def retrieve(
+        self,
+        context: ToolContext,
+        *,
+        providers: tuple[str, ...] = (),
+        selectors: tuple[str, ...] = (),
+        search: str = "",
+        limit: int | None = None,
+        include_internal: bool = False,
+    ) -> tuple[CapabilityDescriptor, ...]:
+        return await self._catalogue.list_descriptors(
+            context,
+            CatalogueQuery(
+                caller=_resolve_context(context),
+                providers=providers,
+                selectors=selectors,
+                search=search,
+                limit=limit,
+                include_internal=include_internal,
+            ),
+        )
+
+
 class WorkspaceCapabilityCatalogue:
     """Default builtin/skill catalogue scoped by the per-turn workspace."""
 
@@ -41,8 +71,15 @@ class WorkspaceCapabilityCatalogue:
         descriptors: list[CapabilityDescriptor] = []
         if not query.providers or "builtin" in query.providers:
             descriptors.extend(descriptor for descriptor in builtin_descriptors() if query.matches(descriptor))
+        descriptors.extend(
+            descriptor
+            for descriptor in sandbox_capability_descriptors(context.assigned_sandbox_types)
+            if query.matches(descriptor)
+        )
         if not query.providers or "skill" in query.providers:
             descriptors.extend(_skill_descriptors(context, query))
+        if query.search:
+            descriptors.sort(key=query.search_score, reverse=True)
         if query.limit is not None and query.limit >= 0:
             descriptors = descriptors[: query.limit]
         return tuple(descriptors)
@@ -70,4 +107,14 @@ def _caller_matches(context: ToolContext, query: CatalogueQuery) -> bool:
         (not caller.username or caller.username == context.username)
         and (not caller.agent_instance_id or caller.agent_instance_id == int(context.agent_instance_id or 0))
         and (not caller.project_id or caller.project_id == context.project_id)
+    )
+
+
+def _resolve_context(context: ToolContext):
+    from app.biz.task_runtime.planning import ResolveContext
+
+    return ResolveContext(
+        username=context.username,
+        agent_instance_id=int(context.agent_instance_id or 0),
+        project_id=context.project_id,
     )

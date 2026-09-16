@@ -53,7 +53,7 @@ Both installer scripts are idempotent, so rerunning them is safe.
 | `make precommit-update` | Bump pinned hook versions |
 | `make openapi` | Regenerate Backend OpenAPI docs (`api/openapi/`) |
 | `make build-frontend` | Install deps and build the frontend SPA (`packages/app/dist`) |
-| `make compose-up` / `compose-down` / `compose-logs` | Docker Compose stack |
+| `make compose-up` / `compose-down` / `compose-logs` | Docker Compose application, infrastructure, and Grafana LGTM stack |
 | `make kind-up` / `kind-down` | Local Kubernetes stack |
 | `make help` | List all targets |
 
@@ -76,6 +76,9 @@ Run the smallest check set that covers your change before opening a PR:
 
 If a relevant check cannot be run locally, mention that in the PR and explain
 why.
+
+For local telemetry endpoints, retention, storage cleanup, signal validation,
+and troubleshooting, see [Local observability](observability.md).
 
 ## Backend (Go)
 

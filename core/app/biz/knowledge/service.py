@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import tempfile
 from pathlib import Path
 
 import requests
@@ -17,6 +18,7 @@ from app.pb.knowledge.knowledge import (
     KnowledgeServiceBase,
 )
 from app.storage.fs import KNOWLEDGE_DOCUMENT_FS, KNOWLEDGE_LINK_FS
+from app.tools.webfetch import fetch_url_as_markdown
 from app.utils.response import failed_response, success_response
 
 
@@ -32,16 +34,7 @@ class KnowledgeService(KnowledgeServiceBase):
         self._logger.info("ExtractDocument request received: %s", message.to_dict())
 
         if message.document_type == KnowledgeDocumentType.LINK:
-            link_url = (message.link_url or "").strip()
-            if not link_url:
-                self._logger.warning("No link_url for LINK knowledge id=%s", message.id)
-                return failed_response(ExtractDocumentResponse(message="missing link_url"))
-            try:
-                await self._persist_link(message, link_url)
-            except Exception as exc:  # pragma: no cover - defensive for filesystem operations
-                self._logger.error("Failed to persist link knowledge id=%s error=%s", message.id, exc)
-                return failed_response(ExtractDocumentResponse(message=str(exc)))
-            return success_response(ExtractDocumentResponse(message="received"))
+            return await self._extract_link_document(message)
 
         if message.document_type != KnowledgeDocumentType.FILE:
             self._logger.info(
@@ -52,6 +45,47 @@ class KnowledgeService(KnowledgeServiceBase):
             return success_response(ExtractDocumentResponse(message="received"))
 
         return await self._extract_file_document(message)
+
+    async def _extract_link_document(self, message: KnowledgeDocument) -> ExtractDocumentResponse:
+        """Fetch and extract LINK-type knowledge documents."""
+        if not self._extractor:
+            self._logger.info(
+                "Document extractor not configured; skipping extraction id=%s",
+                message.id,
+            )
+            return failed_response(ExtractDocumentResponse(message="document extractor not configured"))
+
+        link_url = (message.link_url or "").strip()
+        if not link_url:
+            self._logger.warning("No link_url for LINK knowledge id=%s", message.id)
+            return failed_response(ExtractDocumentResponse(message="missing link_url"))
+
+        try:
+            fetched = await fetch_url_as_markdown(link_url)
+            if error_message := fetched.get("error_message"):
+                raise RuntimeError(str(error_message))
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".md", encoding="utf-8", delete=False) as fetched_file:
+                fetched_file.write(str(fetched.get("content", "")))
+                fetched_path = fetched_file.name
+
+            try:
+                full_text, summary = await self._extractor.extract_utf8_markdown(fetched_path)
+            finally:
+                Path(fetched_path).unlink(missing_ok=True)
+
+            await self._persist_link(message, link_url, full_text, summary)
+            self._logger.info(
+                "Link knowledge extraction succeeded id=%s full_text_length=%d summary_length=%d",
+                message.id,
+                len(full_text),
+                len(summary),
+            )
+        except Exception as exc:  # pragma: no cover - defensive for external service and filesystem operations
+            self._logger.error("Link knowledge extraction failed id=%s error=%s", message.id, exc)
+            return failed_response(ExtractDocumentResponse(message=str(exc)))
+
+        return success_response(ExtractDocumentResponse(message="received", title=str(fetched.get("title", "")).strip()))
 
     async def _extract_file_document(self, message: KnowledgeDocument) -> ExtractDocumentResponse:
         """Handle extraction for FILE-type knowledge documents."""
@@ -137,14 +171,16 @@ class KnowledgeService(KnowledgeServiceBase):
         if message.project_id and message.agent_id:
             return failed_response(GetDocumentDetailsResponse(message="only one of project_id or agent_id should be provided"))
 
+        knowledge_fs = KNOWLEDGE_LINK_FS if message.document_type == KnowledgeDocumentType.LINK else KNOWLEDGE_DOCUMENT_FS
+
         def _read_files() -> tuple[str, str]:
-            summary = KNOWLEDGE_DOCUMENT_FS.read_text(
+            summary = knowledge_fs.read_text(
                 message.document_id,
                 "summary.md",
                 project_id=message.project_id,
                 agent_id=message.agent_id,
             )
-            full_text = KNOWLEDGE_DOCUMENT_FS.read_text(
+            full_text = knowledge_fs.read_text(
                 message.document_id,
                 "full.md",
                 project_id=message.project_id,
@@ -205,7 +241,6 @@ class KnowledgeService(KnowledgeServiceBase):
             )
             return failed_response(GetKnowledgePlaybookDetailsGrpcResponse(), msg=str(exc))
 
-
     async def _persist_extraction(self, message: KnowledgeDocument, full_text: str, summary: str) -> None:
         """Write extraction outputs to storage."""
 
@@ -243,14 +278,28 @@ class KnowledgeService(KnowledgeServiceBase):
                 exc,
             )
 
-    async def _persist_link(self, message: KnowledgeDocument, link_url: str) -> None:
-        """Write link URL to storage as link.md."""
+    async def _persist_link(self, message: KnowledgeDocument, link_url: str, full_text: str, summary: str) -> None:
+        """Write link source and extraction outputs to storage."""
 
         def _write_file() -> str:
             path = KNOWLEDGE_LINK_FS.write_text(
                 message.id,
                 "link.md",
                 link_url,
+                project_id=message.project_id,
+                agent_id=message.agent_id,
+            )
+            KNOWLEDGE_LINK_FS.write_text(
+                message.id,
+                "full.md",
+                full_text or "",
+                project_id=message.project_id,
+                agent_id=message.agent_id,
+            )
+            KNOWLEDGE_LINK_FS.write_text(
+                message.id,
+                "summary.md",
+                summary or "",
                 project_id=message.project_id,
                 agent_id=message.agent_id,
             )

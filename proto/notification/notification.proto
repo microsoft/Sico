@@ -95,6 +95,7 @@ message Notification {
     int64 created_at = 8; // @gotag: json:"createdAt"
     int64 updated_at = 9; // @gotag: json:"updatedAt"
     int64 project_id = 10; // @gotag: json:"projectId"
+    int64 organization_id = 11; // @gotag: json:"organizationId"
 }
 
 message CreateNotificationRequest {

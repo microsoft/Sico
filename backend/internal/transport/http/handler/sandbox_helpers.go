@@ -13,7 +13,7 @@ func getInstanceSandboxes(ctx context.Context, instanceID string) []*commondto.S
 		return nil
 	}
 
-	sandboxes, err := svc.GetInstanceSandboxesWithStatus(ctx, instanceID, "")
+	sandboxes, err := svc.GetAuthorizedInstanceSandboxesWithStatus(ctx, instanceID, "")
 	if err != nil || len(sandboxes) == 0 {
 		return nil
 	}

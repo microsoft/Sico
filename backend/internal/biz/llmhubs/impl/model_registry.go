@@ -41,6 +41,9 @@ func (s *Service) CreateModel(
 	ctx context.Context,
 	req *dto.CreateModelRegistryRequest,
 ) (*dto.CreateModelRegistryResponse, error) {
+	if err := s.requireOrganization(ctx, req.OrganizationId, false); err != nil {
+		return nil, err
+	}
 	if err := validateAuthConfig(req.Auth); err != nil {
 		return nil, err
 	}
@@ -111,6 +114,9 @@ func (s *Service) CreateModel(
 
 // ListModels returns paginated model registry entries for a scope.
 func (s *Service) ListModels(ctx context.Context, req *dto.ListModelRegistryRequest) (*dto.ListModelRegistryResponse, error) {
+	if err := s.requireOrganization(ctx, req.OrganizationId, false); err != nil {
+		return nil, err
+	}
 	page := req.Page
 	pageSize := req.PageSize
 	if page <= 0 {
@@ -159,6 +165,9 @@ func (s *Service) DeleteModel(
 		existing, getErr := modelRepo.GetByID(ctx, req.Id)
 		if getErr != nil {
 			return apperr.New(errcode.CommonNotFound, "model not found")
+		}
+		if err := s.requireOrganization(ctx, existing.OrganizationID, false); err != nil {
+			return err
 		}
 		if existing.IsBuiltin == 1 {
 			return apperr.New(errcode.CommonForbidden, "cannot delete built-in model")

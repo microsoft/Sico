@@ -38,6 +38,12 @@ func TestLeaseMatchesOS(t *testing.T) {
 	require.False(t, leaseMatchesOS(nil, enum.SandboxOSAndroid))
 }
 
+func TestLeaseMatchesLinuxWorkstationSelector(t *testing.T) {
+	lease := &Lease{Type: enum.SandboxTypeLinuxWorkstation.String()}
+
+	require.True(t, leaseMatchesSelector(lease, enum.SandboxTypeLinuxWorkstation.String(), "", false))
+}
+
 func TestAppliableResourcesForOSOrdersManagedBeforePhysical(t *testing.T) {
 	t.Parallel()
 
@@ -112,7 +118,7 @@ func TestApplySandboxReturnsNilWhenNoResourceSuppliesOS(t *testing.T) {
 	require.Nil(t, result)
 }
 
-func TestApplySandboxRejectsNonOSSelector(t *testing.T) {
+func TestApplySandboxAcceptsConcreteLinuxWorkstationSelector(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -122,11 +128,32 @@ func TestApplySandboxRejectsNonOSSelector(t *testing.T) {
 		require.NoError(t, rds.Close())
 	})
 
+	linuxWorkstation := &Resource{
+		Type:       enum.SandboxTypeLinuxWorkstation.String(),
+		ResourceID: "linux-workstation-1", Status: ResourceStatusAvailable,
+	}
+	seedSnapshot(t, ctx, rds, enum.SandboxTypeLinuxWorkstation.String(), time.Now(), linuxWorkstation)
+	lease := &Lease{
+		SandboxID:  enum.SandboxTypeLinuxWorkstation.String() + ":" + linuxWorkstation.ResourceID,
+		Type:       enum.SandboxTypeLinuxWorkstation.String(),
+		ResourceID: linuxWorkstation.ResourceID,
+		User:       "instance-1",
+	}
+	seedLease(t, ctx, rds, lease)
 	svc := &Service{Pool: newTestPool(rds, &fakeProvider{
-		providerType: enum.SandboxTypeEmulator.String(),
+		providerType: enum.SandboxTypeLinuxWorkstation.String(),
 	}, time.Minute)}
 
-	// A concrete sandbox type is no longer accepted by apply.
-	_, err := svc.ApplySandbox(ctx, "instance-1", enum.SandboxTypeEmulator.String())
+	result, err := svc.ApplySandbox(ctx, "instance-1", enum.SandboxTypeLinuxWorkstation.String())
+
+	require.NoError(t, err)
+	require.Equal(t, lease.SandboxID, result["sandbox_id"])
+}
+
+func TestApplySandboxRejectsOtherConcreteSelectors(t *testing.T) {
+	svc := &Service{}
+
+	_, err := svc.ApplySandbox(context.Background(), "instance-1", enum.SandboxTypeEmulator.String())
+
 	require.Error(t, err)
 }

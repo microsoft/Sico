@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 
+	"sico-backend/internal/biz/ownership"
 	"sico-backend/internal/errcode"
 	"sico-backend/internal/shared/apperr"
 	registryrepo "sico-backend/internal/store/llmhubs/repository"
@@ -35,6 +36,7 @@ type Components struct {
 	ModelRegistryRepo       registryrepo.ModelRegistryRepository
 	ModelRegistrySecretRepo registryrepo.ModelRegistrySecretRepository
 	OrgLLMConfigRepo        orgrepo.OrganizationLLMConfigRepository
+	Ownership               ownership.Resolver
 }
 
 // Service implements the core LLMHub runtime and the model registry.
@@ -50,6 +52,30 @@ func NewService(c *Components) *Service {
 		client = llmhubpb.NewLLMHubRPCClient(c.CoreGRPC)
 	}
 	return &Service{Components: c, runtimeClient: client}
+}
+
+func (s *Service) requireOrganization(ctx context.Context, organizationID int64, allowGlobal bool) error {
+	if s == nil || s.Components == nil || s.Ownership == nil {
+		return nil
+	}
+	return s.Ownership.RequireOrganization(ctx, organizationID, allowGlobal)
+}
+
+func (s *Service) requireRuntimeModelOrganization(ctx context.Context, modelKey string) error {
+	if s == nil || s.Components == nil || s.Ownership == nil {
+		return nil
+	}
+	if _, err := s.Ownership.RequireSelected(ctx); err != nil {
+		return err
+	}
+	model, err := s.ModelRegistryRepo.GetByModelKey(ctx, modelKey)
+	if errors.Is(err, gorm.ErrRecordNotFound) || model == nil {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.Ownership.RequireOrganization(ctx, model.OrganizationID, true)
 }
 
 // ListBuiltinModels fetches the list of built-in models from core.
@@ -94,6 +120,9 @@ func (s *Service) ListBuiltinModels(ctx context.Context) ([]*dto.ModelRegistryEn
 
 // RuntimeGenerate calls the core LLM service for synchronous generation.
 func (s *Service) RuntimeGenerate(ctx context.Context, req *dto.RuntimeGenerateRequest) (*dto.RuntimeGenerateResponse, error) {
+	if err := s.requireRuntimeModelOrganization(ctx, req.Model); err != nil {
+		return nil, err
+	}
 	if s.runtimeClient == nil {
 		return nil, apperr.New(errcode.CommonUnavailable, "llm runtime service not initialized")
 	}
@@ -159,6 +188,9 @@ func (s *Service) RuntimeGenerateStream(
 	req *dto.RuntimeGenerateRequest,
 	onChunk func(chunk *dto.RuntimeStreamChunk) error,
 ) error {
+	if err := s.requireRuntimeModelOrganization(ctx, req.Model); err != nil {
+		return err
+	}
 	if s.runtimeClient == nil {
 		return apperr.New(errcode.CommonUnavailable, "llm runtime service not initialized")
 	}

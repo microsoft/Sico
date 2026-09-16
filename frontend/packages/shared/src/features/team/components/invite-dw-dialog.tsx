@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { i18n } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
@@ -12,16 +11,15 @@ import {
 } from "@sico/ui";
 import { useAtomValue } from "jotai";
 import { Loader2 } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import type * as React from "react";
-import { useForm } from "react-hook-form";
 
 import { userAtom } from "../../../atoms/auth-atom";
+import { useAddDwForm } from "../../../hooks/use-add-dw-form";
 import { apiErrorMessage } from "../../../utils/api-error-message";
 import { AddDwDialogHeader } from "../../digital-worker/components/add-dw-dialog-header";
 import {
   ADD_DW_INITIAL_VALUES,
-  addDwSchema,
   type AddDwValues,
 } from "../../digital-worker/components/add-dw-fields";
 import { AvatarField } from "../../digital-worker/components/avatar-field";
@@ -54,21 +52,23 @@ const ADD_FAILED_COPY = msg({
   message: "We couldn't add the digital worker.",
 });
 
-function submitInviteDw({
+async function submitInviteDw({
   values,
   userEmail,
   templates,
   projectId,
-  mutate,
+  mutateAsync,
   onOpenChange,
+  signal,
 }: {
   values: AddDwValues;
   userEmail: string | undefined;
   templates: SingleAgentCard[];
   projectId: number;
-  mutate: ReturnType<typeof useCreateAgentInstanceMutation>["mutate"];
+  mutateAsync: ReturnType<typeof useCreateAgentInstanceMutation>["mutateAsync"];
   onOpenChange: (open: boolean) => void;
-}): void {
+  signal: AbortSignal;
+}): Promise<void> {
   if (!userEmail) {
     toast.error(i18n._(MUST_SIGN_IN_COPY));
     return;
@@ -76,25 +76,24 @@ function submitInviteDw({
   const role = templates.find(
     (template) => template.agentId === values.agentId,
   )?.role;
-  mutate(
-    {
+  try {
+    await mutateAsync({
       agentId: values.agentId,
       name: values.name,
       role,
       iconUri: values.iconUri,
       employerUsername: userEmail,
       projectId,
-    },
-    {
-      onSuccess: () => {
-        toast.success(i18n._(ADDED_COPY), { invert: true });
-        onOpenChange(false);
-      },
-      onError: (error) => {
-        toast.error(apiErrorMessage(error, i18n._(ADD_FAILED_COPY)));
-      },
-    },
-  );
+    });
+    if (!signal.aborted) {
+      toast.success(i18n._(ADDED_COPY), { invert: true });
+      onOpenChange(false);
+    }
+  } catch (error) {
+    if (!signal.aborted) {
+      toast.error(apiErrorMessage(error, i18n._(ADD_FAILED_COPY)));
+    }
+  }
 }
 
 /** Add a digital worker to THIS project (module3). Reuses the Add DW field
@@ -121,19 +120,31 @@ export function InviteDwDialog({
     () => ({ ...ADD_DW_INITIAL_VALUES, projectId: String(projectId) }),
     [projectId],
   );
-  const form = useForm<AddDwValues>({
-    resolver: zodResolver(addDwSchema),
-    defaultValues: initial,
-    mode: "onSubmit",
-    reValidateMode: "onChange",
-  });
   const mutation = useCreateAgentInstanceMutation();
-
-  useEffect(() => {
-    if (open) {
-      form.reset(initial);
-    }
-  }, [open, form, initial]);
+  const {
+    form,
+    preset,
+    onSelectPreset,
+    isSaving,
+    isUploading,
+    handleOpenChange,
+    handleSubmit,
+  } = useAddDwForm({
+    open,
+    isPending: mutation.isPending,
+    onOpenChange,
+    initialValues: initial,
+    onSubmit: (values, signal) =>
+      submitInviteDw({
+        values,
+        userEmail: user?.email,
+        templates,
+        projectId,
+        mutateAsync: mutation.mutateAsync,
+        onOpenChange,
+        signal,
+      }),
+  });
 
   const handlePick = (card: SingleAgentCard | undefined): void => {
     if (card && !form.getFieldState("name").isDirty) {
@@ -141,22 +152,11 @@ export function InviteDwDialog({
     }
   };
 
-  const onSubmit = (values: AddDwValues): void => {
-    submitInviteDw({
-      values,
-      userEmail: user?.email,
-      templates,
-      projectId,
-      mutate: mutation.mutate,
-      onOpenChange,
-    });
-  };
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent variant="content" className="w-150">
         <AddDwDialogHeader />
-        <form noValidate onSubmit={form.handleSubmit(onSubmit)}>
+        <form noValidate onSubmit={handleSubmit}>
           <FieldGroup>
             <DwField
               control={form.control}
@@ -165,24 +165,29 @@ export function InviteDwDialog({
               onPick={handlePick}
             />
             <NameField control={form.control} />
-            <AvatarField control={form.control} />
+            <AvatarField
+              preset={preset}
+              onSelectPreset={onSelectPreset}
+              disabled={isSaving}
+              uploading={isUploading}
+            />
           </FieldGroup>
           <DialogFooter className="mt-6">
             <Button
               type="button"
               variant="subtle"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
             >
               {t({ id: "common.action.cancel", message: "Cancel" })}
             </Button>
             <Button
               type="submit"
               variant="primary"
-              aria-busy={mutation.isPending}
-              disabled={mutation.isPending}
+              aria-busy={isSaving}
+              disabled={isSaving}
             >
-              {mutation.isPending ? <Loader2 className="animate-spin" /> : null}
-              {mutation.isPending
+              {isSaving ? <Loader2 className="animate-spin" /> : null}
+              {isSaving
                 ? t({ id: "common.status.saving", message: "Saving…" })
                 : t({ id: "common.action.save", message: "Save" })}
             </Button>

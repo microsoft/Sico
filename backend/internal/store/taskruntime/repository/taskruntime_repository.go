@@ -10,6 +10,10 @@ import (
 
 // TaskDetail is the read model returned by GetTaskDetail.
 type TaskDetail = dal.TaskDetail
+type BatchCreateResult = dal.BatchCreateResult
+type BatchUpdateResult = dal.BatchUpdateResult
+type BatchCancelResult = dal.BatchCancelResult
+type RunCancelResult = dal.RunCancelResult
 
 // Error sentinels surfaced by the repository. The transport layer maps these to
 // gRPC status codes (FailedPrecondition / AlreadyExists respectively).
@@ -30,11 +34,11 @@ func IsDuplicateKey(err error) bool { return dal.IsDuplicateKey(err) }
 // those documents into the indexed columns plus the fencing / compare-and-set
 // guards and the stale-run sweep.
 type TaskRuntimeRepository interface {
-	CreateBatch(ctx context.Context, batchJSON string) error
-	UpdateBatch(ctx context.Context, batchJSON string) error
+	CreateBatch(ctx context.Context, batchJSON string) (BatchCreateResult, error)
+	UpdateBatch(ctx context.Context, batchJSON string) (BatchUpdateResult, error)
 	GetBatch(ctx context.Context, batchID string) (batchJSON string, found bool, err error)
 
-	CreateRun(ctx context.Context, runJSON string) error
+	CreateRun(ctx context.Context, runJSON string) (created bool, err error)
 	UpdateRun(ctx context.Context, runJSON string) error
 	ReopenRunForRetry(ctx context.Context, runJSON string, expectedAttempt int32) error
 	LookupIdempotent(ctx context.Context, idempotencyKey string) (runJSON string, found bool, err error)
@@ -50,9 +54,9 @@ type TaskRuntimeRepository interface {
 	ClaimRun(ctx context.Context, runID, workerID string) (tokenJSON string, err error)
 	HeartbeatBatch(ctx context.Context, batchID string) error
 	SetRunProgress(ctx context.Context, runID, message string, ts int64) error
-	WriteResult(ctx context.Context, runID, tokenJSON, resultJSON string) error
-	CancelBatch(ctx context.Context, batchID, reason string) error
-	CancelRun(ctx context.Context, runID, reason string) error
+	WriteResult(ctx context.Context, runID, tokenJSON, resultJSON string) (durationMS int64, err error)
+	CancelBatch(ctx context.Context, batchID, reason string) (BatchCancelResult, error)
+	CancelRun(ctx context.Context, runID, reason string) (RunCancelResult, error)
 	SweepStaleRuns(ctx context.Context, beforeTs int64) (staleRunsJSON []string, err error)
 }
 

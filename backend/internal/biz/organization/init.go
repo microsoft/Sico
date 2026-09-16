@@ -21,6 +21,7 @@ func InitService(components *impl.Components) Service {
 
 var ProviderSet = wire.NewSet(
 	repository.NewOrganizationRepository,
+	repository.NewInvitationRepository,
 	wire.Struct(new(impl.Components), "*"),
 	InitService,
 )
