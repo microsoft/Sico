@@ -20,7 +20,7 @@ Guidelines for editors:
   add the compare link at the bottom.
 -->
 
-## [0.4.1] - 2026-09-14
+## [0.5.0] - 2026-09-14
 
 _Highlights: multi-tenant organization management, prepared task environments, Linux workstation sandboxes, and unified main/sub-agent execution._
 
