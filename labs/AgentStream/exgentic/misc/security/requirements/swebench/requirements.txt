@@ -98,7 +98,7 @@ multiprocess==0.70.18
 nicegui==3.8.0
 nodeenv==1.10.0
 numpy==2.4.2
-oauthlib==3.3.1
+oauthlib==4.0.0
 openai==2.24.0
 openai-agents==0.10.3
 opentelemetry-api==1.39.1
