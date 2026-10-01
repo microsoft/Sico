@@ -48,7 +48,7 @@ analysis = [
     "statsmodels>=0.14,<1",
 ]
 amem = [
-    "sentence-transformers>=3,<5",
+    "sentence-transformers>=3,<6",
     "scikit-learn>=1,<2",
 ]
 
