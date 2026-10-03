@@ -184,7 +184,7 @@ unidiff==0.7.5
 urllib3==2.6.3
 uvicorn==0.41.0
 uvloop==0.21.0
-virtualenv==21.1.0
+virtualenv==21.7.13
 watchfiles==1.1.1
 wcwidth==0.6.0
 websockets==15.0.1
