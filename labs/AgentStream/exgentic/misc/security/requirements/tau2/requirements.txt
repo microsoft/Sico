@@ -44,7 +44,7 @@ filelock==3.25.0
 fonttools==4.61.1
 frozenlist==1.8.0
 fs==2.4.16
-fsspec==2026.2.0
+fsspec==2026.6.0
 googleapis-common-protos==1.72.0
 griffe==1.15.0
 grpcio==1.78.0
