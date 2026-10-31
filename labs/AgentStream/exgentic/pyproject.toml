@@ -17,7 +17,7 @@ dependencies = [
     "nicegui>=3,<4",
     "cloudpickle>=3,<4",
     "diskcache>=5,<6",
-    "filelock>=3,<4",
+    "filelock>=3,<5",
     "click>=8.1.7,<9",
     "json-schema-to-pydantic>=0.4,<1",
     "litellm>=1.65.0,!=1.82.7,!=1.82.8,<2",
