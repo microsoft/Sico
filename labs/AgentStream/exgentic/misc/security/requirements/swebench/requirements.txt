@@ -113,7 +113,7 @@ orjson==3.11.7
 packaging==26.0
 pandas==3.0.1
 patsy==1.0.2
-pillow==12.1.1
+pillow==13.0.0
 platformdirs==4.9.2
 pluggy==1.6.0
 polars==1.38.1
